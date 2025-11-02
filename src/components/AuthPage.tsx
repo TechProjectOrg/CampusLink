@@ -23,19 +23,19 @@ export function AuthPage({ onLogin }: AuthPageProps) {
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (loginEmail.endsWith('@college.edu')) {
+    if (loginEmail.endsWith('@gbpuat.ac.in')) {
       onLogin();
     } else {
-      alert('Please use your college email (@college.edu)');
+      alert('Please use your college email (@gbpuat.ac.in)');
     }
   };
 
   const handleSignup = (e: React.FormEvent) => {
     e.preventDefault();
-    if (signupData.email.endsWith('@college.edu')) {
+    if (signupData.email.endsWith('@gbpuat.ac.in')) {
       onLogin();
     } else {
-      alert('Please use your college email (@college.edu)');
+      alert('Please use your college email (@gbpuat.ac.in)');
     }
   };
 
@@ -130,7 +130,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                       <Input
                         id="login-email"
                         type="email"
-                        placeholder="your.name@college.edu"
+                        placeholder="your.name@gbpuat.ac.in"
                         value={loginEmail}
                         onChange={(e) => setLoginEmail(e.target.value)}
                         className="pl-10 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
@@ -190,7 +190,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                       <Input
                         id="signup-email"
                         type="email"
-                        placeholder="your.name@college.edu"
+                        placeholder="your.name@gbpuat.ac.in"
                         value={signupData.email}
                         onChange={(e) => setSignupData({ ...signupData, email: e.target.value })}
                         className="pl-10 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"

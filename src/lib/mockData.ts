@@ -4,7 +4,7 @@ export const mockStudents: Student[] = [
   {
     id: '1',
     name: 'Alex Chen',
-    email: 'alex.chen@college.edu',
+  email: 'alex.chen@gbpuat.ac.in',
     branch: 'Computer Science',
     year: 3,
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alex',
@@ -35,7 +35,7 @@ export const mockStudents: Student[] = [
   {
     id: '2',
     name: 'Sarah Martinez',
-    email: 'sarah.martinez@college.edu',
+  email: 'sarah.martinez@gbpuat.ac.in',
     branch: 'Information Technology',
     year: 4,
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah',
@@ -59,7 +59,7 @@ export const mockStudents: Student[] = [
   {
     id: '3',
     name: 'Raj Patel',
-    email: 'raj.patel@college.edu',
+  email: 'raj.patel@gbpuat.ac.in',
     branch: 'Computer Science',
     year: 2,
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Raj',
@@ -82,7 +82,7 @@ export const mockStudents: Student[] = [
   {
     id: '4',
     name: 'Emily Johnson',
-    email: 'emily.johnson@college.edu',
+  email: 'emily.johnson@gbpuat.ac.in',
     branch: 'Electronics',
     year: 3,
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Emily',
@@ -105,7 +105,7 @@ export const mockStudents: Student[] = [
   {
     id: '5',
     name: 'Michael Lee',
-    email: 'michael.lee@college.edu',
+  email: 'michael.lee@gbpuat.ac.in',
     branch: 'Information Technology',
     year: 4,
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Michael',
@@ -128,7 +128,7 @@ export const mockStudents: Student[] = [
   {
     id: '6',
     name: 'Priya Sharma',
-    email: 'priya.sharma@college.edu',
+  email: 'priya.sharma@gbpuat.ac.in',
     branch: 'Computer Science',
     year: 2,
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Priya',
@@ -151,7 +151,7 @@ export const mockStudents: Student[] = [
   {
     id: 'current',
     name: 'You',
-    email: 'you@college.edu',
+  email: 'you@gbpuat.ac.in',
     branch: 'Computer Science',
     year: 3,
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=You',
@@ -249,7 +249,7 @@ export const mockOpportunities: Opportunity[] = [
     description: 'Monthly coding contest with challenging algorithmic problems. Top 3 winners get Amazon vouchers! Perfect practice for placement preparation. Duration: 3 hours. All are welcome!',
     date: '2025-11-08',
     location: 'Online',
-    link: 'https://codesprint.college.edu',
+  link: 'https://codesprint.gbpuat.ac.in',
     image: 'https://images.unsplash.com/photo-1562758778-e5638b5b6607?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxwcm9ncmFtbWluZyUyMGNvbnRlc3R8ZW58MXx8fHwxNzYyMDIyMjIwfDA&ixlib=rb-4.1.0&q=80&w=1080',
     likes: ['1', '2', '5'],
     comments: [
