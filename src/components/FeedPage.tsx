@@ -52,7 +52,7 @@ export function FeedPage({
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left Sidebar - Profile Card (Hidden on mobile and tablets) */}
-          <div className="hidden xl:block xl:col-span-3">
+          <div className="hidden show-on-laptop xl:col-span-3">
             <div className="sticky top-24">
               {currentUser && (
                 <ProfileCard 

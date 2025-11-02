@@ -73,6 +73,11 @@
 
 @layer theme {
   :root, :host {
+    --breakpoint-sm: 40rem;
+    --breakpoint-md: 48rem;
+    --breakpoint-lg: 64rem;
+    --breakpoint-xl: 75rem;
+    --breakpoint-2xl: 96rem;
     --font-sans: ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
     --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
     --color-red-50: oklch(.971 .013 17.38);
@@ -2872,19 +2877,19 @@
     }
   }
 
-  @media (width >= 80rem) {
+  @media (width >= 75rem) {
     .xl\:col-span-3 {
       grid-column: span 3 / span 3;
     }
   }
 
-  @media (width >= 80rem) {
+  @media (width >= 75rem) {
     .xl\:col-span-6 {
       grid-column: span 6 / span 6;
     }
   }
 
-  @media (width >= 80rem) {
+  @media (width >= 75rem) {
     .xl\:block {
       display: block;
     }
@@ -3264,6 +3269,13 @@ button, input, select, textarea {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
+}
+
+/* Custom breakpoint for 14-inch laptops (1200px+) */
+@media (min-width: 1200px) {
+  .show-on-laptop {
+    display: block !important;
+  }
 }
 
 @property --tw-translate-x {
