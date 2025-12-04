@@ -1,8 +1,10 @@
 {
-      "name": "CampusLink Platform Development",
+      "name": "campuslink-platform-development",
       "version": "0.1.0",
       "private": true,
       "dependencies": {
+            "@prisma/adapter-pg": "^7.0.1",
+            "@prisma/client": "^7.0.1",
             "@radix-ui/react-accordion": "^1.2.3",
             "@radix-ui/react-alert-dialog": "^1.1.6",
             "@radix-ui/react-aspect-ratio": "^1.1.2",
@@ -32,10 +34,13 @@
             "class-variance-authority": "^0.7.1",
             "clsx": "*",
             "cmdk": "^1.1.1",
+            "dotenv": "^17.2.3",
             "embla-carousel-react": "^8.6.0",
+            "express": "^5.2.1",
             "input-otp": "^1.4.2",
             "lucide-react": "^0.487.0",
             "next-themes": "^0.4.6",
+            "pg": "^8.16.3",
             "react": "^18.3.1",
             "react-day-picker": "^8.10.1",
             "react-dom": "^18.3.1",
@@ -47,14 +52,35 @@
             "vaul": "^1.1.2"
       },
       "devDependencies": {
-            "@types/node": "^20.10.0",
+            "@types/express": "^5.0.6",
+            "@types/node": "^20.19.25",
             "@types/react": "^19.2.2",
             "@types/react-dom": "^19.2.2",
             "@vitejs/plugin-react-swc": "^3.10.2",
+            "prisma": "^7.0.1",
+            "ts-node-dev": "^2.0.0",
+            "tsx": "^4.21.0",
+            "typescript": "^5.9.3",
             "vite": "6.3.5"
       },
       "scripts": {
             "dev": "vite",
-            "build": "vite build"
-      }
+            "build": "vite build",
+            "server:dev": "tsx watch server/src/server.ts",
+            "server:build": "tsc -p tsconfig.server.json",
+            "server:start": "node server/dist/server.js"
+      },
+      "description": "Run `npm i` to install the dependencies.",
+      "main": "tailwind.config.js",
+      "repository": {
+            "type": "git",
+            "url": "git+https://github.com/TechProjectOrg/final-year-project.git"
+      },
+      "keywords": [],
+      "author": "",
+      "license": "ISC",
+      "bugs": {
+            "url": "https://github.com/TechProjectOrg/final-year-project/issues"
+      },
+      "homepage": "https://github.com/TechProjectOrg/final-year-project#readme"
 }
