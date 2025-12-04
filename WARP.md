@@ -13,12 +13,15 @@ Original design: https://www.figma.com/design/yZvdhlk5S5huZMnwcNqsJM/CampusLink-
 ### Development
 ```powershell
 npm i                    # Install dependencies
-npm run dev             # Start development server (opens at http://localhost:3000)
+npm run dev             # Start frontend dev server (http://localhost:3000)
+npm run server:dev      # Start backend API server (http://localhost:4000)
 ```
 
 ### Build
 ```powershell
-npm run build           # Build for production (output: build/)
+npm run build           # Build frontend for production (output: dist/ via Vite)
+npm run server:build    # Build backend server (TypeScript → server/dist)
+npm run server:start    # Start built backend server from server/dist
 ```
 
 ## Architecture
@@ -30,6 +33,8 @@ npm run build           # Build for production (output: build/)
 - **Styling**: Tailwind CSS with custom gradient and glass-morphism effects
 - **Icons**: Lucide React
 - **State Management**: React hooks (useState) - all state in App.tsx
+- **Backend API**: Node.js + Express 5 (TypeScript) in `server/src`
+- **Database**: PostgreSQL (Supabase) accessed via Prisma ORM v7 + `@prisma/adapter-pg`
 
 ### Application Structure
 
@@ -190,3 +195,50 @@ Target modern browsers supporting:
 - ESNext features (Vite build target)
 - CSS backdrop-filter (for glass-morphism)
 - Flexbox and Grid layouts
+
+## Backend & Database
+
+### Backend Structure
+
+- Backend code lives in `server/src/`:
+  - `server.ts`: Entry point; reads `PORT` from env (default 4000) and starts Express.
+  - `app.ts`: Express app configuration and routes (includes `/health` endpoint that pings the DB).
+  - `prisma.ts`: Prisma Client setup using `pg` + `@prisma/adapter-pg` and `process.env.DATABASE_URL`.
+- Compiled JS output goes to `server/dist/` via `npm run server:build` and is started with `npm run server:start`.
+
+### Environment & Prisma Config
+
+- `.env` (not committed) must define:
+  - `DATABASE_URL` – PostgreSQL connection string (Supabase in current setup).
+- `prisma.config.ts`:
+  - Imports `"dotenv/config"` so `.env` is loaded for Prisma commands.
+  - Uses `defineConfig` with `schema: "prisma/schema.prisma"`, `migrations.path: "prisma/migrations"` and `datasource.url: env("DATABASE_URL")`.
+
+### Prisma Workflow (Development)
+
+Typical flow when changing the data model:
+
+1. Edit `prisma/schema.prisma` (add/modify models, fields, relations).
+2. Create and apply a migration:
+   ```powershell
+   npx prisma migrate dev --name <change_name>
+   ```
+3. Regenerate Prisma Client if needed (usually done automatically by migrate, but can be run manually):
+   ```powershell
+   npx prisma generate
+   ```
+
+### Resetting the Dev Database (Destructive)
+
+- To wipe all data in the dev database and re-apply all migrations (used once already during setup):
+  ```powershell
+  npx prisma migrate reset --force
+  ```
+- **Warning**: This drops the schema (e.g., `public`) and recreates it from migrations. Only use for disposable dev data.
+
+### Warp Notes
+
+- When making backend or schema changes:
+  - Update `prisma/schema.prisma` and run `npx prisma migrate dev`.
+  - Ensure `.env` has a valid `DATABASE_URL`.
+  - Keep this `WARP.md` in sync with any new backend conventions, commands, or important workflows.

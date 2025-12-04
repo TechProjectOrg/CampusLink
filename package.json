@@ -64,14 +64,14 @@
             "vite": "6.3.5"
       },
       "scripts": {
-            "dev": "vite",
-            "build": "vite build",
-            "server:dev": "tsx watch server/src/server.ts",
-            "server:build": "tsc -p tsconfig.server.json",
-            "server:start": "node server/dist/server.js"
+            "dev": "cd frontend && vite",
+            "build": "cd frontend && vite build",
+            "server:dev": "tsx watch backend/server/src/server.ts",
+            "server:build": "tsc -p backend/tsconfig.server.json",
+            "server:start": "node backend/server/dist/server.js"
       },
       "description": "Run `npm i` to install the dependencies.",
-      "main": "tailwind.config.js",
+      "main": "frontend/tailwind.config.js",
       "repository": {
             "type": "git",
             "url": "git+https://github.com/TechProjectOrg/final-year-project.git"
