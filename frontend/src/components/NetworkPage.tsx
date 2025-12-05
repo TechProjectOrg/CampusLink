@@ -1,4 +1,4 @@
-import { Users, UserCheck, UserPlus, MessageCircle } from 'lucide-react';
+import { Users, UserCheck, UserPlus, MessageCircle, Sparkles, Link2 } from 'lucide-react';
 import { Student } from '../types';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -13,6 +13,7 @@ interface NetworkPageProps {
   onRejectRequest: (studentId: string) => void;
   onMessage: (studentId: string) => void;
   onViewProfile: (studentId: string) => void;
+  onConnect?: (studentId: string) => void;
 }
 
 export function NetworkPage({ 
@@ -21,16 +22,53 @@ export function NetworkPage({
   onAcceptRequest, 
   onRejectRequest,
   onMessage,
-  onViewProfile
+  onViewProfile,
+  onConnect
 }: NetworkPageProps) {
   const currentUser = students.find(s => s.id === currentUserId);
   
   const connections = students.filter(s => currentUser?.connections.includes(s.id));
   const pendingRequests = students.filter(s => currentUser?.pendingRequests.includes(s.id));
 
+  // Find suggested connections based on mutual connections and similar interests
+  const suggestedConnections = students
+    .filter(s => 
+      s.id !== currentUserId && // Not the current user
+      !currentUser?.connections.includes(s.id) && // Not already connected
+      !currentUser?.pendingRequests.includes(s.id) && // Not a pending request
+      !s.pendingRequests.includes(currentUserId) // User hasn't already sent them a request
+    )
+    .map(student => {
+      // Calculate mutual connections
+      const mutualConnections = student.connections.filter(
+        connId => currentUser?.connections.includes(connId)
+      );
+
+      // Calculate common interests/skills
+      const commonSkills = student.skills.filter(
+        skill => currentUser?.skills.includes(skill)
+      );
+
+      const commonInterests = student.interests.filter(
+        interest => currentUser?.interests.includes(interest)
+      );
+
+      return {
+        ...student,
+        mutualCount: mutualConnections.length,
+        commonSkillsCount: commonSkills.length,
+        commonInterestsCount: commonInterests.length,
+        mutualConnections: mutualConnections.slice(0, 3), // Only show first 3
+        commonSkills: commonSkills.slice(0, 3),
+        relevanceScore: mutualConnections.length * 3 + commonSkills.length * 2 + commonInterests.length
+      };
+    })
+    .sort((a, b) => b.relevanceScore - a.relevanceScore) // Sort by relevance
+    .slice(0, 6); // Show top 6 suggestions
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in">
-      <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
+      <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
         {/* Header */}
         <div className="animate-slide-in-down">
           <h1 className="text-gray-900 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
@@ -60,6 +98,18 @@ export function NetworkPage({
               {pendingRequests.length > 0 && (
                 <Badge className="bg-destructive text-white ml-1 animate-pulse transition-all duration-300">
                   {pendingRequests.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger 
+              value="suggestions" 
+              className="flex items-center gap-2 rounded-xl data-[state=active]:gradient-primary data-[state=active]:text-white transition-all duration-300"
+            >
+              <Sparkles className="w-4 h-4" />
+              Suggestions
+              {suggestedConnections.length > 0 && (
+                <Badge className="bg-accent text-accent/80 ml-1 transition-all duration-300 hover:scale-110">
+                  {suggestedConnections.length}
                 </Badge>
               )}
             </TabsTrigger>
@@ -207,6 +257,144 @@ export function NetworkPage({
                     </CardContent>
                   </Card>
                 ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* Suggestions Tab */}
+          <TabsContent value="suggestions" className="space-y-4 animate-fade-in">
+            {/* Info Banner */}
+            <Card className="border-primary/20 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl">
+              <CardContent className="p-4">
+                <div className="flex items-center gap-2 text-sm text-gray-700">
+                  <Sparkles className="w-5 h-5 text-primary" />
+                  <p>Connect with people based on mutual connections and shared interests</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {suggestedConnections.length === 0 ? (
+              <Card className="border-primary/10 rounded-2xl shadow-lg">
+                <CardContent className="p-12 text-center">
+                  <div className="w-16 h-16 gradient-primary rounded-2xl mx-auto mb-4 flex items-center justify-center">
+                    <Sparkles className="w-8 h-8 text-white" />
+                  </div>
+                  <p className="text-gray-500">No suggested connections at the moment.</p>
+                  <p className="text-sm text-gray-400 mt-2">Check back later for more recommendations!</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {suggestedConnections.map((student, index) => {
+                  const mutualConnectionsData = students.filter(s => student.mutualConnections.includes(s.id));
+                  
+                  return (
+                    <Card 
+                      key={student.id} 
+                      className="border-primary/10 rounded-2xl shadow-lg hover-lift animate-slide-in-up"
+                      style={{ animationDelay: `${index * 50}ms` }}
+                    >
+                      <CardContent className="p-6 space-y-4">
+                        {/* Header */}
+                        <div className="flex items-start gap-3">
+                          <Avatar className="w-16 h-16 ring-2 ring-primary/20">
+                            <AvatarImage src={student.avatar} />
+                            <AvatarFallback>{student.name[0]}</AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <h3 className="text-gray-900 truncate">{student.name}</h3>
+                            <p className="text-sm text-gray-600">{student.branch}</p>
+                            <p className="text-sm text-secondary">Year {student.year}</p>
+                          </div>
+                          {student.mutualCount > 0 && (
+                            <Badge className="bg-accent/10 text-accent border border-accent/20">
+                              <Link2 className="w-3 h-3 mr-1" />
+                              {student.mutualCount}
+                            </Badge>
+                          )}
+                        </div>
+
+                        {/* Bio */}
+                        <p className="text-sm text-gray-600 line-clamp-2">{student.bio}</p>
+
+                        {/* Mutual Connections */}
+                        {student.mutualCount > 0 && (
+                          <div className="bg-blue-50 rounded-lg p-3 space-y-2">
+                            <div className="flex items-center gap-2 text-xs text-gray-700">
+                              <Link2 className="w-3 h-3 text-primary" />
+                              <span className="font-semibold">
+                                {student.mutualCount} mutual connection{student.mutualCount > 1 ? 's' : ''}
+                              </span>
+                            </div>
+                            <div className="flex -space-x-2">
+                              {mutualConnectionsData.map(mutual => (
+                                <Avatar key={mutual.id} className="w-7 h-7 border-2 border-white ring-1 ring-gray-200">
+                                  <AvatarImage src={mutual.avatar} />
+                                  <AvatarFallback className="text-xs">{mutual.name[0]}</AvatarFallback>
+                                </Avatar>
+                              ))}
+                              {student.mutualCount > 3 && (
+                                <div className="w-7 h-7 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center ring-1 ring-gray-200">
+                                  <span className="text-xs text-gray-600">+{student.mutualCount - 3}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Common Skills */}
+                        {student.commonSkillsCount > 0 && (
+                          <div>
+                            <p className="text-xs text-gray-500 mb-2">Common skills:</p>
+                            <div className="flex flex-wrap gap-1">
+                              {student.commonSkills.map(skill => (
+                                <Badge key={skill} className="bg-primary/10 text-primary text-xs border-primary/20">
+                                  {skill}
+                                </Badge>
+                              ))}
+                              {student.commonSkillsCount > 3 && (
+                                <Badge className="bg-primary/10 text-primary text-xs border-primary/20">
+                                  +{student.commonSkillsCount - 3} more
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Other Skills */}
+                        {student.commonSkillsCount === 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {student.skills.slice(0, 3).map(skill => (
+                              <Badge key={skill} variant="outline" className="text-xs border-primary/20 text-primary">
+                                {skill}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Actions */}
+                        <div className="flex gap-2 pt-2">
+                          <Button
+                            onClick={() => onViewProfile(student.id)}
+                            variant="outline"
+                            className="flex-1 border-primary/20 hover:border-primary rounded-xl transition-all duration-300 hover:scale-105"
+                            size="sm"
+                          >
+                            View Profile
+                          </Button>
+                          <Button
+                            onClick={() => onConnect?.(student.id)}
+                            className="flex-1 gradient-primary shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl rounded-xl"
+                            size="sm"
+                          >
+                            <UserPlus className="w-4 h-4 mr-2" />
+                            Connect
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </TabsContent>

@@ -1,22 +1,36 @@
 import { useState } from 'react';
-import { Send, Search, MoreVertical, Phone, Video, Info, Image, Smile, Heart, CircleDot } from 'lucide-react';
+import { Send, Search, MoreVertical, Phone, Video, Info, Image, Smile, Heart, CircleDot, Plus, UserPlus, Flag, Ban, Eye } from 'lucide-react';
 import { ChatConversation, Student } from '../types';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
+import { NewChatModal } from './NewChatModal';
+import { GroupInfoPage } from './GroupInfoPage';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
 
 interface ChatPageProps {
   conversations: ChatConversation[];
   students: Student[];
   currentUserId: string;
+  onViewProfile?: (studentId: string) => void;
 }
 
-export function ChatPage({ conversations, students, currentUserId }: ChatPageProps) {
-  const [selectedChat, setSelectedChat] = useState<string | null>(conversations[0]?.id || null);
+export function ChatPage({ conversations, students, currentUserId, onViewProfile }: ChatPageProps) {
+  const [selectedChat, setSelectedChat] = useState<string | null>(null);
   const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState<{ [key: string]: any[] }>({
+  const [isNewChatOpen, setIsNewChatOpen] = useState(false);
+  const [viewingGroupInfo, setViewingGroupInfo] = useState<string | null>(null);
+  const [conversationsList, setConversationsList] = useState<ChatConversation[]>(conversations);
+  const [messages, setMessages] = useState<{ [key: string]: any[] }>(
+  {
     chat1: [
       {
         id: '1',
@@ -99,10 +113,61 @@ export function ChatPage({ conversations, students, currentUserId }: ChatPagePro
         timestamp: '2025-10-30T14:15:00Z',
         isOwn: false
       }
+    ],
+    group1: [
+      {
+        id: '1',
+        senderId: '1',
+        content: 'Hey team! I think we should focus on the backend API first.',
+        timestamp: '2025-11-02T10:00:00Z',
+        isOwn: false
+      },
+      {
+        id: '2',
+        senderId: '2',
+        content: 'Agreed! I can start working on the frontend mockups meanwhile.',
+        timestamp: '2025-11-02T10:15:00Z',
+        isOwn: false
+      },
+      {
+        id: '3',
+        senderId: 'current',
+        content: 'Sounds good! I\'ll set up the database schema today.',
+        timestamp: '2025-11-02T10:30:00Z',
+        isOwn: true
+      },
+      {
+        id: '4',
+        senderId: '5',
+        content: 'Perfect! I\'ll handle the deployment and CI/CD setup.',
+        timestamp: '2025-11-02T11:00:00Z',
+        isOwn: false
+      },
+      {
+        id: '5',
+        senderId: '1',
+        content: 'Let\'s have a quick sync call tonight at 8 PM?',
+        timestamp: '2025-11-02T14:30:00Z',
+        isOwn: false
+      },
+      {
+        id: '6',
+        senderId: 'current',
+        content: 'Works for me! 👍',
+        timestamp: '2025-11-02T15:00:00Z',
+        isOwn: true
+      },
+      {
+        id: '7',
+        senderId: '2',
+        content: 'Let\'s finalize the presentation slides by tomorrow',
+        timestamp: '2025-11-02T18:45:00Z',
+        isOwn: false
+      }
     ]
   });
 
-  const selectedConversation = conversations.find(c => c.id === selectedChat);
+  const selectedConversation = conversationsList.find(c => c.id === selectedChat);
   const chatMessages = selectedChat ? messages[selectedChat] || [] : [];
 
   const handleSendMessage = () => {
@@ -138,14 +203,100 @@ export function ChatPage({ conversations, students, currentUserId }: ChatPagePro
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
+  const handleStartChat = (studentId: string) => {
+    // Check if conversation already exists
+    const existingConvo = conversationsList.find(c => c.participantId === studentId);
+    if (existingConvo) {
+      setSelectedChat(existingConvo.id);
+      setIsNewChatOpen(false);
+      return;
+    }
+
+    // Create new conversation
+    const student = students.find(s => s.id === studentId);
+    if (!student) return;
+
+    const newConversation: ChatConversation = {
+      id: `chat${Date.now()}`,
+      participantId: studentId,
+      participantName: student.name,
+      participantAvatar: student.avatar,
+      lastMessage: 'Start a conversation...',
+      timestamp: new Date().toISOString(),
+      unread: 0,
+      isGroup: false
+    };
+
+    setConversationsList([newConversation, ...conversationsList]);
+    setSelectedChat(newConversation.id);
+    setMessages({ ...messages, [newConversation.id]: [] });
+    setIsNewChatOpen(false);
+  };
+
+  const handleCreateGroup = (name: string, description: string, memberIds: string[]) => {
+    // Create new group conversation
+    const newGroupId = `group${Date.now()}`;
+    const newGroup: ChatConversation = {
+      id: newGroupId,
+      participantId: newGroupId,
+      participantName: name,
+      participantAvatar: `https://api.dicebear.com/7.x/shapes/svg?seed=${name}`,
+      lastMessage: 'Group created',
+      timestamp: new Date().toISOString(),
+      unread: 0,
+      isGroup: true,
+      groupMembers: [currentUserId, ...memberIds]
+    };
+
+    setConversationsList([newGroup, ...conversationsList]);
+    setSelectedChat(newGroup.id);
+    setMessages({ ...messages, [newGroup.id]: [] });
+    setIsNewChatOpen(false);
+  };
+
+  // Mock group data for demonstration
+  const mockGroup = viewingGroupInfo ? {
+    id: viewingGroupInfo,
+    name: selectedConversation?.participantName || 'Group',
+    description: 'This is a study group for CS students working on projects together.',
+    avatar: selectedConversation?.participantAvatar || '',
+    members: selectedConversation?.groupMembers || [],
+    admins: [currentUserId],
+    createdAt: new Date().toISOString(),
+    createdBy: currentUserId
+  } : null;
+
+  // If viewing group info, show GroupInfoPage
+  if (viewingGroupInfo && mockGroup) {
+    return (
+      <GroupInfoPage
+        group={mockGroup}
+        students={students}
+        currentUserId={currentUserId}
+        onBack={() => setViewingGroupInfo(null)}
+        onViewProfile={onViewProfile}
+      />
+    );
+  }
+
   return (
-    <div className="h-[calc(100vh-4rem)] bg-white">
+    <div className="h-[calc(100vh-4rem)] pb-20 md:pb-0 bg-white">
       <div className="h-full max-w-7xl mx-auto flex border-x border-gray-200">
         {/* Conversations List - Instagram Style */}
-        <div className="w-full md:w-96 border-r border-gray-200 flex flex-col bg-white">
+        <div className={`${selectedChat ? 'hidden md:flex' : 'flex'} w-full md:w-96 border-r border-gray-200 flex-col bg-white`}>
           {/* Header */}
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-gray-900 mb-4">Messages</h2>
+          <div className="p-4 md:p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-gray-900">Messages</h2>
+              <Button
+                onClick={() => setIsNewChatOpen(true)}
+                size="sm"
+                className="gradient-primary rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                New Chat
+              </Button>
+            </div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
@@ -159,7 +310,7 @@ export function ChatPage({ conversations, students, currentUserId }: ChatPagePro
           {/* Conversation List */}
           <ScrollArea className="flex-1">
             <div className="p-2">
-              {conversations.map(conversation => (
+              {conversationsList.map(conversation => (
                 <button
                   key={conversation.id}
                   onClick={() => setSelectedChat(conversation.id)}
@@ -171,12 +322,12 @@ export function ChatPage({ conversations, students, currentUserId }: ChatPagePro
                 >
                   <div className="flex gap-3 items-center">
                     <div className="relative flex-shrink-0">
-                      <Avatar className="w-14 h-14 ring-2 ring-white shadow-sm">
+                      <Avatar className="w-12 h-12 md:w-14 md:h-14 ring-2 ring-white shadow-sm">
                         <AvatarImage src={conversation.participantAvatar} />
                         <AvatarFallback>{conversation.participantName[0]}</AvatarFallback>
                       </Avatar>
                       {conversation.unread > 0 && (
-                        <div className="absolute bottom-0 right-0 w-4 h-4 bg-primary rounded-full border-2 border-white"></div>
+                        <div className="absolute bottom-0 right-0 w-3 h-3 md:w-4 md:h-4 bg-primary rounded-full border-2 border-white"></div>
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -208,37 +359,100 @@ export function ChatPage({ conversations, students, currentUserId }: ChatPagePro
 
         {/* Chat Area - Instagram Style */}
         {selectedConversation ? (
-          <div className="flex-1 flex flex-col bg-white hidden md:flex">
+          <div className={`${selectedChat ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-white`}>
             {/* Chat Header */}
-            <div className="px-6 py-3 border-b border-gray-200 flex items-center justify-between">
+            <div className="px-4 md:px-6 py-3 border-b border-gray-200 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <Avatar className="w-10 h-10">
-                  <AvatarImage src={selectedConversation.participantAvatar} />
-                  <AvatarFallback>{selectedConversation.participantName[0]}</AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="text-sm text-gray-900">{selectedConversation.participantName}</p>
-                  <div className="flex items-center gap-1">
-                    <CircleDot className="w-2 h-2 text-green-500 fill-green-500" />
-                    <p className="text-xs text-gray-500">Active now</p>
+                <button 
+                  onClick={() => setSelectedChat(null)}
+                  className="md:hidden text-gray-600 hover:text-gray-900 mr-2"
+                  aria-label="Back to conversations"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => {
+                    if (selectedConversation.isGroup) {
+                      setViewingGroupInfo(selectedConversation.id);
+                    } else {
+                      onViewProfile?.(selectedConversation.participantId);
+                    }
+                  }}
+                  className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                >
+                  <Avatar className="w-10 h-10">
+                    <AvatarImage src={selectedConversation.participantAvatar} />
+                    <AvatarFallback>{selectedConversation.participantName[0]}</AvatarFallback>
+                  </Avatar>
+                  <div className="text-left">
+                    <p className="text-sm text-gray-900">{selectedConversation.participantName}</p>
+                    <div className="flex items-center gap-1">
+                      {selectedConversation.isGroup ? (
+                        <p className="text-xs text-gray-500">
+                          {selectedConversation.groupMembers?.length || 0} members
+                        </p>
+                      ) : (
+                        <>
+                          <CircleDot className="w-2 h-2 text-green-500 fill-green-500" />
+                          <p className="text-xs text-gray-500">Active now</p>
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
+                </button>
               </div>
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" className="hover:bg-gray-100 rounded-full w-9 h-9 p-0">
-                  <Phone className="w-5 h-5 text-gray-700" />
+              <div className="flex items-center gap-1 md:gap-2">
+                <Button variant="ghost" size="sm" className="hover:bg-gray-100 rounded-full w-8 h-8 md:w-9 md:h-9 p-0">
+                  <Phone className="w-4 h-4 md:w-5 md:h-5 text-gray-700" />
                 </Button>
-                <Button variant="ghost" size="sm" className="hover:bg-gray-100 rounded-full w-9 h-9 p-0">
-                  <Video className="w-5 h-5 text-gray-700" />
+                <Button variant="ghost" size="sm" className="hover:bg-gray-100 rounded-full w-8 h-8 md:w-9 md:h-9 p-0">
+                  <Video className="w-4 h-4 md:w-5 md:h-5 text-gray-700" />
                 </Button>
-                <Button variant="ghost" size="sm" className="hover:bg-gray-100 rounded-full w-9 h-9 p-0">
-                  <Info className="w-5 h-5 text-gray-700" />
-                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="hover:bg-gray-100 rounded-full w-8 h-8 md:w-9 md:h-9 p-0">
+                      <Info className="w-4 h-4 md:w-5 md:h-5 text-gray-700" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem
+                      onClick={() => {
+                        if (selectedConversation.isGroup) {
+                          setViewingGroupInfo(selectedConversation.id);
+                        } else {
+                          onViewProfile?.(selectedConversation.participantId);
+                        }
+                      }}
+                    >
+                      <Eye className="w-4 h-4 mr-2" />
+                      {selectedConversation.isGroup ? 'View Group Info' : 'View Profile'}
+                    </DropdownMenuItem>
+                    {!selectedConversation.isGroup && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-orange-600 focus:text-orange-600">
+                          <Ban className="w-4 h-4 mr-2" />
+                          Block User
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive focus:text-destructive">
+                          <Flag className="w-4 h-4 mr-2" />
+                          Report User
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="text-destructive focus:text-destructive">
+                      Delete Chat
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
 
             {/* Messages */}
-            <ScrollArea className="flex-1 p-6">
+            <ScrollArea className="flex-1 p-4 md:p-6">
               <div className="space-y-3 max-w-3xl mx-auto">
                 {chatMessages.map((msg, index) => {
                   const showDate = index === 0 || 
@@ -247,23 +461,23 @@ export function ChatPage({ conversations, students, currentUserId }: ChatPagePro
                   return (
                     <div key={msg.id}>
                       {showDate && (
-                        <div className="flex justify-center my-6">
-                          <span className="text-xs text-gray-500 px-4 py-1 bg-gray-100 rounded-full">
+                        <div className="flex justify-center my-4 md:my-6">
+                          <span className="text-xs text-gray-500 px-3 md:px-4 py-1 bg-gray-100 rounded-full">
                             {formatDate(msg.timestamp)}
                           </span>
                         </div>
                       )}
                       <div className={`flex items-end gap-2 ${msg.isOwn ? 'justify-end' : 'justify-start'}`}>
                         {!msg.isOwn && (
-                          <Avatar className="w-7 h-7 flex-shrink-0 mb-1">
+                          <Avatar className="w-6 h-6 md:w-7 md:h-7 flex-shrink-0 mb-1">
                             <AvatarImage src={selectedConversation.participantAvatar} />
                             <AvatarFallback>{selectedConversation.participantName[0]}</AvatarFallback>
                           </Avatar>
                         )}
-                        <div className={`max-w-md ${msg.isOwn ? 'order-2' : 'order-1'}`}>
+                        <div className={`max-w-[75%] md:max-w-md ${msg.isOwn ? 'order-2' : 'order-1'}`}>
                           <div className="group relative">
                             <div
-                              className={`rounded-3xl px-4 py-2.5 ${
+                              className={`rounded-3xl px-3 py-2 md:px-4 md:py-2.5 ${
                                 msg.isOwn
                                   ? 'bg-gradient-to-br from-primary to-secondary text-white'
                                   : 'bg-gray-100 text-gray-900'
@@ -272,7 +486,7 @@ export function ChatPage({ conversations, students, currentUserId }: ChatPagePro
                               <p className="text-sm break-words">{msg.content}</p>
                             </div>
                             {msg.isOwn && (
-                              <button className="absolute -left-8 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                              <button className="hidden md:block absolute -left-8 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                                 <MoreVertical className="w-4 h-4 text-gray-400" />
                               </button>
                             )}
@@ -289,10 +503,10 @@ export function ChatPage({ conversations, students, currentUserId }: ChatPagePro
             </ScrollArea>
 
             {/* Message Input - Instagram Style */}
-            <div className="px-6 py-4 border-t border-gray-200">
-              <div className="flex items-center gap-3">
-                <Button variant="ghost" size="sm" className="hover:bg-gray-100 rounded-full w-9 h-9 p-0 flex-shrink-0">
-                  <Image className="w-5 h-5 text-gray-700" />
+            <div className="px-4 md:px-6 py-3 md:py-4 border-t border-gray-200">
+              <div className="flex items-center gap-2 md:gap-3">
+                <Button variant="ghost" size="sm" className="hover:bg-gray-100 rounded-full w-8 h-8 md:w-9 md:h-9 p-0 flex-shrink-0">
+                  <Image className="w-4 h-4 md:w-5 md:h-5 text-gray-700" />
                 </Button>
                 <div className="flex-1 relative">
                   <Input
@@ -301,20 +515,20 @@ export function ChatPage({ conversations, students, currentUserId }: ChatPagePro
                     value={message}
                     onChange={(e) => setMessage(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                    className="w-full pr-10 bg-gray-100 border-gray-100 rounded-full focus:bg-gray-50 transition-all duration-300"
+                    className="w-full pr-10 bg-gray-100 border-gray-100 rounded-full focus:bg-gray-50 transition-all duration-300 text-sm md:text-base"
                   />
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    className="absolute right-1 top-1/2 -translate-y-1/2 hover:bg-transparent rounded-full w-8 h-8 p-0"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 hover:bg-transparent rounded-full w-7 h-7 md:w-8 md:h-8 p-0"
                   >
-                    <Smile className="w-5 h-5 text-gray-500" />
+                    <Smile className="w-4 h-4 md:w-5 md:h-5 text-gray-500" />
                   </Button>
                 </div>
                 {message.trim() ? (
                   <Button 
                     onClick={handleSendMessage}
-                    className="bg-transparent hover:bg-transparent text-primary p-0 h-auto transition-all duration-300 hover:scale-110"
+                    className="bg-transparent hover:bg-transparent text-primary p-0 h-auto text-sm md:text-base transition-all duration-300 hover:scale-110"
                   >
                     Send
                   </Button>
@@ -322,9 +536,9 @@ export function ChatPage({ conversations, students, currentUserId }: ChatPagePro
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    className="hover:bg-transparent rounded-full w-9 h-9 p-0 flex-shrink-0"
+                    className="hover:bg-transparent rounded-full w-8 h-8 md:w-9 md:h-9 p-0 flex-shrink-0"
                   >
-                    <Heart className="w-5 h-5 text-gray-700" />
+                    <Heart className="w-4 h-4 md:w-5 md:h-5 text-gray-700" />
                   </Button>
                 )}
               </div>
@@ -342,6 +556,16 @@ export function ChatPage({ conversations, students, currentUserId }: ChatPagePro
           </div>
         )}
       </div>
+
+      {/* New Chat Modal */}
+      <NewChatModal
+        isOpen={isNewChatOpen}
+        onClose={() => setIsNewChatOpen(false)}
+        students={students}
+        currentUserId={currentUserId}
+        onStartChat={handleStartChat}
+        onCreateGroup={handleCreateGroup}
+      />
     </div>
   );
 }

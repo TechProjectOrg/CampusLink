@@ -9,9 +9,13 @@ import {
   Upload, 
   ExternalLink,
   Plus,
-  X
+  X,
+  Heart,
+  MessageCircle,
+  Share2,
+  Bookmark
 } from 'lucide-react';
-import { Student } from '../types';
+import { Student, Opportunity } from '../types';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -24,11 +28,20 @@ interface ProfilePageProps {
   student: Student;
   isOwnProfile: boolean;
   onEdit?: (updates: Partial<Student>) => void;
+  opportunities?: Opportunity[];
+  onLike?: (opportunityId: string) => void;
+  onSave?: (opportunityId: string) => void;
+  onComment?: (opportunityId: string, comment: string) => void;
 }
 
-export function ProfilePage({ student, isOwnProfile, onEdit }: ProfilePageProps) {
+export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLike, onSave, onComment }: ProfilePageProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedStudent, setEditedStudent] = useState(student);
+  const [commentText, setCommentText] = useState<{ [key: string]: string }>({});
+  const [showComments, setShowComments] = useState<{ [key: string]: boolean }>({});
+
+  // Filter posts by this user
+  const userPosts = opportunities?.filter(opp => opp.authorId === student.id) || [];
 
   const handleSave = () => {
     if (onEdit) {
@@ -54,7 +67,7 @@ export function ProfilePage({ student, isOwnProfile, onEdit }: ProfilePageProps)
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
       <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
         {/* Header Card */}
         <Card>
@@ -268,6 +281,178 @@ export function ProfilePage({ student, isOwnProfile, onEdit }: ProfilePageProps)
                   </div>
                 </div>
               ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* User Posts */}
+        {userPosts.length > 0 && (
+          <Card>
+            <CardHeader>
+              <h2 className="text-gray-900">
+                {isOwnProfile ? 'My Posts' : `Posts by ${student.name}`}
+              </h2>
+              <p className="text-sm text-gray-500">{userPosts.length} post{userPosts.length !== 1 ? 's' : ''}</p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {userPosts.map((post) => {
+                const isLiked = onLike && post.likes.includes('current');
+                const isSaved = onSave && post.saved.includes('current');
+
+                return (
+                  <Card key={post.id} className="border border-primary/10 hover:shadow-lg transition-all duration-300">
+                    <CardContent className="p-4 md:p-6 space-y-4">
+                      {/* Post Header */}
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Badge className={`
+                              ${post.type === 'internship' ? 'bg-blue-100 text-blue-800' : ''}
+                              ${post.type === 'event' ? 'bg-purple-100 text-purple-800' : ''}
+                              ${post.type === 'hackathon' ? 'bg-green-100 text-green-800' : ''}
+                            `}>
+                              {post.type.toUpperCase()}
+                            </Badge>
+                            <span className="text-xs text-gray-500">
+                              {new Date(post.date).toLocaleDateString('en-US', { 
+                                month: 'short', 
+                                day: 'numeric',
+                                year: 'numeric'
+                              })}
+                            </span>
+                          </div>
+                          <h3 className="text-gray-900">{post.title}</h3>
+                          {post.location && (
+                            <div className="flex items-center gap-1 mt-1 text-sm text-gray-600">
+                              <MapPin className="w-3 h-3" />
+                              <span>{post.location}</span>
+                            </div>
+                          )}
+                        </div>
+                        {onSave && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onSave(post.id)}
+                            className={isSaved ? 'text-primary' : 'text-gray-400'}
+                          >
+                            <Bookmark className={`w-5 h-5 ${isSaved ? 'fill-current' : ''}`} />
+                          </Button>
+                        )}
+                      </div>
+
+                      {/* Post Description */}
+                      <p className="text-gray-700">{post.description}</p>
+
+                      {/* Post Image */}
+                      {post.image && (
+                        <div className="rounded-xl overflow-hidden">
+                          <ImageWithFallback
+                            src={post.image}
+                            alt={post.title}
+                            className="w-full h-64 object-cover hover:scale-105 transition-transform duration-500"
+                          />
+                        </div>
+                      )}
+
+                      {/* Post Link */}
+                      {post.link && (
+                        <a
+                          href={post.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 text-primary hover:underline text-sm"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                          Learn more
+                        </a>
+                      )}
+
+                      {/* Post Actions */}
+                      <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+                        {onLike && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => onLike(post.id)}
+                            className={`${isLiked ? 'text-red-600' : 'text-gray-600'} hover:bg-red-50`}
+                          >
+                            <Heart className={`w-4 h-4 mr-2 ${isLiked ? 'fill-current' : ''}`} />
+                            {post.likes.length}
+                          </Button>
+                        )}
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="text-gray-600 hover:bg-blue-50"
+                          onClick={() => setShowComments({ ...showComments, [post.id]: !showComments[post.id] })}
+                        >
+                          <MessageCircle className="w-4 h-4 mr-2" />
+                          {post.comments.length}
+                        </Button>
+                        <Button variant="ghost" size="sm" className="text-gray-600 hover:bg-gray-50 ml-auto">
+                          <Share2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+
+                      {/* Comments Section */}
+                      {showComments[post.id] && (
+                        <div className="space-y-3 pt-3 border-t border-gray-100">
+                          {post.comments.map((comment) => (
+                            <div key={comment.id} className="flex gap-3">
+                              <Avatar className="w-8 h-8">
+                                <AvatarImage src={comment.authorAvatar} />
+                                <AvatarFallback>{comment.authorName[0]}</AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 bg-gray-50 rounded-lg p-3">
+                                <p className="text-sm font-semibold text-gray-900">{comment.authorName}</p>
+                                <p className="text-sm text-gray-700">{comment.content}</p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {new Date(comment.timestamp).toLocaleDateString('en-US', { 
+                                    month: 'short', 
+                                    day: 'numeric',
+                                    hour: 'numeric',
+                                    minute: '2-digit'
+                                  })}
+                                </p>
+                              </div>
+                            </div>
+                          ))}
+                          
+                          {/* Add Comment */}
+                          {onComment && (
+                            <div className="flex gap-2 pt-2">
+                              <Input
+                                placeholder="Write a comment..."
+                                value={commentText[post.id] || ''}
+                                onChange={(e) => setCommentText({ ...commentText, [post.id]: e.target.value })}
+                                onKeyPress={(e) => {
+                                  if (e.key === 'Enter' && commentText[post.id]?.trim()) {
+                                    onComment(post.id, commentText[post.id]);
+                                    setCommentText({ ...commentText, [post.id]: '' });
+                                  }
+                                }}
+                              />
+                              <Button
+                                size="sm"
+                                onClick={() => {
+                                  if (commentText[post.id]?.trim()) {
+                                    onComment(post.id, commentText[post.id]);
+                                    setCommentText({ ...commentText, [post.id]: '' });
+                                  }
+                                }}
+                                disabled={!commentText[post.id]?.trim()}
+                              >
+                                Post
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </CardContent>
           </Card>
         )}

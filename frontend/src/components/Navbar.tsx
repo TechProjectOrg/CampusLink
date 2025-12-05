@@ -1,7 +1,15 @@
 import { useState } from 'react';
-import { Home, Search, Users, MessageCircle, BookOpen, User, Bell } from 'lucide-react';
+import { Home, Search, Users, MessageCircle, BookOpen, User, Bell, Settings } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
 
 interface NavbarProps {
   activeTab: string;
@@ -105,6 +113,16 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
             )}
           </button>
 
+          {/* Settings - Desktop */}
+          <button 
+            onClick={() => onTabChange('settings')}
+            className={`hidden md:flex p-2 rounded-xl relative transition-all duration-300 hover:scale-110 border border-white/20 ${
+              activeTab === 'settings' ? 'bg-white/20' : 'hover:bg-white/10'
+            }`}
+          >
+            <Settings className="w-5 h-5 text-white" />
+          </button>
+
           {/* Search Icon - Mobile */}
           <button 
             onClick={handleSearchFocus}
@@ -146,7 +164,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
         )}
 
         {/* Mobile Navigation */}
-        <div className="md:hidden fixed bottom-0 left-0 right-0 backdrop-blur-xl bg-gradient-to-r from-primary via-secondary to-primary border-t border-white/20 flex items-center justify-around py-2 px-2 shadow-2xl z-50">
+        <div className="md:hidden fixed bottom-0 left-0 right-0 backdrop-blur-xl bg-gradient-to-r from-primary via-secondary to-primary border-t border-white/20 flex items-center justify-center gap-2 py-3 px-4 shadow-2xl z-50 safe-area-inset-bottom">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -155,16 +173,16 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
               <button
                 key={item.id}
                 onClick={() => onTabChange(item.id)}
-                className={`relative flex flex-col items-center gap-1 px-3 py-2 rounded-xl transition-all duration-300 ${
+                className={`relative flex flex-col items-center justify-center gap-1 flex-1 max-w-[80px] px-3 py-3 rounded-2xl transition-all duration-300 ${
                   isActive 
-                    ? 'text-white bg-white/20 scale-110 shadow-lg border border-white/30' 
-                    : 'text-white/80 hover:text-white'
+                    ? 'text-white bg-white/25 scale-105 shadow-xl border border-white/40 backdrop-blur-sm' 
+                    : 'text-white/70 hover:text-white hover:bg-white/10 active:scale-95'
                 }`}
               >
-                <Icon className="w-5 h-5" />
-                <span className="text-xs">{item.label}</span>
+                <Icon className="w-6 h-6 mb-0.5" />
+                <span className="text-[10px] font-medium leading-none whitespace-nowrap">{item.label}</span>
                 {item.badge && item.badge > 0 && (
-                  <Badge className="absolute -top-1 -right-1 bg-destructive text-white px-1.5 py-0 min-w-5 h-5 flex items-center justify-center animate-pulse">
+                  <Badge className="absolute -top-1 -right-1 bg-destructive text-white px-1.5 py-0.5 min-w-[18px] h-[18px] text-[10px] flex items-center justify-center animate-pulse shadow-lg border border-white/30">
                     {item.badge}
                   </Badge>
                 )}

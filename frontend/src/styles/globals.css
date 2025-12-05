@@ -220,6 +220,17 @@ html {
   }
 }
 
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
 @keyframes glow {
   0%, 100% {
     box-shadow: 0 0 20px rgba(26, 115, 232, 0.3);
@@ -238,6 +249,15 @@ html {
   }
 }
 
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
 .animate-slide-in-up {
   animation: slideInUp 0.5s ease-out;
 }
@@ -248,6 +268,14 @@ html {
 
 .animate-fade-in {
   animation: fadeIn 0.3s ease-out;
+}
+
+.animate-fade-slide-in {
+  animation: fadeSlideIn 0.35s ease-out;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
 }
 
 /* Smooth transitions for all interactive elements */
@@ -270,9 +298,21 @@ button, input, select, textarea {
   border: 1px solid rgba(255, 255, 255, 0.3);
 }
 
+/* Glass morphism effect with more opacity for better text visibility */
+.glass-morphism-solid {
+  background: rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
 /* Futuristic gradient backgrounds */
 .gradient-primary {
   background: linear-gradient(135deg, #1A73E8 0%, #42A5F5 100%);
+}
+
+.gradient-secondary {
+  background: linear-gradient(135deg, #42A5F5 0%, #1A73E8 100%);
 }
 
 .gradient-success {
@@ -310,4 +350,18 @@ button, input, select, textarea {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
+}
+
+/* Safe area insets for mobile devices with notches */
+@supports (padding: max(0px)) {
+  .safe-area-inset-bottom {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+}
+
+/* Ensure body doesn't scroll behind mobile nav */
+@media (max-width: 768px) {
+  body {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
 }

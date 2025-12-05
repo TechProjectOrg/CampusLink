@@ -4,6 +4,8 @@ import { Opportunity, Student } from '../types';
 import { OpportunityCard } from './OpportunityCard';
 import { ProfileCard } from './ProfileCard';
 import { SuggestionsCard } from './SuggestionsCard';
+import { CreateOpportunityModal } from './CreateOpportunityModal';
+import { EmptyState } from './EmptyState';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 
@@ -15,6 +17,7 @@ interface FeedPageProps {
   onLike: (id: string) => void;
   onSave: (id: string) => void;
   onComment: (id: string, comment: string) => void;
+  onCreateOpportunity?: (opportunity: Opportunity) => void;
   onViewProfile?: () => void;
   onConnect?: (studentId: string) => void;
   onViewStudentProfile?: (studentId: string) => void;
@@ -28,11 +31,13 @@ export function FeedPage({
   onLike, 
   onSave, 
   onComment,
+  onCreateOpportunity,
   onViewProfile,
   onConnect,
   onViewStudentProfile
 }: FeedPageProps) {
   const [selectedFilter, setSelectedFilter] = useState<string>('all');
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const filters = [
     { id: 'all', label: 'All', icon: Sparkles },
@@ -48,11 +53,11 @@ export function FeedPage({
     : opportunities.filter(opp => opp.type === selectedFilter);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
       <div className="max-w-7xl mx-auto px-4 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Left Sidebar - Profile Card (Hidden on mobile and tablets) */}
-          <div className="hidden show-on-laptop xl:col-span-3">
+          <div className="hidden xl:block xl:col-span-3">
             <div className="sticky top-24">
               {currentUser && (
                 <ProfileCard 
@@ -73,7 +78,7 @@ export function FeedPage({
                 </h1>
                 <p className="text-gray-600">Discover internships, events, and more</p>
               </div>
-              <Button className="flex items-center gap-2 gradient-success shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+              <Button className="flex items-center gap-2 gradient-success shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105" onClick={() => setIsCreateModalOpen(true)}>
                 <Plus className="w-4 h-4" />
                 <span className="hidden sm:inline">Post</span>
               </Button>
@@ -120,6 +125,7 @@ export function FeedPage({
                     onLike={onLike}
                     onSave={onSave}
                     onComment={onComment}
+                    onViewProfile={onViewStudentProfile}
                   />
                 </div>
               ))}
@@ -149,6 +155,12 @@ export function FeedPage({
           </div>
         </div>
       </div>
+      <CreateOpportunityModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onCreateOpportunity={(opp) => onCreateOpportunity?.(opp)}
+        currentUser={currentUser}
+      />
     </div>
   );
 }

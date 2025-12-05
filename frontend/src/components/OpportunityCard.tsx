@@ -13,6 +13,7 @@ interface OpportunityCardProps {
   onLike: (id: string) => void;
   onSave: (id: string) => void;
   onComment: (id: string, comment: string) => void;
+  onViewProfile?: (authorId: string) => void;
 }
 
 export function OpportunityCard({ 
@@ -20,7 +21,8 @@ export function OpportunityCard({
   currentUserId, 
   onLike, 
   onSave, 
-  onComment 
+  onComment,
+  onViewProfile
 }: OpportunityCardProps) {
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -53,13 +55,16 @@ export function OpportunityCard({
       {/* Header */}
       <div className="p-6 pb-4">
         <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <Avatar className="ring-2 ring-primary/20 transition-all duration-300 hover:ring-primary/40">
+          <div 
+            className="flex items-center gap-3 cursor-pointer group"
+            onClick={() => onViewProfile?.(opportunity.authorId)}
+          >
+            <Avatar className="ring-2 ring-primary/20 transition-all duration-300 group-hover:ring-primary/40">
               <AvatarImage src={opportunity.authorAvatar} />
               <AvatarFallback>{opportunity.authorName[0]}</AvatarFallback>
             </Avatar>
             <div>
-              <p className="text-gray-900">{opportunity.authorName}</p>
+              <p className="text-gray-900 group-hover:text-primary transition-colors">{opportunity.authorName}</p>
               <p className="text-sm text-gray-500">{formatDate(opportunity.date)}</p>
             </div>
           </div>

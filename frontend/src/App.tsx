@@ -8,6 +8,9 @@ import { NetworkPage } from './components/NetworkPage';
 import { ChatPage } from './components/ChatPage';
 import { ClubsPage } from './components/ClubsPage';
 import { NotificationsPage } from './components/NotificationsPage';
+import { SettingsPage } from './components/SettingsPage';
+import { FloatingChat } from './components/FloatingChat';
+import { Toaster } from './components/ui/sonner';
 import { mockStudents, mockOpportunities, mockClubs, mockConversations, mockNotifications, getCurrentUser } from './lib/mockData';
 import { Student, Opportunity, Club, Notification } from './types';
 
@@ -198,6 +201,28 @@ export default function App() {
     setIsAuthenticated(true);
   };
 
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setActiveTab('feed');
+    setViewingProfileId(null);
+  };
+
+  // Create opportunity handler
+  const handleCreateOpportunity = (opportunity: Opportunity) => {
+    setOpportunities([opportunity, ...opportunities]);
+  };
+
+  // Create club handler
+  const handleCreateClub = (club: Club) => {
+    setClubs([club, ...clubs]);
+  };
+
+  // Settings handler
+  const handleUpdateSettings = (settings: any) => {
+    // Handle settings update
+    console.log('Settings updated:', settings);
+  };
+
   // Calculate unread messages and notifications
   const unreadCount = mockConversations.reduce((sum, conv) => sum + conv.unread, 0);
   const unreadNotifications = notifications.filter(n => !n.read).length;
@@ -241,6 +266,7 @@ export default function App() {
           onLike={handleLike}
           onSave={handleSave}
           onComment={handleComment}
+          onCreateOpportunity={handleCreateOpportunity}
           onViewProfile={() => handleViewProfile(currentUserId)}
           onConnect={handleConnect}
           onViewStudentProfile={handleViewProfile}
@@ -265,6 +291,7 @@ export default function App() {
           onRejectRequest={handleRejectRequest}
           onMessage={handleMessage}
           onViewProfile={handleViewProfile}
+          onConnect={handleConnect}
         />
       )}
 
@@ -273,6 +300,7 @@ export default function App() {
           conversations={mockConversations}
           students={students}
           currentUserId={currentUserId}
+          onViewProfile={handleViewProfile}
         />
       )}
 
@@ -283,6 +311,8 @@ export default function App() {
           currentUserId={currentUserId}
           onJoinClub={handleJoinClub}
           onLeaveClub={handleLeaveClub}
+          onCreateClub={handleCreateClub}
+          onViewProfile={handleViewProfile}
         />
       )}
 
@@ -291,6 +321,10 @@ export default function App() {
           student={displayedStudent}
           isOwnProfile={displayedStudent.id === currentUserId}
           onEdit={handleEditProfile}
+          opportunities={opportunities}
+          onLike={handleLike}
+          onSave={handleSave}
+          onComment={handleComment}
         />
       )}
 
@@ -302,6 +336,21 @@ export default function App() {
           onNotificationClick={handleNotificationClick}
         />
       )}
+
+      {activeTab === 'settings' && (
+        <SettingsPage
+          student={currentUser}
+          onEdit={handleEditProfile}
+          onUpdateSettings={handleUpdateSettings}
+        />
+      )}
+
+      <FloatingChat
+        conversations={mockConversations}
+        currentUserId={currentUserId}
+        onOpenFullChat={() => handleTabChange('chat')}
+      />
+      <Toaster />
     </div>
   );
 }

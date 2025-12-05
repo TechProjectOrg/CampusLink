@@ -15,8 +15,8 @@ export function NotificationsPage({
   onNotificationClick
 }: NotificationsPageProps) {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in">
-      <div className="max-w-3xl mx-auto px-4 py-6">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
+      <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         <NotificationsCard
           notifications={notifications}
           onMarkAsRead={onMarkAsRead}
