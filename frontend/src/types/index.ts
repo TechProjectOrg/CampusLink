@@ -76,6 +76,8 @@ export interface ChatConversation {
   lastMessage: string;
   timestamp: string;
   unread: number;
+  isGroup?: boolean;
+  groupMembers?: string[];
 }
 
 export interface Notification {
@@ -87,4 +89,15 @@ export interface Notification {
   timestamp: string;
   read: boolean;
   actionUrl?: string;
+}
+
+export interface Group {
+  id: string;
+  name: string;
+  description: string;
+  avatar: string;
+  members: string[];
+  admins: string[];
+  createdAt: string;
+  createdBy: string;
 }
