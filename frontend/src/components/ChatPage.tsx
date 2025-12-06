@@ -24,7 +24,7 @@ interface ChatPageProps {
 }
 
 export function ChatPage({ conversations, students, currentUserId, onViewProfile }: ChatPageProps) {
-  const [selectedChat, setSelectedChat] = useState<string | null>(null);
+  const [selectedChat, setSelectedChat] = useState<string | null>(conversations[0]?.id || null);
   const [message, setMessage] = useState('');
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
   const [viewingGroupInfo, setViewingGroupInfo] = useState<string | null>(null);
@@ -287,7 +287,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
           {/* Header */}
           <div className="p-4 md:p-6 border-b border-gray-200">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-gray-900">Messages</h2>
+              <h2 className="text-gray-900 mb-4">Messages</h2>
               <Button
                 onClick={() => setIsNewChatOpen(true)}
                 size="sm"

@@ -49,7 +49,7 @@ export function ClubsPage({ clubs, students, currentUserId, onJoinClub, onLeaveC
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
-      <div className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-8 space-y-6 md:space-y-8">
+      <div className="max-w-6xl mx-auto px-4 md:px-6 py-6 md:py-8 space-y-6 md:space-y-8">
         {/* Header */}
         <div className="animate-slide-in-down">
           <h1 className="text-gray-900 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent mb-2">Campus Clubs</h1>
@@ -91,7 +91,7 @@ export function ClubsPage({ clubs, students, currentUserId, onJoinClub, onLeaveC
                   alt={club.name}
                   className="w-full h-full object-cover opacity-50"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent"></div>
                 <div className="absolute bottom-3 md:bottom-4 left-3 md:left-4 right-3 md:right-4">
                   <h2 className="text-white text-lg md:text-xl">{club.name}</h2>
                 </div>

@@ -14,6 +14,7 @@ interface AuthPageProps {
 export function AuthPage({ onLogin }: AuthPageProps) {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [signupType, setSignupType] = useState<'student' | 'alumni'>('student');
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
   const [activeForm, setActiveForm] = useState<'login' | 'signup'>('login');
@@ -21,36 +22,67 @@ export function AuthPage({ onLogin }: AuthPageProps) {
     name: '',
     email: '',
     password: '',
+    confirmPassword: '',
     branch: '',
     year: ''
   });
 
+  const [alumniSignupData, setAlumniSignupData] = useState({
+    name: '',
+    email: '',
+    graduationYear: '',
+    branch: '',
+    currentStatus: '',
+    password: '',
+    confirmPassword: ''
+  });
+
+  const [signupError, setSignupError] = useState('');
+
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showStudentPassword, setShowStudentPassword] = useState(false);
+  const [showStudentConfirmPassword, setShowStudentConfirmPassword] = useState(false);
+  const [showAlumniPassword, setShowAlumniPassword] = useState(false);
+  const [showAlumniConfirmPassword, setShowAlumniConfirmPassword] = useState(false);
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    if (loginEmail.endsWith('@college.edu')) {
+    if (loginEmail.endsWith('@gbpuat.ac.in')) {
       onLogin();
     } else {
-      alert('Please use your college email (@college.edu)');
+      alert('Please use your college email (@gbpuat.ac.in)');
     }
   };
 
   const handleSignup = (e: React.FormEvent) => {
     e.preventDefault();
-    if (signupData.email.endsWith('@college.edu')) {
-      onLogin();
-    } else {
-      alert('Please use your college email (@college.edu)');
+
+    const data = signupType === 'student' ? signupData : alumniSignupData;
+
+    if (data.password !== data.confirmPassword) {
+      setSignupError('Passwords do not match');
+      return;
     }
+
+    setSignupError('');
+
+    // For students, enforce college email; for alumni, allow any valid email
+    if (signupType === 'student' && !data.email.endsWith('@gbpuat.ac.in')) {
+      alert('Please use your college email (@gbpuat.ac.in)');
+      return;
+    }
+
+    onLogin();
   };
 
   const handleForgotPassword = (e: React.FormEvent) => {
     e.preventDefault();
-    if (forgotPasswordEmail.endsWith('@college.edu')) {
+    if (forgotPasswordEmail.endsWith('@gbpuat.ac.in')) {
       alert('Password reset link has been sent to your email!');
       setIsForgotPasswordOpen(false);
       setForgotPasswordEmail('');
     } else {
-      alert('Please use your college email (@college.edu)');
+      alert('Please use your college email (@gbpuat.ac.in)');
     }
   };
 
@@ -87,28 +119,28 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                 <Users className="w-5 h-5 text-white" />
                 <p className="text-2xl text-white">500+</p>
               </div>
-              <p className="text-sm text-white/90">Active Students</p>
+              <p className="text-sm text-white/80">Active Students</p>
             </div>
             <div className="glass-morphism-solid rounded-2xl p-4 shadow-xl hover-lift animate-slide-in-up" style={{ animationDelay: '200ms' }}>
               <div className="flex items-center gap-2 mb-2">
                 <TrendingUp className="w-5 h-5 text-white" />
                 <p className="text-2xl text-white">100+</p>
               </div>
-              <p className="text-sm text-white/90">Opportunities</p>
+              <p className="text-sm text-white/80">Opportunities</p>
             </div>
             <div className="glass-morphism-solid rounded-2xl p-4 shadow-xl hover-lift animate-slide-in-up" style={{ animationDelay: '300ms' }}>
               <div className="flex items-center gap-2 mb-2">
                 <Sparkles className="w-5 h-5 text-white" />
                 <p className="text-2xl text-white">50+</p>
               </div>
-              <p className="text-sm text-white/90">Active Clubs</p>
+              <p className="text-sm text-white/80">Active Clubs</p>
             </div>
             <div className="glass-morphism-solid rounded-2xl p-4 shadow-xl hover-lift animate-slide-in-up" style={{ animationDelay: '400ms' }}>
               <div className="flex items-center gap-2 mb-2">
                 <Award className="w-5 h-5 text-white" />
                 <p className="text-2xl text-white">20+</p>
               </div>
-              <p className="text-sm text-white/90">Events/Month</p>
+              <p className="text-sm text-white/80">Events/Month</p>
             </div>
           </div>
         </div>
@@ -163,7 +195,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                         <Input
                           id="login-email"
                           type="email"
-                          placeholder="your.name@college.edu"
+                          placeholder="your.name@gbpuat.ac.in"
                           value={loginEmail}
                           onChange={(e) => setLoginEmail(e.target.value)}
                           className="pl-10 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
@@ -212,7 +244,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                                 <Input
                                   id="forgot-email"
                                   type="email"
-                                  placeholder="your.name@college.edu"
+                                  placeholder="your.name@gbpuat.ac.in"
                                   value={forgotPasswordEmail}
                                   onChange={(e) => setForgotPasswordEmail(e.target.value)}
                                   className="pl-10 border-primary/20 focus:border-primary rounded-xl"
@@ -248,6 +280,22 @@ export function AuthPage({ onLogin }: AuthPageProps) {
               {activeForm === 'signup' && (
                 <div className="animate-fade-slide-in">
                   <form onSubmit={handleSignup} className="space-y-4">
+                      {/* Signup type selector */}
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-type">Sign up as</Label>
+                      <select
+                        id="signup-type"
+                        value={signupType}
+                        onChange={(e) => setSignupType(e.target.value as 'student' | 'alumni')}
+                        className="w-full px-4 py-2 border border-primary/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all duration-300"
+                      >
+                        <option value="student">Student</option>
+                        <option value="alumni">Alumni</option>
+                      </select>
+                    </div>
+
+                    {signupType === 'student' ? (
+                      <>
                     <div className="space-y-2">
                       <Label htmlFor="signup-name">Full Name</Label>
                       <Input
@@ -268,7 +316,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                         <Input
                           id="signup-email"
                           type="email"
-                          placeholder="your.name@college.edu"
+                          placeholder="your.name@gbpuat.ac.in"
                           value={signupData.email}
                           onChange={(e) => setSignupData({ ...signupData, email: e.target.value })}
                           className="pl-10 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
@@ -319,20 +367,167 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="signup-password">Password</Label>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <Label htmlFor="signup-password">Password</Label>
+                        <div className="relative">
+                          <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                          <Input
+                            id="signup-password"
+                            type={showStudentPassword ? 'text' : 'password'}
+                            placeholder="••••••••"
+                            value={signupData.password}
+                            onChange={(e) => {
+                              setSignupData({ ...signupData, password: e.target.value });
+                              setSignupError('');
+                            }}
+                            className="pl-10 pr-16 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="signup-confirm-password">Confirm Password</Label>
+                        <div className="relative">
+                          <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                          <Input
+                            id="signup-confirm-password"
+                            type={showStudentConfirmPassword ? 'text' : 'password'}
+                            placeholder="••••••••"
+                            value={signupData.confirmPassword}
+                            onChange={(e) => {
+                              setSignupData({ ...signupData, confirmPassword: e.target.value });
+                              setSignupError('');
+                            }}
+                            className="pl-10 pr-16 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
+                            required
+                          />
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="alumni-name">Full Name</Label>
                         <Input
-                          id="signup-password"
-                          type="password"
-                          placeholder="••••••••"
-                          value={signupData.password}
-                          onChange={(e) => setSignupData({ ...signupData, password: e.target.value })}
-                          className="pl-10 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
+                          id="alumni-name"
+                          type="text"
+                          placeholder="John Doe"
+                          value={alumniSignupData.name}
+                          onChange={(e) => setAlumniSignupData({ ...alumniSignupData, name: e.target.value })}
+                          className="border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
                           required
                         />
                       </div>
-                    </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="alumni-email">Email</Label>
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                          <Input
+                            id="alumni-email"
+                            type="email"
+                            placeholder="you@example.com"
+                            value={alumniSignupData.email}
+                            onChange={(e) => setAlumniSignupData({ ...alumniSignupData, email: e.target.value })}
+                            className="pl-10 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="alumni-graduation-year">Graduation Year</Label>
+                          <Input
+                            id="alumni-graduation-year"
+                            type="number"
+                            placeholder="2022"
+                            value={alumniSignupData.graduationYear}
+                            onChange={(e) => setAlumniSignupData({ ...alumniSignupData, graduationYear: e.target.value })}
+                            className="border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
+                            required
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="alumni-branch">Branch</Label>
+                          <div className="relative">
+                            <GraduationCap className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 z-10" />
+                            <select
+                              id="alumni-branch"
+                              value={alumniSignupData.branch}
+                              onChange={(e) => setAlumniSignupData({ ...alumniSignupData, branch: e.target.value })}
+                              className="w-full pl-10 pr-4 py-2 border border-primary/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all duration-300"
+                              required
+                            >
+                              <option value="">Select</option>
+                              <option value="Computer Science">Computer Science</option>
+                              <option value="Information Technology">Information Technology</option>
+                              <option value="Electronics">Electronics</option>
+                              <option value="Mechanical">Mechanical</option>
+                              <option value="Civil">Civil</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="alumni-current-status">Current working status</Label>
+                        <Input
+                          id="alumni-current-status"
+                          type="text"
+                          placeholder="Software Engineer at XYZ"
+                          value={alumniSignupData.currentStatus}
+                          onChange={(e) => setAlumniSignupData({ ...alumniSignupData, currentStatus: e.target.value })}
+                          className="border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="alumni-password">Password</Label>
+                        <div className="relative">
+                          <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                          <Input
+                            id="alumni-password"
+                            type={showAlumniPassword ? 'text' : 'password'}
+                            placeholder="••••••••"
+                            value={alumniSignupData.password}
+                            onChange={(e) => {
+                              setAlumniSignupData({ ...alumniSignupData, password: e.target.value });
+                              setSignupError('');
+                            }}
+                            className="pl-10 pr-16 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="alumni-confirm-password">Confirm Password</Label>
+                        <div className="relative">
+                          <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                          <Input
+                            id="alumni-confirm-password"
+                            type={showAlumniConfirmPassword ? 'text' : 'password'}
+                            placeholder="••••••••"
+                            value={alumniSignupData.confirmPassword}
+                            onChange={(e) => {
+                              setAlumniSignupData({ ...alumniSignupData, confirmPassword: e.target.value });
+                              setSignupError('');
+                            }}
+                            className="pl-10 pr-16 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
+                            required
+                          />
+                        
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {signupError && (
+                    <p className="text-sm text-red-500">{signupError}</p>
+                  )}
 
                     <Button type="submit" className="w-full gradient-success shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
                       Create Account
