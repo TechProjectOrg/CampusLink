@@ -72,26 +72,28 @@ export function NewChatModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] p-0">
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0">
         <DialogHeader className="p-6 pb-4 border-b">
           <DialogTitle>New Message</DialogTitle>
           <DialogDescription>Select a person or create a group to start a chat.</DialogDescription>
         </DialogHeader>
 
-        <Tabs value={selectedTab} onValueChange={(v) => setSelectedTab(v as 'person' | 'group')} className="flex-1 flex flex-col">
-          <TabsList className="w-full grid grid-cols-2 mx-6 mb-4">
-            <TabsTrigger value="person" className="flex items-center gap-2">
-              <User className="w-4 h-4" />
-              Person
-            </TabsTrigger>
-            <TabsTrigger value="group" className="flex items-center gap-2">
-              <Users className="w-4 h-4" />
-              Group
-            </TabsTrigger>
-          </TabsList>
+        <Tabs value={selectedTab} onValueChange={(v) => setSelectedTab(v as 'person' | 'group')} className="flex-1 flex flex-col overflow-hidden">
+          <div className="px-6">
+            <TabsList className="w-full grid grid-cols-2 mt-4">
+              <TabsTrigger value="person" className="flex items-center gap-2">
+                <User className="w-4 h-4" />
+                Person
+              </TabsTrigger>
+              <TabsTrigger value="group" className="flex items-center gap-2">
+                <Users className="w-4 h-4" />
+                Group
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* Search Bar */}
-          <div className="px-6 pb-4">
+          <div className="px-6 pt-4">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
@@ -105,8 +107,8 @@ export function NewChatModal({
           </div>
 
           {/* Person Tab */}
-          <TabsContent value="person" className="mt-0">
-            <div className="max-h-[400px] overflow-y-auto px-6 pb-6">
+          <TabsContent value="person" className="flex-1 overflow-y-auto mt-4">
+            <div className="px-6 pb-6">
               {filteredStudents.length === 0 ? (
                 <div className="text-center py-12">
                   <p className="text-gray-500">No students found</p>
@@ -135,8 +137,8 @@ export function NewChatModal({
           </TabsContent>
 
           {/* Group Tab */}
-          <TabsContent value="group" className="mt-0">
-            <div className="px-6 pb-6 space-y-4">
+          <TabsContent value="group" className="flex-1 flex flex-col overflow-y-auto mt-4">
+            <div className="px-6 pb-6 flex-1 flex flex-col gap-4">
               {/* Group Info */}
               <div className="space-y-3">
                 <Input
@@ -178,7 +180,7 @@ export function NewChatModal({
               )}
 
               {/* Member Selection */}
-              <div className="max-h-[300px] overflow-y-auto space-y-2">
+              <div className="flex-1 overflow-y-auto space-y-2">
                 <p className="text-sm font-medium text-gray-700 mb-2">
                   Add members ({selectedMembers.length} selected)
                 </p>
@@ -209,16 +211,18 @@ export function NewChatModal({
                   );
                 })}
               </div>
-
-              {/* Create Group Button */}
-              <Button
-                onClick={handleCreateGroup}
-                disabled={!groupName.trim() || selectedMembers.length === 0}
-                className="w-full gradient-primary rounded-xl"
-              >
-                Create Group ({selectedMembers.length} members)
-              </Button>
             </div>
+            {selectedMembers.length > 0 && (
+              <div className="sticky bottom-0 bg-white p-6 border-t">
+                <Button
+                  onClick={handleCreateGroup}
+                  disabled={!groupName.trim() || selectedMembers.length === 0}
+                  className="w-full gradient-primary rounded-xl"
+                >
+                  Create Group ({selectedMembers.length} members)
+                </Button>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </DialogContent>
