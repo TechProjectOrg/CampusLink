@@ -4,7 +4,7 @@
       "private": true,
       "dependencies": {
             "@prisma/adapter-pg": "^7.0.1",
-            "@prisma/client": "^7.0.1",
+            "@prisma/client": "^7.1.0",
             "@radix-ui/react-accordion": "^1.2.3",
             "@radix-ui/react-alert-dialog": "^1.1.6",
             "@radix-ui/react-aspect-ratio": "^1.1.2",
@@ -57,7 +57,7 @@
             "@types/react": "^19.2.2",
             "@types/react-dom": "^19.2.2",
             "@vitejs/plugin-react-swc": "^3.10.2",
-            "prisma": "^7.0.1",
+            "prisma": "^7.1.0",
             "ts-node-dev": "^2.0.0",
             "tsx": "^4.21.0",
             "typescript": "^5.9.3",
