@@ -59,6 +59,11 @@ interface AlumniSignupBody {
   password: string;
 }
 
+interface LoginBody {
+  email: string;
+  password: string;
+}
+
 router.post('/signup/student', async (req: Request, res: Response) => {
   const { name, email, password, branch, year } = req.body as Partial<StudentSignupBody>;
 
@@ -80,23 +85,25 @@ router.post('/signup/student', async (req: Request, res: Response) => {
     const passwordHash = hashPassword(password);
     const numericYear = typeof year === 'string' ? parseInt(year, 10) : year;
 
-    const bio = `Student - Branch: ${branch}, Year: ${numericYear}`;
-
     const createdUsers = await prisma.$queryRaw<
-      { user_id: string; username: string; email: string; bio: string | null; created_at: Date }[]
+      { user_id: string; username: string; email: string; created_at: Date }[]
     >`
-      INSERT INTO "users" (username, email, password_hash, bio, is_public)
-      VALUES (${username}, ${email}, ${passwordHash}, ${bio}, true)
-      RETURNING user_id, username, email, bio, created_at
+      INSERT INTO users (username, email, password_hash, profile_picture_url)
+      VALUES (${username}, ${email}, ${passwordHash}, NULL)
+      RETURNING user_id, username, email, created_at
     `;
 
     const user = createdUsers[0];
+
+    await prisma.$queryRaw`
+      INSERT INTO studentprofiles (user_id, branch, year)
+      VALUES (${user.user_id}, ${branch}, ${numericYear})
+    `;
 
     return res.status(201).json({
       userId: user.user_id,
       username: user.username,
       email: user.email,
-      bio: user.bio,
       type: 'student',
       createdAt: user.created_at,
     });
@@ -125,28 +132,88 @@ router.post('/signup/alumni', async (req: Request, res: Response) => {
     const numericGradYear =
       typeof graduationYear === 'string' ? parseInt(graduationYear, 10) : graduationYear;
 
-    const bio = `Alumni - Branch: ${branch}, Graduation Year: ${numericGradYear}, Status: ${currentStatus}`;
-
     const createdUsers = await prisma.$queryRaw<
-      { user_id: string; username: string; email: string; bio: string | null; created_at: Date }[]
+      { user_id: string; username: string; email: string; created_at: Date }[]
     >`
-      INSERT INTO "users" (username, email, password_hash, bio, is_public)
-      VALUES (${username}, ${email}, ${passwordHash}, ${bio}, true)
-      RETURNING user_id, username, email, bio, created_at
+      INSERT INTO users (username, email, password_hash, profile_picture_url)
+      VALUES (${username}, ${email}, ${passwordHash}, NULL)
+      RETURNING user_id, username, email, created_at
     `;
 
     const user = createdUsers[0];
+
+    await prisma.$queryRaw`
+      INSERT INTO alumniprofiles (user_id, branch, passing_year)
+      VALUES (${user.user_id}, ${branch}, ${numericGradYear})
+    `;
 
     return res.status(201).json({
       userId: user.user_id,
       username: user.username,
       email: user.email,
-      bio: user.bio,
       type: 'alumni',
       createdAt: user.created_at,
     });
   } catch (err) {
     console.error('Error during alumni signup:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.post('/login', async (req: Request, res: Response) => {
+  const { email, password } = req.body as Partial<LoginBody>;
+
+  if (!email || !password) {
+    return res.status(400).json({ message: 'Missing email or password' });
+  }
+
+  try {
+    const users = await prisma.$queryRaw<
+      {
+        user_id: string;
+        username: string;
+        email: string;
+        password_hash: string;
+        created_at: Date;
+      }[]
+    >`
+      SELECT user_id, username, email, password_hash, created_at
+      FROM users
+      WHERE email = ${email}
+    `;
+
+    const user = users[0];
+
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    const incomingHash = hashPassword(password);
+
+    if (incomingHash !== user.password_hash) {
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    const typeResult = await prisma.$queryRaw<{ type: string }[]>`
+      SELECT CASE
+        WHEN EXISTS (SELECT 1 FROM studentprofiles sp WHERE sp.user_id = ${user.user_id}) THEN 'student'
+        WHEN EXISTS (SELECT 1 FROM alumniprofiles ap WHERE ap.user_id = ${user.user_id}) THEN 'alumni'
+        WHEN EXISTS (SELECT 1 FROM teacherprofiles tp WHERE tp.user_id = ${user.user_id}) THEN 'teacher'
+        ELSE 'unknown'
+      END AS type
+    `;
+
+    const type = typeResult[0]?.type ?? 'unknown';
+
+    return res.status(200).json({
+      userId: user.user_id,
+      username: user.username,
+      email: user.email,
+      type,
+      createdAt: user.created_at,
+    });
+  } catch (err) {
+    console.error('Error during login:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });

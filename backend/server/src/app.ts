@@ -1,8 +1,15 @@
 import express, { Application, Request, Response } from 'express';
 import prisma from './prisma';
 import authRouter from './routes/auth';
+import cors from 'cors';
 
 const app: Application = express();
+
+app.use(
+  cors({
+    origin: ['http://localhost:3000', 'http://localhost:5173'],
+  })
+);
 
 app.use(express.json());
 

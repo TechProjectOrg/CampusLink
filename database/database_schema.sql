@@ -12,6 +12,9 @@ DROP TABLE IF EXISTS Comments;
 DROP TABLE IF EXISTS Likes;
 DROP TABLE IF EXISTS Follows;
 DROP TABLE IF EXISTS Posts;
+DROP TABLE IF EXISTS TeacherProfiles;
+DROP TABLE IF EXISTS AlumniProfiles;
+DROP TABLE IF EXISTS StudentProfiles;
 DROP TABLE IF EXISTS Users;
 
 -- ============================================================
@@ -31,6 +34,34 @@ CREATE TABLE Users (
 -- Indexes for Users table
 CREATE INDEX idx_user_username ON Users(username);
 CREATE INDEX idx_user_email ON Users(email);
+
+-- ============================================================
+-- 1a. STUDENT PROFILES TABLE
+-- ============================================================
+CREATE TABLE StudentProfiles (
+    user_id UUID PRIMARY KEY,
+    branch VARCHAR(100) NOT NULL,
+    year INT NOT NULL,
+    CONSTRAINT fk_student_user FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
+);
+
+-- ============================================================
+-- 1b. ALUMNI PROFILES TABLE
+-- ============================================================
+CREATE TABLE AlumniProfiles (
+    user_id UUID PRIMARY KEY,
+    branch VARCHAR(100) NOT NULL,
+    passing_year INT NOT NULL,
+    CONSTRAINT fk_alumni_user FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
+);
+
+-- ============================================================
+-- 1c. TEACHER PROFILES TABLE
+-- ============================================================
+CREATE TABLE TeacherProfiles (
+    user_id UUID PRIMARY KEY,
+    CONSTRAINT fk_teacher_user FOREIGN KEY (user_id) REFERENCES Users(user_id) ON DELETE CASCADE
+);
 
 -- ============================================================
 -- 2. POSTS TABLE
