@@ -1,9 +1,12 @@
 import express, { Application, Request, Response } from 'express';
 import prisma from './prisma';
+import authRouter from './routes/auth';
 
 const app: Application = express();
 
 app.use(express.json());
+
+app.use('/auth', authRouter);
 
 app.get('/health', async (_req: Request, res: Response) => {
   try {
