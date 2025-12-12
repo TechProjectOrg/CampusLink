@@ -21,14 +21,14 @@ interface ChatPageProps {
   students: Student[];
   currentUserId: string;
   onViewProfile?: (studentId: string) => void;
+  onChatClick: (conversationId: string) => void;
 }
 
-export function ChatPage({ conversations, students, currentUserId, onViewProfile }: ChatPageProps) {
+export function ChatPage({ conversations, students, currentUserId, onViewProfile, onChatClick }: ChatPageProps) {
   const [selectedChat, setSelectedChat] = useState<string | null>(conversations[0]?.id || null);
   const [message, setMessage] = useState('');
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
   const [viewingGroupInfo, setViewingGroupInfo] = useState<string | null>(null);
-  const [conversationsList, setConversationsList] = useState<ChatConversation[]>(conversations);
   const [messages, setMessages] = useState<{ [key: string]: any[] }>(
   {
     chat1: [
@@ -167,7 +167,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     ]
   });
 
-  const selectedConversation = conversationsList.find(c => c.id === selectedChat);
+  const selectedConversation = conversations.find(c => c.id === selectedChat);
   const chatMessages = selectedChat ? messages[selectedChat] || [] : [];
 
   const handleSendMessage = () => {
@@ -205,14 +205,15 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
 
   const handleStartChat = (studentId: string) => {
     // Check if conversation already exists
-    const existingConvo = conversationsList.find(c => c.participantId === studentId);
+    const existingConvo = conversations.find(c => c.participantId === studentId);
     if (existingConvo) {
       setSelectedChat(existingConvo.id);
+      onChatClick(existingConvo.id); // Reorder on existing chat selection
       setIsNewChatOpen(false);
       return;
     }
 
-    // Create new conversation
+    // Create new conversation (this would ideally trigger an update in App.tsx)
     const student = students.find(s => s.id === studentId);
     if (!student) return;
 
@@ -227,14 +228,16 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
       isGroup: false
     };
 
-    setConversationsList([newConversation, ...conversationsList]);
+    // For now, we're not adding to `conversations` here, as `App.tsx` owns that state.
+    // In a real app, `onStartChat` would likely be a prop from `App.tsx` that updates its state.
+    // For now, simply select the chat and let the parent reorder if it chooses.
     setSelectedChat(newConversation.id);
     setMessages({ ...messages, [newConversation.id]: [] });
     setIsNewChatOpen(false);
   };
 
   const handleCreateGroup = (name: string, description: string, memberIds: string[]) => {
-    // Create new group conversation
+    // Create new group conversation (this would ideally trigger an update in App.tsx)
     const newGroupId = `group${Date.now()}`;
     const newGroup: ChatConversation = {
       id: newGroupId,
@@ -248,7 +251,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
       groupMembers: [currentUserId, ...memberIds]
     };
 
-    setConversationsList([newGroup, ...conversationsList]);
+    // For now, we're not adding to `conversations` here, as `App.tsx` owns that state.
     setSelectedChat(newGroup.id);
     setMessages({ ...messages, [newGroup.id]: [] });
     setIsNewChatOpen(false);
@@ -280,8 +283,8 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   }
 
   return (
-    <div className="h-[calc(100vh-4rem)] pb-20 md:pb-0 bg-white">
-      <div className="h-full max-w-7xl mx-auto flex border-x border-gray-200">
+    <div className="h-[calc(100vh-4rem)] pb-20 md:pb-0 bg-white overflow-hidden">
+      <div className="h-full max-w-7xl mx-auto flex flex-1 border-x border-gray-200">
         {/* Conversations List - Instagram Style */}
         <div className={`${selectedChat ? 'hidden md:flex' : 'flex'} w-full md:w-96 border-r border-gray-200 flex-col bg-white`}>
           {/* Header */}
@@ -308,12 +311,15 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
           </div>
 
           {/* Conversation List */}
-          <ScrollArea className="flex-1">
+          <ScrollArea className="flex-1 conversation-scroll-area">
             <div className="p-2">
-              {conversationsList.map(conversation => (
+              {conversations.map(conversation => (
                 <button
                   key={conversation.id}
-                  onClick={() => setSelectedChat(conversation.id)}
+                  onClick={() => {
+                    setSelectedChat(conversation.id);
+                    onChatClick(conversation.id);
+                  }}
                   className={`w-full p-3 text-left rounded-xl transition-all duration-300 mb-1 ${
                     selectedChat === conversation.id 
                       ? 'bg-gray-100' 
@@ -452,7 +458,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
             </div>
 
             {/* Messages */}
-            <ScrollArea className="flex-1 p-4 md:p-6">
+            <ScrollArea className="flex-1 p-4 md:p-6 chat-scroll-area">
               <div className="space-y-3 max-w-3xl mx-auto">
                 {chatMessages.map((msg, index) => {
                   const showDate = index === 0 || 

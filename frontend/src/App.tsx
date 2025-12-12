@@ -21,6 +21,7 @@ export default function App() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>(mockOpportunities);
   const [clubs, setClubs] = useState<Club[]>(mockClubs);
   const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
+  const [conversations, setConversations] = useState(mockConversations);
   const [viewingProfileId, setViewingProfileId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -127,6 +128,23 @@ export default function App() {
     setActiveTab('chat');
   };
 
+  const handleChatClick = (conversationId: string) => {
+    setConversations(prevConversations => {
+      const conversationIndex = prevConversations.findIndex(
+        (conv) => conv.id === conversationId
+      );
+
+      if (conversationIndex === -1) {
+        return prevConversations;
+      }
+
+      const updatedConversations = [...prevConversations];
+      const [clickedConversation] = updatedConversations.splice(conversationIndex, 1);
+      updatedConversations.unshift(clickedConversation);
+      return updatedConversations;
+    });
+  };
+
   const handleViewProfile = (studentId: string) => {
     setViewingProfileId(studentId);
     setActiveTab('profile');
@@ -224,7 +242,7 @@ export default function App() {
   };
 
   // Calculate unread messages and notifications
-  const unreadCount = mockConversations.reduce((sum, conv) => sum + conv.unread, 0);
+  const unreadCount = conversations.reduce((sum, conv) => sum + conv.unread, 0);
   const unreadNotifications = notifications.filter(n => !n.read).length;
 
   if (!isAuthenticated) {
@@ -297,10 +315,11 @@ export default function App() {
 
       {activeTab === 'chat' && (
         <ChatPage
-          conversations={mockConversations}
+          conversations={conversations}
           students={students}
           currentUserId={currentUserId}
           onViewProfile={handleViewProfile}
+          onChatClick={handleChatClick}
         />
       )}
 
@@ -347,9 +366,10 @@ export default function App() {
 
       {activeTab !== 'chat' && (
         <FloatingChat
-          conversations={mockConversations}
+          conversations={conversations}
           currentUserId={currentUserId}
           onOpenFullChat={() => handleTabChange('chat')}
+          onChatClick={handleChatClick}
         />
       )}
       <Toaster />

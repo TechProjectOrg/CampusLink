@@ -19,9 +19,10 @@ interface FloatingChatProps {
   conversations: ChatConversation[];
   currentUserId: string;
   onOpenFullChat: () => void;
+  onChatClick: (conversationId: string) => void;
 }
 
-export function FloatingChat({ conversations, currentUserId, onOpenFullChat }: FloatingChatProps) {
+export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onChatClick }: FloatingChatProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
@@ -353,7 +354,10 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat }: F
                   filteredConversations.map((conv) => (
                     <button
                       key={conv.id}
-                      onClick={() => setSelectedConversation(conv.id)}
+                      onClick={() => {
+                        setSelectedConversation(conv.id);
+                        onChatClick(conv.id);
+                      }}
                       className="w-full p-3 hover:bg-gray-50 transition-colors flex items-center gap-3 rounded-xl mb-1"
                     >
                       <div className="relative flex-shrink-0">
