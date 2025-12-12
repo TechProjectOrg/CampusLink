@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Users, Mail, Lock, GraduationCap, Sparkles, TrendingUp, Award, Zap } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader } from './ui/card';
 import { Label } from './ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { validatePassword, getPasswordValidationMessage } from '../lib/validation';
 
 const API_BASE = 'http://localhost:4000';
 
@@ -41,6 +42,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
 
   const [signupError, setSignupError] = useState('');
   const [loginError, setLoginError] = useState('');
+  const [passwordValidationMessages, setPasswordValidationMessages] = useState<string[]>([]);
 
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [showStudentPassword, setShowStudentPassword] = useState(false);
@@ -86,6 +88,11 @@ export function AuthPage({ onLogin }: AuthPageProps) {
 
     if (data.password !== data.confirmPassword) {
       setSignupError('Passwords do not match');
+      return;
+    }
+
+    if (!validatePassword(data.password)) {
+      setSignupError('Password does not meet the requirements.');
       return;
     }
 
@@ -448,23 +455,30 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="signup-password">Password</Label>
-                        <div className="relative">
-                          <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                          <Input
-                            id="signup-password"
-                            type={showStudentPassword ? 'text' : 'password'}
-                            placeholder="••••••••"
-                            value={signupData.password}
-                            onChange={(e) => {
-                              setSignupData({ ...signupData, password: e.target.value });
-                              setSignupError('');
-                            }}
-                            className="pl-10 pr-16 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
-                            required
-                          />
-                        </div>
+                      <Label htmlFor="signup-password">Password</Label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <Input
+                          id="signup-password"
+                          type={showStudentPassword ? 'text' : 'password'}
+                          placeholder="••••••••"
+                          value={signupData.password}
+                          onChange={(e) => {
+                            const newPassword = e.target.value;
+                            setSignupData({ ...signupData, password: newPassword });
+                            setPasswordValidationMessages(getPasswordValidationMessage(newPassword));
+                            setSignupError('');
+                          }}
+                          className="pl-10 pr-16 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
+                          required
+                        />
                       </div>
+                      {passwordValidationMessages.length > 0 && (
+                        <ul className="text-xs text-red-500 list-disc list-inside">
+                          {passwordValidationMessages.map((msg) => <li key={msg}>{msg}</li>)}
+                        </ul>
+                      )}
+                    </div>
 
                       <div className="space-y-2">
                         <Label htmlFor="signup-confirm-password">Confirm Password</Label>
@@ -477,7 +491,11 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                             value={signupData.confirmPassword}
                             onChange={(e) => {
                               setSignupData({ ...signupData, confirmPassword: e.target.value });
-                              setSignupError('');
+                              if (signupData.password === e.target.value) {
+                                setSignupError('');
+                              } else {
+                                setSignupError('Passwords do not match');
+                              }
                             }}
                             className="pl-10 pr-16 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
                             required
@@ -575,13 +593,20 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                             placeholder="••••••••"
                             value={alumniSignupData.password}
                             onChange={(e) => {
-                              setAlumniSignupData({ ...alumniSignupData, password: e.target.value });
+                              const newPassword = e.target.value;
+                              setAlumniSignupData({ ...alumniSignupData, password: newPassword });
+                              setPasswordValidationMessages(getPasswordValidationMessage(newPassword));
                               setSignupError('');
                             }}
                             className="pl-10 pr-16 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
                             required
                           />
                         </div>
+                        {passwordValidationMessages.length > 0 && (
+                            <ul className="text-xs text-red-500 list-disc list-inside">
+                                {passwordValidationMessages.map((msg) => <li key={msg}>{msg}</li>)}
+                            </ul>
+                        )}
                       </div>
 
                       <div className="space-y-2">
@@ -595,7 +620,11 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                             value={alumniSignupData.confirmPassword}
                             onChange={(e) => {
                               setAlumniSignupData({ ...alumniSignupData, confirmPassword: e.target.value });
-                              setSignupError('');
+                              if (alumniSignupData.password === e.target.value) {
+                                  setSignupError('');
+                              } else {
+                                  setSignupError('Passwords do not match');
+                              }
                             }}
                             className="pl-10 pr-16 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
                             required

@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import crypto from 'crypto';
 import prisma from '../prisma';
+import validatePassword from '../middleware/validatePassword';
 
 const router = express.Router();
 
@@ -17,13 +18,15 @@ async function emailExists(email: string): Promise<boolean> {
 }
 
 async function generateUsername(email: string, name?: string): Promise<string> {
-  const baseFromEmail = email.split('@')[0];
-  const cleanedBase = (name ?? baseFromEmail)
-    .toLowerCase()
-    .replace(/[^a-z0-9_]/g, '')
-    .slice(0, 20) || 'user';
+  let base: string;
+  if (name) {
+    base = name; // Use name directly if provided
+  } else {
+    base = email.split('@')[0]; // Fallback to email if name is not provided
+    base = base.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20) || 'user'; // Clean up if from email
+  }
 
-  let candidate = cleanedBase;
+  let candidate = base;
   let suffix = 1;
 
   // Ensure uniqueness against existing usernames
@@ -37,7 +40,7 @@ async function generateUsername(email: string, name?: string): Promise<string> {
       return candidate;
     }
 
-    candidate = `${cleanedBase}${suffix}`;
+    candidate = `${base}${suffix}`;
     suffix += 1;
   }
 }
@@ -64,7 +67,7 @@ interface LoginBody {
   password: string;
 }
 
-router.post('/signup/student', async (req: Request, res: Response) => {
+router.post('/signup/student', validatePassword, async (req: Request, res: Response) => {
   const { name, email, password, branch, year } = req.body as Partial<StudentSignupBody>;
 
   if (!name || !email || !password || !branch || !year) {
@@ -113,7 +116,7 @@ router.post('/signup/student', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/signup/alumni', async (req: Request, res: Response) => {
+router.post('/signup/alumni', validatePassword, async (req: Request, res: Response) => {
   const { name, email, graduationYear, branch, currentStatus, password } =
     req.body as Partial<AlumniSignupBody>;
 
