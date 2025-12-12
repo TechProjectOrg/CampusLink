@@ -345,11 +345,13 @@ export default function App() {
         />
       )}
 
-      <FloatingChat
-        conversations={mockConversations}
-        currentUserId={currentUserId}
-        onOpenFullChat={() => handleTabChange('chat')}
-      />
+      {activeTab !== 'chat' && (
+        <FloatingChat
+          conversations={mockConversations}
+          currentUserId={currentUserId}
+          onOpenFullChat={() => handleTabChange('chat')}
+        />
+      )}
       <Toaster />
     </div>
   );
