@@ -48,7 +48,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-center gap-4 h-16">
           {/* Logo */}
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 flex-shrink-0 cursor-pointer" onClick={() => onTabChange('feed')}>
             <div className="bg-white/20 backdrop-blur-lg text-white rounded-xl p-2 shadow-lg hover-lift border border-white/30">
               <Users className="w-6 h-6" />
             </div>
