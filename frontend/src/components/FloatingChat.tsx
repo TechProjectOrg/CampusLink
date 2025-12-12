@@ -91,6 +91,84 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat }: F
         timestamp: new Date(Date.now() - 84600000).toISOString(),
         isOwn: true
       }
+    ],
+    chat4: [
+      {
+        id: '1',
+        senderId: '4',
+        content: 'Hey, are you coming to the IoT workshop tomorrow?',
+        timestamp: new Date(Date.now() - 1200000).toISOString(),
+        isOwn: false
+      },
+      {
+        id: '2',
+        senderId: 'current',
+        content: 'Yes! Looking forward to it.',
+        timestamp: new Date(Date.now() - 600000).toISOString(),
+        isOwn: true
+      }
+    ],
+    chat5: [
+      {
+        id: '1',
+        senderId: '6',
+        content: 'Remember the Flutter dev session on Friday!',
+        timestamp: new Date(Date.now() - 2400000).toISOString(),
+        isOwn: false
+      },
+      {
+        id: '2',
+        senderId: 'current',
+        content: 'Got it, thanks for the reminder!',
+        timestamp: new Date(Date.now() - 1800000).toISOString(),
+        isOwn: true
+      }
+    ],
+    group2: [
+      {
+        id: '1',
+        senderId: '3',
+        content: 'Meeting at 7 PM to discuss project ideas for the hackathon.',
+        timestamp: new Date(Date.now() - 3600000).toISOString(),
+        isOwn: false
+      },
+      {
+        id: '2',
+        senderId: 'current',
+        content: 'Sounds good! I\'ll be there.',
+        timestamp: new Date(Date.now() - 3000000).toISOString(),
+        isOwn: true
+      },
+      {
+        id: '3',
+        senderId: '6',
+        content: 'Great, see you all then!',
+        timestamp: new Date(Date.now() - 2400000).toISOString(),
+        isOwn: false
+      }
+    ],
+    group3: [
+      {
+        id: '1',
+        senderId: '1',
+        content: 'New tutorial on Next.js 14 out now!',
+        timestamp: new Date(Date.now() - 7200000).toISOString(),
+        isOwn: false
+      },
+      {
+        id: '2',
+        senderId: '2',
+        content: 'Oh, nice! I\'ll check it out.',
+        timestamp: new Date(Date.now() - 6600000).toISOString(),
+        isOwn: false
+      },
+      {
+        id: '3',
+        senderId: 'current',
+        content: 'Looks interesting, thanks for sharing!',
+        timestamp: new Date(Date.now() - 6000000).toISOString(),
+        isOwn: true
+      }
     ]
   });
 

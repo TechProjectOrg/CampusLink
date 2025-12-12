@@ -113,6 +113,52 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
         isOwn: false
       }
     ],
+    chat4: [
+      {
+        id: '1',
+        senderId: '3',
+        content: 'Can you help me with that DP problem?',
+        timestamp: '2025-10-30T14:00:00Z',
+        isOwn: false
+      },
+      {
+        id: '2',
+        senderId: 'current',
+        content: 'Sure! Which problem is it?',
+        timestamp: '2025-10-30T14:10:00Z',
+        isOwn: true
+      },
+      {
+        id: '3',
+        senderId: '3',
+        content: 'The longest increasing subsequence one from yesterday\'s contest.',
+        timestamp: '2025-10-30T14:15:00Z',
+        isOwn: false
+      }
+    ],
+    chat5: [
+      {
+        id: '1',
+        senderId: '3',
+        content: 'Can you help me with that DP problem?',
+        timestamp: '2025-10-30T14:00:00Z',
+        isOwn: false
+      },
+      {
+        id: '2',
+        senderId: 'current',
+        content: 'Sure! Which problem is it?',
+        timestamp: '2025-10-30T14:10:00Z',
+        isOwn: true
+      },
+      {
+        id: '3',
+        senderId: '3',
+        content: 'The longest increasing subsequence one from yesterday\'s contest.',
+        timestamp: '2025-10-30T14:15:00Z',
+        isOwn: false
+      }
+    ],
     group1: [
       {
         id: '1',
