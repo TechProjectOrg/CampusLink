@@ -145,7 +145,20 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat }: F
 
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
+      const target = e.currentTarget as HTMLElement;
+      if (target) {
+        const { scrollTop, scrollHeight, clientHeight } = target;
+
+        const isScrollingDown = e.deltaY > 0;
+        const isAtBottom = scrollTop + clientHeight >= scrollHeight;
+        const isScrollingUp = e.deltaY < 0;
+        const isAtTop = scrollTop === 0;
+
+        if ((isScrollingDown && isAtBottom) || (isScrollingUp && isAtTop)) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+      }
     };
 
     const messagesEl = messagesViewportRef.current;
