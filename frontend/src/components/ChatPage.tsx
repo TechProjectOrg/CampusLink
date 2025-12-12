@@ -21,10 +21,9 @@ interface ChatPageProps {
   students: Student[];
   currentUserId: string;
   onViewProfile?: (studentId: string) => void;
-  onChatClick: (conversationId: string) => void;
 }
 
-export function ChatPage({ conversations, students, currentUserId, onViewProfile, onChatClick }: ChatPageProps) {
+export function ChatPage({ conversations, students, currentUserId, onViewProfile }: ChatPageProps) {
   const [selectedChat, setSelectedChat] = useState<string | null>(conversations[0]?.id || null);
   const [message, setMessage] = useState('');
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
@@ -221,7 +220,6 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     const existingConvo = conversations.find(c => c.participantId === studentId);
     if (existingConvo) {
       setSelectedChat(existingConvo.id);
-      onChatClick(existingConvo.id); // Reorder on existing chat selection
       setIsNewChatOpen(false);
       return;
     }
@@ -331,7 +329,6 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                   key={conversation.id}
                   onClick={() => {
                     setSelectedChat(conversation.id);
-                    onChatClick(conversation.id);
                   }}
                   className={`w-full p-3 text-left rounded-xl transition-all duration-300 mb-1 ${
                     selectedChat === conversation.id 
