@@ -245,7 +245,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat }: F
 
         {/* Conversation View */}
         {selectedChat ? (
-          <div className="flex-1 flex flex-col bg-white min-h-0">
+          <>
             {/* Chat Header */}
             <div className="px-4 py-3 border-b flex items-center gap-3">
               <button
@@ -349,7 +349,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat }: F
                 ) : null}
               </div>
             </div>
-          </div>
+          </>
         ) : (
           <>
             {/* Search */}
