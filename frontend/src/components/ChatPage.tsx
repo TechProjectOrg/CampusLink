@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Send, Search, MoreVertical, Phone, Video, Info, Image, Smile, Heart, CircleDot, Plus, UserPlus, Flag, Ban, Eye } from 'lucide-react';
 import { ChatConversation, Student } from '../types';
 import { Input } from './ui/input';
@@ -169,6 +169,19 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
 
   const selectedConversation = conversations.find(c => c.id === selectedChat);
   const chatMessages = selectedChat ? messages[selectedChat] || [] : [];
+
+  const messagesViewportRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    // Scroll to the bottom (latest message) whenever a chat is selected or messages change
+    if (messagesViewportRef.current) {
+      try {
+        messagesViewportRef.current.scrollTop = messagesViewportRef.current.scrollHeight;
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, [selectedChat, chatMessages.length]);
 
   const handleSendMessage = () => {
     if (!message.trim() || !selectedChat) return;
@@ -458,7 +471,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
             </div>
 
             {/* Messages */}
-            <ScrollArea className="flex-1 overflow-hidden min-w-0">
+            <ScrollArea viewportRef={messagesViewportRef} className="flex-1 overflow-hidden min-w-0">
               <div className="p-4 md:p-6 space-y-3 max-w-3xl mx-auto">
                 {chatMessages.map((msg, index) => {
                   const showDate = index === 0 || 
