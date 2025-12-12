@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navbar } from './components/Navbar';
 import { AuthPage } from './components/AuthPage';
 import { FeedPage } from './components/FeedPage';
@@ -24,6 +24,43 @@ export default function App() {
   const [conversations, setConversations] = useState(mockConversations);
   const [viewingProfileId, setViewingProfileId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  useEffect(() => {
+    const setTabFromPath = () => {
+        const pathParts = window.location.pathname.split('/').filter(p => p);
+        const mainPath = pathParts[0] || 'feed';
+        setActiveTab(mainPath);
+
+        if (mainPath === 'profile' && pathParts[1]) {
+            setViewingProfileId(pathParts[1]);
+        } else {
+            setViewingProfileId(null);
+        }
+    };
+
+    setTabFromPath(); // Initial load
+
+    const handlePopState = () => {
+        setTabFromPath();
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+        window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
+
+  const navigate = (tab: string, profileId?: string) => {
+    let path = `/${tab}`;
+    const state: { tab: string; profileId?: string } = { tab };
+    if (tab === 'profile' && profileId) {
+        path += `/${profileId}`;
+        state.profileId = profileId;
+    }
+    window.history.pushState(state, '', path);
+    setActiveTab(tab); // Set active tab to trigger re-render
+  };
   
   const currentUserId = 'current';
 
@@ -125,7 +162,7 @@ export default function App() {
   };
 
   const handleMessage = (studentId: string) => {
-    setActiveTab('chat');
+    navigate('chat');
   };
 
   const handleChatClick = (conversationId: string) => {
@@ -147,7 +184,7 @@ export default function App() {
 
   const handleViewProfile = (studentId: string) => {
     setViewingProfileId(studentId);
-    setActiveTab('profile');
+    navigate('profile', studentId);
   };
 
   // Club handlers
@@ -200,16 +237,16 @@ export default function App() {
     // Handle different notification types
     switch (notification.type) {
       case 'connection':
-        setActiveTab('network');
+        navigate('network');
         break;
       case 'message':
-        setActiveTab('chat');
+        navigate('chat');
         break;
       case 'opportunity':
-        setActiveTab('feed');
+        navigate('feed');
         break;
       case 'club':
-        setActiveTab('clubs');
+        navigate('clubs');
         break;
     }
   };
@@ -217,11 +254,12 @@ export default function App() {
   // Auth handler
   const handleLogin = () => {
     setIsAuthenticated(true);
+    navigate('feed');
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
-    setActiveTab('feed');
+    navigate('feed');
     setViewingProfileId(null);
   };
 
@@ -262,7 +300,7 @@ export default function App() {
     if (tab !== 'search') {
       setSearchQuery('');
     }
-    setActiveTab(tab);
+    navigate(tab);
   };
 
   return (
