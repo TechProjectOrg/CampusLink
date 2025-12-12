@@ -4925,3 +4925,10 @@ textarea {
   width: 100% !important;
   box-sizing: border-box;
 }
+
+/* Hide scrollbars on feed page panels while keeping scrolling functional */
+div[style*="width: 20%"]::webkit-scrollbar,
+div[style*="width: 55%"]::webkit-scrollbar,
+div[style*="width: 25%"]::webkit-scrollbar {
+  display: none !important;
+}

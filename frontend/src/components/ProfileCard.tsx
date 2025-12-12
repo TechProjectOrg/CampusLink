@@ -70,7 +70,7 @@ export function ProfileCard({ student, onViewProfile }: ProfileCardProps) {
 
       {/* Quick Skills Card */}
       <Card className="border-primary/10 rounded-2xl shadow-lg hover-lift animate-slide-in-up" style={{ animationDelay: '100ms' }}>
-        <CardContent className="p-6 space-y-4">
+        <CardContent className="p-4 space-y-2">
           <div className="flex items-center gap-2">
             <Award className="w-5 h-5 text-primary" />
             <h4 className="text-gray-900">Top Skills</h4>
@@ -95,7 +95,7 @@ export function ProfileCard({ student, onViewProfile }: ProfileCardProps) {
 
       {/* Quick Actions Card */}
       <Card className="border-primary/10 rounded-2xl shadow-lg hover-lift animate-slide-in-up" style={{ animationDelay: '200ms' }}>
-        <CardContent className="p-6 space-y-3">
+        <CardContent className="p-4 space-y-2">
           <div className="flex items-center gap-2 mb-2">
             <Briefcase className="w-5 h-5 text-primary" />
             <h4 className="text-gray-900">Quick Actions</h4>

@@ -317,10 +317,10 @@ export default function App() {
       <div className="flex justify-center">
         {activeTab === 'feed' ? (
           <div className="flex w-full max-w-7xl">
-            <div className="hidden xl:block w-1/4 p-4 overflow-y-auto h-[calc(100vh-4rem)]">
+            <div className="flex-none px-2 overflow-y-auto h-[calc(100vh-4rem)]" style={{ width: '20%', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               <ProfileCard student={currentUser} onViewProfile={() => handleViewProfile(currentUserId)} />
             </div>
-            <div className="w-full lg:w-3/4 xl:w-1/2 p-4 overflow-y-auto h-[calc(100vh-4rem)]">
+            <div className="flex-none px-2 overflow-y-auto h-[calc(100vh-4rem)]" style={{ width: '55%', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               <FeedPage
                 opportunities={opportunities}
                 currentUserId={currentUserId}
@@ -335,7 +335,7 @@ export default function App() {
                 onViewStudentProfile={handleViewProfile}
               />
             </div>
-            <div className="hidden lg:block w-1/4 p-4 overflow-y-auto h-[calc(100vh-4rem)]">
+            <div className="flex-none px-2 overflow-y-auto h-[calc(100vh-4rem)]" style={{ width: '25%', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               <SuggestionsCard students={students} currentUserId={currentUserId} onConnect={handleConnect} onViewProfile={handleViewProfile} />
             </div>
           </div>
