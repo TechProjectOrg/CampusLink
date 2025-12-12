@@ -1,4 +1,5 @@
 import { Users, UserCheck, UserPlus, MessageCircle, Sparkles, Link2 } from 'lucide-react';
+import { useState } from 'react';
 import { Student } from '../types';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -66,6 +67,8 @@ export function NetworkPage({
     .sort((a, b) => b.relevanceScore - a.relevanceScore) // Sort by relevance
     .slice(0, 6); // Show top 6 suggestions
 
+  const [activeTab, setActiveTab] = useState<string>('connections');
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
       <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
@@ -77,11 +80,11 @@ export function NetworkPage({
           <p className="text-gray-600">Manage your connections and requests</p>
         </div>
 
-        <Tabs defaultValue="connections" className="space-y-6 animate-slide-in-up">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6 animate-slide-in-up">
           <TabsList className="bg-white/80 backdrop-blur-lg p-1 rounded-2xl border border-primary/10 shadow-lg">
             <TabsTrigger 
               value="connections" 
-              className="flex items-center gap-2 rounded-xl data-[state=active]:gradient-primary data-[state=active]:text-white transition-all duration-300"
+              className={`flex items-center gap-2 rounded-xl data-[state=active]:gradient-primary data-[state=active]:text-white transition-all duration-300 hover:scale-105 ${activeTab === 'connections' ? 'gradient-primary text-white' : ''}`}
             >
               <Users className="w-4 h-4" />
               Connections
@@ -91,7 +94,7 @@ export function NetworkPage({
             </TabsTrigger>
             <TabsTrigger 
               value="requests" 
-              className="flex items-center gap-2 rounded-xl data-[state=active]:gradient-primary data-[state=active]:text-white transition-all duration-300"
+              className={`flex items-center gap-2 rounded-xl data-[state=active]:gradient-primary data-[state=active]:text-white transition-all duration-300 hover:scale-105 ${activeTab === 'requests' ? 'gradient-primary text-white' : ''}`}
             >
               <UserPlus className="w-4 h-4" />
               Requests
@@ -103,7 +106,7 @@ export function NetworkPage({
             </TabsTrigger>
             <TabsTrigger 
               value="suggestions" 
-              className="flex items-center gap-2 rounded-xl data-[state=active]:gradient-primary data-[state=active]:text-white transition-all duration-300"
+              className={`flex items-center gap-2 rounded-xl data-[state=active]:gradient-primary data-[state=active]:text-white transition-all duration-300 hover:scale-105 ${activeTab === 'suggestions' ? 'gradient-primary text-white' : ''}`}
             >
               <Sparkles className="w-4 h-4" />
               Suggestions

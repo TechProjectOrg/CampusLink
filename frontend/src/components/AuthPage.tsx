@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Users, Mail, Lock, GraduationCap, Sparkles, TrendingUp, Award, Zap } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -6,6 +6,9 @@ import { Card, CardContent, CardHeader } from './ui/card';
 import { Label } from './ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { validatePassword, getPasswordValidationMessage } from '../lib/validation';
+
+const API_BASE = 'http://localhost:4000';
 
 interface AuthPageProps {
   onLogin: () => void;
@@ -38,6 +41,8 @@ export function AuthPage({ onLogin }: AuthPageProps) {
   });
 
   const [signupError, setSignupError] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [passwordValidationMessages, setPasswordValidationMessages] = useState<string[]>([]);
 
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [showStudentPassword, setShowStudentPassword] = useState(false);
@@ -45,16 +50,38 @@ export function AuthPage({ onLogin }: AuthPageProps) {
   const [showAlumniPassword, setShowAlumniPassword] = useState(false);
   const [showAlumniConfirmPassword, setShowAlumniConfirmPassword] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (loginEmail.endsWith('@gbpuat.ac.in')) {
+    setLoginError('');
+
+    try {
+      const response = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: loginEmail,
+          password: loginPassword,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        setLoginError(errorData.message || 'Invalid email or password');
+        return;
+      }
+
+      // const user = await response.json();
+      // TODO: store user/token if needed
       onLogin();
-    } else {
-      alert('Please use your college email (@gbpuat.ac.in)');
+    } catch (error) {
+      console.error('Login error:', error);
+      setLoginError('Unable to connect to the server. Please try again.');
     }
   };
 
-  const handleSignup = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const data = signupType === 'student' ? signupData : alumniSignupData;
@@ -64,7 +91,13 @@ export function AuthPage({ onLogin }: AuthPageProps) {
       return;
     }
 
+    if (!validatePassword(data.password)) {
+      setSignupError('Password does not meet the requirements.');
+      return;
+    }
+
     setSignupError('');
+    setLoginError('');
 
     // For students, enforce college email; for alumni, allow any valid email
     if (signupType === 'student' && !data.email.endsWith('@gbpuat.ac.in')) {
@@ -72,7 +105,58 @@ export function AuthPage({ onLogin }: AuthPageProps) {
       return;
     }
 
-    onLogin();
+    try {
+      const endpoint =
+        signupType === 'student' ? '/auth/signup/student' : '/auth/signup/alumni';
+
+      const payload =
+        signupType === 'student'
+          ? {
+              name: signupData.name,
+              email: signupData.email,
+              password: signupData.password,
+              branch: signupData.branch,
+              year: signupData.year,
+            }
+          : {
+              name: alumniSignupData.name,
+              email: alumniSignupData.email,
+              password: alumniSignupData.password,
+              graduationYear: alumniSignupData.graduationYear,
+              branch: alumniSignupData.branch,
+              currentStatus: alumniSignupData.currentStatus,
+            };
+
+      const response = await fetch(`${API_BASE}${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (response.status === 409) {
+        const errorData = await response.json().catch(() => ({}));
+        setSignupError(errorData.message || 'User already exists. Please sign in instead.');
+        // Switch to login and pre-fill email for convenience
+        setActiveForm('login');
+        setLoginEmail(data.email);
+        return;
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        setSignupError(errorData.message || 'Signup failed. Please try again.');
+        return;
+      }
+
+      // const user = await response.json();
+      // TODO: store user/token if needed
+      onLogin();
+    } catch (error) {
+      console.error('Signup error:', error);
+      setSignupError('Unable to connect to the server. Please try again.');
+    }
   };
 
   const handleForgotPassword = (e: React.FormEvent) => {
@@ -189,13 +273,13 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                 <div className="animate-fade-slide-in">
                   <form onSubmit={handleLogin} className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="login-email">College Email</Label>
+                      <Label htmlFor="login-email">Email</Label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 transition-colors duration-300" />
                         <Input
                           id="login-email"
                           type="email"
-                          placeholder="your.name@gbpuat.ac.in"
+                          placeholder="your.email@example.com"
                           value={loginEmail}
                           onChange={(e) => setLoginEmail(e.target.value)}
                           className="pl-10 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
@@ -219,6 +303,10 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                         />
                       </div>
                     </div>
+
+                    {loginError && (
+                      <p className="text-sm text-red-500">{loginError}</p>
+                    )}
 
                     <Button type="submit" className="w-full gradient-primary shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
                       Login to CampusLink
@@ -367,23 +455,30 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="signup-password">Password</Label>
-                        <div className="relative">
-                          <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                          <Input
-                            id="signup-password"
-                            type={showStudentPassword ? 'text' : 'password'}
-                            placeholder="••••••••"
-                            value={signupData.password}
-                            onChange={(e) => {
-                              setSignupData({ ...signupData, password: e.target.value });
-                              setSignupError('');
-                            }}
-                            className="pl-10 pr-16 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
-                            required
-                          />
-                        </div>
+                      <Label htmlFor="signup-password">Password</Label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <Input
+                          id="signup-password"
+                          type={showStudentPassword ? 'text' : 'password'}
+                          placeholder="••••••••"
+                          value={signupData.password}
+                          onChange={(e) => {
+                            const newPassword = e.target.value;
+                            setSignupData({ ...signupData, password: newPassword });
+                            setPasswordValidationMessages(getPasswordValidationMessage(newPassword));
+                            setSignupError('');
+                          }}
+                          className="pl-10 pr-16 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
+                          required
+                        />
                       </div>
+                      {passwordValidationMessages.length > 0 && (
+                        <ul className="text-xs text-red-500 list-disc list-inside">
+                          {passwordValidationMessages.map((msg) => <li key={msg}>{msg}</li>)}
+                        </ul>
+                      )}
+                    </div>
 
                       <div className="space-y-2">
                         <Label htmlFor="signup-confirm-password">Confirm Password</Label>
@@ -396,7 +491,11 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                             value={signupData.confirmPassword}
                             onChange={(e) => {
                               setSignupData({ ...signupData, confirmPassword: e.target.value });
-                              setSignupError('');
+                              if (signupData.password === e.target.value) {
+                                setSignupError('');
+                              } else {
+                                setSignupError('Passwords do not match');
+                              }
                             }}
                             className="pl-10 pr-16 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
                             required
@@ -494,13 +593,20 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                             placeholder="••••••••"
                             value={alumniSignupData.password}
                             onChange={(e) => {
-                              setAlumniSignupData({ ...alumniSignupData, password: e.target.value });
+                              const newPassword = e.target.value;
+                              setAlumniSignupData({ ...alumniSignupData, password: newPassword });
+                              setPasswordValidationMessages(getPasswordValidationMessage(newPassword));
                               setSignupError('');
                             }}
                             className="pl-10 pr-16 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
                             required
                           />
                         </div>
+                        {passwordValidationMessages.length > 0 && (
+                            <ul className="text-xs text-red-500 list-disc list-inside">
+                                {passwordValidationMessages.map((msg) => <li key={msg}>{msg}</li>)}
+                            </ul>
+                        )}
                       </div>
 
                       <div className="space-y-2">
@@ -514,7 +620,11 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                             value={alumniSignupData.confirmPassword}
                             onChange={(e) => {
                               setAlumniSignupData({ ...alumniSignupData, confirmPassword: e.target.value });
-                              setSignupError('');
+                              if (alumniSignupData.password === e.target.value) {
+                                  setSignupError('');
+                              } else {
+                                  setSignupError('Passwords do not match');
+                              }
                             }}
                             className="pl-10 pr-16 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
                             required
