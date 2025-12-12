@@ -4908,3 +4908,20 @@ textarea {
     transform: translate3d(var(--tw-exit-translate-x, 0), var(--tw-exit-translate-y, 0), 0) scale3d(var(--tw-exit-scale, 1), var(--tw-exit-scale, 1), var(--tw-exit-scale, 1)) rotate(var(--tw-exit-rotate, 0));
   }
 }
+
+/* Broader fix: ensure any Radix ScrollArea viewport's inner wrapper
+   doesn't use table layout or force a min-width that overflows its
+   padded parents. This covers conversation and chat scroll areas. */
+[data-radix-scroll-area-viewport] > div {
+  min-width: 0 !important;
+  display: block !important;
+  width: 100% !important;
+  box-sizing: border-box;
+}
+
+.chat-scroll-area [data-radix-scroll-area-viewport] > div {
+  min-width: 0 !important;
+  display: block !important;
+  width: 100% !important;
+  box-sizing: border-box;
+}

@@ -284,9 +284,9 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
 
   return (
     <div className="h-[calc(100vh-4rem)] pb-20 md:pb-0 bg-white overflow-hidden">
-      <div className="h-full max-w-7xl mx-auto flex flex-1 border-x border-gray-200">
+      <div className="h-full w-full flex border-x border-gray-200 overflow-hidden">
         {/* Conversations List - Instagram Style */}
-        <div className={`${selectedChat ? 'hidden md:flex' : 'flex'} w-full md:w-96 border-r border-gray-200 flex-col bg-white`}>
+        <div className={`${selectedChat ? 'hidden md:flex' : 'flex'} w-full md:w-96 flex-shrink-0 overflow-hidden border-r border-gray-200 flex-col bg-white`}>
           {/* Header */}
           <div className="p-4 md:p-6 border-b border-gray-200">
             <div className="flex items-center justify-between mb-4">
@@ -311,8 +311,8 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
           </div>
 
           {/* Conversation List */}
-          <ScrollArea className="flex-1 conversation-scroll-area">
-            <div className="p-2">
+          <ScrollArea className="flex-1 overflow-hidden">
+            <div className="p-2 w-full">
               {conversations.map(conversation => (
                 <button
                   key={conversation.id}
@@ -326,7 +326,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                       : 'hover:bg-gray-50'
                   }`}
                 >
-                  <div className="flex gap-3 items-center">
+                  <div className="flex gap-3 items-center w-full overflow-hidden">
                     <div className="relative flex-shrink-0">
                       <Avatar className="w-12 h-12 md:w-14 md:h-14 ring-2 ring-white shadow-sm">
                         <AvatarImage src={conversation.participantAvatar} />
@@ -336,7 +336,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                         <div className="absolute bottom-0 right-0 w-3 h-3 md:w-4 md:h-4 bg-primary rounded-full border-2 border-white"></div>
                       )}
                     </div>
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 overflow-hidden">
                       <div className="flex items-center justify-between mb-1">
                         <p className={`text-sm truncate ${conversation.unread > 0 ? 'text-gray-900' : 'text-gray-900'}`}>
                           {conversation.participantName}
@@ -365,7 +365,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
 
         {/* Chat Area - Instagram Style */}
         {selectedConversation ? (
-          <div className={`${selectedChat ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-white`}>
+          <div className={`${selectedChat ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-white min-w-0`}>
             {/* Chat Header */}
             <div className="px-4 md:px-6 py-3 border-b border-gray-200 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -458,8 +458,8 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
             </div>
 
             {/* Messages */}
-            <ScrollArea className="flex-1 p-4 md:p-6 chat-scroll-area">
-              <div className="space-y-3 max-w-3xl mx-auto">
+            <ScrollArea className="flex-1 overflow-hidden min-w-0">
+              <div className="p-4 md:p-6 space-y-3 max-w-3xl mx-auto">
                 {chatMessages.map((msg, index) => {
                   const showDate = index === 0 || 
                     formatDate(msg.timestamp) !== formatDate(chatMessages[index - 1].timestamp);
@@ -551,7 +551,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
             </div>
           </div>
         ) : (
-          <div className="flex-1 hidden md:flex items-center justify-center bg-white">
+          <div className="flex-1 hidden md:flex items-center justify-center bg-white min-w-0">
             <div className="text-center">
               <div className="w-24 h-24 rounded-full border-4 border-gray-900 mx-auto mb-4 flex items-center justify-center">
                 <Send className="w-12 h-12 text-gray-900" />
