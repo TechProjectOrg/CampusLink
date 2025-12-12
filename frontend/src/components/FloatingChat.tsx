@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { MessageCircle, X, Minus, Send, Search, MoreVertical, Smile, Image as ImageIcon } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
@@ -140,6 +140,36 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat }: F
 
   const chatMessages = selectedConversation ? messages[selectedConversation] || [] : [];
 
+  const messagesViewportRef = useRef<HTMLDivElement | null>(null);
+  const conversationsViewportRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+    };
+
+    const messagesEl = messagesViewportRef.current;
+    const conversationsEl = conversationsViewportRef.current;
+
+    messagesEl?.addEventListener('wheel', handleWheel, { passive: false });
+    conversationsEl?.addEventListener('wheel', handleWheel, { passive: false });
+
+    return () => {
+      messagesEl?.removeEventListener('wheel', handleWheel);
+      conversationsEl?.removeEventListener('wheel', handleWheel);
+    };
+  }, [isOpen, selectedConversation]);
+
+  useEffect(() => {
+    if (messagesViewportRef.current) {
+      try {
+        messagesViewportRef.current.scrollTop = messagesViewportRef.current.scrollHeight;
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, [selectedConversation, chatMessages.length]);
+
   if (!isOpen) {
     return (
       <button
@@ -181,7 +211,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat }: F
 
   return (
     <div className="fixed bottom-24 md:bottom-6 right-4 md:right-6 z-40 animate-slide-in-up">
-      <div className="w-[calc(100vw-2rem)] md:w-96 h-[600px] max-h-[calc(100vh-12rem)] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-200">
+      <div className="w-[calc(100vw-2rem)] md:w-96 h-[600px] max-h-[calc(100vh-12rem)] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-200 min-h-0">
         {/* Header */}
         <div className="bg-gradient-to-r from-primary to-secondary p-4 flex items-center justify-between">
           <div className="flex items-center gap-2 text-white">
@@ -215,7 +245,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat }: F
 
         {/* Conversation View */}
         {selectedChat ? (
-          <div className="flex-1 flex flex-col bg-white">
+          <div className="flex-1 flex flex-col bg-white min-h-0">
             {/* Chat Header */}
             <div className="px-4 py-3 border-b flex items-center gap-3">
               <button
@@ -238,7 +268,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat }: F
             </div>
 
             {/* Messages */}
-            <ScrollArea className="flex-1 px-4 py-3">
+            <ScrollArea viewportRef={messagesViewportRef} className="flex-1 overflow-hidden px-4 py-3">
               <div className="space-y-3">
                 {chatMessages.map((msg, index) => {
                   const showDate = index === 0 || 
@@ -336,7 +366,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat }: F
             </div>
 
             {/* Conversations List */}
-            <ScrollArea className="flex-1">
+            <ScrollArea viewportRef={conversationsViewportRef} className="flex-1 overflow-hidden">
               <div className="p-2">
                 {filteredConversations.length === 0 ? (
                   <div className="p-8 text-center text-gray-500">
