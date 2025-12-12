@@ -13,6 +13,8 @@ import { FloatingChat } from './components/FloatingChat';
 import { Toaster } from './components/ui/sonner';
 import { mockStudents, mockOpportunities, mockClubs, mockConversations, mockNotifications, getCurrentUser } from './lib/mockData';
 import { Student, Opportunity, Club, Notification } from './types';
+import { ProfileCard } from './components/ProfileCard';
+import { SuggestionsCard } from './components/SuggestionsCard';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -312,95 +314,92 @@ export default function App() {
         unreadNotifications={unreadNotifications}
         onSearch={setSearchQuery}
       />
-      
-      {activeTab === 'feed' && (
-        <FeedPage
-          opportunities={opportunities}
-          currentUserId={currentUserId}
-          currentUser={currentUser}
-          students={students}
-          onLike={handleLike}
-          onSave={handleSave}
-          onComment={handleComment}
-          onCreateOpportunity={handleCreateOpportunity}
-          onViewProfile={() => handleViewProfile(currentUserId)}
-          onConnect={handleConnect}
-          onViewStudentProfile={handleViewProfile}
-        />
-      )}
-
-      {activeTab === 'search' && (
-        <SearchPage
-          students={students}
-          currentUserId={currentUserId}
-          onConnect={handleConnect}
-          onViewProfile={handleViewProfile}
-          initialSearchQuery={searchQuery}
-        />
-      )}
-
-      {activeTab === 'network' && (
-        <NetworkPage
-          students={students}
-          currentUserId={currentUserId}
-          onAcceptRequest={handleAcceptRequest}
-          onRejectRequest={handleRejectRequest}
-          onMessage={handleMessage}
-          onViewProfile={handleViewProfile}
-          onConnect={handleConnect}
-        />
-      )}
-
-      {activeTab === 'chat' && (
-        <ChatPage
-          conversations={conversations}
-          students={students}
-          currentUserId={currentUserId}
-          onViewProfile={handleViewProfile}
-          onChatClick={handleChatClick}
-        />
-      )}
-
-      {activeTab === 'clubs' && (
-        <ClubsPage
-          clubs={clubs}
-          students={students}
-          currentUserId={currentUserId}
-          onJoinClub={handleJoinClub}
-          onLeaveClub={handleLeaveClub}
-          onCreateClub={handleCreateClub}
-          onViewProfile={handleViewProfile}
-        />
-      )}
-
-      {activeTab === 'profile' && (
-        <ProfilePage
-          student={displayedStudent}
-          isOwnProfile={displayedStudent.id === currentUserId}
-          onEdit={handleEditProfile}
-          opportunities={opportunities}
-          onLike={handleLike}
-          onSave={handleSave}
-          onComment={handleComment}
-        />
-      )}
-
-      {activeTab === 'notifications' && (
-        <NotificationsPage
-          notifications={notifications}
-          onMarkAsRead={handleMarkAsRead}
-          onMarkAllAsRead={handleMarkAllAsRead}
-          onNotificationClick={handleNotificationClick}
-        />
-      )}
-
-      {activeTab === 'settings' && (
-        <SettingsPage
-          student={currentUser}
-          onEdit={handleEditProfile}
-          onUpdateSettings={handleUpdateSettings}
-        />
-      )}
+      <div className="flex justify-center">
+        {activeTab === 'feed' ? (
+          <div className="flex w-full max-w-7xl">
+            <div className="hidden xl:block w-1/4 p-4 overflow-y-auto h-[calc(100vh-4rem)]">
+              <ProfileCard student={currentUser} onViewProfile={() => handleViewProfile(currentUserId)} />
+            </div>
+            <div className="w-full lg:w-3/4 xl:w-1/2 p-4 overflow-y-auto h-[calc(100vh-4rem)]">
+              <FeedPage
+                opportunities={opportunities}
+                currentUserId={currentUserId}
+                currentUser={currentUser}
+                students={students}
+                onLike={handleLike}
+                onSave={handleSave}
+                onComment={handleComment}
+                onCreateOpportunity={handleCreateOpportunity}
+                onViewProfile={() => handleViewProfile(currentUserId)}
+                onConnect={handleConnect}
+                onViewStudentProfile={handleViewProfile}
+              />
+            </div>
+            <div className="hidden lg:block w-1/4 p-4 overflow-y-auto h-[calc(100vh-4rem)]">
+              <SuggestionsCard students={students} currentUserId={currentUserId} onConnect={handleConnect} onViewProfile={handleViewProfile} />
+            </div>
+          </div>
+        ) : activeTab === 'search' ? (
+          <SearchPage
+            students={students}
+            currentUserId={currentUserId}
+            onConnect={handleConnect}
+            onViewProfile={handleViewProfile}
+            initialSearchQuery={searchQuery}
+          />
+        ) : activeTab === 'network' ? (
+          <NetworkPage
+            students={students}
+            currentUserId={currentUserId}
+            onAcceptRequest={handleAcceptRequest}
+            onRejectRequest={handleRejectRequest}
+            onMessage={handleMessage}
+            onViewProfile={handleViewProfile}
+            onConnect={handleConnect}
+          />
+        ) : activeTab === 'chat' ? (
+          <ChatPage
+            conversations={conversations}
+            students={students}
+            currentUserId={currentUserId}
+            onViewProfile={handleViewProfile}
+            onChatClick={handleChatClick}
+          />
+        ) : activeTab === 'clubs' ? (
+          <ClubsPage
+            clubs={clubs}
+            students={students}
+            currentUserId={currentUserId}
+            onJoinClub={handleJoinClub}
+            onLeaveClub={handleLeaveClub}
+            onCreateClub={handleCreateClub}
+            onViewProfile={handleViewProfile}
+          />
+        ) : activeTab === 'profile' ? (
+          <ProfilePage
+            student={displayedStudent}
+            isOwnProfile={displayedStudent.id === currentUserId}
+            onEdit={handleEditProfile}
+            opportunities={opportunities}
+            onLike={handleLike}
+            onSave={handleSave}
+            onComment={handleComment}
+          />
+        ) : activeTab === 'notifications' ? (
+          <NotificationsPage
+            notifications={notifications}
+            onMarkAsRead={handleMarkAsRead}
+            onMarkAllAsRead={handleMarkAllAsRead}
+            onNotificationClick={handleNotificationClick}
+          />
+        ) : activeTab === 'settings' ? (
+          <SettingsPage
+            student={currentUser}
+            onEdit={handleEditProfile}
+            onUpdateSettings={handleUpdateSettings}
+          />
+        ) : null}
+      </div>
 
       {activeTab !== 'chat' && (
         <FloatingChat
