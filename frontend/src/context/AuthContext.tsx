@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ApiUserProfile, Student } from '../types';
 import {
+  apiDeleteAccount,
   apiFetchUserProfile,
   apiLogin,
   apiSignupAlumni,
@@ -26,6 +27,7 @@ interface AuthContextValue {
   signupStudent: (payload: StudentSignupPayload) => Promise<void>;
   signupAlumni: (payload: AlumniSignupPayload) => Promise<void>;
   refreshProfile: () => Promise<void>;
+  deleteAccount: (password: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -87,6 +89,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile(latest);
   };
 
+  const deleteAccount = async (password: string) => {
+    if (!session) {
+      throw new Error('Not authenticated');
+    }
+
+    await apiDeleteAccount(session.userId, password, session.token);
+    logout();
+  };
+
   const login = async (email: string, password: string) => {
     const { profile: p, token } = await apiLogin(email, password);
     persistAndSet(p, token);
@@ -138,6 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signupStudent,
     signupAlumni,
     refreshProfile,
+    deleteAccount,
     logout,
   };
 
