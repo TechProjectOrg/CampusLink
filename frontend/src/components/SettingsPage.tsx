@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Separator } from './ui/separator';
 import { toast } from 'sonner@2.0.3';
 import { Student } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface SettingsPageProps {
   student: Student;
@@ -17,6 +18,8 @@ interface SettingsPageProps {
 }
 
 export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPageProps) {
+  const auth = useAuth();
+
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [passwordData, setPasswordData] = useState({
@@ -66,9 +69,23 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
     toast.success('Privacy settings saved');
   };
 
-  const handleDeleteAccount = () => {
-    if (confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
-      toast.error('Account deletion requested. Please contact support to complete this action.');
+  const handleDeleteAccount = async () => {
+    const confirmed = confirm(
+      'Are you sure you want to delete your account? This action cannot be undone.'
+    );
+    if (!confirmed) return;
+
+    const password = window.prompt('Enter your password to confirm account deletion:');
+    if (!password) {
+      toast.error('Account deletion cancelled (password required).');
+      return;
+    }
+
+    try {
+      await auth.deleteAccount(password);
+      toast.success('Your account has been deleted.');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Unable to delete account');
     }
   };
 

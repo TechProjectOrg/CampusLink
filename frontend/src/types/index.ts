@@ -101,3 +101,29 @@ export interface Group {
   createdAt: string;
   createdBy: string;
 }
+
+// ==============================
+// Backend API types
+// ==============================
+export type ApiUserType = 'student' | 'alumni' | 'teacher' | 'unknown';
+
+export interface ApiUserProfile {
+  userId: string;
+  username: string;
+  email: string;
+  bio: string | null;
+  profilePictureUrl: string | null;
+  isPublic: boolean;
+  createdAt: string; // ISO string
+  type: ApiUserType;
+  details?: {
+    branch?: string;
+    year?: number;
+    passingYear?: number;
+  };
+  stats?: {
+    followerCount: number;
+    followingCount: number;
+    postCount: number;
+  };
+}
