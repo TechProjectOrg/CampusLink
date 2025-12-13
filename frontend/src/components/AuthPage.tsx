@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Users, Mail, Lock, GraduationCap, Sparkles, TrendingUp, Award, Zap } from 'lucide-react';
-import Lottie from "lottie-react";
-import loadingAnimation from "../assets/loading_animation.json";
+import Lottie from 'lottie-react';
+import loadingAnimation from '../assets/loading_animation.json';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader } from './ui/card';
@@ -9,14 +9,11 @@ import { Label } from './ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { validatePassword, getPasswordValidationMessage } from '../lib/validation';
+import { useAuth } from '../context/AuthContext';
 
-const API_BASE = 'http://localhost:4000';
+export function AuthPage() {
+  const auth = useAuth();
 
-interface AuthPageProps {
-  onLogin: () => void;
-}
-
-export function AuthPage({ onLogin }: AuthPageProps) {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [signupType, setSignupType] = useState<'student' | 'alumni'>('student');
@@ -59,30 +56,10 @@ export function AuthPage({ onLogin }: AuthPageProps) {
     setIsLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE}/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: loginEmail,
-          password: loginPassword,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        setLoginError(errorData.message || 'Invalid email or password');
-        setIsLoading(false);
-        return;
-      }
-
-      // const user = await response.json();
-      // TODO: store user/token if needed
-      onLogin();
+      await auth.login(loginEmail, loginPassword);
     } catch (error) {
       console.error('Login error:', error);
-      setLoginError('Unable to connect to the server. Please try again.');
+      setLoginError(error instanceof Error ? error.message : 'Login failed');
     } finally {
       setIsLoading(false);
     }
@@ -117,58 +94,34 @@ export function AuthPage({ onLogin }: AuthPageProps) {
     }
 
     try {
-      const endpoint =
-        signupType === 'student' ? '/auth/signup/student' : '/auth/signup/alumni';
-
-      const payload =
-        signupType === 'student'
-          ? {
-              name: signupData.name,
-              email: signupData.email,
-              password: signupData.password,
-              branch: signupData.branch,
-              year: signupData.year,
-            }
-          : {
-              name: alumniSignupData.name,
-              email: alumniSignupData.email,
-              password: alumniSignupData.password,
-              graduationYear: alumniSignupData.graduationYear,
-              branch: alumniSignupData.branch,
-              currentStatus: alumniSignupData.currentStatus,
-            };
-
-      const response = await fetch(`${API_BASE}${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (response.status === 409) {
-        const errorData = await response.json().catch(() => ({}));
-        setSignupError(errorData.message || 'User already exists. Please sign in instead.');
-        // Switch to login and pre-fill email for convenience
-        setActiveForm('login');
-        setLoginEmail(data.email);
-        setIsLoading(false);
-        return;
+      if (signupType === 'student') {
+        await auth.signupStudent({
+          name: signupData.name,
+          email: signupData.email,
+          password: signupData.password,
+          branch: signupData.branch,
+          year: signupData.year,
+        });
+      } else {
+        await auth.signupAlumni({
+          name: alumniSignupData.name,
+          email: alumniSignupData.email,
+          password: alumniSignupData.password,
+          graduationYear: alumniSignupData.graduationYear,
+          branch: alumniSignupData.branch,
+          currentStatus: alumniSignupData.currentStatus,
+        });
       }
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        setSignupError(errorData.message || 'Signup failed. Please try again.');
-        setIsLoading(false);
-        return;
-      }
-
-      // const user = await response.json();
-      // TODO: store user/token if needed
-      onLogin();
     } catch (error) {
       console.error('Signup error:', error);
-      setSignupError('Unable to connect to the server. Please try again.');
+      const message = error instanceof Error ? error.message : 'Signup failed';
+      setSignupError(message);
+
+      // Convenience: if backend says user already exists, switch to login.
+      if (message.toLowerCase().includes('already exists')) {
+        setActiveForm('login');
+        setLoginEmail(data.email);
+      }
     } finally {
       setIsLoading(false);
     }

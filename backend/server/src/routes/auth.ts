@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import crypto from 'crypto';
 import prisma from '../prisma';
 import validatePassword from '../middleware/validatePassword';
+import { getUserProfileById } from '../services/userProfile';
 
 const router = express.Router();
 
@@ -103,13 +104,16 @@ router.post('/signup/student', validatePassword, async (req: Request, res: Respo
       VALUES (${user.user_id}, ${branch}, ${numericYear})
     `;
 
-    return res.status(201).json({
-      userId: user.user_id,
-      username: user.username,
-      email: user.email,
-      type: 'student',
-      createdAt: user.created_at,
-    });
+    const profile = await getUserProfileById(user.user_id);
+    return res.status(201).json(
+      profile ?? {
+        userId: user.user_id,
+        username: user.username,
+        email: user.email,
+        type: 'student',
+        createdAt: user.created_at,
+      }
+    );
   } catch (err) {
     console.error('Error during student signup:', err);
     return res.status(500).json({ message: 'Internal server error' });
@@ -150,13 +154,16 @@ router.post('/signup/alumni', validatePassword, async (req: Request, res: Respon
       VALUES (${user.user_id}, ${branch}, ${numericGradYear})
     `;
 
-    return res.status(201).json({
-      userId: user.user_id,
-      username: user.username,
-      email: user.email,
-      type: 'alumni',
-      createdAt: user.created_at,
-    });
+    const profile = await getUserProfileById(user.user_id);
+    return res.status(201).json(
+      profile ?? {
+        userId: user.user_id,
+        username: user.username,
+        email: user.email,
+        type: 'alumni',
+        createdAt: user.created_at,
+      }
+    );
   } catch (err) {
     console.error('Error during alumni signup:', err);
     return res.status(500).json({ message: 'Internal server error' });
@@ -197,24 +204,19 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    const typeResult = await prisma.$queryRaw<{ type: string }[]>`
-      SELECT CASE
-        WHEN EXISTS (SELECT 1 FROM studentprofiles sp WHERE sp.user_id = ${user.user_id}) THEN 'student'
-        WHEN EXISTS (SELECT 1 FROM alumniprofiles ap WHERE ap.user_id = ${user.user_id}) THEN 'alumni'
-        WHEN EXISTS (SELECT 1 FROM teacherprofiles tp WHERE tp.user_id = ${user.user_id}) THEN 'teacher'
-        ELSE 'unknown'
-      END AS type
-    `;
+    const profile = await getUserProfileById(user.user_id);
+    if (!profile) {
+      // Should never happen since we just fetched the user, but keep a safe fallback.
+      return res.status(200).json({
+        userId: user.user_id,
+        username: user.username,
+        email: user.email,
+        type: 'unknown',
+        createdAt: user.created_at,
+      });
+    }
 
-    const type = typeResult[0]?.type ?? 'unknown';
-
-    return res.status(200).json({
-      userId: user.user_id,
-      username: user.username,
-      email: user.email,
-      type,
-      createdAt: user.created_at,
-    });
+    return res.status(200).json(profile);
   } catch (err) {
     console.error('Error during login:', err);
     return res.status(500).json({ message: 'Internal server error' });

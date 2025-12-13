@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Navbar } from './components/Navbar';
 import { AuthPage } from './components/AuthPage';
 import { FeedPage } from './components/FeedPage';
@@ -10,14 +10,24 @@ import { ClubsPage } from './components/ClubsPage';
 import { NotificationsPage } from './components/NotificationsPage';
 import { SettingsPage } from './components/SettingsPage';
 import { FloatingChat } from './components/FloatingChat';
+import { LoadingState } from './components/LoadingState';
 import { Toaster } from './components/ui/sonner';
-import { mockStudents, mockOpportunities, mockClubs, mockConversations, mockNotifications, getCurrentUser } from './lib/mockData';
+import {
+  mockStudents,
+  mockOpportunities,
+  mockClubs,
+  mockConversations,
+  mockNotifications,
+  getCurrentUser,
+} from './lib/mockData';
 import { Student, Opportunity, Club, Notification } from './types';
 import { ProfileCard } from './components/ProfileCard';
 import { SuggestionsCard } from './components/SuggestionsCard';
+import { useAuth } from './context/AuthContext';
 
 export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const auth = useAuth();
+
   const [activeTab, setActiveTab] = useState('feed');
   const [students, setStudents] = useState<Student[]>(mockStudents);
   const [opportunities, setOpportunities] = useState<Opportunity[]>(mockOpportunities);
@@ -64,7 +74,34 @@ export default function App() {
     setActiveTab(tab); // Set active tab to trigger re-render
   };
   
-  const currentUserId = 'current';
+  const currentUser = useMemo(() => {
+    const mockMe = getCurrentUser();
+    if (!auth.currentUser) return mockMe;
+
+    // Preserve mock-only fields (skills, interests, etc.) but overwrite identity fields from backend.
+    return {
+      ...mockMe,
+      id: auth.currentUser.id,
+      name: auth.currentUser.name,
+      email: auth.currentUser.email,
+      branch: auth.currentUser.branch,
+      year: auth.currentUser.year,
+      avatar: auth.currentUser.avatar,
+      bio: auth.currentUser.bio,
+    } as Student;
+  }, [auth.currentUser]);
+
+  const currentUserId = currentUser.id;
+
+  // Ensure the authenticated user is present in the in-memory students list (used by Network/Profile lookups).
+  useEffect(() => {
+    if (!auth.currentUser) return;
+
+    setStudents((prev) => {
+      const filtered = prev.filter((s) => s.id !== 'current' && s.id !== currentUserId);
+      return [currentUser, ...filtered];
+    });
+  }, [auth.currentUser, currentUser, currentUserId]);
 
   // Opportunity handlers
   const handleLike = (opportunityId: string) => {
@@ -100,14 +137,13 @@ export default function App() {
   const handleComment = (opportunityId: string, commentText: string) => {
     setOpportunities(opportunities.map(opp => {
       if (opp.id === opportunityId) {
-        const currentUser = getCurrentUser();
         const newComment = {
           id: Date.now().toString(),
           authorId: currentUserId,
           authorName: currentUser.name,
           authorAvatar: currentUser.avatar,
           content: commentText,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
         };
         return {
           ...opp,
@@ -253,17 +289,6 @@ export default function App() {
     }
   };
 
-  // Auth handler
-  const handleLogin = () => {
-    setIsAuthenticated(true);
-    navigate('feed');
-  };
-
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    navigate('feed');
-    setViewingProfileId(null);
-  };
 
   // Create opportunity handler
   const handleCreateOpportunity = (opportunity: Opportunity) => {
@@ -285,11 +310,13 @@ export default function App() {
   const unreadCount = conversations.reduce((sum, conv) => sum + conv.unread, 0);
   const unreadNotifications = notifications.filter(n => !n.read).length;
 
-  if (!isAuthenticated) {
-    return <AuthPage onLogin={handleLogin} />;
+  if (auth.isLoading) {
+    return <LoadingState type="page" />;
   }
 
-  const currentUser = getCurrentUser();
+  if (!auth.isAuthenticated) {
+    return <AuthPage />;
+  }
   const displayedStudent = viewingProfileId 
     ? students.find(s => s.id === viewingProfileId) || currentUser
     : currentUser;
