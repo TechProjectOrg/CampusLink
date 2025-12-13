@@ -369,11 +369,13 @@ export default function App() {
       />
       <div className="flex justify-center">
         {activeTab === 'feed' ? (
-          <div className="flex w-full max-w-7xl">
-            <div className="flex-none px-2 overflow-y-auto h-[calc(100vh-4rem)]" style={{ width: '20%', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          <div className="flex w-full xl:max-w-7xl">
+            {/* Profile Section (Left) - Visible on XL screens and up */}
+            <div className="w-1/5 px-2 overflow-y-auto h-[calc(100vh-4rem)] hidden xl:block" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               <ProfileCard student={currentUser} onViewProfile={() => handleViewProfile(currentUserId)} />
             </div>
-            <div className="flex-none px-2 overflow-y-auto h-[calc(100vh-4rem)]" style={{ width: '55%', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            {/* Feed Section (Center) - Expands to fill space */}
+            <div className="px-2 overflow-y-auto h-[calc(100vh-4rem)] w-full lg:w-3/4 xl:w-11/20" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               <FeedPage
                 opportunities={opportunities}
                 currentUserId={currentUserId}
@@ -388,7 +390,8 @@ export default function App() {
                 onViewStudentProfile={handleViewProfile}
               />
             </div>
-            <div className="flex-none px-2 overflow-y-auto h-[calc(100vh-4rem)]" style={{ width: '25%', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            {/* Suggestions Section (Right) - Visible on LG screens and up */}
+            <div className="w-1/4 px-2 overflow-y-auto h-[calc(100vh-4rem)] hidden lg:block" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               <SuggestionsCard students={students} currentUserId={currentUserId} onConnect={handleConnect} onViewProfile={handleViewProfile} />
             </div>
           </div>
