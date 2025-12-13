@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Navbar } from './components/Navbar';
 import { AuthPage } from './components/AuthPage';
 import { FeedPage } from './components/FeedPage';
@@ -36,6 +36,32 @@ export default function App() {
   const [conversations, setConversations] = useState(mockConversations);
   const [viewingProfileId, setViewingProfileId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+
+  const prevAuthenticatedRef = useRef<boolean>(auth.isAuthenticated);
+
+  // Always land on homescreen after a successful login/signup.
+  useEffect(() => {
+    const wasAuthenticated = prevAuthenticatedRef.current;
+    const isAuthenticated = auth.isAuthenticated;
+
+    // Transition: logged in
+    if (!wasAuthenticated && isAuthenticated) {
+      setViewingProfileId(null);
+      setSearchQuery('');
+      setActiveTab('feed');
+      window.history.pushState({ tab: 'feed' }, '', '/feed');
+    }
+
+    // Transition: logged out (optional, but avoids restoring old tab on next login)
+    if (wasAuthenticated && !isAuthenticated) {
+      setViewingProfileId(null);
+      setSearchQuery('');
+      setActiveTab('feed');
+      window.history.pushState({ tab: 'feed' }, '', '/feed');
+    }
+
+    prevAuthenticatedRef.current = isAuthenticated;
+  }, [auth.isAuthenticated]);
   
   useEffect(() => {
     const setTabFromPath = () => {
