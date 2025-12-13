@@ -55,21 +55,9 @@ export function FeedPage({
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
       <div className="max-w-7xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left Sidebar - Profile Card (Hidden on mobile and tablets) */}
-          <div className="hidden xl:block xl:col-span-3">
-            <div className="sticky top-24">
-              {currentUser && (
-                <ProfileCard 
-                  student={currentUser} 
-                  onViewProfile={() => onViewProfile?.()} 
-                />
-              )}
-            </div>
-          </div>
-
+        <div className="space-y-6">
           {/* Main Feed */}
-          <div className="lg:col-span-8 xl:col-span-6 space-y-6">
+          <div className="space-y-6">
             {/* Header */}
             <div className="flex items-center justify-between animate-slide-in-down">
               <div>
@@ -136,20 +124,6 @@ export function FeedPage({
                   </div>
                   <p className="text-gray-500">No opportunities found for this filter.</p>
                 </div>
-              )}
-            </div>
-          </div>
-
-          {/* Right Sidebar - Suggestions (Hidden on mobile) */}
-          <div className="hidden lg:block lg:col-span-4 xl:col-span-3">
-            <div className="sticky top-24">
-              {students.length > 0 && (
-                <SuggestionsCard
-                  students={students}
-                  currentUserId={currentUserId}
-                  onConnect={(id) => onConnect?.(id)}
-                  onViewProfile={(id) => onViewStudentProfile?.(id)}
-                />
               )}
             </div>
           </div>

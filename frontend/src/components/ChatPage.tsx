@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Send, Search, MoreVertical, Phone, Video, Info, Image, Smile, Heart, CircleDot, Plus, UserPlus, Flag, Ban, Eye } from 'lucide-react';
 import { ChatConversation, Student } from '../types';
 import { Input } from './ui/input';
@@ -28,7 +28,6 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   const [message, setMessage] = useState('');
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
   const [viewingGroupInfo, setViewingGroupInfo] = useState<string | null>(null);
-  const [conversationsList, setConversationsList] = useState<ChatConversation[]>(conversations);
   const [messages, setMessages] = useState<{ [key: string]: any[] }>(
   {
     chat1: [
@@ -114,6 +113,52 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
         isOwn: false
       }
     ],
+    chat4: [
+      {
+        id: '1',
+        senderId: '3',
+        content: 'Can you help me with that DP problem?',
+        timestamp: '2025-10-30T14:00:00Z',
+        isOwn: false
+      },
+      {
+        id: '2',
+        senderId: 'current',
+        content: 'Sure! Which problem is it?',
+        timestamp: '2025-10-30T14:10:00Z',
+        isOwn: true
+      },
+      {
+        id: '3',
+        senderId: '3',
+        content: 'The longest increasing subsequence one from yesterday\'s contest.',
+        timestamp: '2025-10-30T14:15:00Z',
+        isOwn: false
+      }
+    ],
+    chat5: [
+      {
+        id: '1',
+        senderId: '3',
+        content: 'Can you help me with that DP problem?',
+        timestamp: '2025-10-30T14:00:00Z',
+        isOwn: false
+      },
+      {
+        id: '2',
+        senderId: 'current',
+        content: 'Sure! Which problem is it?',
+        timestamp: '2025-10-30T14:10:00Z',
+        isOwn: true
+      },
+      {
+        id: '3',
+        senderId: '3',
+        content: 'The longest increasing subsequence one from yesterday\'s contest.',
+        timestamp: '2025-10-30T14:15:00Z',
+        isOwn: false
+      }
+    ],
     group1: [
       {
         id: '1',
@@ -167,8 +212,21 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     ]
   });
 
-  const selectedConversation = conversationsList.find(c => c.id === selectedChat);
+  const selectedConversation = conversations.find(c => c.id === selectedChat);
   const chatMessages = selectedChat ? messages[selectedChat] || [] : [];
+
+  const messagesViewportRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    // Scroll to the bottom (latest message) whenever a chat is selected or messages change
+    if (messagesViewportRef.current) {
+      try {
+        messagesViewportRef.current.scrollTop = messagesViewportRef.current.scrollHeight;
+      } catch (e) {
+        // ignore
+      }
+    }
+  }, [selectedChat, chatMessages.length]);
 
   const handleSendMessage = () => {
     if (!message.trim() || !selectedChat) return;
@@ -205,14 +263,14 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
 
   const handleStartChat = (studentId: string) => {
     // Check if conversation already exists
-    const existingConvo = conversationsList.find(c => c.participantId === studentId);
+    const existingConvo = conversations.find(c => c.participantId === studentId);
     if (existingConvo) {
       setSelectedChat(existingConvo.id);
       setIsNewChatOpen(false);
       return;
     }
 
-    // Create new conversation
+    // Create new conversation (this would ideally trigger an update in App.tsx)
     const student = students.find(s => s.id === studentId);
     if (!student) return;
 
@@ -227,14 +285,16 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
       isGroup: false
     };
 
-    setConversationsList([newConversation, ...conversationsList]);
+    // For now, we're not adding to `conversations` here, as `App.tsx` owns that state.
+    // In a real app, `onStartChat` would likely be a prop from `App.tsx` that updates its state.
+    // For now, simply select the chat and let the parent reorder if it chooses.
     setSelectedChat(newConversation.id);
     setMessages({ ...messages, [newConversation.id]: [] });
     setIsNewChatOpen(false);
   };
 
   const handleCreateGroup = (name: string, description: string, memberIds: string[]) => {
-    // Create new group conversation
+    // Create new group conversation (this would ideally trigger an update in App.tsx)
     const newGroupId = `group${Date.now()}`;
     const newGroup: ChatConversation = {
       id: newGroupId,
@@ -248,7 +308,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
       groupMembers: [currentUserId, ...memberIds]
     };
 
-    setConversationsList([newGroup, ...conversationsList]);
+    // For now, we're not adding to `conversations` here, as `App.tsx` owns that state.
     setSelectedChat(newGroup.id);
     setMessages({ ...messages, [newGroup.id]: [] });
     setIsNewChatOpen(false);
@@ -280,10 +340,10 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   }
 
   return (
-    <div className="h-[calc(100vh-4rem)] pb-20 md:pb-0 bg-white">
-      <div className="h-full max-w-7xl mx-auto flex border-x border-gray-200">
+    <div className="flex flex-col flex-1 pb-20 md:pb-0 bg-white">
+      <div className="flex-1 w-full flex border-x border-gray-200 overflow-hidden">
         {/* Conversations List - Instagram Style */}
-        <div className={`${selectedChat ? 'hidden md:flex' : 'flex'} w-full md:w-96 border-r border-gray-200 flex-col bg-white`}>
+        <div className={`${selectedChat ? 'hidden md:flex' : 'flex'} w-full md:w-96 flex-shrink-0 overflow-hidden border-r border-gray-200 flex-col bg-white`}>
           {/* Header */}
           <div className="p-4 md:p-6 border-b border-gray-200">
             <div className="flex items-center justify-between mb-4">
@@ -308,19 +368,21 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
           </div>
 
           {/* Conversation List */}
-          <ScrollArea className="flex-1">
-            <div className="p-2">
-              {conversationsList.map(conversation => (
+          <ScrollArea className="flex-1 overflow-hidden">
+            <div className="p-2 w-full">
+              {conversations.map(conversation => (
                 <button
                   key={conversation.id}
-                  onClick={() => setSelectedChat(conversation.id)}
+                  onClick={() => {
+                    setSelectedChat(conversation.id);
+                  }}
                   className={`w-full p-3 text-left rounded-xl transition-all duration-300 mb-1 ${
                     selectedChat === conversation.id 
                       ? 'bg-gray-100' 
                       : 'hover:bg-gray-50'
                   }`}
                 >
-                  <div className="flex gap-3 items-center">
+                  <div className="flex gap-3 items-center w-full overflow-hidden">
                     <div className="relative flex-shrink-0">
                       <Avatar className="w-12 h-12 md:w-14 md:h-14 ring-2 ring-white shadow-sm">
                         <AvatarImage src={conversation.participantAvatar} />
@@ -330,7 +392,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                         <div className="absolute bottom-0 right-0 w-3 h-3 md:w-4 md:h-4 bg-primary rounded-full border-2 border-white"></div>
                       )}
                     </div>
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 overflow-hidden">
                       <div className="flex items-center justify-between mb-1">
                         <p className={`text-sm truncate ${conversation.unread > 0 ? 'text-gray-900' : 'text-gray-900'}`}>
                           {conversation.participantName}
@@ -359,7 +421,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
 
         {/* Chat Area - Instagram Style */}
         {selectedConversation ? (
-          <div className={`${selectedChat ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-white`}>
+          <div className={`${selectedChat ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-white min-w-0`}>
             {/* Chat Header */}
             <div className="px-4 md:px-6 py-3 border-b border-gray-200 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -452,8 +514,8 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
             </div>
 
             {/* Messages */}
-            <ScrollArea className="flex-1 p-4 md:p-6">
-              <div className="space-y-3 max-w-3xl mx-auto">
+            <ScrollArea viewportRef={messagesViewportRef} className="flex-1 overflow-hidden min-w-0">
+              <div className="p-4 md:p-6 space-y-3 max-w-3xl mx-auto">
                 {chatMessages.map((msg, index) => {
                   const showDate = index === 0 || 
                     formatDate(msg.timestamp) !== formatDate(chatMessages[index - 1].timestamp);
@@ -545,7 +607,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
             </div>
           </div>
         ) : (
-          <div className="flex-1 hidden md:flex items-center justify-center bg-white">
+          <div className="flex-1 hidden md:flex items-center justify-center bg-white min-w-0">
             <div className="text-center">
               <div className="w-24 h-24 rounded-full border-4 border-gray-900 mx-auto mb-4 flex items-center justify-center">
                 <Send className="w-12 h-12 text-gray-900" />

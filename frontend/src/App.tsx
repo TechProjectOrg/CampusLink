@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Navbar } from './components/Navbar';
 import { AuthPage } from './components/AuthPage';
 import { FeedPage } from './components/FeedPage';
@@ -13,6 +13,8 @@ import { FloatingChat } from './components/FloatingChat';
 import { Toaster } from './components/ui/sonner';
 import { mockStudents, mockOpportunities, mockClubs, mockConversations, mockNotifications, getCurrentUser } from './lib/mockData';
 import { Student, Opportunity, Club, Notification } from './types';
+import { ProfileCard } from './components/ProfileCard';
+import { SuggestionsCard } from './components/SuggestionsCard';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -21,8 +23,46 @@ export default function App() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>(mockOpportunities);
   const [clubs, setClubs] = useState<Club[]>(mockClubs);
   const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
+  const [conversations, setConversations] = useState(mockConversations);
   const [viewingProfileId, setViewingProfileId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  useEffect(() => {
+    const setTabFromPath = () => {
+        const pathParts = window.location.pathname.split('/').filter(p => p);
+        const mainPath = pathParts[0] || 'feed';
+        setActiveTab(mainPath);
+
+        if (mainPath === 'profile' && pathParts[1]) {
+            setViewingProfileId(pathParts[1]);
+        } else {
+            setViewingProfileId(null);
+        }
+    };
+
+    setTabFromPath(); // Initial load
+
+    const handlePopState = () => {
+        setTabFromPath();
+    };
+
+    window.addEventListener('popstate', handlePopState);
+
+    return () => {
+        window.removeEventListener('popstate', handlePopState);
+    };
+  }, []);
+
+  const navigate = (tab: string, profileId?: string) => {
+    let path = `/${tab}`;
+    const state: { tab: string; profileId?: string } = { tab };
+    if (tab === 'profile' && profileId) {
+        path += `/${profileId}`;
+        state.profileId = profileId;
+    }
+    window.history.pushState(state, '', path);
+    setActiveTab(tab); // Set active tab to trigger re-render
+  };
   
   const currentUserId = 'current';
 
@@ -124,12 +164,29 @@ export default function App() {
   };
 
   const handleMessage = (studentId: string) => {
-    setActiveTab('chat');
+    navigate('chat');
+  };
+
+  const handleChatClick = (conversationId: string) => {
+    setConversations(prevConversations => {
+      const conversationIndex = prevConversations.findIndex(
+        (conv) => conv.id === conversationId
+      );
+
+      if (conversationIndex === -1) {
+        return prevConversations;
+      }
+
+      const updatedConversations = [...prevConversations];
+      const [clickedConversation] = updatedConversations.splice(conversationIndex, 1);
+      updatedConversations.unshift(clickedConversation);
+      return updatedConversations;
+    });
   };
 
   const handleViewProfile = (studentId: string) => {
     setViewingProfileId(studentId);
-    setActiveTab('profile');
+    navigate('profile', studentId);
   };
 
   // Club handlers
@@ -182,16 +239,16 @@ export default function App() {
     // Handle different notification types
     switch (notification.type) {
       case 'connection':
-        setActiveTab('network');
+        navigate('network');
         break;
       case 'message':
-        setActiveTab('chat');
+        navigate('chat');
         break;
       case 'opportunity':
-        setActiveTab('feed');
+        navigate('feed');
         break;
       case 'club':
-        setActiveTab('clubs');
+        navigate('clubs');
         break;
     }
   };
@@ -199,11 +256,12 @@ export default function App() {
   // Auth handler
   const handleLogin = () => {
     setIsAuthenticated(true);
+    navigate('feed');
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
-    setActiveTab('feed');
+    navigate('feed');
     setViewingProfileId(null);
   };
 
@@ -224,7 +282,7 @@ export default function App() {
   };
 
   // Calculate unread messages and notifications
-  const unreadCount = mockConversations.reduce((sum, conv) => sum + conv.unread, 0);
+  const unreadCount = conversations.reduce((sum, conv) => sum + conv.unread, 0);
   const unreadNotifications = notifications.filter(n => !n.read).length;
 
   if (!isAuthenticated) {
@@ -244,7 +302,7 @@ export default function App() {
     if (tab !== 'search') {
       setSearchQuery('');
     }
-    setActiveTab(tab);
+    navigate(tab);
   };
 
   return (
@@ -256,100 +314,101 @@ export default function App() {
         unreadNotifications={unreadNotifications}
         onSearch={setSearchQuery}
       />
-      
-      {activeTab === 'feed' && (
-        <FeedPage
-          opportunities={opportunities}
+      <div className="flex justify-center">
+        {activeTab === 'feed' ? (
+          <div className="flex w-full max-w-7xl">
+            <div className="flex-none px-2 overflow-y-auto h-[calc(100vh-4rem)]" style={{ width: '20%', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+              <ProfileCard student={currentUser} onViewProfile={() => handleViewProfile(currentUserId)} />
+            </div>
+            <div className="flex-none px-2 overflow-y-auto h-[calc(100vh-4rem)]" style={{ width: '55%', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+              <FeedPage
+                opportunities={opportunities}
+                currentUserId={currentUserId}
+                currentUser={currentUser}
+                students={students}
+                onLike={handleLike}
+                onSave={handleSave}
+                onComment={handleComment}
+                onCreateOpportunity={handleCreateOpportunity}
+                onViewProfile={() => handleViewProfile(currentUserId)}
+                onConnect={handleConnect}
+                onViewStudentProfile={handleViewProfile}
+              />
+            </div>
+            <div className="flex-none px-2 overflow-y-auto h-[calc(100vh-4rem)]" style={{ width: '25%', scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+              <SuggestionsCard students={students} currentUserId={currentUserId} onConnect={handleConnect} onViewProfile={handleViewProfile} />
+            </div>
+          </div>
+        ) : activeTab === 'search' ? (
+          <SearchPage
+            students={students}
+            currentUserId={currentUserId}
+            onConnect={handleConnect}
+            onViewProfile={handleViewProfile}
+            initialSearchQuery={searchQuery}
+          />
+        ) : activeTab === 'network' ? (
+          <NetworkPage
+            students={students}
+            currentUserId={currentUserId}
+            onAcceptRequest={handleAcceptRequest}
+            onRejectRequest={handleRejectRequest}
+            onMessage={handleMessage}
+            onViewProfile={handleViewProfile}
+            onConnect={handleConnect}
+          />
+        ) : activeTab === 'chat' ? (
+          <ChatPage
+            conversations={conversations}
+            students={students}
+            currentUserId={currentUserId}
+            onViewProfile={handleViewProfile}
+            onChatClick={handleChatClick}
+          />
+        ) : activeTab === 'clubs' ? (
+          <ClubsPage
+            clubs={clubs}
+            students={students}
+            currentUserId={currentUserId}
+            onJoinClub={handleJoinClub}
+            onLeaveClub={handleLeaveClub}
+            onCreateClub={handleCreateClub}
+            onViewProfile={handleViewProfile}
+          />
+        ) : activeTab === 'profile' ? (
+          <ProfilePage
+            student={displayedStudent}
+            isOwnProfile={displayedStudent.id === currentUserId}
+            onEdit={handleEditProfile}
+            opportunities={opportunities}
+            onLike={handleLike}
+            onSave={handleSave}
+            onComment={handleComment}
+          />
+        ) : activeTab === 'notifications' ? (
+          <NotificationsPage
+            notifications={notifications}
+            onMarkAsRead={handleMarkAsRead}
+            onMarkAllAsRead={handleMarkAllAsRead}
+            onNotificationClick={handleNotificationClick}
+          />
+        ) : activeTab === 'settings' ? (
+          <SettingsPage
+            student={currentUser}
+            onEdit={handleEditProfile}
+            onUpdateSettings={handleUpdateSettings}
+          />
+        ) : null}
+      </div>
+
+      {activeTab !== 'chat' && (
+        <FloatingChat
+          conversations={conversations}
           currentUserId={currentUserId}
-          currentUser={currentUser}
-          students={students}
-          onLike={handleLike}
-          onSave={handleSave}
-          onComment={handleComment}
-          onCreateOpportunity={handleCreateOpportunity}
-          onViewProfile={() => handleViewProfile(currentUserId)}
-          onConnect={handleConnect}
-          onViewStudentProfile={handleViewProfile}
+          onOpenFullChat={() => handleTabChange('chat')}
+          onChatClick={handleChatClick}
         />
       )}
-
-      {activeTab === 'search' && (
-        <SearchPage
-          students={students}
-          currentUserId={currentUserId}
-          onConnect={handleConnect}
-          onViewProfile={handleViewProfile}
-          initialSearchQuery={searchQuery}
-        />
-      )}
-
-      {activeTab === 'network' && (
-        <NetworkPage
-          students={students}
-          currentUserId={currentUserId}
-          onAcceptRequest={handleAcceptRequest}
-          onRejectRequest={handleRejectRequest}
-          onMessage={handleMessage}
-          onViewProfile={handleViewProfile}
-          onConnect={handleConnect}
-        />
-      )}
-
-      {activeTab === 'chat' && (
-        <ChatPage
-          conversations={mockConversations}
-          students={students}
-          currentUserId={currentUserId}
-          onViewProfile={handleViewProfile}
-        />
-      )}
-
-      {activeTab === 'clubs' && (
-        <ClubsPage
-          clubs={clubs}
-          students={students}
-          currentUserId={currentUserId}
-          onJoinClub={handleJoinClub}
-          onLeaveClub={handleLeaveClub}
-          onCreateClub={handleCreateClub}
-          onViewProfile={handleViewProfile}
-        />
-      )}
-
-      {activeTab === 'profile' && (
-        <ProfilePage
-          student={displayedStudent}
-          isOwnProfile={displayedStudent.id === currentUserId}
-          onEdit={handleEditProfile}
-          opportunities={opportunities}
-          onLike={handleLike}
-          onSave={handleSave}
-          onComment={handleComment}
-        />
-      )}
-
-      {activeTab === 'notifications' && (
-        <NotificationsPage
-          notifications={notifications}
-          onMarkAsRead={handleMarkAsRead}
-          onMarkAllAsRead={handleMarkAllAsRead}
-          onNotificationClick={handleNotificationClick}
-        />
-      )}
-
-      {activeTab === 'settings' && (
-        <SettingsPage
-          student={currentUser}
-          onEdit={handleEditProfile}
-          onUpdateSettings={handleUpdateSettings}
-        />
-      )}
-
-      <FloatingChat
-        conversations={mockConversations}
-        currentUserId={currentUserId}
-        onOpenFullChat={() => handleTabChange('chat')}
-      />
       <Toaster />
     </div>
   );

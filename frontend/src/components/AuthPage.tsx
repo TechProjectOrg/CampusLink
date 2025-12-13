@@ -1,5 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Users, Mail, Lock, GraduationCap, Sparkles, TrendingUp, Award, Zap } from 'lucide-react';
+import Lottie from "lottie-react";
+import loadingAnimation from "../assets/loading_animation.json";
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Card, CardContent, CardHeader } from './ui/card';
@@ -21,6 +23,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
   const [forgotPasswordEmail, setForgotPasswordEmail] = useState('');
   const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
   const [activeForm, setActiveForm] = useState<'login' | 'signup'>('login');
+  const [isLoading, setIsLoading] = useState(false);
   const [signupData, setSignupData] = useState({
     name: '',
     email: '',
@@ -53,6 +56,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
+    setIsLoading(true);
 
     try {
       const response = await fetch(`${API_BASE}/auth/login`, {
@@ -69,6 +73,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         setLoginError(errorData.message || 'Invalid email or password');
+        setIsLoading(false);
         return;
       }
 
@@ -78,21 +83,26 @@ export function AuthPage({ onLogin }: AuthPageProps) {
     } catch (error) {
       console.error('Login error:', error);
       setLoginError('Unable to connect to the server. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
 
     const data = signupType === 'student' ? signupData : alumniSignupData;
 
     if (data.password !== data.confirmPassword) {
       setSignupError('Passwords do not match');
+      setIsLoading(false);
       return;
     }
 
     if (!validatePassword(data.password)) {
       setSignupError('Password does not meet the requirements.');
+      setIsLoading(false);
       return;
     }
 
@@ -102,6 +112,7 @@ export function AuthPage({ onLogin }: AuthPageProps) {
     // For students, enforce college email; for alumni, allow any valid email
     if (signupType === 'student' && !data.email.endsWith('@gbpuat.ac.in')) {
       alert('Please use your college email (@gbpuat.ac.in)');
+      setIsLoading(false);
       return;
     }
 
@@ -141,12 +152,14 @@ export function AuthPage({ onLogin }: AuthPageProps) {
         // Switch to login and pre-fill email for convenience
         setActiveForm('login');
         setLoginEmail(data.email);
+        setIsLoading(false);
         return;
       }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         setSignupError(errorData.message || 'Signup failed. Please try again.');
+        setIsLoading(false);
         return;
       }
 
@@ -156,6 +169,8 @@ export function AuthPage({ onLogin }: AuthPageProps) {
     } catch (error) {
       console.error('Signup error:', error);
       setSignupError('Unable to connect to the server. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -308,8 +323,8 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                       <p className="text-sm text-red-500">{loginError}</p>
                     )}
 
-                    <Button type="submit" className="w-full gradient-primary shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
-                      Login to CampusLink
+                    <Button type="submit" className="w-full gradient-primary shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105" disabled={isLoading}>
+                      {isLoading ? <Lottie animationData={loadingAnimation} style={{ height: 50, width: 50 }} /> : "Login to CampusLink"}
                     </Button>
 
                     <div className="text-center">
@@ -639,8 +654,8 @@ export function AuthPage({ onLogin }: AuthPageProps) {
                     <p className="text-sm text-red-500">{signupError}</p>
                   )}
 
-                    <Button type="submit" className="w-full gradient-success shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
-                      Create Account
+                    <Button type="submit" className="w-full gradient-success shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105" disabled={isLoading}>
+                      {isLoading ? <Lottie animationData={loadingAnimation} style={{ height: 50, width: 50 }} /> : "Create Account"}
                     </Button>
 
                     <p className="text-xs text-gray-500 text-center">

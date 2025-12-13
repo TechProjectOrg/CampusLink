@@ -361,6 +361,48 @@ export const mockConversations: ChatConversation[] = [
     timestamp: '2025-10-30T14:15:00Z',
     unread: 1,
     isGroup: false
+  },
+  {
+    id: 'chat4',
+    participantId: '4',
+    participantName: 'Emily Johnson',
+    participantAvatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Emily',
+    lastMessage: 'IoT workshop is tomorrow, excited!',
+    timestamp: '2025-11-04T10:00:00Z',
+    unread: 0,
+    isGroup: false
+  },
+  {
+    id: 'chat5',
+    participantId: '6',
+    participantName: 'Priya Sharma',
+    participantAvatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Priya',
+    lastMessage: 'Don\'t forget about the Flutter dev session.',
+    timestamp: '2025-11-03T11:40:00Z',
+    unread: 1,
+    isGroup: false
+  },
+  {
+    id: 'group2',
+    participantId: 'group2',
+    participantName: 'Hackathon Squad 💻',
+    participantAvatar: 'https://api.dicebear.com/7.x/shapes/svg?seed=Hackathon',
+    lastMessage: 'Meeting at 7 PM to discuss project ideas.',
+    timestamp: '2025-11-04T19:00:00Z',
+    unread: 5,
+    isGroup: true,
+    groupMembers: ['current', '3', '6']
+  },
+  {
+    id: 'group3',
+    participantId: 'group3',
+    participantName: 'Web Dev Enthusiasts 🌐',
+    participantAvatar: 'https://api.dicebear.com/7.x/shapes/svg?seed=WebDev',
+    lastMessage: 'New tutorial on Next.js 14 out now!',
+    timestamp: '2025-11-05T09:00:00Z',
+    unread: 0,
+    isGroup: true,
+    groupMembers: ['current', '1', '2', '4', '5']
   }
 ];
 
