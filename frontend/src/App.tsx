@@ -371,11 +371,11 @@ export default function App() {
         {activeTab === 'feed' ? (
           <div className="flex w-full xl:max-w-7xl">
             {/* Profile Section (Left) - Visible on XL screens and up */}
-            <div className="w-1/5 px-2 overflow-y-auto h-[calc(100vh-4rem)] hidden xl:block" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+             <div className="w-[280px] min-w-[280px] px-2 overflow-y-auto h-[calc(100vh-4rem)] hidden xl:block flex-shrink-0">
               <ProfileCard student={currentUser} onViewProfile={() => handleViewProfile(currentUserId)} />
             </div>
             {/* Feed Section (Center) - Expands to fill space */}
-            <div className="px-2 overflow-y-auto h-[calc(100vh-4rem)] w-full lg:w-3/4 xl:w-11/20" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <div className="px-2 overflow-y-auto h-[calc(100vh-4rem)] w-full lg:w-3/4 xl:w-1/2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               <FeedPage
                 opportunities={opportunities}
                 currentUserId={currentUserId}
