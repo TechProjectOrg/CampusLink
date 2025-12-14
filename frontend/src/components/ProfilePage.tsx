@@ -23,6 +23,12 @@ import {
   apiFetchUserCertifications,
   type UserCertification,
 } from '../lib/certificationsApi';
+import {
+  apiCreateUserProject,
+  apiDeleteUserProject,
+  apiFetchUserProjects,
+  type UserProject,
+} from '../lib/projectsApi';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -62,6 +68,15 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
   const [newCertName, setNewCertName] = useState('');
   const [newCertDescription, setNewCertDescription] = useState('');
   const [newCertImageUrl, setNewCertImageUrl] = useState('');
+
+  // Projects are backend-driven for all profiles.
+  const [loadedProjects, setLoadedProjects] = useState<UserProject[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [projectsError, setProjectsError] = useState<string | null>(null);
+  const [newProject, setNewProject] = useState({
+    title: '',
+    description: '',
+  });
 
   const authUserId = auth.currentUser?.id ?? auth.session?.userId;
   const authToken = auth.session?.token;
@@ -104,6 +119,22 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
     }
   };
 
+  const loadProjects = async () => {
+    if (!student.id) return;
+
+    setProjectsLoading(true);
+    setProjectsError(null);
+    try {
+      const list = await apiFetchUserProjects(student.id, authToken);
+      setLoadedProjects(list);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Unable to load projects';
+      setProjectsError(message);
+    } finally {
+      setProjectsLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (isOwnProfile && authUserId) {
       loadSkills();
@@ -113,6 +144,11 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
 
   useEffect(() => {
     loadCertifications();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [student.id, authToken]);
+
+  useEffect(() => {
+    loadProjects();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [student.id, authToken]);
 
@@ -182,6 +218,46 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Unable to add certification';
       setCertificationsError(message);
+    }
+  };
+
+  const handleAddProject = async () => {
+    if (!isOwnProfile || !authUserId) return;
+
+    const { title, description } = newProject;
+    if (!title.trim() || !description.trim()) {
+      setProjectsError('Project title and description are required.');
+      return;
+    }
+
+    setProjectsError(null);
+    try {
+      await apiCreateUserProject(
+        authUserId,
+        {
+          title: title.trim(),
+          description: description.trim(),
+        },
+        authToken
+      );
+      setNewProject({ title: '', description: '' });
+      loadProjects();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Unable to add project';
+      setProjectsError(message);
+    }
+  };
+
+  const handleRemoveProject = async (projectId: string) => {
+    if (!isOwnProfile || !authUserId) return;
+
+    setProjectsError(null);
+    try {
+      await apiDeleteUserProject(authUserId, projectId, authToken);
+      loadProjects();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Unable to remove project';
+      setProjectsError(message);
     }
   };
 
@@ -281,11 +357,11 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
                     <p className="text-sm text-gray-600">Connections</p>
                   </div>
                   <div>
-                    <p className="text-gray-900">{student.projects.length}</p>
+                    <p className="text-gray-900">{loadedProjects.length}</p>
                     <p className="text-sm text-gray-600">Projects</p>
                   </div>
                   <div>
-                    <p className="text-gray-900">{student.certifications.length}</p>
+                    <p className="text-gray-900">{loadedCertifications.length}</p>
                     <p className="text-sm text-gray-600">Certifications</p>
                   </div>
                 </div>
@@ -447,44 +523,94 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
         </Card>
 
         {/* Projects */}
-        {student.projects.length > 0 && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <h2 className="text-gray-900">Projects</h2>
-              {isOwnProfile && (
-                <Button variant="outline" size="sm">
+        <Card>
+          <CardHeader>
+            <h2 className="text-gray-900">Projects</h2>
+          </CardHeader>
+          <CardContent>
+            {projectsError && (
+              <p className="text-sm text-red-600 mb-3">
+                {projectsError}
+              </p>
+            )}
+
+            {projectsLoading ? (
+              <p className="text-sm text-gray-500">Loading projects…</p>
+            ) : loadedProjects.length === 0 ? (
+              <p className="text-sm text-gray-500">No projects added yet.</p>
+            ) : (
+              <div className="space-y-4">
+                {loadedProjects.map((project) => (
+                  <div key={project.id} className="p-4 border rounded-lg space-y-2 relative">
+                    {isOwnProfile && isEditing && (
+                       <Button
+                         type="button"
+                         variant="ghost"
+                         size="sm"
+                         onClick={() => handleRemoveProject(project.id)}
+                         className="absolute top-2 right-2 text-gray-500 hover:text-red-600"
+                         aria-label={`Remove ${project.title}`}
+                       >
+                         <X className="w-4 h-4" />
+                       </Button>
+                    )}
+                    <div className="flex items-start justify-between">
+                      <h3 className="text-gray-900">{project.title}</h3>
+                      {project.link && (
+                        <a
+                          href={project.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-700"
+                        >
+                          <ExternalLink className="w-5 h-5" />
+                        </a>
+                      )}
+                    </div>
+                    {project.imageUrl && (
+                       <ImageWithFallback src={project.imageUrl} alt={project.title} className="w-full h-48 object-cover rounded-md" />
+                    )}
+                    <p className="text-gray-600">{project.description}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {project.tags.map((tag) => (
+                        <Badge key={tag} variant="outline">
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {isOwnProfile && isEditing && (
+              <div className="mt-6 p-4 border rounded-lg space-y-3">
+                <h3 className="text-gray-900">Add Project</h3>
+                <Input
+                  value={newProject.title}
+                  onChange={(e) => setNewProject({ ...newProject, title: e.target.value })}
+                  placeholder="Title"
+                />
+                <Textarea
+                  value={newProject.description}
+                  onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
+                  placeholder="Description"
+                  rows={3}
+                />
+                <Input
+                  type="file"
+                  accept="image/*"
+                  disabled // UI only as per request
+                  className="text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+                <Button type="button" onClick={handleAddProject} disabled={!newProject.title.trim() || !newProject.description.trim()}>
                   <Plus className="w-4 h-4 mr-2" />
                   Add Project
                 </Button>
-              )}
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {student.projects.map((project) => (
-                <div key={project.id} className="p-4 border rounded-lg space-y-2">
-                  <div className="flex items-start justify-between">
-                    <h3 className="text-gray-900">{project.title}</h3>
-                    <a
-                      href={project.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:text-blue-700"
-                    >
-                      <ExternalLink className="w-5 h-5" />
-                    </a>
-                  </div>
-                  <p className="text-gray-600">{project.description}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {project.tags.map((tag) => (
-                      <Badge key={tag} variant="outline">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* User Posts */}
         {userPosts.length > 0 && (
