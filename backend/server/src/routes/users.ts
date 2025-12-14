@@ -170,4 +170,136 @@ router.delete(
   }
 );
 
+// ==============================
+// Profile: Certifications
+// ==============================
+router.get('/:userId/certifications', async (req: Request<{ userId: string }>, res: Response) => {
+  const { userId } = req.params;
+
+  try {
+    const rows = await prisma.$queryRaw<
+      {
+        certification_id: string;
+        name: string;
+        issuer: string | null;
+        credential_url: string | null;
+        issued_at: Date | null;
+        created_at: Date;
+      }[]
+    >`
+      SELECT certification_id, name, issuer, credential_url, issued_at, created_at
+      FROM certifications
+      WHERE user_id = ${userId}
+      ORDER BY created_at DESC
+    `;
+
+    return res.status(200).json(
+      rows.map((r) => ({
+        id: r.certification_id,
+        name: r.name,
+        issuer: r.issuer,
+        credentialUrl: r.credential_url,
+        issuedAt: r.issued_at ? r.issued_at.toISOString().slice(0, 10) : null,
+        createdAt: r.created_at.toISOString(),
+      }))
+    );
+  } catch (err) {
+    console.error('Error fetching certifications:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.post(
+  '/:userId/certifications',
+  async (
+    req: Request<
+      { userId: string },
+      unknown,
+      {
+        name?: string;
+        issuer?: string;
+        credentialUrl?: string;
+        issuedAt?: string;
+        description?: string;
+        imageUrl?: string;
+      }
+    >,
+    res: Response
+  ) => {
+    const { userId } = req.params;
+    const { name, issuer, credentialUrl, issuedAt, description, imageUrl } = req.body;
+
+    if (!name || name.trim().length === 0) {
+      return res.status(400).json({ message: 'Certification name is required' });
+    }
+
+    // Accept the UI's {description, imageUrl} but store them in existing DB columns.
+    const issuerValue = (issuer ?? description ?? '').trim() || null;
+    const credentialUrlValue = (credentialUrl ?? imageUrl ?? '').trim() || null;
+
+    const issuedAtDate = issuedAt ? new Date(issuedAt) : null;
+    if (issuedAt && Number.isNaN(issuedAtDate?.getTime())) {
+      return res.status(400).json({ message: 'issuedAt must be a valid date (YYYY-MM-DD)' });
+    }
+
+    try {
+      const rows = await prisma.$queryRaw<
+        {
+          certification_id: string;
+          name: string;
+          issuer: string | null;
+          credential_url: string | null;
+          issued_at: Date | null;
+          created_at: Date;
+        }[]
+      >`
+        INSERT INTO certifications (user_id, name, issuer, credential_url, issued_at)
+        VALUES (${userId}, ${name.trim()}, ${issuerValue}, ${credentialUrlValue}, ${issuedAtDate})
+        RETURNING certification_id, name, issuer, credential_url, issued_at, created_at
+      `;
+
+      const created = rows[0];
+      return res.status(201).json({
+        id: created.certification_id,
+        name: created.name,
+        issuer: created.issuer,
+        credentialUrl: created.credential_url,
+        issuedAt: created.issued_at ? created.issued_at.toISOString().slice(0, 10) : null,
+        createdAt: created.created_at.toISOString(),
+      });
+    } catch (err) {
+      console.error('Error creating certification:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
+
+router.delete(
+  '/:userId/certifications/:certificationId',
+  async (req: Request<{ userId: string; certificationId: string }>, res: Response) => {
+    const { userId, certificationId } = req.params;
+
+    try {
+      const result = await prisma.$queryRaw<{ count: number }[]>`
+        WITH deleted AS (
+          DELETE FROM certifications
+          WHERE user_id = ${userId} AND certification_id = ${certificationId}
+          RETURNING 1
+        )
+        SELECT COUNT(*)::int AS count FROM deleted
+      `;
+
+      const count = result[0]?.count ?? 0;
+      if (count === 0) {
+        return res.status(404).json({ message: 'Certification not found' });
+      }
+
+      return res.status(204).send();
+    } catch (err) {
+      console.error('Error deleting certification:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
+
 export default router;

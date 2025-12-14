@@ -1,3 +1,12 @@
+export interface Certification {
+  id: string;
+  name: string;
+  description: string | null;
+  imageUrl: string | null;
+  issuedAt?: string | null;
+  createdAt?: string;
+}
+
 export interface Student {
   id: string;
   name: string;
@@ -8,7 +17,7 @@ export interface Student {
   bio: string;
   skills: string[];
   interests: string[];
-  certifications: string[];
+  certifications: Certification[];
   projects: Project[];
   resumeUrl?: string;
   connections: string[];

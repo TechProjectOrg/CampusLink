@@ -18,6 +18,11 @@ import {
 import { Student, Opportunity } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { apiAddUserSkill, apiDeleteUserSkill, apiFetchUserSkills, type UserSkill } from '../lib/skillsApi';
+import {
+  apiCreateUserCertification,
+  apiFetchUserCertifications,
+  type UserCertification,
+} from '../lib/certificationsApi';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -50,7 +55,15 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
   const [skillsError, setSkillsError] = useState<string | null>(null);
   const [newSkillName, setNewSkillName] = useState('');
 
-  const authUserId = auth.session?.userId;
+  // Certifications are backend-driven for the authenticated user's profile.
+  const [loadedCertifications, setLoadedCertifications] = useState<Certification[]>(student.certifications);
+  const [certificationsLoading, setCertificationsLoading] = useState(false);
+  const [certificationsError, setCertificationsError] = useState<string | null>(null);
+  const [newCertName, setNewCertName] = useState('');
+  const [newCertDescription, setNewCertDescription] = useState('');
+  const [newCertImageUrl, setNewCertImageUrl] = useState('');
+
+  const authUserId = auth.currentUser?.id ?? auth.session?.userId;
   const authToken = auth.session?.token;
 
   // Filter posts by this user
@@ -72,10 +85,36 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
     }
   };
 
+  const loadCertifications = async () => {
+    if (!student.id) return; // Ensure we have a student ID to fetch for
+
+    setCertificationsLoading(true);
+    setCertificationsError(null);
+    try {
+      const list = await apiFetchUserCertifications(student.id, authToken);
+      setLoadedCertifications(list);
+      if (isOwnProfile && onEdit) {
+        onEdit({ certifications: list });
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Unable to load certifications';
+      setCertificationsError(message);
+    } finally {
+      setCertificationsLoading(false);
+    }
+  };
+
   useEffect(() => {
-    loadSkills();
+    if (isOwnProfile && authUserId) {
+      loadSkills();
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOwnProfile, authUserId, authToken]);
+
+  useEffect(() => {
+    loadCertifications();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [student.id, authToken]);
 
   const handleSave = () => {
     if (onEdit) {
@@ -111,6 +150,38 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Unable to remove skill';
       setSkillsError(message);
+    }
+  };
+
+  const handleAddCertification = async () => {
+    if (!isOwnProfile || !authUserId) return;
+
+    const name = newCertName.trim();
+    const description = newCertDescription.trim();
+    const imageUrl = newCertImageUrl.trim();
+
+    if (!name) return;
+
+    setCertificationsError(null);
+    try {
+      await apiCreateUserCertification(
+        authUserId,
+        {
+          name,
+          description: description || undefined,
+          imageUrl: imageUrl || undefined,
+        },
+        authToken
+      );
+
+      setNewCertName('');
+      setNewCertDescription('');
+      setNewCertImageUrl('');
+
+      loadCertifications();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Unable to add certification';
+      setCertificationsError(message);
     }
   };
 
@@ -305,23 +376,75 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
         </Card>
 
         {/* Certifications */}
-        {student.certifications.length > 0 && (
-          <Card>
-            <CardHeader>
-              <h2 className="text-gray-900">Certifications</h2>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-2">
-                {student.certifications.map((cert, index) => (
-                  <li key={index} className="flex items-center gap-2 text-gray-700">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    {cert}
-                  </li>
+        <Card>
+          <CardHeader>
+            <h2 className="text-gray-900">Certifications</h2>
+          </CardHeader>
+          <CardContent>
+            {certificationsError && (
+              <p className="text-sm text-red-600 mb-3">
+                {certificationsError}
+              </p>
+            )}
+
+            {certificationsLoading ? (
+              <p className="text-sm text-gray-500">Loading certifications…</p>
+            ) : loadedCertifications.length === 0 ? (
+              <p className="text-sm text-gray-500">No certifications added yet.</p>
+            ) : (
+              <div className="space-y-4">
+                {loadedCertifications.map((cert) => (
+                  <div key={cert.id} className="p-4 border rounded-lg space-y-2">
+                    <p className="text-gray-900">{cert.name}</p>
+                    {cert.description && (
+                      <p className="text-sm text-gray-600">{cert.description}</p>
+                    )}
+                    {cert.imageUrl && (
+                      <a
+                        href={cert.imageUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
+                      >
+                        View certificate
+                      </a>
+                    )}
+                  </div>
                 ))}
-              </ul>
-            </CardContent>
-          </Card>
-        )}
+              </div>
+            )}
+
+            {isOwnProfile && isEditing && (
+              <div className="mt-4 space-y-3">
+                <Input
+                  value={newCertName}
+                  onChange={(e) => setNewCertName(e.target.value)}
+                  placeholder="Certification name"
+                />
+                <Textarea
+                  value={newCertDescription}
+                  onChange={(e) => setNewCertDescription(e.target.value)}
+                  placeholder="Description"
+                  rows={3}
+                />
+                <Input
+                  value={newCertImageUrl}
+                  onChange={(e) => setNewCertImageUrl(e.target.value)}
+                  placeholder="Certificate image URL"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleAddCertification}
+                  disabled={!newCertName.trim()}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Certification
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Projects */}
         {student.projects.length > 0 && (
