@@ -15,7 +15,9 @@ import {
   Share2,
   Bookmark
 } from 'lucide-react';
-import { Student, Opportunity } from '../types';
+import type { Student, Opportunity } from '../types';
+import type { FollowGraph } from '../lib/mockFollows';
+import { FollowButton } from './network/FollowButton';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -26,7 +28,14 @@ import { ImageWithFallback } from './figma/ImageWithFallback';
 
 interface ProfilePageProps {
   student: Student;
+  currentUserId: string;
   isOwnProfile: boolean;
+
+  followGraph: FollowGraph;
+  onFollow: (targetUserId: string) => void;
+  onUnfollow: (targetUserId: string) => void;
+  onCancelRequest: (targetUserId: string) => void;
+
   onEdit?: (updates: Partial<Student>) => void;
   opportunities?: Opportunity[];
   onLike?: (opportunityId: string) => void;
@@ -34,7 +43,20 @@ interface ProfilePageProps {
   onComment?: (opportunityId: string, comment: string) => void;
 }
 
-export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLike, onSave, onComment }: ProfilePageProps) {
+export function ProfilePage({
+  student,
+  currentUserId,
+  isOwnProfile,
+  followGraph,
+  onFollow,
+  onUnfollow,
+  onCancelRequest,
+  onEdit,
+  opportunities,
+  onLike,
+  onSave,
+  onComment,
+}: ProfilePageProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedStudent, setEditedStudent] = useState(student);
   const [commentText, setCommentText] = useState<{ [key: string]: string }>({});
@@ -42,6 +64,15 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
 
   // Filter posts by this user
   const userPosts = opportunities?.filter(opp => opp.authorId === student.id) || [];
+
+  const followersCount = (followGraph.followersByUserId[student.id] ?? []).length;
+  const followingCount = (followGraph.followingByUserId[student.id] ?? []).length;
+
+  const isFollowing = (followGraph.followingByUserId[currentUserId] ?? []).includes(student.id);
+  const isFollower = (followGraph.followersByUserId[currentUserId] ?? []).includes(student.id);
+  const requestStatus = (followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id)
+    ? 'requested'
+    : 'none';
 
   const handleSave = () => {
     if (onEdit) {
@@ -115,9 +146,9 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
                       </div>
                     </div>
                   </div>
-                  {isOwnProfile && (
-                    <div className="flex gap-2">
-                      {isEditing ? (
+                  <div className="flex gap-2">
+                    {isOwnProfile ? (
+                      isEditing ? (
                         <>
                           <Button onClick={handleSave} size="sm">Save</Button>
                           <Button onClick={() => setIsEditing(false)} variant="outline" size="sm">
@@ -129,9 +160,20 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
                           <Edit2 className="w-4 h-4 mr-2" />
                           Edit Profile
                         </Button>
-                      )}
-                    </div>
-                  )}
+                      )
+                    ) : (
+                      <FollowButton
+                        targetName={student.name}
+                        accountType={student.accountType}
+                        isFollowing={isFollowing}
+                        isFollower={isFollower}
+                        requestStatus={requestStatus}
+                        onFollow={() => onFollow(student.id)}
+                        onUnfollow={() => onUnfollow(student.id)}
+                        onCancelRequest={() => onCancelRequest(student.id)}
+                      />
+                    )}
+                  </div>
                 </div>
 
                 {/* Bio */}
@@ -155,19 +197,19 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
                   </div>
                 )}
 
-                {/* Connection Stats */}
+                {/* Social Stats */}
                 <div className="flex gap-6 pt-2">
                   <div>
-                    <p className="text-gray-900">{student.connections.length}</p>
-                    <p className="text-sm text-gray-600">Connections</p>
+                    <p className="text-gray-900">{followersCount}</p>
+                    <p className="text-sm text-gray-600">Followers</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-900">{followingCount}</p>
+                    <p className="text-sm text-gray-600">Following</p>
                   </div>
                   <div>
                     <p className="text-gray-900">{student.projects.length}</p>
                     <p className="text-sm text-gray-600">Projects</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-900">{student.certifications.length}</p>
-                    <p className="text-sm text-gray-600">Certifications</p>
                   </div>
                 </div>
               </div>

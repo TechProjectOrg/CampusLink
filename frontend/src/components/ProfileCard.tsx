@@ -7,10 +7,12 @@ import { Badge } from './ui/badge';
 
 interface ProfileCardProps {
   student: Student;
+  followerCount: number;
+  followingCount: number;
   onViewProfile: () => void;
 }
 
-export function ProfileCard({ student, onViewProfile }: ProfileCardProps) {
+export function ProfileCard({ student, followerCount, followingCount, onViewProfile }: ProfileCardProps) {
   return (
     <div className="space-y-4">
       {/* Main Profile Card */}
@@ -44,12 +46,12 @@ export function ProfileCard({ student, onViewProfile }: ProfileCardProps) {
           {/* Stats */}
           <div className="grid grid-cols-3 gap-3 mb-4 pt-4 border-t border-primary/10">
             <div className="text-center">
-              <p className="text-xl text-primary">{student.connections.length}</p>
-              <p className="text-xs text-gray-600">Connections</p>
+              <p className="text-xl text-primary">{followerCount}</p>
+              <p className="text-xs text-gray-600">Followers</p>
             </div>
             <div className="text-center">
-              <p className="text-xl text-primary">{student.projects.length}</p>
-              <p className="text-xs text-gray-600">Projects</p>
+              <p className="text-xl text-primary">{followingCount}</p>
+              <p className="text-xs text-gray-600">Following</p>
             </div>
             <div className="text-center">
               <p className="text-xl text-primary">{student.skills.length}</p>
@@ -115,7 +117,7 @@ export function ProfileCard({ student, onViewProfile }: ProfileCardProps) {
             </div>
             <div>
               <p className="text-sm text-gray-900">My Network</p>
-              <p className="text-xs text-gray-500">View connections</p>
+              <p className="text-xs text-gray-500">Followers & following</p>
             </div>
           </button>
         </CardContent>

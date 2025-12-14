@@ -21,6 +21,7 @@ import {
   mockNotifications,
   getCurrentUser,
 } from './lib/mockData';
+import { mockFollowGraph, type FollowGraph } from './lib/mockFollows';
 import { Student, Opportunity, Club, Notification } from './types';
 import { ProfileCard } from './components/ProfileCard';
 import { SuggestionsCard } from './components/SuggestionsCard';
@@ -35,6 +36,7 @@ export default function App() {
   const [clubs, setClubs] = useState<Club[]>(mockClubs);
   const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
   const [conversations, setConversations] = useState(mockConversations);
+  const [followGraph, setFollowGraph] = useState<FollowGraph>(mockFollowGraph);
   const [viewingProfileId, setViewingProfileId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -110,15 +112,47 @@ export default function App() {
       ...mockMe,
       id: auth.currentUser.id,
       name: auth.currentUser.name,
+      username: auth.currentUser.username,
       email: auth.currentUser.email,
       branch: auth.currentUser.branch,
       year: auth.currentUser.year,
       avatar: auth.currentUser.avatar,
       bio: auth.currentUser.bio,
+      accountType: auth.currentUser.accountType,
     } as Student;
   }, [auth.currentUser]);
 
   const currentUserId = currentUser.id;
+
+  // If a real authenticated user replaces the mock 'current' user, rewrite the mock follow graph
+  // so the UI still works (frontend-only state).
+  useEffect(() => {
+    if (currentUserId === 'current') return;
+
+    setFollowGraph((prev) => {
+      // Already normalized
+      if (prev.followersByUserId[currentUserId] || prev.followingByUserId[currentUserId]) {
+        return prev;
+      }
+
+      const rewriteId = (id: string) => (id === 'current' ? currentUserId : id);
+
+      const rewriteRecord = (rec: Record<string, string[]>) => {
+        const out: Record<string, string[]> = {};
+        for (const [k, v] of Object.entries(rec)) {
+          out[rewriteId(k)] = v.map(rewriteId);
+        }
+        return out;
+      };
+
+      return {
+        followersByUserId: rewriteRecord(prev.followersByUserId),
+        followingByUserId: rewriteRecord(prev.followingByUserId),
+        incomingRequestsByUserId: rewriteRecord(prev.incomingRequestsByUserId),
+        outgoingRequestsByUserId: rewriteRecord(prev.outgoingRequestsByUserId),
+      };
+    });
+  }, [currentUserId]);
 
   // Ensure the authenticated user is present in the in-memory students list (used by Network/Profile lookups).
   useEffect(() => {
@@ -196,49 +230,136 @@ export default function App() {
     setOpportunities([event, ...opportunities]);
   };
 
-  // Network handlers
-  const handleConnect = (studentId: string) => {
-    setStudents(students.map(student => {
-      if (student.id === studentId) {
-        return {
-          ...student,
-          pendingRequests: [...student.pendingRequests, currentUserId]
-        };
-      }
-      return student;
-    }));
-    alert('Connection request sent!');
+  // Follow system handlers (frontend-only mock state; future API-ready)
+  const uniq = (arr: string[]) => Array.from(new Set(arr));
+  const addUnique = (arr: string[], id: string) => (arr.includes(id) ? arr : [...arr, id]);
+  const removeId = (arr: string[], id: string) => arr.filter((x) => x !== id);
+
+  const getAccountType = (userId: string) => {
+    return students.find((s) => s.id === userId)?.accountType ?? 'public';
   };
 
-  const handleAcceptRequest = (studentId: string) => {
-    setStudents(students.map(student => {
-      if (student.id === currentUserId) {
-        return {
-          ...student,
-          connections: [...student.connections, studentId],
-          pendingRequests: student.pendingRequests.filter(id => id !== studentId)
-        };
+  const handleFollow = (targetUserId: string) => {
+    const targetAccountType = getAccountType(targetUserId);
+
+    setFollowGraph((prev) => {
+      const followersByUserId = { ...prev.followersByUserId };
+      const followingByUserId = { ...prev.followingByUserId };
+      const incomingRequestsByUserId = { ...prev.incomingRequestsByUserId };
+      const outgoingRequestsByUserId = { ...prev.outgoingRequestsByUserId };
+
+      const alreadyFollowing = (followingByUserId[currentUserId] ?? []).includes(targetUserId);
+      const alreadyRequested = (outgoingRequestsByUserId[currentUserId] ?? []).includes(targetUserId);
+      if (alreadyFollowing || alreadyRequested) return prev;
+
+      if (targetAccountType === 'private') {
+        outgoingRequestsByUserId[currentUserId] = addUnique(outgoingRequestsByUserId[currentUserId] ?? [], targetUserId);
+        incomingRequestsByUserId[targetUserId] = addUnique(incomingRequestsByUserId[targetUserId] ?? [], currentUserId);
+      } else {
+        followingByUserId[currentUserId] = addUnique(followingByUserId[currentUserId] ?? [], targetUserId);
+        followersByUserId[targetUserId] = addUnique(followersByUserId[targetUserId] ?? [], currentUserId);
       }
-      if (student.id === studentId) {
-        return {
-          ...student,
-          connections: [...student.connections, currentUserId]
-        };
-      }
-      return student;
-    }));
+
+      // Keep arrays clean/unique.
+      followingByUserId[currentUserId] = uniq(followingByUserId[currentUserId] ?? []);
+      outgoingRequestsByUserId[currentUserId] = uniq(outgoingRequestsByUserId[currentUserId] ?? []);
+      incomingRequestsByUserId[targetUserId] = uniq(incomingRequestsByUserId[targetUserId] ?? []);
+      followersByUserId[targetUserId] = uniq(followersByUserId[targetUserId] ?? []);
+
+      return {
+        followersByUserId,
+        followingByUserId,
+        incomingRequestsByUserId,
+        outgoingRequestsByUserId,
+      };
+    });
   };
 
-  const handleRejectRequest = (studentId: string) => {
-    setStudents(students.map(student => {
-      if (student.id === currentUserId) {
-        return {
-          ...student,
-          pendingRequests: student.pendingRequests.filter(id => id !== studentId)
-        };
-      }
-      return student;
-    }));
+  const handleUnfollow = (targetUserId: string) => {
+    setFollowGraph((prev) => {
+      const followersByUserId = { ...prev.followersByUserId };
+      const followingByUserId = { ...prev.followingByUserId };
+
+      followingByUserId[currentUserId] = removeId(followingByUserId[currentUserId] ?? [], targetUserId);
+      followersByUserId[targetUserId] = removeId(followersByUserId[targetUserId] ?? [], currentUserId);
+
+      return {
+        ...prev,
+        followersByUserId,
+        followingByUserId,
+      };
+    });
+  };
+
+  const handleCancelRequest = (targetUserId: string) => {
+    setFollowGraph((prev) => {
+      const incomingRequestsByUserId = { ...prev.incomingRequestsByUserId };
+      const outgoingRequestsByUserId = { ...prev.outgoingRequestsByUserId };
+
+      outgoingRequestsByUserId[currentUserId] = removeId(outgoingRequestsByUserId[currentUserId] ?? [], targetUserId);
+      incomingRequestsByUserId[targetUserId] = removeId(incomingRequestsByUserId[targetUserId] ?? [], currentUserId);
+
+      return {
+        ...prev,
+        incomingRequestsByUserId,
+        outgoingRequestsByUserId,
+      };
+    });
+  };
+
+  const handleRemoveFollower = (followerUserId: string) => {
+    setFollowGraph((prev) => {
+      const followersByUserId = { ...prev.followersByUserId };
+      const followingByUserId = { ...prev.followingByUserId };
+
+      followersByUserId[currentUserId] = removeId(followersByUserId[currentUserId] ?? [], followerUserId);
+      followingByUserId[followerUserId] = removeId(followingByUserId[followerUserId] ?? [], currentUserId);
+
+      return {
+        ...prev,
+        followersByUserId,
+        followingByUserId,
+      };
+    });
+  };
+
+  const handleAcceptFollowRequest = (requesterUserId: string) => {
+    setFollowGraph((prev) => {
+      const followersByUserId = { ...prev.followersByUserId };
+      const followingByUserId = { ...prev.followingByUserId };
+      const incomingRequestsByUserId = { ...prev.incomingRequestsByUserId };
+      const outgoingRequestsByUserId = { ...prev.outgoingRequestsByUserId };
+
+      incomingRequestsByUserId[currentUserId] = removeId(incomingRequestsByUserId[currentUserId] ?? [], requesterUserId);
+      outgoingRequestsByUserId[requesterUserId] = removeId(outgoingRequestsByUserId[requesterUserId] ?? [], currentUserId);
+
+      // Accepting turns the requester into a follower.
+      followersByUserId[currentUserId] = addUnique(followersByUserId[currentUserId] ?? [], requesterUserId);
+      followingByUserId[requesterUserId] = addUnique(followingByUserId[requesterUserId] ?? [], currentUserId);
+
+      return {
+        followersByUserId,
+        followingByUserId,
+        incomingRequestsByUserId,
+        outgoingRequestsByUserId,
+      };
+    });
+  };
+
+  const handleRejectFollowRequest = (requesterUserId: string) => {
+    setFollowGraph((prev) => {
+      const incomingRequestsByUserId = { ...prev.incomingRequestsByUserId };
+      const outgoingRequestsByUserId = { ...prev.outgoingRequestsByUserId };
+
+      incomingRequestsByUserId[currentUserId] = removeId(incomingRequestsByUserId[currentUserId] ?? [], requesterUserId);
+      outgoingRequestsByUserId[requesterUserId] = removeId(outgoingRequestsByUserId[requesterUserId] ?? [], currentUserId);
+
+      return {
+        ...prev,
+        incomingRequestsByUserId,
+        outgoingRequestsByUserId,
+      };
+    });
   };
 
   const handleMessage = (studentId: string) => {
@@ -316,7 +437,7 @@ export default function App() {
   const handleNotificationClick = (notification: Notification) => {
     // Handle different notification types
     switch (notification.type) {
-      case 'connection':
+      case 'follow':
         navigate('network');
         break;
       case 'message':
@@ -351,6 +472,9 @@ export default function App() {
   // Calculate unread messages and notifications
   const unreadCount = conversations.reduce((sum, conv) => sum + conv.unread, 0);
   const unreadNotifications = notifications.filter(n => !n.read).length;
+
+  const currentFollowerCount = (followGraph.followersByUserId[currentUserId] ?? []).length;
+  const currentFollowingCount = (followGraph.followingByUserId[currentUserId] ?? []).length;
 
   if (auth.isLoading) {
     return <LoadingState type="page" />;
@@ -388,7 +512,12 @@ export default function App() {
           <div className="flex w-full xl:max-w-7xl">
             {/* Profile Section (Left) - Visible on XL screens and up */}
              <div className="w-[280px] min-w-[280px] px-2 overflow-y-auto h-[calc(100vh-4rem)] hidden xl:block flex-shrink-0">
-              <ProfileCard student={currentUser} onViewProfile={() => handleViewProfile(currentUserId)} />
+              <ProfileCard
+                student={currentUser}
+                followerCount={currentFollowerCount}
+                followingCount={currentFollowingCount}
+                onViewProfile={() => handleViewProfile(currentUserId)}
+              />
             </div>
             {/* Feed Section (Center) - Expands to fill space */}
             <div className="px-2 overflow-y-auto h-[calc(100vh-4rem)] w-full lg:w-3/4 xl:w-1/2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
@@ -405,20 +534,30 @@ export default function App() {
                 onCreatePost={handleCreatePost}
                 onCreateEvent={handleCreateEvent}
                 onViewProfile={() => handleViewProfile(currentUserId)}
-                onConnect={handleConnect}
                 onViewStudentProfile={handleViewProfile}
               />
             </div>
             {/* Suggestions Section (Right) - Visible on LG screens and up */}
             <div className="w-1/4 px-2 overflow-y-auto h-[calc(100vh-4rem)] hidden lg:block" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-              <SuggestionsCard students={students} currentUserId={currentUserId} onConnect={handleConnect} onViewProfile={handleViewProfile} />
+              <SuggestionsCard
+                students={students}
+                currentUserId={currentUserId}
+                followGraph={followGraph}
+                onFollow={handleFollow}
+                onUnfollow={handleUnfollow}
+                onCancelRequest={handleCancelRequest}
+                onViewProfile={handleViewProfile}
+              />
             </div>
           </div>
         ) : activeTab === 'search' ? (
           <SearchPage
             students={students}
             currentUserId={currentUserId}
-            onConnect={handleConnect}
+            followGraph={followGraph}
+            onFollow={handleFollow}
+            onUnfollow={handleUnfollow}
+            onCancelRequest={handleCancelRequest}
             onViewProfile={handleViewProfile}
             initialSearchQuery={searchQuery}
           />
@@ -426,11 +565,14 @@ export default function App() {
           <NetworkPage
             students={students}
             currentUserId={currentUserId}
-            onAcceptRequest={handleAcceptRequest}
-            onRejectRequest={handleRejectRequest}
-            onMessage={handleMessage}
+            followGraph={followGraph}
+            onFollow={handleFollow}
+            onUnfollow={handleUnfollow}
+            onCancelRequest={handleCancelRequest}
+            onRemoveFollower={handleRemoveFollower}
+            onAcceptRequest={handleAcceptFollowRequest}
+            onRejectRequest={handleRejectFollowRequest}
             onViewProfile={handleViewProfile}
-            onConnect={handleConnect}
           />
         ) : activeTab === 'chat' ? (
           <ChatPage
@@ -453,7 +595,12 @@ export default function App() {
         ) : activeTab === 'profile' ? (
           <ProfilePage
             student={displayedStudent}
+            currentUserId={currentUserId}
             isOwnProfile={displayedStudent.id === currentUserId}
+            followGraph={followGraph}
+            onFollow={handleFollow}
+            onUnfollow={handleUnfollow}
+            onCancelRequest={handleCancelRequest}
             onEdit={handleEditProfile}
             opportunities={opportunities}
             onLike={handleLike}

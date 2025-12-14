@@ -30,7 +30,7 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
 
   const [notificationSettings, setNotificationSettings] = useState({
     emailNotifications: true,
-    connectionRequests: true,
+    followRequests: true,
     newMessages: true,
     opportunityAlerts: true,
     clubUpdates: true,
@@ -38,11 +38,10 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
   });
 
   const [privacySettings, setPrivacySettings] = useState({
-    profileVisibility: 'public',
+    accountType: student.accountType,
     showEmail: true,
     showProjects: true,
     allowMessages: true,
-    showConnections: true
   });
 
   const handlePasswordChange = (e: React.FormEvent) => {
@@ -274,13 +273,13 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
 
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
-                    <p className="text-gray-900">Connection Requests</p>
-                    <p className="text-sm text-gray-600">When someone sends you a connection request</p>
+                    <p className="text-gray-900">Follow Requests</p>
+                    <p className="text-sm text-gray-600">When someone requests to follow you</p>
                   </div>
                   <Switch
-                    checked={notificationSettings.connectionRequests}
+                    checked={notificationSettings.followRequests}
                     onCheckedChange={(checked) =>
-                      setNotificationSettings({ ...notificationSettings, connectionRequests: checked })
+                      setNotificationSettings({ ...notificationSettings, followRequests: checked })
                     }
                   />
                 </div>
@@ -354,18 +353,17 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="space-y-2">
-                  <Label htmlFor="profile-visibility">Profile Visibility</Label>
+                  <Label htmlFor="account-type">Account Type</Label>
                   <select
-                    id="profile-visibility"
-                    value={privacySettings.profileVisibility}
+                    id="account-type"
+                    value={privacySettings.accountType}
                     onChange={(e) =>
-                      setPrivacySettings({ ...privacySettings, profileVisibility: e.target.value })
+                      setPrivacySettings({ ...privacySettings, accountType: e.target.value as any })
                     }
                     className="w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50"
                   >
-                    <option value="public">Public - Anyone can view</option>
-                    <option value="connections">Connections Only</option>
-                    <option value="private">Private - Only me</option>
+                    <option value="public">Public - Anyone can follow instantly</option>
+                    <option value="private">Private - Follow requests require approval</option>
                   </select>
                 </div>
 
@@ -410,18 +408,6 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                   />
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <p className="text-gray-900">Show Connections</p>
-                    <p className="text-sm text-gray-600">Display your connection list</p>
-                  </div>
-                  <Switch
-                    checked={privacySettings.showConnections}
-                    onCheckedChange={(checked) =>
-                      setPrivacySettings({ ...privacySettings, showConnections: checked })
-                    }
-                  />
-                </div>
 
                 <Button onClick={handleSavePrivacy} className="w-full gradient-primary">
                   <Save className="w-4 h-4 mr-2" />

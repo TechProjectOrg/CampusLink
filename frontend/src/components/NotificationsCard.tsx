@@ -25,7 +25,7 @@ export function NotificationsCard({
 
   const getNotificationIcon = (type: Notification['type']) => {
     switch (type) {
-      case 'connection':
+      case 'follow':
         return <UserPlus className="w-4 h-4" />;
       case 'like':
         return <Heart className="w-4 h-4" />;
@@ -44,7 +44,7 @@ export function NotificationsCard({
 
   const getNotificationColor = (type: Notification['type']) => {
     switch (type) {
-      case 'connection':
+      case 'follow':
         return 'bg-primary/10 text-primary';
       case 'like':
         return 'bg-destructive/10 text-destructive';

@@ -39,6 +39,7 @@ function profileToStudent(profile: ApiUserProfile): Student {
   return {
     id: profile.userId,
     name: profile.username,
+    username: profile.username,
     email: profile.email,
     branch: profile.details?.branch ?? 'Unknown',
     year: profile.details?.year ?? profile.details?.passingYear ?? 0,
@@ -49,8 +50,7 @@ function profileToStudent(profile: ApiUserProfile): Student {
     interests: [],
     certifications: [],
     projects: [],
-    connections: [],
-    pendingRequests: [],
+    accountType: profile.isPublic ? 'public' : 'private',
   };
 }
 

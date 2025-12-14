@@ -23,14 +23,14 @@ export function EmptyState({ type, onAction, actionLabel }: EmptyStateProps) {
     },
     network: {
       icon: Users,
-      title: 'No connections yet',
-      description: 'Start building your network by connecting with fellow students!',
-      action: 'Discover Students'
+      title: 'No followers yet',
+      description: 'Follow classmates and seniors to keep up with updates, opportunities, and campus life.',
+      action: 'Discover People'
     },
     chat: {
       icon: MessageSquare,
       title: 'No conversations',
-      description: 'Start a conversation with your connections to collaborate and share ideas.',
+      description: 'Start a conversation with people you follow to collaborate and share ideas.',
       action: 'Browse Network'
     },
     opportunities: {

@@ -1,6 +1,9 @@
+export type AccountType = 'public' | 'private';
+
 export interface Student {
   id: string;
   name: string;
+  username: string;
   email: string;
   branch: string;
   year: number;
@@ -11,8 +14,7 @@ export interface Student {
   certifications: string[];
   projects: Project[];
   resumeUrl?: string;
-  connections: string[];
-  pendingRequests: string[];
+  accountType: AccountType;
 }
 
 export interface Project {
@@ -82,7 +84,7 @@ export interface ChatConversation {
 
 export interface Notification {
   id: string;
-  type: 'connection' | 'like' | 'comment' | 'message' | 'opportunity' | 'club';
+  type: 'follow' | 'like' | 'comment' | 'message' | 'opportunity' | 'club';
   title: string;
   message: string;
   avatar: string;

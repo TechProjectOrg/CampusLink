@@ -22,7 +22,6 @@ interface FeedPageProps {
   onCreatePost?: (post: any) => void;
   onCreateEvent?: (event: any) => void;
   onViewProfile?: () => void;
-  onConnect?: (studentId: string) => void;
   onViewStudentProfile?: (studentId: string) => void;
 }
 
@@ -39,7 +38,6 @@ export function FeedPage({
   onCreatePost,
   onCreateEvent,
   onViewProfile,
-  onConnect,
   onViewStudentProfile
 }: FeedPageProps) {
   const [selectedFilter, setSelectedFilter] = useState<string>('all');

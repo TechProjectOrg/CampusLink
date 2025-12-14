@@ -1,5 +1,7 @@
-import { UserPlus, TrendingUp, Users, Sparkles } from 'lucide-react';
-import { Student } from '../types';
+import { TrendingUp, Users, Sparkles } from 'lucide-react';
+import type { Student } from '../types';
+import type { FollowGraph } from '../lib/mockFollows';
+import { FollowButton } from './network/FollowButton';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
@@ -8,20 +10,32 @@ import { Badge } from './ui/badge';
 interface SuggestionsCardProps {
   students: Student[];
   currentUserId: string;
-  onConnect: (studentId: string) => void;
+  followGraph: FollowGraph;
+  onFollow: (targetUserId: string) => void;
+  onUnfollow: (targetUserId: string) => void;
+  onCancelRequest: (targetUserId: string) => void;
   onViewProfile: (studentId: string) => void;
 }
 
-export function SuggestionsCard({ students, currentUserId, onConnect, onViewProfile }: SuggestionsCardProps) {
+export function SuggestionsCard({
+  students,
+  currentUserId,
+  followGraph,
+  onFollow,
+  onUnfollow,
+  onCancelRequest,
+  onViewProfile
+}: SuggestionsCardProps) {
   const currentUser = students.find(s => s.id === currentUserId);
   
-  // Get suggested connections - students in same branch who are not connected
+  // Suggested accounts: same branch, not already followed / requested.
   const suggestedStudents = students
-    .filter(s => 
-      s.id !== currentUserId && 
-      !currentUser?.connections.includes(s.id) &&
-      s.branch === currentUser?.branch
-    )
+    .filter((s) => {
+      if (s.id === currentUserId) return false;
+      const isFollowing = (followGraph.followingByUserId[currentUserId] ?? []).includes(s.id);
+      const isRequested = (followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(s.id);
+      return !isFollowing && !isRequested && s.branch === currentUser?.branch;
+    })
     .slice(0, 3);
 
   return (
@@ -64,15 +78,18 @@ export function SuggestionsCard({ students, currentUserId, onConnect, onViewProf
                     </div>
                   </div>
                 </div>
-                <Button
-                  onClick={() => onConnect(student.id)}
-                  size="sm"
-                  variant="outline"
-                  className="w-full border-primary/20 hover:border-primary hover:bg-primary/5 transition-all duration-300 hover:scale-105 rounded-xl"
-                >
-                  <UserPlus className="w-3 h-3 mr-2" />
-                  Connect
-                </Button>
+                <div className="w-full">
+                  <FollowButton
+                    targetName={student.name}
+                    accountType={student.accountType}
+                    isFollowing={(followGraph.followingByUserId[currentUserId] ?? []).includes(student.id)}
+                    isFollower={(followGraph.followersByUserId[currentUserId] ?? []).includes(student.id)}
+                    requestStatus={(followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id) ? 'requested' : 'none'}
+                    onFollow={() => onFollow(student.id)}
+                    onUnfollow={() => onUnfollow(student.id)}
+                    onCancelRequest={() => onCancelRequest(student.id)}
+                  />
+                </div>
               </div>
             ))}
           </div>

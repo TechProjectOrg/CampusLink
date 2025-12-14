@@ -4,6 +4,7 @@ export const mockStudents: Student[] = [
   {
     id: '1',
     name: 'Alex Chen',
+    username: 'alexchen',
     email: 'alex.chen@gbpuat.ac.in',
     branch: 'Computer Science',
     year: 3,
@@ -29,12 +30,12 @@ export const mockStudents: Student[] = [
       }
     ],
     resumeUrl: '/resumes/alex-chen.pdf',
-    connections: ['2', '3', '4'],
-    pendingRequests: []
+    accountType: 'public'
   },
   {
     id: '2',
     name: 'Sarah Martinez',
+    username: 'sarahmartinez',
     email: 'sarah.martinez@gbpuat.ac.in',
     branch: 'Information Technology',
     year: 4,
@@ -53,12 +54,12 @@ export const mockStudents: Student[] = [
       }
     ],
     resumeUrl: '/resumes/sarah-martinez.pdf',
-    connections: ['1', '3', '5'],
-    pendingRequests: []
+    accountType: 'public'
   },
   {
     id: '3',
     name: 'Raj Patel',
+    username: 'rajpatel',
     email: 'raj.patel@gbpuat.ac.in',
     branch: 'Computer Science',
     year: 2,
@@ -76,12 +77,12 @@ export const mockStudents: Student[] = [
         tags: ['JavaScript', 'D3.js', 'Algorithms']
       }
     ],
-    connections: ['1', '2', '4'],
-    pendingRequests: []
+    accountType: 'public'
   },
   {
     id: '4',
     name: 'Emily Johnson',
+    username: 'emilyjohnson',
     email: 'emily.johnson@gbpuat.ac.in',
     branch: 'Electronics',
     year: 3,
@@ -99,12 +100,12 @@ export const mockStudents: Student[] = [
         tags: ['Raspberry Pi', 'Python', 'MQTT']
       }
     ],
-    connections: ['1', '3', '6'],
-    pendingRequests: []
+    accountType: 'private'
   },
   {
     id: '5',
     name: 'Michael Lee',
+    username: 'michaellee',
     email: 'michael.lee@gbpuat.ac.in',
     branch: 'Information Technology',
     year: 4,
@@ -122,12 +123,12 @@ export const mockStudents: Student[] = [
         tags: ['Docker', 'Jenkins', 'Kubernetes']
       }
     ],
-    connections: ['2', '6'],
-    pendingRequests: []
+    accountType: 'public'
   },
   {
     id: '6',
     name: 'Priya Sharma',
+    username: 'priyasharma',
     email: 'priya.sharma@gbpuat.ac.in',
     branch: 'Computer Science',
     year: 2,
@@ -145,12 +146,27 @@ export const mockStudents: Student[] = [
         tags: ['Flutter', 'Firebase', 'Google Maps']
       }
     ],
-    connections: ['4', '5'],
-    pendingRequests: []
+    accountType: 'private'
+  },
+  {
+    id: '7',
+    name: 'Aarav Gupta',
+    username: 'aaravgupta',
+    email: 'aarav.gupta@gbpuat.ac.in',
+    branch: 'Civil',
+    year: 3,
+    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Aarav',
+    bio: 'Final-year student focused on sustainable infrastructure and smart cities.',
+    skills: ['AutoCAD', 'Project Planning', 'GIS'],
+    interests: ['Smart Cities', 'Sustainability'],
+    certifications: ['Autodesk Certified User'],
+    projects: [],
+    accountType: 'public'
   },
   {
     id: 'current',
     name: 'You',
+    username: 'you',
     email: 'you@gbpuat.ac.in',
     branch: 'Computer Science',
     year: 3,
@@ -160,8 +176,7 @@ export const mockStudents: Student[] = [
     interests: ['Web Development', 'Open Source'],
     certifications: [],
     projects: [],
-    connections: ['1', '2'],
-    pendingRequests: ['3', '4']
+    accountType: 'private'
   }
 ];
 
@@ -409,9 +424,9 @@ export const mockConversations: ChatConversation[] = [
 export const mockNotifications: Notification[] = [
   {
     id: 'n1',
-    type: 'connection',
+    type: 'follow',
     title: 'Alex Chen',
-    message: 'accepted your connection request',
+    message: 'started following you',
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alex',
     timestamp: '2025-11-02T10:30:00Z',
     read: false
@@ -463,9 +478,9 @@ export const mockNotifications: Notification[] = [
   },
   {
     id: 'n7',
-    type: 'connection',
+    type: 'follow',
     title: 'Priya Sharma',
-    message: 'wants to connect with you',
+    message: 'requested to follow you',
     avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Priya',
     timestamp: '2025-10-31T15:30:00Z',
     read: true

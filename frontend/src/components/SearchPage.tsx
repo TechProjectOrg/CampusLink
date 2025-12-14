@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Search, Filter, UserPlus } from 'lucide-react';
-import { Student } from '../types';
+import { Search, Filter } from 'lucide-react';
+import type { Student } from '../types';
+import type { FollowGraph } from '../lib/mockFollows';
+import { FollowButton } from './network/FollowButton';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -10,12 +12,24 @@ import { Card, CardContent } from './ui/card';
 interface SearchPageProps {
   students: Student[];
   currentUserId: string;
-  onConnect: (studentId: string) => void;
+  followGraph: FollowGraph;
+  onFollow: (targetUserId: string) => void;
+  onUnfollow: (targetUserId: string) => void;
+  onCancelRequest: (targetUserId: string) => void;
   onViewProfile: (studentId: string) => void;
   initialSearchQuery?: string;
 }
 
-export function SearchPage({ students, currentUserId, onConnect, onViewProfile, initialSearchQuery = '' }: SearchPageProps) {
+export function SearchPage({
+  students,
+  currentUserId,
+  followGraph,
+  onFollow,
+  onUnfollow,
+  onCancelRequest,
+  onViewProfile,
+  initialSearchQuery = ''
+}: SearchPageProps) {
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
 
   useEffect(() => {
@@ -41,10 +55,6 @@ export function SearchPage({ students, currentUserId, onConnect, onViewProfile, 
     return matchesSearch && matchesBranch && matchesYear;
   });
 
-  const isConnected = (studentId: string) => {
-    const currentUser = students.find(s => s.id === currentUserId);
-    return currentUser?.connections.includes(studentId);
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
@@ -167,8 +177,8 @@ export function SearchPage({ students, currentUserId, onConnect, onViewProfile, 
                   {/* Stats */}
                   <div className="flex gap-4 text-sm text-gray-600 pt-2 border-t border-primary/10">
                     <div>
-                      <span className="text-primary">{student.connections.length}</span>
-                      <span className="ml-1">connections</span>
+                      <span className="text-primary">{(followGraph.followersByUserId[student.id] ?? []).length}</span>
+                      <span className="ml-1">followers</span>
                     </div>
                     <div>
                       <span className="text-primary">{student.projects.length}</span>
@@ -177,7 +187,7 @@ export function SearchPage({ students, currentUserId, onConnect, onViewProfile, 
                   </div>
 
                   {/* Actions */}
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 items-center">
                     <Button
                       onClick={() => onViewProfile(student.id)}
                       variant="outline"
@@ -186,16 +196,18 @@ export function SearchPage({ students, currentUserId, onConnect, onViewProfile, 
                     >
                       View Profile
                     </Button>
-                    {!isConnected(student.id) && (
-                      <Button
-                        onClick={() => onConnect(student.id)}
-                        className="flex-1 gradient-primary shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl rounded-xl"
-                        size="sm"
-                      >
-                        <UserPlus className="w-4 h-4 mr-2" />
-                        Connect
-                      </Button>
-                    )}
+                    <div className="flex-shrink-0">
+                      <FollowButton
+                        targetName={student.name}
+                        accountType={student.accountType}
+                        isFollowing={(followGraph.followingByUserId[currentUserId] ?? []).includes(student.id)}
+                        isFollower={(followGraph.followersByUserId[currentUserId] ?? []).includes(student.id)}
+                        requestStatus={(followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id) ? 'requested' : 'none'}
+                        onFollow={() => onFollow(student.id)}
+                        onUnfollow={() => onUnfollow(student.id)}
+                        onCancelRequest={() => onCancelRequest(student.id)}
+                      />
+                    </div>
                   </div>
                 </CardContent>
               </Card>

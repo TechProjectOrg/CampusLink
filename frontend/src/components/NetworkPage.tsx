@@ -1,408 +1,306 @@
-import { Users, UserCheck, UserPlus, MessageCircle, Sparkles, Link2 } from 'lucide-react';
-import { useState } from 'react';
-import { Student } from '../types';
-import { Button } from './ui/button';
+import { Users, UserPlus } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import type { Student } from '../types';
+import type { FollowGraph } from '../lib/mockFollows';
 import { Badge } from './ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
+import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from './ui/alert-dialog';
+import { FollowButton } from './network/FollowButton';
+import { RequestCard } from './network/RequestCard';
+import { UserCard } from './network/UserCard';
 
 interface NetworkPageProps {
   students: Student[];
   currentUserId: string;
-  onAcceptRequest: (studentId: string) => void;
-  onRejectRequest: (studentId: string) => void;
-  onMessage: (studentId: string) => void;
+  followGraph: FollowGraph;
+
+  onFollow: (targetUserId: string) => void;
+  onUnfollow: (targetUserId: string) => void;
+  onCancelRequest: (targetUserId: string) => void;
+
+  onRemoveFollower: (followerUserId: string) => void;
+  onAcceptRequest: (requesterUserId: string) => void;
+  onRejectRequest: (requesterUserId: string) => void;
+
   onViewProfile: (studentId: string) => void;
-  onConnect?: (studentId: string) => void;
 }
 
-export function NetworkPage({ 
-  students, 
-  currentUserId, 
-  onAcceptRequest, 
+function uniqueIntersection(a: string[], b: string[]) {
+  const bSet = new Set(b);
+  const out: string[] = [];
+  for (const id of a) {
+    if (bSet.has(id)) out.push(id);
+  }
+  return Array.from(new Set(out));
+}
+
+export function NetworkPage({
+  students,
+  currentUserId,
+  followGraph,
+  onFollow,
+  onUnfollow,
+  onCancelRequest,
+  onRemoveFollower,
+  onAcceptRequest,
   onRejectRequest,
-  onMessage,
   onViewProfile,
-  onConnect
 }: NetworkPageProps) {
-  const currentUser = students.find(s => s.id === currentUserId);
-  
-  const connections = students.filter(s => currentUser?.connections.includes(s.id));
-  const pendingRequests = students.filter(s => currentUser?.pendingRequests.includes(s.id));
+  const currentUser = students.find((s) => s.id === currentUserId);
+  const isPrivateAccount = currentUser?.accountType === 'private';
 
-  // Find suggested connections based on mutual connections and similar interests
-  const suggestedConnections = students
-    .filter(s => 
-      s.id !== currentUserId && // Not the current user
-      !currentUser?.connections.includes(s.id) && // Not already connected
-      !currentUser?.pendingRequests.includes(s.id) && // Not a pending request
-      !s.pendingRequests.includes(currentUserId) // User hasn't already sent them a request
-    )
-    .map(student => {
-      // Calculate mutual connections
-      const mutualConnections = student.connections.filter(
-        connId => currentUser?.connections.includes(connId)
-      );
+  const followersIds = followGraph.followersByUserId[currentUserId] ?? [];
+  const followingIds = followGraph.followingByUserId[currentUserId] ?? [];
+  const outgoingRequestIds = followGraph.outgoingRequestsByUserId[currentUserId] ?? [];
+  const incomingRequestIds = followGraph.incomingRequestsByUserId[currentUserId] ?? [];
 
-      // Calculate common interests/skills
-      const commonSkills = student.skills.filter(
-        skill => currentUser?.skills.includes(skill)
-      );
+  const followers = useMemo(() => {
+    return followersIds
+      .map((id) => students.find((s) => s.id === id))
+      .filter(Boolean) as Student[];
+  }, [followersIds, students]);
 
-      const commonInterests = student.interests.filter(
-        interest => currentUser?.interests.includes(interest)
-      );
+  const following = useMemo(() => {
+    const ids = Array.from(new Set([...followingIds, ...outgoingRequestIds]));
+    return ids.map((id) => students.find((s) => s.id === id)).filter(Boolean) as Student[];
+  }, [followingIds, outgoingRequestIds, students]);
 
-      return {
-        ...student,
-        mutualCount: mutualConnections.length,
-        commonSkillsCount: commonSkills.length,
-        commonInterestsCount: commonInterests.length,
-        mutualConnections: mutualConnections.slice(0, 3), // Only show first 3
-        commonSkills: commonSkills.slice(0, 3),
-        relevanceScore: mutualConnections.length * 3 + commonSkills.length * 2 + commonInterests.length
-      };
-    })
-    .sort((a, b) => b.relevanceScore - a.relevanceScore) // Sort by relevance
-    .slice(0, 6); // Show top 6 suggestions
+  const incomingRequests = useMemo(() => {
+    return incomingRequestIds
+      .map((id) => students.find((s) => s.id === id))
+      .filter(Boolean) as Student[];
+  }, [incomingRequestIds, students]);
 
-  const [activeTab, setActiveTab] = useState<string>('connections');
+  const [activeTab, setActiveTab] = useState<'followers' | 'following' | 'requests'>('followers');
+  const [requestLimit, setRequestLimit] = useState(3);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [removeFollowerId, setRemoveFollowerId] = useState<string | null>(null);
+
+  const followersCount = followersIds.length;
+  const followingCount = followingIds.length;
+  const requestsCount = incomingRequestIds.length;
+
+  const mutualFollowersCount = (otherUserId: string) => {
+    // Future-ready: mutual followers = people who follow BOTH you and the other user.
+    const mutual = uniqueIntersection(
+      followGraph.followersByUserId[currentUserId] ?? [],
+      followGraph.followersByUserId[otherUserId] ?? []
+    ).filter((id) => id !== currentUserId && id !== otherUserId);
+
+    return mutual.length;
+  };
+
+  const visibleRequests = incomingRequests.slice(0, requestLimit);
+  const canLoadMore = incomingRequests.length > visibleRequests.length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
-      <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-        {/* Header */}
+      <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         <div className="animate-slide-in-down">
           <h1 className="text-gray-900 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-            My Network
+            Network
           </h1>
-          <p className="text-gray-600">Manage your connections and requests</p>
+          <p className="text-gray-600">Followers, following, and requests — simple and student-first</p>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6 animate-slide-in-up">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-6">
           <TabsList className="bg-white/80 backdrop-blur-lg p-1 rounded-2xl border border-primary/10 shadow-lg">
-            <TabsTrigger 
-              value="connections" 
-              className={`flex items-center gap-2 rounded-xl data-[state=active]:gradient-primary data-[state=active]:text-white transition-all duration-300 hover:scale-105 ${activeTab === 'connections' ? 'gradient-primary text-white' : ''}`}
+            <TabsTrigger
+              value="followers"
+              className={`flex items-center gap-2 rounded-xl data-[state=active]:gradient-primary data-[state=active]:text-white transition-all duration-300 ${
+                activeTab === 'followers' ? 'gradient-primary text-white' : ''
+              }`}
             >
               <Users className="w-4 h-4" />
-              Connections
-              <Badge className="bg-secondary text-white ml-1 transition-all duration-300 hover:scale-110">
-                {connections.length}
-              </Badge>
+              Followers
+              <Badge className="bg-secondary text-white ml-1">{followersCount}</Badge>
             </TabsTrigger>
-            <TabsTrigger 
-              value="requests" 
-              className={`flex items-center gap-2 rounded-xl data-[state=active]:gradient-primary data-[state=active]:text-white transition-all duration-300 hover:scale-105 ${activeTab === 'requests' ? 'gradient-primary text-white' : ''}`}
+
+            <TabsTrigger
+              value="following"
+              className={`flex items-center gap-2 rounded-xl data-[state=active]:gradient-primary data-[state=active]:text-white transition-all duration-300 ${
+                activeTab === 'following' ? 'gradient-primary text-white' : ''
+              }`}
             >
-              <UserPlus className="w-4 h-4" />
-              Requests
-              {pendingRequests.length > 0 && (
-                <Badge className="bg-destructive text-white ml-1 animate-pulse transition-all duration-300">
-                  {pendingRequests.length}
-                </Badge>
-              )}
+              <Users className="w-4 h-4" />
+              Following
+              <Badge className="bg-secondary text-white ml-1">{followingCount}</Badge>
             </TabsTrigger>
-            <TabsTrigger 
-              value="suggestions" 
-              className={`flex items-center gap-2 rounded-xl data-[state=active]:gradient-primary data-[state=active]:text-white transition-all duration-300 hover:scale-105 ${activeTab === 'suggestions' ? 'gradient-primary text-white' : ''}`}
-            >
-              <Sparkles className="w-4 h-4" />
-              Suggestions
-              {suggestedConnections.length > 0 && (
-                <Badge className="bg-accent text-accent/80 ml-1 transition-all duration-300 hover:scale-110">
-                  {suggestedConnections.length}
-                </Badge>
-              )}
-            </TabsTrigger>
+
+            {isPrivateAccount && (
+              <TabsTrigger
+                value="requests"
+                className={`flex items-center gap-2 rounded-xl data-[state=active]:gradient-primary data-[state=active]:text-white transition-all duration-300 ${
+                  activeTab === 'requests' ? 'gradient-primary text-white' : ''
+                }`}
+              >
+                <UserPlus className="w-4 h-4" />
+                Requests
+                {requestsCount > 0 && <Badge className="bg-destructive text-white ml-1">{requestsCount}</Badge>}
+              </TabsTrigger>
+            )}
           </TabsList>
 
-          {/* Connections Tab */}
-          <TabsContent value="connections" className="space-y-4 animate-fade-in">
-            {connections.length === 0 ? (
+          <TabsContent value="followers" className="space-y-3">
+            {followers.length === 0 ? (
               <Card className="border-primary/10 rounded-2xl shadow-lg">
-                <CardContent className="p-12 text-center">
-                  <div className="w-16 h-16 gradient-primary rounded-2xl mx-auto mb-4 flex items-center justify-center">
-                    <Users className="w-8 h-8 text-white" />
-                  </div>
-                  <p className="text-gray-500">No connections yet. Start networking!</p>
+                <CardContent className="p-10 text-center">
+                  <p className="text-gray-500">No followers yet.</p>
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {connections.map((student, index) => (
-                  <Card 
-                    key={student.id} 
-                    className="hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 border-primary/10 rounded-2xl animate-slide-in-up"
-                    style={{ animationDelay: `${index * 50}ms` }}
-                  >
-                    <CardContent className="p-6 space-y-4">
-                      {/* Header */}
-                      <div className="flex items-start gap-3">
-                        <Avatar className="w-16 h-16 ring-2 ring-primary/20 transition-all duration-300 hover:ring-primary/40">
-                          <AvatarImage src={student.avatar} />
-                          <AvatarFallback>{student.name[0]}</AvatarFallback>
-                        </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <h3 className="text-gray-900 truncate">{student.name}</h3>
-                          <p className="text-sm text-gray-600">{student.branch}</p>
-                          <p className="text-sm text-secondary">Year {student.year}</p>
-                        </div>
-                        <Badge className="bg-accent/10 text-accent border border-accent/20 transition-all duration-300 hover:scale-110">
-                          <UserCheck className="w-3 h-3 mr-1" />
-                          Connected
-                        </Badge>
-                      </div>
+              <div className="space-y-3">
+                {followers.map((user) => {
+                  const isFollowingBack = followingIds.includes(user.id);
+                  const mutual = mutualFollowersCount(user.id);
 
-                      {/* Bio */}
-                      <p className="text-sm text-gray-600 line-clamp-2">{student.bio}</p>
-
-                      {/* Skills */}
-                      <div className="flex flex-wrap gap-1">
-                        {student.skills.slice(0, 4).map(skill => (
-                          <Badge key={skill} variant="outline" className="text-xs border-primary/20 text-primary">
-                            {skill}
-                          </Badge>
-                        ))}
-                        {student.skills.length > 4 && (
-                          <Badge variant="outline" className="text-xs border-primary/20 text-primary">
-                            +{student.skills.length - 4}
-                          </Badge>
-                        )}
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex gap-2 pt-2">
-                        <Button
-                          onClick={() => onViewProfile(student.id)}
-                          variant="outline"
-                          className="flex-1 border-primary/20 hover:border-primary rounded-xl transition-all duration-300 hover:scale-105"
-                          size="sm"
-                        >
-                          View Profile
-                        </Button>
-                        <Button
-                          onClick={() => onMessage(student.id)}
-                          className="flex-1 gradient-secondary shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl rounded-xl"
-                          size="sm"
-                        >
-                          <MessageCircle className="w-4 h-4 mr-2" />
-                          Message
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </TabsContent>
-
-          {/* Requests Tab */}
-          <TabsContent value="requests" className="space-y-4 animate-fade-in">
-            {pendingRequests.length === 0 ? (
-              <Card className="border-primary/10 rounded-2xl shadow-lg">
-                <CardContent className="p-12 text-center">
-                  <div className="w-16 h-16 gradient-primary rounded-2xl mx-auto mb-4 flex items-center justify-center">
-                    <UserPlus className="w-8 h-8 text-white" />
-                  </div>
-                  <p className="text-gray-500">No pending connection requests.</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="space-y-4">
-                {pendingRequests.map((student, index) => (
-                  <Card 
-                    key={student.id} 
-                    className="border-primary/10 rounded-2xl shadow-lg hover-lift animate-slide-in-up"
-                    style={{ animationDelay: `${index * 50}ms` }}
-                  >
-                    <CardContent className="p-6">
-                      <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
-                        {/* Student Info */}
-                        <div className="flex items-start gap-3 flex-1">
-                          <Avatar className="w-16 h-16 ring-2 ring-primary/20">
-                            <AvatarImage src={student.avatar} />
-                            <AvatarFallback>{student.name[0]}</AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="text-gray-900">{student.name}</h3>
-                            <p className="text-sm text-gray-600">{student.branch} • Year {student.year}</p>
-                            <p className="text-sm text-gray-600 mt-1 line-clamp-2">{student.bio}</p>
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {student.skills.slice(0, 3).map(skill => (
-                                <Badge key={skill} variant="outline" className="text-xs border-primary/20 text-primary">
-                                  {skill}
-                                </Badge>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Actions */}
-                        <div className="flex gap-2 w-full md:w-auto">
-                          <Button
-                            onClick={() => onAcceptRequest(student.id)}
-                            className="flex-1 md:flex-initial gradient-success shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl rounded-xl"
-                          >
-                            <UserCheck className="w-4 h-4 mr-2" />
-                            Accept
-                          </Button>
-                          <Button
-                            onClick={() => onRejectRequest(student.id)}
-                            variant="outline"
-                            className="flex-1 md:flex-initial border-destructive/20 text-destructive hover:bg-destructive/10 rounded-xl transition-all duration-300 hover:scale-105"
-                          >
-                            Decline
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </TabsContent>
-
-          {/* Suggestions Tab */}
-          <TabsContent value="suggestions" className="space-y-4 animate-fade-in">
-            {/* Info Banner */}
-            <Card className="border-primary/20 bg-gradient-to-br from-blue-50 to-purple-50 rounded-2xl">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 text-sm text-gray-700">
-                  <Sparkles className="w-5 h-5 text-primary" />
-                  <p>Connect with people based on mutual connections and shared interests</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {suggestedConnections.length === 0 ? (
-              <Card className="border-primary/10 rounded-2xl shadow-lg">
-                <CardContent className="p-12 text-center">
-                  <div className="w-16 h-16 gradient-primary rounded-2xl mx-auto mb-4 flex items-center justify-center">
-                    <Sparkles className="w-8 h-8 text-white" />
-                  </div>
-                  <p className="text-gray-500">No suggested connections at the moment.</p>
-                  <p className="text-sm text-gray-400 mt-2">Check back later for more recommendations!</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {suggestedConnections.map((student, index) => {
-                  const mutualConnectionsData = students.filter(s => student.mutualConnections.includes(s.id));
-                  
                   return (
-                    <Card 
-                      key={student.id} 
-                      className="border-primary/10 rounded-2xl shadow-lg hover-lift animate-slide-in-up"
-                      style={{ animationDelay: `${index * 50}ms` }}
-                    >
-                      <CardContent className="p-6 space-y-4">
-                        {/* Header */}
-                        <div className="flex items-start gap-3">
-                          <Avatar className="w-16 h-16 ring-2 ring-primary/20">
-                            <AvatarImage src={student.avatar} />
-                            <AvatarFallback>{student.name[0]}</AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <h3 className="text-gray-900 truncate">{student.name}</h3>
-                            <p className="text-sm text-gray-600">{student.branch}</p>
-                            <p className="text-sm text-secondary">Year {student.year}</p>
-                          </div>
-                          {student.mutualCount > 0 && (
-                            <Badge className="bg-accent/10 text-accent border border-accent/20">
-                              <Link2 className="w-3 h-3 mr-1" />
-                              {student.mutualCount}
-                            </Badge>
-                          )}
-                        </div>
-
-                        {/* Bio */}
-                        <p className="text-sm text-gray-600 line-clamp-2">{student.bio}</p>
-
-                        {/* Mutual Connections */}
-                        {student.mutualCount > 0 && (
-                          <div className="bg-blue-50 rounded-lg p-3 space-y-2">
-                            <div className="flex items-center gap-2 text-xs text-gray-700">
-                              <Link2 className="w-3 h-3 text-primary" />
-                              <span className="font-semibold">
-                                {student.mutualCount} mutual connection{student.mutualCount > 1 ? 's' : ''}
-                              </span>
-                            </div>
-                            <div className="flex -space-x-2">
-                              {mutualConnectionsData.map(mutual => (
-                                <Avatar key={mutual.id} className="w-7 h-7 border-2 border-white ring-1 ring-gray-200">
-                                  <AvatarImage src={mutual.avatar} />
-                                  <AvatarFallback className="text-xs">{mutual.name[0]}</AvatarFallback>
-                                </Avatar>
-                              ))}
-                              {student.mutualCount > 3 && (
-                                <div className="w-7 h-7 rounded-full bg-gray-200 border-2 border-white flex items-center justify-center ring-1 ring-gray-200">
-                                  <span className="text-xs text-gray-600">+{student.mutualCount - 3}</span>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Common Skills */}
-                        {student.commonSkillsCount > 0 && (
-                          <div>
-                            <p className="text-xs text-gray-500 mb-2">Common skills:</p>
-                            <div className="flex flex-wrap gap-1">
-                              {student.commonSkills.map(skill => (
-                                <Badge key={skill} className="bg-primary/10 text-primary text-xs border-primary/20">
-                                  {skill}
-                                </Badge>
-                              ))}
-                              {student.commonSkillsCount > 3 && (
-                                <Badge className="bg-primary/10 text-primary text-xs border-primary/20">
-                                  +{student.commonSkillsCount - 3} more
-                                </Badge>
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Other Skills */}
-                        {student.commonSkillsCount === 0 && (
-                          <div className="flex flex-wrap gap-1">
-                            {student.skills.slice(0, 3).map(skill => (
-                              <Badge key={skill} variant="outline" className="text-xs border-primary/20 text-primary">
-                                {skill}
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Actions */}
-                        <div className="flex gap-2 pt-2">
-                          <Button
-                            onClick={() => onViewProfile(student.id)}
-                            variant="outline"
-                            className="flex-1 border-primary/20 hover:border-primary rounded-xl transition-all duration-300 hover:scale-105"
-                            size="sm"
-                          >
-                            View Profile
-                          </Button>
-                          <Button
-                            onClick={() => onConnect?.(student.id)}
-                            className="flex-1 gradient-primary shadow-lg transition-all duration-300 hover:scale-105 hover:shadow-xl rounded-xl"
-                            size="sm"
-                          >
-                            <UserPlus className="w-4 h-4 mr-2" />
-                            Connect
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
+                    <UserCard
+                      key={user.id}
+                      user={user}
+                      onClick={() => onViewProfile(user.id)}
+                      mutualFollowersCount={mutual}
+                      action={
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10"
+                          onClick={() => setRemoveFollowerId(user.id)}
+                        >
+                          Remove
+                        </Button>
+                      }
+                    />
                   );
                 })}
               </div>
             )}
           </TabsContent>
+
+          <TabsContent value="following" className="space-y-3">
+            {following.length === 0 ? (
+              <Card className="border-primary/10 rounded-2xl shadow-lg">
+                <CardContent className="p-10 text-center">
+                  <p className="text-gray-500">You’re not following anyone yet.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {following.map((user) => {
+                  const isFollowing = followingIds.includes(user.id);
+                  const requestStatus = outgoingRequestIds.includes(user.id) ? 'requested' : 'none';
+                  const isFollower = followersIds.includes(user.id);
+                  const mutual = mutualFollowersCount(user.id);
+
+                  return (
+                    <UserCard
+                      key={user.id}
+                      user={user}
+                      onClick={() => onViewProfile(user.id)}
+                      mutualFollowersCount={mutual}
+                      action={
+                        <FollowButton
+                          targetName={user.name}
+                          accountType={user.accountType}
+                          isFollowing={isFollowing}
+                          isFollower={isFollower}
+                          requestStatus={requestStatus}
+                          onFollow={() => onFollow(user.id)}
+                          onUnfollow={() => onUnfollow(user.id)}
+                          onCancelRequest={() => onCancelRequest(user.id)}
+                        />
+                      }
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </TabsContent>
+
+          {isPrivateAccount && (
+            <TabsContent value="requests" className="space-y-3">
+              {incomingRequests.length === 0 ? (
+                <Card className="border-primary/10 rounded-2xl shadow-lg">
+                  <CardContent className="p-10 text-center">
+                    <p className="text-gray-500">No follow requests right now.</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {visibleRequests.map((user) => {
+                    const mutual = mutualFollowersCount(user.id);
+
+                    return (
+                      <RequestCard
+                        key={user.id}
+                        user={user}
+                        mutualFollowersCount={mutual}
+                        onViewProfile={() => onViewProfile(user.id)}
+                        onAccept={() => onAcceptRequest(user.id)}
+                        onReject={() => onRejectRequest(user.id)}
+                      />
+                    );
+                  })}
+
+                  {canLoadMore && (
+                    <div className="pt-2">
+                      <Button
+                        variant="outline"
+                        className="w-full rounded-xl"
+                        disabled={isLoadingMore}
+                        onClick={() => {
+                          setIsLoadingMore(true);
+                          // Mimic an API call.
+                          window.setTimeout(() => {
+                            setRequestLimit(incomingRequests.length);
+                            setIsLoadingMore(false);
+                          }, 450);
+                        }}
+                      >
+                        {isLoadingMore ? 'Loading…' : 'Load More'}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </TabsContent>
+          )}
         </Tabs>
       </div>
+
+      <AlertDialog open={removeFollowerId !== null} onOpenChange={(open) => !open && setRemoveFollowerId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove follower?</AlertDialogTitle>
+            <AlertDialogDescription>
+              They will no longer see your posts.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!removeFollowerId) return;
+                onRemoveFollower(removeFollowerId);
+                setRemoveFollowerId(null);
+              }}
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
