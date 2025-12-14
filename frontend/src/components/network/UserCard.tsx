@@ -7,10 +7,11 @@ interface UserCardProps {
   user: Student;
   onClick?: () => void;
   mutualFollowersCount?: number;
+  secondaryLabel?: string; // New prop
   action?: ReactNode;
 }
 
-export function UserCard({ user, onClick, mutualFollowersCount, action }: UserCardProps) {
+export function UserCard({ user, onClick, mutualFollowersCount, secondaryLabel, action }: UserCardProps) {
   const showMutual = typeof mutualFollowersCount === 'number' && mutualFollowersCount > 0;
 
   return (
@@ -30,6 +31,9 @@ export function UserCard({ user, onClick, mutualFollowersCount, action }: UserCa
             <div className="min-w-0">
               <p className="text-gray-900 truncate">{user.name}</p>
               <p className="text-sm text-gray-500 truncate">@{user.username}</p>
+              {secondaryLabel && (
+                <p className="text-xs text-gray-500 mt-1">{secondaryLabel}</p>
+              )}
               {showMutual && (
                 <p className="text-xs text-gray-500 mt-1">
                   {mutualFollowersCount} mutual follower{mutualFollowersCount === 1 ? '' : 's'}

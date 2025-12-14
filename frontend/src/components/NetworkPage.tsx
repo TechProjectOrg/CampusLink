@@ -16,7 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from './ui/alert-dialog';
-import { FollowButton } from './network/FollowButton';
+
 import { RequestCard } from './network/RequestCard';
 import { UserCard } from './network/UserCard';
 
@@ -178,6 +178,7 @@ export function NetworkPage({
                       user={user}
                       onClick={() => onViewProfile(user.id)}
                       mutualFollowersCount={mutual}
+                      secondaryLabel={isFollowingBack ? "Following you" : undefined}
                       action={
                         <Button
                           size="sm"
@@ -217,13 +218,27 @@ export function NetworkPage({
                       onClick={() => onViewProfile(user.id)}
                       mutualFollowersCount={mutual}
                       action={
-                        <FollowButton
-                          targetName={user.name}
-                          accountType={user.accountType}
-                          isFollowing={true}
-                          onUnfollow={() => setUnfollowUserId(user.id)}
-                        />
+                       outgoingRequestIds.includes(user.id) ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="rounded-xl border-orange-500/30 text-orange-500 hover:bg-orange-500/10"
+                          onClick={() => setCancelRequestId(user.id)}
+                         >
+                          Requested
+                         </Button>
+                       ) : (
+                       <Button
+                         size="sm"
+                         variant="outline"
+                         className="rounded-xl border-primary/30 text-primary hover:bg-primary/10"
+                         onClick={() => setUnfollowUserId(user.id)}
+                         >
+                          Following
+                        </Button>
+                       )
                       }
+
                     />
                   );
                 })}
