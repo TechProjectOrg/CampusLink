@@ -359,6 +359,7 @@ export function NetworkPage({
                   setCancelRequestId(null);
                 }
               }}
+              variant="destructive"
             >
               {removeFollowerId !== null ? 'Remove' : unfollowUserId !== null ? 'Unfollow' : 'Cancel Request'}
             </AlertDialogAction>
