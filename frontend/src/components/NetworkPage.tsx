@@ -72,9 +72,8 @@ export function NetworkPage({
   }, [followersIds, students]);
 
   const following = useMemo(() => {
-    const ids = Array.from(new Set([...followingIds, ...outgoingRequestIds]));
-    return ids.map((id) => students.find((s) => s.id === id)).filter(Boolean) as Student[];
-  }, [followingIds, outgoingRequestIds, students]);
+    return followingIds.map((id) => students.find((s) => s.id === id)).filter(Boolean) as Student[];
+  }, [followingIds, students]);
 
   const incomingRequests = useMemo(() => {
     return incomingRequestIds
@@ -86,6 +85,7 @@ export function NetworkPage({
   const [requestLimit, setRequestLimit] = useState(3);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [removeFollowerId, setRemoveFollowerId] = useState<string | null>(null);
+  const [unfollowUserId, setUnfollowUserId] = useState<string | null>(null);
 
   const followersCount = followersIds.length;
   const followingCount = followingIds.length;
@@ -213,12 +213,8 @@ export function NetworkPage({
                         <FollowButton
                           targetName={user.name}
                           accountType={user.accountType}
-                          isFollowing={isFollowing}
-                          isFollower={isFollower}
-                          requestStatus={requestStatus}
-                          onFollow={() => onFollow(user.id)}
-                          onUnfollow={() => onUnfollow(user.id)}
-                          onCancelRequest={() => onCancelRequest(user.id)}
+                          isFollowing={true}
+                          onUnfollow={() => setUnfollowUserId(user.id)}
                         />
                       }
                     />
@@ -279,24 +275,40 @@ export function NetworkPage({
         </Tabs>
       </div>
 
-      <AlertDialog open={removeFollowerId !== null} onOpenChange={(open) => !open && setRemoveFollowerId(null)}>
+      <AlertDialog
+        open={removeFollowerId !== null || unfollowUserId !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRemoveFollowerId(null);
+            setUnfollowUserId(null);
+          }
+        }}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Remove follower?</AlertDialogTitle>
+            <AlertDialogTitle>
+              {removeFollowerId !== null ? 'Remove follower?' : 'Unfollow user?'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              They will no longer see your posts.
+              {removeFollowerId !== null
+                ? 'They will no longer see your posts.'
+                : 'You will no longer see their posts.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
-                if (!removeFollowerId) return;
-                onRemoveFollower(removeFollowerId);
-                setRemoveFollowerId(null);
+                if (removeFollowerId !== null) {
+                  onRemoveFollower(removeFollowerId);
+                  setRemoveFollowerId(null);
+                } else if (unfollowUserId !== null) {
+                  onUnfollow(unfollowUserId);
+                  setUnfollowUserId(null);
+                }
               }}
             >
-              Remove
+              {removeFollowerId !== null ? 'Remove' : 'Unfollow'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
