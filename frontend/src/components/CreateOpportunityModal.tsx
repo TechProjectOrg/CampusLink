@@ -6,7 +6,8 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Badge } from './ui/badge';
-import { toast } from 'sonner@2.0.3';
+import { ImageUpload } from './ui/ImageUpload';
+import { toast } from 'sonner';
 
 interface CreateOpportunityModalProps {
   isOpen: boolean;
@@ -32,7 +33,7 @@ export function CreateOpportunityModal({
     stipend: '',
     duration: '',
     tags: [] as string[],
-    imageUrl: ''
+    imageFile: null as File | null
   });
 
   const [tagInput, setTagInput] = useState('');
@@ -40,7 +41,7 @@ export function CreateOpportunityModal({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.title || !formData.description) {
+    if (!formData.title || !formData.description || !formData.deadline) {
       toast.error('Please fill in all required fields');
       return;
     }
@@ -56,7 +57,7 @@ export function CreateOpportunityModal({
       date: new Date().toISOString(),
       location: formData.location || undefined,
       link: formData.link || undefined,
-      image: formData.imageUrl || undefined,
+      image: formData.imageFile ? URL.createObjectURL(formData.imageFile) : undefined,
       likes: [],
       comments: [],
       saved: []
@@ -78,10 +79,11 @@ export function CreateOpportunityModal({
       stipend: '',
       duration: '',
       tags: [],
-      imageUrl: ''
+      imageFile: null
     });
     setTagInput('');
   };
+
 
   const addTag = () => {
     if (tagInput && !formData.tags.includes(tagInput)) {
@@ -188,39 +190,14 @@ export function CreateOpportunityModal({
               id="description"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Describe the opportunity, requirements, and benefits..."
+              placeholder={`About the opportunity...\nEligibility / requirements...\nBenefits / perks...`}
               rows={4}
               required
             />
           </div>
 
-          {/* Image URL */}
-          <div className="space-y-2">
-            <Label htmlFor="imageUrl">Cover Image URL (optional)</Label>
-            <div className="relative">
-              <ImageIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input
-                id="imageUrl"
-                value={formData.imageUrl}
-                onChange={(e) => setFormData({ ...formData, imageUrl: e.target.value })}
-                placeholder="https://example.com/image.jpg"
-                className="pl-10"
-              />
-            </div>
-            {formData.imageUrl && (
-              <div className="mt-2 rounded-xl overflow-hidden border border-gray-200">
-                <img 
-                  src={formData.imageUrl} 
-                  alt="Preview" 
-                  className="w-full h-48 object-cover"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
-              </div>
-            )}
-            <p className="text-xs text-gray-500">Add a cover image to make your post stand out</p>
-          </div>
+          {/* Image Upload */}
+          <ImageUpload onFileChange={(file) => setFormData({ ...formData, imageFile: file })} />
 
           {/* Additional Details Grid */}
           <div className="grid grid-cols-2 gap-4">
@@ -250,6 +227,7 @@ export function CreateOpportunityModal({
                   value={formData.deadline}
                   onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
                   className="pl-10"
+                  required
                 />
               </div>
             </div>
@@ -272,6 +250,7 @@ export function CreateOpportunityModal({
             )}
 
             {/* Duration */}
+            {formData.type === 'internship' && (
             <div className="space-y-2">
               <Label htmlFor="duration">Duration</Label>
               <Input
@@ -281,6 +260,7 @@ export function CreateOpportunityModal({
                 placeholder="e.g. 3 months, 2 days"
               />
             </div>
+            )}
           </div>
 
           {/* Tags */}

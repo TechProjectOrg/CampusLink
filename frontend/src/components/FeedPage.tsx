@@ -9,6 +9,10 @@ import { EmptyState } from './EmptyState';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 
+import { CreatePostModal } from './CreatePostModal';
+
+import { CreateEventModal } from './CreateEventModal';
+
 interface FeedPageProps {
   opportunities: Opportunity[];
   currentUserId: string;
@@ -17,7 +21,10 @@ interface FeedPageProps {
   onLike: (id: string) => void;
   onSave: (id: string) => void;
   onComment: (id: string, comment: string) => void;
+  onDelete?: (id: string) => void;
   onCreateOpportunity?: (opportunity: Opportunity) => void;
+  onCreatePost?: (post: any) => void;
+  onCreateEvent?: (event: any) => void;
   onViewProfile?: () => void;
   onConnect?: (studentId: string) => void;
   onViewStudentProfile?: (studentId: string) => void;
@@ -31,13 +38,18 @@ export function FeedPage({
   onLike, 
   onSave, 
   onComment,
+  onDelete,
   onCreateOpportunity,
+  onCreatePost,
+  onCreateEvent,
   onViewProfile,
   onConnect,
   onViewStudentProfile
 }: FeedPageProps) {
   const [selectedFilter, setSelectedFilter] = useState<string>('all');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isCreatePostModalOpen, setIsCreatePostModalOpen] = useState(false);
+  const [isCreateEventModalOpen, setIsCreateEventModalOpen] = useState(false);
 
   const filters = [
     { id: 'all', label: 'All', icon: Sparkles },
@@ -66,10 +78,20 @@ export function FeedPage({
                 </h1>
                 <p className="text-gray-600">Discover internships, events, and more</p>
               </div>
-              <Button className="flex items-center gap-2 gradient-success shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105" onClick={() => setIsCreateModalOpen(true)}>
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">Post</span>
-              </Button>
+              <div className="flex gap-2">
+                <Button className="flex items-center gap-2" variant="outline" onClick={() => setIsCreatePostModalOpen(true)}>
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">New Post</span>
+                </Button>
+                <Button className="flex items-center gap-2" variant="outline" onClick={() => setIsCreateEventModalOpen(true)}>
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">Create Event</span>
+                </Button>
+                <Button className="flex items-center gap-2 gradient-success shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105" onClick={() => setIsCreateModalOpen(true)}>
+                  <Plus className="w-4 h-4" />
+                  <span className="hidden sm:inline">Post Opportunity</span>
+                </Button>
+              </div>
             </div>
 
             {/* Filters */}
@@ -113,6 +135,7 @@ export function FeedPage({
                     onLike={onLike}
                     onSave={onSave}
                     onComment={onComment}
+                    onDelete={(id) => onDelete?.(id)}
                     onViewProfile={onViewStudentProfile}
                   />
                 </div>
@@ -133,6 +156,18 @@ export function FeedPage({
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onCreateOpportunity={(opp) => onCreateOpportunity?.(opp)}
+        currentUser={currentUser}
+      />
+      <CreatePostModal
+        isOpen={isCreatePostModalOpen}
+        onClose={() => setIsCreatePostModalOpen(false)}
+        onCreatePost={(post) => onCreatePost?.(post)}
+        currentUser={currentUser}
+      />
+      <CreateEventModal
+        isOpen={isCreateEventModalOpen}
+        onClose={() => setIsCreateEventModalOpen(false)}
+        onCreateEvent={(event) => onCreateEvent?.(event)}
         currentUser={currentUser}
       />
     </div>

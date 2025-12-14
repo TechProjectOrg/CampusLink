@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Heart, MessageCircle, Bookmark, ExternalLink, MapPin, Calendar } from 'lucide-react';
+import { Heart, MessageCircle, Bookmark, ExternalLink, MapPin, Calendar, Trash2 } from 'lucide-react';
 import { Opportunity } from '../types';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -13,6 +13,7 @@ interface OpportunityCardProps {
   onLike: (id: string) => void;
   onSave: (id: string) => void;
   onComment: (id: string, comment: string) => void;
+  onDelete: (id: string) => void;
   onViewProfile?: (authorId: string) => void;
 }
 
@@ -22,6 +23,7 @@ export function OpportunityCard({
   onLike, 
   onSave, 
   onComment,
+  onDelete,
   onViewProfile
 }: OpportunityCardProps) {
   const [showComments, setShowComments] = useState(false);
@@ -68,9 +70,16 @@ export function OpportunityCard({
               <p className="text-sm text-gray-500">{formatDate(opportunity.date)}</p>
             </div>
           </div>
-          <Badge className={`${typeColors[opportunity.type]} border transition-all duration-300 hover:scale-110`}>
-            {opportunity.type.charAt(0).toUpperCase() + opportunity.type.slice(1)}
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Badge className={`${typeColors[opportunity.type]} border transition-all duration-300 hover:scale-110`}>
+              {opportunity.type.charAt(0).toUpperCase() + opportunity.type.slice(1)}
+            </Badge>
+            {opportunity.authorId === currentUserId && (
+              <button onClick={() => onDelete(opportunity.id)} className="text-gray-400 hover:text-red-500 transition-colors">
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
 
         {/* Content */}

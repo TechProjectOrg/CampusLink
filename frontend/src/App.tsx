@@ -12,6 +12,7 @@ import { SettingsPage } from './components/SettingsPage';
 import { FloatingChat } from './components/FloatingChat';
 import { LoadingState } from './components/LoadingState';
 import { Toaster } from './components/ui/sonner';
+import { toast } from 'sonner';
 import {
   mockStudents,
   mockOpportunities,
@@ -178,6 +179,21 @@ export default function App() {
       }
       return opp;
     }));
+  };
+
+  const handleDeleteOpportunity = (opportunityId: string) => {
+    setOpportunities(opportunities.filter(opp => opp.id !== opportunityId));
+    toast.success('Post deleted successfully');
+  };
+
+  // Create post handler
+  const handleCreatePost = (post: Opportunity) => {
+    setOpportunities([post, ...opportunities]);
+  };
+
+  // Create event handler
+  const handleCreateEvent = (event: Opportunity) => {
+    setOpportunities([event, ...opportunities]);
   };
 
   // Network handlers
@@ -384,7 +400,10 @@ export default function App() {
                 onLike={handleLike}
                 onSave={handleSave}
                 onComment={handleComment}
+                onDelete={handleDeleteOpportunity}
                 onCreateOpportunity={handleCreateOpportunity}
+                onCreatePost={handleCreatePost}
+                onCreateEvent={handleCreateEvent}
                 onViewProfile={() => handleViewProfile(currentUserId)}
                 onConnect={handleConnect}
                 onViewStudentProfile={handleViewProfile}

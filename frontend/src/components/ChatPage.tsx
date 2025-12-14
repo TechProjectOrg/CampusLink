@@ -21,9 +21,10 @@ interface ChatPageProps {
   students: Student[];
   currentUserId: string;
   onViewProfile?: (studentId: string) => void;
+  onChatClick?: (conversationId: string) => void;
 }
 
-export function ChatPage({ conversations, students, currentUserId, onViewProfile }: ChatPageProps) {
+export function ChatPage({ conversations, students, currentUserId, onViewProfile, onChatClick }: ChatPageProps) {
   const [selectedChat, setSelectedChat] = useState<string | null>(conversations[0]?.id || null);
   const [message, setMessage] = useState('');
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
@@ -374,6 +375,9 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                 <button
                   key={conversation.id}
                   onClick={() => {
+                    if (onChatClick) {
+                      onChatClick(conversation.id);
+                    }
                     setSelectedChat(conversation.id);
                   }}
                   className={`w-full p-3 text-left rounded-xl transition-all duration-300 mb-1 ${
