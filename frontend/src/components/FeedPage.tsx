@@ -75,7 +75,7 @@ export function FeedPage({
               <div className="flex gap-2">
                 <Button className="flex items-center gap-2 gradient-primary shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105" onClick={() => setIsCreateUnifiedModalOpen(true)}>
                   <Plus className="w-4 h-4" />
-                  <span className="hidden sm:inline">+ Post</span>
+                  <span className="hidden sm:inline">Post</span>
                 </Button>
               </div>
             </div>
