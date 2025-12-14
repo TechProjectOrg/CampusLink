@@ -81,11 +81,18 @@ export function NetworkPage({
       .filter(Boolean) as Student[];
   }, [incomingRequestIds, students]);
 
+  const outgoingRequests = useMemo(() => {
+    return outgoingRequestIds
+      .map((id) => students.find((s) => s.id === id))
+      .filter(Boolean) as Student[];
+  }, [outgoingRequestIds, students]);
+
   const [activeTab, setActiveTab] = useState<'followers' | 'following' | 'requests'>('followers');
   const [requestLimit, setRequestLimit] = useState(3);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [removeFollowerId, setRemoveFollowerId] = useState<string | null>(null);
   const [unfollowUserId, setUnfollowUserId] = useState<string | null>(null);
+  const [cancelRequestId, setCancelRequestId] = useState<string | null>(null);
 
   const followersCount = followersIds.length;
   const followingCount = followingIds.length;
@@ -226,10 +233,11 @@ export function NetworkPage({
 
           {isPrivateAccount && (
             <TabsContent value="requests" className="space-y-3">
+              <h2 className="text-xl font-semibold mb-4">Requests Received</h2>
               {incomingRequests.length === 0 ? (
                 <Card className="border-primary/10 rounded-2xl shadow-lg">
                   <CardContent className="p-10 text-center">
-                    <p className="text-gray-500">No follow requests right now.</p>
+                    <p className="text-gray-500">No incoming follow requests right now.</p>
                   </CardContent>
                 </Card>
               ) : (
@@ -270,29 +278,70 @@ export function NetworkPage({
                   )}
                 </div>
               )}
+
+              <h2 className="text-xl font-semibold mb-4 mt-8">Requests Sent</h2>
+              {outgoingRequests.length === 0 ? (
+                <Card className="border-primary/10 rounded-2xl shadow-lg">
+                  <CardContent className="p-10 text-center">
+                    <p className="text-gray-500">No outgoing follow requests right now.</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {outgoingRequests.map((user) => {
+                    const mutual = mutualFollowersCount(user.id);
+
+                    return (
+                      <UserCard
+                        key={user.id}
+                        user={user}
+                        onClick={() => onViewProfile(user.id)}
+                        mutualFollowersCount={mutual}
+                        action={
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-xl border-orange-500/30 text-orange-500 hover:bg-orange-500/10"
+                            onClick={() => setCancelRequestId(user.id)} // Will implement setCancelRequestId next
+                          >
+                            Cancel Request
+                          </Button>
+                        }
+                      />
+                    );
+                  })}
+                </div>
+              )}
             </TabsContent>
           )}
         </Tabs>
       </div>
 
       <AlertDialog
-        open={removeFollowerId !== null || unfollowUserId !== null}
+        open={removeFollowerId !== null || unfollowUserId !== null || cancelRequestId !== null}
         onOpenChange={(open) => {
           if (!open) {
             setRemoveFollowerId(null);
             setUnfollowUserId(null);
+            setCancelRequestId(null);
           }
         }}
       >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {removeFollowerId !== null ? 'Remove follower?' : 'Unfollow user?'}
+              {removeFollowerId !== null
+                ? 'Remove follower?'
+                : unfollowUserId !== null
+                ? 'Unfollow user?'
+                : 'Cancel request?'}
             </AlertDialogTitle>
             <AlertDialogDescription>
               {removeFollowerId !== null
                 ? 'They will no longer see your posts.'
-                : 'You will no longer see their posts.'}
+                : unfollowUserId !== null
+                ? 'You will no longer see their posts.'
+                : 'You will no longer be sending a follow request.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -305,10 +354,13 @@ export function NetworkPage({
                 } else if (unfollowUserId !== null) {
                   onUnfollow(unfollowUserId);
                   setUnfollowUserId(null);
+                } else if (cancelRequestId !== null) {
+                  onCancelRequest(cancelRequestId);
+                  setCancelRequestId(null);
                 }
               }}
             >
-              {removeFollowerId !== null ? 'Remove' : 'Unfollow'}
+              {removeFollowerId !== null ? 'Remove' : unfollowUserId !== null ? 'Unfollow' : 'Cancel Request'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
