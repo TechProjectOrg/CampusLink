@@ -80,4 +80,94 @@ router.delete('/:userId', async (req: Request<GetUserParams, unknown, Partial<De
   }
 });
 
+// ==============================
+// Profile: Skills
+// ==============================
+router.get('/:userId/skills', async (req: Request<{ userId: string }>, res: Response) => {
+  const { userId } = req.params;
+
+  try {
+    const rows = await prisma.$queryRaw<
+      { skill_id: string; name: string; created_at: Date }[]
+    >`
+      SELECT skill_id, name, created_at
+      FROM skills
+      WHERE user_id = ${userId}
+      ORDER BY created_at DESC
+    `;
+
+    return res
+      .status(200)
+      .json(rows.map((r) => ({ id: r.skill_id, name: r.name, createdAt: r.created_at.toISOString() })));
+  } catch (err) {
+    console.error('Error fetching skills:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.post(
+  '/:userId/skills',
+  async (req: Request<{ userId: string }, unknown, { name?: string }>, res: Response) => {
+    const { userId } = req.params;
+    const { name } = req.body;
+
+    if (!name || name.trim().length === 0) {
+      return res.status(400).json({ message: 'Skill name is required' });
+    }
+
+    try {
+      const rows = await prisma.$queryRaw<
+        { skill_id: string; name: string; created_at: Date }[]
+      >`
+        INSERT INTO skills (user_id, name)
+        VALUES (${userId}, ${name.trim()})
+        RETURNING skill_id, name, created_at
+      `;
+
+      const created = rows[0];
+      return res.status(201).json({
+        id: created.skill_id,
+        name: created.name,
+        createdAt: created.created_at.toISOString(),
+      });
+    } catch (err: any) {
+      // Unique violation (duplicate skill)
+      if (err?.code === '23505') {
+        return res.status(409).json({ message: 'Skill already exists' });
+      }
+
+      console.error('Error creating skill:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
+
+router.delete(
+  '/:userId/skills/:skillId',
+  async (req: Request<{ userId: string; skillId: string }>, res: Response) => {
+    const { userId, skillId } = req.params;
+
+    try {
+      const result = await prisma.$queryRaw<{ count: number }[]>`
+        WITH deleted AS (
+          DELETE FROM skills
+          WHERE user_id = ${userId} AND skill_id = ${skillId}
+          RETURNING 1
+        )
+        SELECT COUNT(*)::int AS count FROM deleted
+      `;
+
+      const count = result[0]?.count ?? 0;
+      if (count === 0) {
+        return res.status(404).json({ message: 'Skill not found' });
+      }
+
+      return res.status(204).send();
+    } catch (err) {
+      console.error('Error deleting skill:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
+
 export default router;

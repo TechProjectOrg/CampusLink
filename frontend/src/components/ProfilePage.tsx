@@ -1,21 +1,23 @@
-import { useState } from 'react';
-import { 
-  Mail, 
-  GraduationCap, 
-  Calendar, 
-  MapPin, 
-  Edit2, 
-  Download, 
-  Upload, 
+import { useEffect, useState } from 'react';
+import {
+  Mail,
+  GraduationCap,
+  Calendar,
+  MapPin,
+  Edit2,
+  Download,
+  Upload,
   ExternalLink,
   Plus,
   X,
   Heart,
   MessageCircle,
   Share2,
-  Bookmark
+  Bookmark,
 } from 'lucide-react';
 import { Student, Opportunity } from '../types';
+import { useAuth } from '../context/AuthContext';
+import { apiAddUserSkill, apiDeleteUserSkill, apiFetchUserSkills, type UserSkill } from '../lib/skillsApi';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -35,13 +37,45 @@ interface ProfilePageProps {
 }
 
 export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLike, onSave, onComment }: ProfilePageProps) {
+  const auth = useAuth();
+
   const [isEditing, setIsEditing] = useState(false);
   const [editedStudent, setEditedStudent] = useState(student);
   const [commentText, setCommentText] = useState<{ [key: string]: string }>({});
   const [showComments, setShowComments] = useState<{ [key: string]: boolean }>({});
 
+  // Skills are backend-driven for the authenticated user's profile.
+  const [skills, setSkills] = useState<UserSkill[]>([]);
+  const [skillsLoading, setSkillsLoading] = useState(false);
+  const [skillsError, setSkillsError] = useState<string | null>(null);
+  const [newSkillName, setNewSkillName] = useState('');
+
+  const authUserId = auth.session?.userId;
+  const authToken = auth.session?.token;
+
   // Filter posts by this user
-  const userPosts = opportunities?.filter(opp => opp.authorId === student.id) || [];
+  const userPosts = opportunities?.filter((opp) => opp.authorId === student.id) || [];
+
+  const loadSkills = async () => {
+    if (!isOwnProfile || !authUserId) return;
+
+    setSkillsLoading(true);
+    setSkillsError(null);
+    try {
+      const list = await apiFetchUserSkills(authUserId, authToken);
+      setSkills(list);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Unable to load skills';
+      setSkillsError(message);
+    } finally {
+      setSkillsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSkills();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwnProfile, authUserId, authToken]);
 
   const handleSave = () => {
     if (onEdit) {
@@ -50,20 +84,34 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
     setIsEditing(false);
   };
 
-  const addSkill = (skill: string) => {
-    if (skill && !editedStudent.skills.includes(skill)) {
-      setEditedStudent({
-        ...editedStudent,
-        skills: [...editedStudent.skills, skill]
-      });
+  const handleAddSkill = async () => {
+    if (!isOwnProfile || !authUserId) return;
+
+    const name = newSkillName.trim();
+    if (!name) return;
+
+    setSkillsError(null);
+    try {
+      await apiAddUserSkill(authUserId, name, authToken);
+      setNewSkillName('');
+      await loadSkills();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Unable to add skill';
+      setSkillsError(message);
     }
   };
 
-  const removeSkill = (skill: string) => {
-    setEditedStudent({
-      ...editedStudent,
-      skills: editedStudent.skills.filter(s => s !== skill)
-    });
+  const handleRemoveSkill = async (skillId: string) => {
+    if (!isOwnProfile || !authUserId) return;
+
+    setSkillsError(null);
+    try {
+      await apiDeleteUserSkill(authUserId, skillId, authToken);
+      await loadSkills();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Unable to remove skill';
+      setSkillsError(message);
+    }
   };
 
   return (
@@ -181,32 +229,62 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
             <h2 className="text-gray-900">Skills</h2>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {(isEditing ? editedStudent : student).skills.map((skill) => (
-                <Badge key={skill} className="bg-blue-100 text-blue-800">
-                  {skill}
-                  {isEditing && (
-                    <button
-                      onClick={() => removeSkill(skill)}
-                      className="ml-2 hover:text-blue-900"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
+            {isOwnProfile ? (
+              <>
+                {skillsError && (
+                  <p className="text-sm text-red-600 mb-3">
+                    {skillsError}
+                  </p>
+                )}
+
+                <div className="flex flex-wrap gap-2">
+                  {skillsLoading ? (
+                    <p className="text-sm text-gray-500">Loading skills…</p>
+                  ) : (
+                    skills.map((skill) => (
+                      <Badge key={skill.id} className="bg-blue-100 text-blue-800">
+                        {skill.name}
+                        {isEditing && (
+                          <button
+                            onClick={() => handleRemoveSkill(skill.id)}
+                            className="ml-2 hover:text-blue-900"
+                            aria-label={`Remove ${skill.name}`}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </Badge>
+                    ))
                   )}
-                </Badge>
-              ))}
-              {isEditing && (
-                <button
-                  onClick={() => {
-                    const skill = prompt('Enter skill name:');
-                    if (skill) addSkill(skill);
-                  }}
-                  className="px-3 py-1 rounded-md border-2 border-dashed border-gray-300 text-gray-600 hover:border-gray-400 hover:text-gray-700 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              )}
-            </div>
+                </div>
+
+                {isEditing && (
+                  <div className="flex gap-2 mt-4">
+                    <Input
+                      value={newSkillName}
+                      onChange={(e) => setNewSkillName(e.target.value)}
+                      placeholder="Add a skill"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleAddSkill}
+                      disabled={!newSkillName.trim()}
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {student.skills.map((skill) => (
+                  <Badge key={skill} className="bg-blue-100 text-blue-800">
+                    {skill}
+                  </Badge>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
