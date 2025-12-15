@@ -575,7 +575,7 @@ export function CreateUnifiedPostModal({
                     <Button type="button" onClick={handleClose} variant="outline" className="flex-1">
                     Cancel
                     </Button>
-                    <Button type="submit" className="flex-1 gradient-success">
+                    <Button type="submit" className="flex-1 gradient-primary">
                     Post Opportunity
                     </Button>
                 </div>
