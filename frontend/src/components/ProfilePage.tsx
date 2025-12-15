@@ -1,23 +1,40 @@
-import { useState } from 'react';
-import { 
-  Mail, 
-  GraduationCap, 
-  Calendar, 
-  MapPin, 
-  Edit2, 
-  Download, 
-  Upload, 
+import { useEffect, useState } from 'react';
+import {
+  Mail,
+  GraduationCap,
+  Calendar,
+  MapPin,
+  Edit2,
+  Download,
+  Upload,
   ExternalLink,
   Plus,
   X,
   Heart,
   MessageCircle,
   Share2,
-  Bookmark
+  Bookmark,
 } from 'lucide-react';
+<<<<<<< HEAD
 import type { Student, Opportunity } from '../types';
 import type { FollowGraph } from '../lib/mockFollows';
 import { FollowButton } from './network/FollowButton';
+=======
+import { Student, Opportunity } from '../types';
+import { useAuth } from '../context/AuthContext';
+import { apiAddUserSkill, apiDeleteUserSkill, apiFetchUserSkills, type UserSkill } from '../lib/skillsApi';
+import {
+  apiCreateUserCertification,
+  apiFetchUserCertifications,
+  type UserCertification,
+} from '../lib/certificationsApi';
+import {
+  apiCreateUserProject,
+  apiDeleteUserProject,
+  apiFetchUserProjects,
+  type UserProject,
+} from '../lib/projectsApi';
+>>>>>>> HimaniBranch
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -43,6 +60,7 @@ interface ProfilePageProps {
   onComment?: (opportunityId: string, comment: string) => void;
 }
 
+<<<<<<< HEAD
 export function ProfilePage({
   student,
   currentUserId,
@@ -57,13 +75,112 @@ export function ProfilePage({
   onSave,
   onComment,
 }: ProfilePageProps) {
+=======
+export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLike, onSave, onComment }: ProfilePageProps) {
+  const auth = useAuth();
+
+>>>>>>> HimaniBranch
   const [isEditing, setIsEditing] = useState(false);
   const [editedStudent, setEditedStudent] = useState(student);
   const [commentText, setCommentText] = useState<{ [key: string]: string }>({});
   const [showComments, setShowComments] = useState<{ [key: string]: boolean }>({});
 
+  // Skills are backend-driven for the authenticated user's profile.
+  const [skills, setSkills] = useState<UserSkill[]>([]);
+  const [skillsLoading, setSkillsLoading] = useState(false);
+  const [skillsError, setSkillsError] = useState<string | null>(null);
+  const [newSkillName, setNewSkillName] = useState('');
+
+  // Certifications are backend-driven for the authenticated user's profile.
+  const [loadedCertifications, setLoadedCertifications] = useState<Certification[]>(student.certifications);
+  const [certificationsLoading, setCertificationsLoading] = useState(false);
+  const [certificationsError, setCertificationsError] = useState<string | null>(null);
+  const [newCertName, setNewCertName] = useState('');
+  const [newCertDescription, setNewCertDescription] = useState('');
+  const [newCertImageUrl, setNewCertImageUrl] = useState('');
+
+  // Projects are backend-driven for all profiles.
+  const [loadedProjects, setLoadedProjects] = useState<UserProject[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [projectsError, setProjectsError] = useState<string | null>(null);
+  const [newProject, setNewProject] = useState({
+    title: '',
+    description: '',
+  });
+
+  const authUserId = auth.currentUser?.id ?? auth.session?.userId;
+  const authToken = auth.session?.token;
+
   // Filter posts by this user
-  const userPosts = opportunities?.filter(opp => opp.authorId === student.id) || [];
+  const userPosts = opportunities?.filter((opp) => opp.authorId === student.id) || [];
+
+  const loadSkills = async () => {
+    if (!isOwnProfile || !authUserId) return;
+
+    setSkillsLoading(true);
+    setSkillsError(null);
+    try {
+      const list = await apiFetchUserSkills(authUserId, authToken);
+      setSkills(list);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Unable to load skills';
+      setSkillsError(message);
+    } finally {
+      setSkillsLoading(false);
+    }
+  };
+
+  const loadCertifications = async () => {
+    if (!student.id) return; // Ensure we have a student ID to fetch for
+
+    setCertificationsLoading(true);
+    setCertificationsError(null);
+    try {
+      const list = await apiFetchUserCertifications(student.id, authToken);
+      setLoadedCertifications(list);
+      if (isOwnProfile && onEdit) {
+        onEdit({ certifications: list });
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Unable to load certifications';
+      setCertificationsError(message);
+    } finally {
+      setCertificationsLoading(false);
+    }
+  };
+
+  const loadProjects = async () => {
+    if (!student.id) return;
+
+    setProjectsLoading(true);
+    setProjectsError(null);
+    try {
+      const list = await apiFetchUserProjects(student.id, authToken);
+      setLoadedProjects(list);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Unable to load projects';
+      setProjectsError(message);
+    } finally {
+      setProjectsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isOwnProfile && authUserId) {
+      loadSkills();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwnProfile, authUserId, authToken]);
+
+  useEffect(() => {
+    loadCertifications();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [student.id, authToken]);
+
+  useEffect(() => {
+    loadProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [student.id, authToken]);
 
   const followersCount = (followGraph.followersByUserId[student.id] ?? []).length;
   const followingCount = (followGraph.followingByUserId[student.id] ?? []).length;
@@ -81,20 +198,106 @@ export function ProfilePage({
     setIsEditing(false);
   };
 
-  const addSkill = (skill: string) => {
-    if (skill && !editedStudent.skills.includes(skill)) {
-      setEditedStudent({
-        ...editedStudent,
-        skills: [...editedStudent.skills, skill]
-      });
+  const handleAddSkill = async () => {
+    if (!isOwnProfile || !authUserId) return;
+
+    const name = newSkillName.trim();
+    if (!name) return;
+
+    setSkillsError(null);
+    try {
+      await apiAddUserSkill(authUserId, name, authToken);
+      setNewSkillName('');
+      await loadSkills();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Unable to add skill';
+      setSkillsError(message);
     }
   };
 
-  const removeSkill = (skill: string) => {
-    setEditedStudent({
-      ...editedStudent,
-      skills: editedStudent.skills.filter(s => s !== skill)
-    });
+  const handleRemoveSkill = async (skillId: string) => {
+    if (!isOwnProfile || !authUserId) return;
+
+    setSkillsError(null);
+    try {
+      await apiDeleteUserSkill(authUserId, skillId, authToken);
+      await loadSkills();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Unable to remove skill';
+      setSkillsError(message);
+    }
+  };
+
+  const handleAddCertification = async () => {
+    if (!isOwnProfile || !authUserId) return;
+
+    const name = newCertName.trim();
+    const description = newCertDescription.trim();
+    const imageUrl = newCertImageUrl.trim();
+
+    if (!name) return;
+
+    setCertificationsError(null);
+    try {
+      await apiCreateUserCertification(
+        authUserId,
+        {
+          name,
+          description: description || undefined,
+          imageUrl: imageUrl || undefined,
+        },
+        authToken
+      );
+
+      setNewCertName('');
+      setNewCertDescription('');
+      setNewCertImageUrl('');
+
+      loadCertifications();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Unable to add certification';
+      setCertificationsError(message);
+    }
+  };
+
+  const handleAddProject = async () => {
+    if (!isOwnProfile || !authUserId) return;
+
+    const { title, description } = newProject;
+    if (!title.trim() || !description.trim()) {
+      setProjectsError('Project title and description are required.');
+      return;
+    }
+
+    setProjectsError(null);
+    try {
+      await apiCreateUserProject(
+        authUserId,
+        {
+          title: title.trim(),
+          description: description.trim(),
+        },
+        authToken
+      );
+      setNewProject({ title: '', description: '' });
+      loadProjects();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Unable to add project';
+      setProjectsError(message);
+    }
+  };
+
+  const handleRemoveProject = async (projectId: string) => {
+    if (!isOwnProfile || !authUserId) return;
+
+    setProjectsError(null);
+    try {
+      await apiDeleteUserProject(authUserId, projectId, authToken);
+      loadProjects();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Unable to remove project';
+      setProjectsError(message);
+    }
   };
 
   return (
@@ -208,9 +411,16 @@ export function ProfilePage({
                     <p className="text-sm text-gray-600">Following</p>
                   </div>
                   <div>
-                    <p className="text-gray-900">{student.projects.length}</p>
+                    <p className="text-gray-900">{loadedProjects.length}</p>
                     <p className="text-sm text-gray-600">Projects</p>
                   </div>
+<<<<<<< HEAD
+=======
+                  <div>
+                    <p className="text-gray-900">{loadedCertifications.length}</p>
+                    <p className="text-sm text-gray-600">Certifications</p>
+                  </div>
+>>>>>>> HimaniBranch
                 </div>
               </div>
             </div>
@@ -223,32 +433,62 @@ export function ProfilePage({
             <h2 className="text-gray-900">Skills</h2>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap gap-2">
-              {(isEditing ? editedStudent : student).skills.map((skill) => (
-                <Badge key={skill} className="bg-blue-100 text-blue-800">
-                  {skill}
-                  {isEditing && (
-                    <button
-                      onClick={() => removeSkill(skill)}
-                      className="ml-2 hover:text-blue-900"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
+            {isOwnProfile ? (
+              <>
+                {skillsError && (
+                  <p className="text-sm text-red-600 mb-3">
+                    {skillsError}
+                  </p>
+                )}
+
+                <div className="flex flex-wrap gap-2">
+                  {skillsLoading ? (
+                    <p className="text-sm text-gray-500">Loading skills…</p>
+                  ) : (
+                    skills.map((skill) => (
+                      <Badge key={skill.id} className="bg-blue-100 text-blue-800">
+                        {skill.name}
+                        {isEditing && (
+                          <button
+                            onClick={() => handleRemoveSkill(skill.id)}
+                            className="ml-2 hover:text-blue-900"
+                            aria-label={`Remove ${skill.name}`}
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </Badge>
+                    ))
                   )}
-                </Badge>
-              ))}
-              {isEditing && (
-                <button
-                  onClick={() => {
-                    const skill = prompt('Enter skill name:');
-                    if (skill) addSkill(skill);
-                  }}
-                  className="px-3 py-1 rounded-md border-2 border-dashed border-gray-300 text-gray-600 hover:border-gray-400 hover:text-gray-700 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              )}
-            </div>
+                </div>
+
+                {isEditing && (
+                  <div className="flex gap-2 mt-4">
+                    <Input
+                      value={newSkillName}
+                      onChange={(e) => setNewSkillName(e.target.value)}
+                      placeholder="Add a skill"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleAddSkill}
+                      disabled={!newSkillName.trim()}
+                    >
+                      <Plus className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {student.skills.map((skill) => (
+                  <Badge key={skill} className="bg-blue-100 text-blue-800">
+                    {skill}
+                  </Badge>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -269,63 +509,165 @@ export function ProfilePage({
         </Card>
 
         {/* Certifications */}
-        {student.certifications.length > 0 && (
-          <Card>
-            <CardHeader>
-              <h2 className="text-gray-900">Certifications</h2>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-2">
-                {student.certifications.map((cert, index) => (
-                  <li key={index} className="flex items-center gap-2 text-gray-700">
-                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                    {cert}
-                  </li>
+        <Card>
+          <CardHeader>
+            <h2 className="text-gray-900">Certifications</h2>
+          </CardHeader>
+          <CardContent>
+            {certificationsError && (
+              <p className="text-sm text-red-600 mb-3">
+                {certificationsError}
+              </p>
+            )}
+
+            {certificationsLoading ? (
+              <p className="text-sm text-gray-500">Loading certifications…</p>
+            ) : loadedCertifications.length === 0 ? (
+              <p className="text-sm text-gray-500">No certifications added yet.</p>
+            ) : (
+              <div className="space-y-4">
+                {loadedCertifications.map((cert) => (
+                  <div key={cert.id} className="p-4 border rounded-lg space-y-2">
+                    <p className="text-gray-900">{cert.name}</p>
+                    {cert.description && (
+                      <p className="text-sm text-gray-600">{cert.description}</p>
+                    )}
+                    {cert.imageUrl && (
+                      <a
+                        href={cert.imageUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-sm text-blue-600 hover:text-blue-700 hover:underline"
+                      >
+                        View certificate
+                      </a>
+                    )}
+                  </div>
                 ))}
-              </ul>
-            </CardContent>
-          </Card>
-        )}
+              </div>
+            )}
+
+            {isOwnProfile && isEditing && (
+              <div className="mt-4 space-y-3">
+                <Input
+                  value={newCertName}
+                  onChange={(e) => setNewCertName(e.target.value)}
+                  placeholder="Certification name"
+                />
+                <Textarea
+                  value={newCertDescription}
+                  onChange={(e) => setNewCertDescription(e.target.value)}
+                  placeholder="Description"
+                  rows={3}
+                />
+                <Input
+                  value={newCertImageUrl}
+                  onChange={(e) => setNewCertImageUrl(e.target.value)}
+                  placeholder="Certificate image URL"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleAddCertification}
+                  disabled={!newCertName.trim()}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Certification
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Projects */}
-        {student.projects.length > 0 && (
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <h2 className="text-gray-900">Projects</h2>
-              {isOwnProfile && (
-                <Button variant="outline" size="sm">
+        <Card>
+          <CardHeader>
+            <h2 className="text-gray-900">Projects</h2>
+          </CardHeader>
+          <CardContent>
+            {projectsError && (
+              <p className="text-sm text-red-600 mb-3">
+                {projectsError}
+              </p>
+            )}
+
+            {projectsLoading ? (
+              <p className="text-sm text-gray-500">Loading projects…</p>
+            ) : loadedProjects.length === 0 ? (
+              <p className="text-sm text-gray-500">No projects added yet.</p>
+            ) : (
+              <div className="space-y-4">
+                {loadedProjects.map((project) => (
+                  <div key={project.id} className="p-4 border rounded-lg space-y-2 relative">
+                    {isOwnProfile && isEditing && (
+                       <Button
+                         type="button"
+                         variant="ghost"
+                         size="sm"
+                         onClick={() => handleRemoveProject(project.id)}
+                         className="absolute top-2 right-2 text-gray-500 hover:text-red-600"
+                         aria-label={`Remove ${project.title}`}
+                       >
+                         <X className="w-4 h-4" />
+                       </Button>
+                    )}
+                    <div className="flex items-start justify-between">
+                      <h3 className="text-gray-900">{project.title}</h3>
+                      {project.link && (
+                        <a
+                          href={project.link}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-700"
+                        >
+                          <ExternalLink className="w-5 h-5" />
+                        </a>
+                      )}
+                    </div>
+                    {project.imageUrl && (
+                       <ImageWithFallback src={project.imageUrl} alt={project.title} className="w-full h-48 object-cover rounded-md" />
+                    )}
+                    <p className="text-gray-600">{project.description}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {project.tags.map((tag) => (
+                        <Badge key={tag} variant="outline">
+                          {tag}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {isOwnProfile && isEditing && (
+              <div className="mt-6 p-4 border rounded-lg space-y-3">
+                <h3 className="text-gray-900">Add Project</h3>
+                <Input
+                  value={newProject.title}
+                  onChange={(e) => setNewProject({ ...newProject, title: e.target.value })}
+                  placeholder="Title"
+                />
+                <Textarea
+                  value={newProject.description}
+                  onChange={(e) => setNewProject({ ...newProject, description: e.target.value })}
+                  placeholder="Description"
+                  rows={3}
+                />
+                <Input
+                  type="file"
+                  accept="image/*"
+                  disabled // UI only as per request
+                  className="text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+                <Button type="button" onClick={handleAddProject} disabled={!newProject.title.trim() || !newProject.description.trim()}>
                   <Plus className="w-4 h-4 mr-2" />
                   Add Project
                 </Button>
-              )}
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {student.projects.map((project) => (
-                <div key={project.id} className="p-4 border rounded-lg space-y-2">
-                  <div className="flex items-start justify-between">
-                    <h3 className="text-gray-900">{project.title}</h3>
-                    <a
-                      href={project.link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:text-blue-700"
-                    >
-                      <ExternalLink className="w-5 h-5" />
-                    </a>
-                  </div>
-                  <p className="text-gray-600">{project.description}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {project.tags.map((tag) => (
-                      <Badge key={tag} variant="outline">
-                        {tag}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* User Posts */}
         {userPosts.length > 0 && (

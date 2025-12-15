@@ -13,22 +13,7 @@ export const mockStudents: Student[] = [
     skills: ['Python', 'Machine Learning', 'React', 'TensorFlow', 'Node.js'],
     interests: ['Artificial Intelligence', 'Web Development', 'Data Science'],
     certifications: ['AWS Cloud Practitioner', 'Google ML Crash Course'],
-    projects: [
-      {
-        id: 'p1',
-        title: 'Smart Campus Navigator',
-        description: 'AI-powered indoor navigation system for college campus using computer vision',
-        link: 'https://github.com/alexchen/campus-nav',
-        tags: ['Python', 'OpenCV', 'Machine Learning']
-      },
-      {
-        id: 'p2',
-        title: 'Study Buddy Matcher',
-        description: 'Platform to connect students with similar courses for group study sessions',
-        link: 'https://github.com/alexchen/study-buddy',
-        tags: ['React', 'Firebase', 'TypeScript']
-      }
-    ],
+    projects: [],
     resumeUrl: '/resumes/alex-chen.pdf',
     accountType: 'public'
   },
@@ -44,15 +29,7 @@ export const mockStudents: Student[] = [
     skills: ['React', 'TypeScript', 'Figma', 'Tailwind CSS', 'Next.js'],
     interests: ['UI/UX Design', 'Frontend Development', 'Accessibility'],
     certifications: ['Meta Frontend Developer', 'Google UX Design'],
-    projects: [
-      {
-        id: 'p3',
-        title: 'Campus Events App',
-        description: 'Modern event management platform with beautiful UI and seamless experience',
-        link: 'https://github.com/sarahm/campus-events',
-        tags: ['Next.js', 'Tailwind', 'PostgreSQL']
-      }
-    ],
+    projects: [],
     resumeUrl: '/resumes/sarah-martinez.pdf',
     accountType: 'public'
   },
@@ -68,6 +45,7 @@ export const mockStudents: Student[] = [
     skills: ['C++', 'Data Structures', 'Algorithms', 'Python', 'Java'],
     interests: ['Competitive Programming', 'Problem Solving', 'Mathematics'],
     certifications: ['CodeChef 5 Star', 'Google Code Jam Qualifier'],
+<<<<<<< HEAD
     projects: [
       {
         id: 'p4',
@@ -78,6 +56,11 @@ export const mockStudents: Student[] = [
       }
     ],
     accountType: 'public'
+=======
+    projects: [],
+    connections: ['1', '2', '4'],
+    pendingRequests: []
+>>>>>>> HimaniBranch
   },
   {
     id: '4',
@@ -91,6 +74,7 @@ export const mockStudents: Student[] = [
     skills: ['Arduino', 'Raspberry Pi', 'Python', 'C', 'IoT'],
     interests: ['Robotics', 'IoT', 'Embedded Systems'],
     certifications: ['Arduino Certified', 'Cisco IoT Fundamentals'],
+<<<<<<< HEAD
     projects: [
       {
         id: 'p5',
@@ -101,6 +85,11 @@ export const mockStudents: Student[] = [
       }
     ],
     accountType: 'private'
+=======
+    projects: [],
+    connections: ['1', '3', '6'],
+    pendingRequests: []
+>>>>>>> HimaniBranch
   },
   {
     id: '5',
@@ -114,6 +103,7 @@ export const mockStudents: Student[] = [
     skills: ['Docker', 'Kubernetes', 'AWS', 'CI/CD', 'Linux'],
     interests: ['Cloud Computing', 'DevOps', 'Infrastructure'],
     certifications: ['AWS Solutions Architect', 'Kubernetes Administrator'],
+<<<<<<< HEAD
     projects: [
       {
         id: 'p6',
@@ -124,6 +114,11 @@ export const mockStudents: Student[] = [
       }
     ],
     accountType: 'public'
+=======
+    projects: [],
+    connections: ['2', '6'],
+    pendingRequests: []
+>>>>>>> HimaniBranch
   },
   {
     id: '6',
@@ -137,6 +132,7 @@ export const mockStudents: Student[] = [
     skills: ['Flutter', 'Dart', 'Firebase', 'React Native', 'Mobile Development'],
     interests: ['Mobile Development', 'Social Impact', 'Entrepreneurship'],
     certifications: ['Google Flutter Developer'],
+<<<<<<< HEAD
     projects: [
       {
         id: 'p7',
@@ -162,6 +158,11 @@ export const mockStudents: Student[] = [
     certifications: ['Autodesk Certified User'],
     projects: [],
     accountType: 'public'
+=======
+    projects: [],
+    connections: ['4', '5'],
+    pendingRequests: []
+>>>>>>> HimaniBranch
   },
   {
     id: 'current',

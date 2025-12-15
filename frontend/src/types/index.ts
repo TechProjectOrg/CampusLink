@@ -1,4 +1,15 @@
+<<<<<<< HEAD
 export type AccountType = 'public' | 'private';
+=======
+export interface Certification {
+  id: string;
+  name: string;
+  description: string | null;
+  imageUrl: string | null;
+  issuedAt?: string | null;
+  createdAt?: string;
+}
+>>>>>>> HimaniBranch
 
 export interface Student {
   id: string;
@@ -11,7 +22,7 @@ export interface Student {
   bio: string;
   skills: string[];
   interests: string[];
-  certifications: string[];
+  certifications: Certification[];
   projects: Project[];
   resumeUrl?: string;
   accountType: AccountType;
