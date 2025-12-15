@@ -131,7 +131,7 @@ export function NetworkPage({
             >
               <Users className="w-4 h-4" />
               Followers
-              <Badge className="bg-secondary text-white ml-1">{followersCount}</Badge>
+              <Badge className="bg-green-500 text-white ml-1">{followersCount}</Badge>
             </TabsTrigger>
 
             <TabsTrigger
@@ -142,7 +142,7 @@ export function NetworkPage({
             >
               <Users className="w-4 h-4" />
               Following
-              <Badge className="bg-secondary text-white ml-1">{followingCount}</Badge>
+              <Badge className="bg-green-500 text-white ml-1">{followingCount}</Badge>
             </TabsTrigger>
 
             {isPrivateAccount && (
@@ -231,7 +231,8 @@ export function NetworkPage({
                        <Button
                          size="sm"
                          variant="outline"
-                         className="rounded-xl border-primary/30 text-primary hover:bg-primary/10"
+                         className="rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10"
+                        
                          onClick={() => setUnfollowUserId(user.id)}
                          >
                           Unfollow
