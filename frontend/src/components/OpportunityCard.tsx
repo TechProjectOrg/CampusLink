@@ -37,7 +37,8 @@ export function OpportunityCard({
     hackathon: 'bg-purple-100 text-purple-700 border-purple-200',
     event: 'bg-secondary/10 text-secondary border-secondary/20',
     contest: 'bg-orange-100 text-orange-700 border-orange-200',
-    club: 'bg-pink-100 text-pink-700 border-pink-200'
+    club: 'bg-pink-100 text-pink-700 border-pink-200',
+    general: 'bg-gray-100 text-gray-700 border-gray-200'
   };
 
   const handleComment = () => {
