@@ -17,7 +17,7 @@ interface FeedPageProps {
   onLike: (id: string) => void;
   onSave: (id: string) => void;
   onComment: (id: string, comment: string) => void;
-  onDelete?: (id: string) => void;
+
   onCreateOpportunity?: (opportunity: Opportunity) => void;
   onCreatePost?: (post: any) => void;
   onCreateEvent?: (event: any) => void;
@@ -33,7 +33,6 @@ export function FeedPage({
   onLike, 
   onSave, 
   onComment,
-  onDelete,
   onCreateOpportunity,
   onCreatePost,
   onCreateEvent,
@@ -119,7 +118,7 @@ export function FeedPage({
                     onLike={onLike}
                     onSave={onSave}
                     onComment={onComment}
-                    onDelete={(id) => onDelete?.(id)}
+
                     onViewProfile={onViewStudentProfile}
                   />
                 </div>
