@@ -178,7 +178,7 @@ export function NetworkPage({
                       user={user}
                       onClick={() => onViewProfile(user.id)}
                       mutualFollowersCount={mutual}
-                      secondaryLabel={isFollowingBack ? "Following you" : undefined}
+                      
                       action={
                         <Button
                           size="sm"
@@ -186,7 +186,7 @@ export function NetworkPage({
                           className="rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10"
                           onClick={() => setRemoveFollowerId(user.id)}
                         >
-                          Remove
+                         Remove
                         </Button>
                       }
                     />
@@ -234,7 +234,7 @@ export function NetworkPage({
                          className="rounded-xl border-primary/30 text-primary hover:bg-primary/10"
                          onClick={() => setUnfollowUserId(user.id)}
                          >
-                          Following
+                          Unfollow
                         </Button>
                        )
                       }
