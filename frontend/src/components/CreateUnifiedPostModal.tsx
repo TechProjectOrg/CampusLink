@@ -62,6 +62,21 @@ export function CreateUnifiedPostModal({
   });
   const [opportunityTagInput, setOpportunityTagInput] = useState('');
 
+  const getOpportunityTitlePlaceholder = (type: Opportunity['type']): string => {
+    switch (type) {
+      case 'internship':
+        return 'e.g. Software Engineering Intern';
+      case 'hackathon':
+        return 'e.g. Smart India Hackathon 2025';
+      case 'event':
+        return 'e.g. AI Workshop on Campus';
+      case 'contest':
+        return 'e.g. UI/UX Design Challenge';
+      default:
+        return 'e.g. Opportunity Title';
+    }
+  };
+
   const resetAllForms = () => {
     // Reset Post Form
     setPostText('');
@@ -422,7 +437,7 @@ export function CreateUnifiedPostModal({
                     id="opportunity-title"
                     value={opportunityFormData.title}
                     onChange={(e) => setOpportunityFormData({ ...opportunityFormData, title: e.target.value })}
-                    placeholder={opportunityFormData.type === 'contest' ? 'e.g. Annual Design Challenge' : 'e.g. Software Engineering Intern'}
+                    placeholder={getOpportunityTitlePlaceholder(opportunityFormData.type)}
                     required
                     />
                 </div>
