@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { X, Calendar, MapPin, Link as LinkIcon, DollarSign } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { ImageUpload } from './ui/ImageUpload';
+import { Opportunity } from '../types';
 
 interface CreateUnifiedPostModalProps {
   isOpen: boolean;
@@ -49,7 +50,7 @@ export function CreateUnifiedPostModal({
   const [opportunityFormData, setOpportunityFormData] = useState({
     title: '',
     company: '',
-    type: 'internship' as 'internship' | 'hackathon' | 'event',
+    type: 'internship' as Opportunity['type'],
     location: '',
     description: '',
     link: '',
@@ -174,22 +175,30 @@ export function CreateUnifiedPostModal({
       toast.error('Please fill in all required fields');
       return;
     }
-    const newOpportunity = {
+    const newOpportunity: any = {
       id: Date.now().toString(),
       authorId: currentUser?.id || 'current',
       authorName: currentUser?.name || 'Unknown User',
       authorAvatar: currentUser?.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Default',
       type: opportunityFormData.type,
       title: opportunityFormData.title,
+      company: opportunityFormData.company,
       description: opportunityFormData.description,
       date: new Date().toISOString(),
       location: opportunityFormData.location || undefined,
       link: opportunityFormData.link || undefined,
+      deadline: opportunityFormData.deadline,
       image: opportunityFormData.imageFile ? URL.createObjectURL(opportunityFormData.imageFile) : undefined,
       likes: [],
       comments: [],
       saved: []
     };
+
+    if (opportunityFormData.type === 'internship') {
+      newOpportunity.stipend = opportunityFormData.stipend;
+      newOpportunity.duration = opportunityFormData.duration;
+    }
+
     onCreateOpportunity(newOpportunity);
     toast.success('Opportunity posted successfully!');
     resetAllForms();
@@ -362,7 +371,7 @@ export function CreateUnifiedPostModal({
              <form onSubmit={handleOpportunitySubmit} className="space-y-4 pt-4">
                 <div className="space-y-2">
                     <Label>Opportunity Type *</Label>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-4 gap-2">
                     <button
                         type="button"
                         onClick={() => setOpportunityFormData({ ...opportunityFormData, type: 'internship' })}
@@ -393,28 +402,43 @@ export function CreateUnifiedPostModal({
                     >
                         Event
                     </button>
+                    <button
+                        type="button"
+                        onClick={() => setOpportunityFormData({ ...opportunityFormData, type: 'contest' })}
+                        className={`p-3 rounded-xl border-2 transition-all ${ opportunityFormData.type === 'contest'
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                    >
+                        Contest
+                    </button>
                     </div>
                 </div>
                 <div className="space-y-2">
-                    <Label htmlFor="opportunity-title">Title *</Label>
+                    <Label htmlFor="opportunity-title">
+                        {opportunityFormData.type === 'contest' ? 'Contest Title' : 'Title'} *
+                    </Label>
                     <Input
                     id="opportunity-title"
                     value={opportunityFormData.title}
                     onChange={(e) => setOpportunityFormData({ ...opportunityFormData, title: e.target.value })}
-                    placeholder="e.g. Software Engineering Intern"
+                    placeholder={opportunityFormData.type === 'contest' ? 'e.g. Annual Design Challenge' : 'e.g. Software Engineering Intern'}
                     required
                     />
                 </div>
                 <div className="space-y-2">
-                    <Label htmlFor="company">Company/Organization *</Label>
+                    <Label htmlFor="company">
+                        {opportunityFormData.type === 'contest' ? 'Organizer / Club / Platform name' : 'Company/Organization'} *
+                    </Label>
                     <Input
                     id="company"
                     value={opportunityFormData.company}
                     onChange={(e) => setOpportunityFormData({ ...opportunityFormData, company: e.target.value })}
-                    placeholder="e.g. Google, Tech Club"
+                    placeholder={opportunityFormData.type === 'contest' ? 'e.g. IEEE Student Chapter' : 'e.g. Google, Tech Club'}
                     required
                     />
                 </div>
+                {opportunityFormData.type !== 'contest' && (
                 <div className="space-y-2">
                     <Label htmlFor="opportunity-location">Location</Label>
                     <div className="relative">
@@ -428,6 +452,7 @@ export function CreateUnifiedPostModal({
                     />
                     </div>
                 </div>
+                )}
                 <div className="space-y-2">
                     <Label htmlFor="opportunity-description">Description *</Label>
                     <Textarea
@@ -442,7 +467,9 @@ export function CreateUnifiedPostModal({
                 <ImageUpload onFileChange={(file) => setOpportunityFormData({ ...opportunityFormData, imageFile: file })} />
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                        <Label htmlFor="link">Application Link</Label>
+                        <Label htmlFor="link">
+                            {opportunityFormData.type === 'contest' ? 'Registration Link' : 'Application Link'}
+                        </Label>
                         <div className="relative">
                             <LinkIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <Input
@@ -455,7 +482,9 @@ export function CreateUnifiedPostModal({
                         </div>
                     </div>
                     <div className="space-y-2">
-                    <Label htmlFor="deadline">Deadline</Label>
+                    <Label htmlFor="deadline">
+                        {opportunityFormData.type === 'contest' ? 'Deadline / Last date to participate' : 'Deadline'} *
+                    </Label>
                     <div className="relative">
                         <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <Input
@@ -469,30 +498,30 @@ export function CreateUnifiedPostModal({
                     </div>
                     </div>
                     {opportunityFormData.type === 'internship' && (
-                    <div className="space-y-2">
-                        <Label htmlFor="stipend">Stipend</Label>
-                        <div className="relative">
-                        <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <Input
-                            id="stipend"
-                            value={opportunityFormData.stipend}
-                            onChange={(e) => setOpportunityFormData({ ...opportunityFormData, stipend: e.target.value })}
-                            placeholder="e.g. $1000/month"
-                            className="pl-10"
-                        />
+                    <>
+                        <div className="space-y-2">
+                            <Label htmlFor="stipend">Stipend</Label>
+                            <div className="relative">
+                            <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <Input
+                                id="stipend"
+                                value={opportunityFormData.stipend}
+                                onChange={(e) => setOpportunityFormData({ ...opportunityFormData, stipend: e.target.value })}
+                                placeholder="e.g. $1000/month"
+                                className="pl-10"
+                            />
+                            </div>
                         </div>
-                    </div>
-                    )}
-                    {opportunityFormData.type === 'internship' && (
-                    <div className="space-y-2">
-                    <Label htmlFor="duration">Duration</Label>
-                    <Input
-                        id="duration"
-                        value={opportunityFormData.duration}
-                        onChange={(e) => setOpportunityFormData({ ...opportunityFormData, duration: e.target.value })}
-                        placeholder="e.g. 3 months, 2 days"
-                    />
-                    </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="duration">Duration</Label>
+                            <Input
+                                id="duration"
+                                value={opportunityFormData.duration}
+                                onChange={(e) => setOpportunityFormData({ ...opportunityFormData, duration: e.target.value })}
+                                placeholder="e.g. 3 months, 2 days"
+                            />
+                        </div>
+                    </>
                     )}
                 </div>
                 <div className="space-y-2">
