@@ -15,12 +15,9 @@ import {
   Share2,
   Bookmark,
 } from 'lucide-react';
-<<<<<<< HEAD
-import type { Student, Opportunity } from '../types';
+import { Student, Opportunity } from '../types';
 import type { FollowGraph } from '../lib/mockFollows';
 import { FollowButton } from './network/FollowButton';
-=======
-import { Student, Opportunity } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { apiAddUserSkill, apiDeleteUserSkill, apiFetchUserSkills, type UserSkill } from '../lib/skillsApi';
 import {
@@ -34,7 +31,6 @@ import {
   apiFetchUserProjects,
   type UserProject,
 } from '../lib/projectsApi';
->>>>>>> HimaniBranch
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -60,26 +56,9 @@ interface ProfilePageProps {
   onComment?: (opportunityId: string, comment: string) => void;
 }
 
-<<<<<<< HEAD
-export function ProfilePage({
-  student,
-  currentUserId,
-  isOwnProfile,
-  followGraph,
-  onFollow,
-  onUnfollow,
-  onCancelRequest,
-  onEdit,
-  opportunities,
-  onLike,
-  onSave,
-  onComment,
-}: ProfilePageProps) {
-=======
-export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLike, onSave, onComment }: ProfilePageProps) {
+export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLike, onSave, onComment, currentUserId, followGraph, onFollow, onUnfollow, onCancelRequest,}: ProfilePageProps) {
   const auth = useAuth();
 
->>>>>>> HimaniBranch
   const [isEditing, setIsEditing] = useState(false);
   const [editedStudent, setEditedStudent] = useState(student);
   const [commentText, setCommentText] = useState<{ [key: string]: string }>({});
@@ -92,7 +71,7 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
   const [newSkillName, setNewSkillName] = useState('');
 
   // Certifications are backend-driven for the authenticated user's profile.
-  const [loadedCertifications, setLoadedCertifications] = useState<Certification[]>(student.certifications);
+  const [loadedCertifications, setLoadedCertifications] = useState<UserCertification[]>(student.certifications);
   const [certificationsLoading, setCertificationsLoading] = useState(false);
   const [certificationsError, setCertificationsError] = useState<string | null>(null);
   const [newCertName, setNewCertName] = useState('');
@@ -414,13 +393,10 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
                     <p className="text-gray-900">{loadedProjects.length}</p>
                     <p className="text-sm text-gray-600">Projects</p>
                   </div>
-<<<<<<< HEAD
-=======
                   <div>
                     <p className="text-gray-900">{loadedCertifications.length}</p>
                     <p className="text-sm text-gray-600">Certifications</p>
                   </div>
->>>>>>> HimaniBranch
                 </div>
               </div>
             </div>
