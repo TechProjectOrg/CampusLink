@@ -43,7 +43,8 @@ export function CreateUnifiedPostModal({
     dateTime: '',
     location: '',
     description: '',
-    registrationLink: ''
+    registrationLink: '',
+    coverImage: null as File | null
   });
 
   // State for Opportunity Form
@@ -91,7 +92,8 @@ export function CreateUnifiedPostModal({
       dateTime: '',
       location: '',
       description: '',
-      registrationLink: ''
+      registrationLink: '',
+      coverImage: null
     });
 
     // Reset Opportunity Form
@@ -172,7 +174,7 @@ export function CreateUnifiedPostModal({
       date: new Date().toISOString(),
       eventDate: eventFormData.dateTime,
       location: eventFormData.mode === 'Offline' ? eventFormData.location : 'Online',
-      link: eventFormData.registrationLink || undefined,
+      image: eventFormData.coverImage ? URL.createObjectURL(eventFormData.coverImage) : undefined,
       likes: [],
       comments: [],
       saved: []
@@ -374,6 +376,7 @@ export function CreateUnifiedPostModal({
                   placeholder="https://example.com/register"
                 />
               </div>
+              <ImageUpload onFileChange={(file) => setEventFormData({ ...eventFormData, coverImage: file })} />
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="ghost" onClick={handleClose}>Cancel</Button>
                 <Button type="submit">Create Event</Button>
