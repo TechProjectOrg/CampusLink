@@ -470,12 +470,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                 </button>
               </div>
               <div className="flex items-center gap-1 md:gap-2">
-                <Button variant="ghost" size="sm" className="hover:bg-gray-100 rounded-full w-8 h-8 md:w-9 md:h-9 p-0">
-                  <Phone className="w-4 h-4 md:w-5 md:h-5 text-gray-700" />
-                </Button>
-                <Button variant="ghost" size="sm" className="hover:bg-gray-100 rounded-full w-8 h-8 md:w-9 md:h-9 p-0">
-                  <Video className="w-4 h-4 md:w-5 md:h-5 text-gray-700" />
-                </Button>
+
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm" className="hover:bg-gray-100 rounded-full w-8 h-8 md:w-9 md:h-9 p-0">
