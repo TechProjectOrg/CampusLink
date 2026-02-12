@@ -153,7 +153,7 @@ export function AuthPage() {
             <div className="gradient-primary text-white rounded-xl p-3 shadow-lg">
               <Users className="w-8 h-8" />
             </div>
-            <span className="text-white text-2xl">CampusLink</span>
+            <span className="text-white text-2xl">CampusLynk</span>
           </div>
           
           <h1 className="text-white text-3xl md:text-4xl animate-slide-in-down">
@@ -203,7 +203,7 @@ export function AuthPage() {
             <div className="flex items-center justify-center gap-2 mb-2">
               <Zap className="w-6 h-6 text-primary" />
               <h2 className="text-gray-900 text-center bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                Welcome to CampusLink
+                Welcome to CampusLynk
               </h2>
             </div>
             <p className="text-gray-600 text-center">Start building your professional network</p>
@@ -284,7 +284,7 @@ export function AuthPage() {
                     )}
 
                     <Button type="submit" className="w-full gradient-primary shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105" disabled={isLoading}>
-                      {isLoading ? <Lottie animationData={loadingAnimation} style={{ height: 50, width: 50 }} /> : "Login to CampusLink"}
+                      {isLoading ? <Lottie animationData={loadingAnimation} style={{ height: 50, width: 50 }} /> : "Login to CampusLynk"}
                     </Button>
 
                     <div className="text-center">

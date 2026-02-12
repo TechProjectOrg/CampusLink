@@ -4,7 +4,7 @@ This file provides guidance to me, Gemini, when working with code in this reposi
 
 ## Project Overview
 
-CampusLink is a social networking platform for college students built with React, TypeScript, and Vite for the frontend, and a Node.js/Express backend. It enables students to connect, share opportunities, join clubs, and communicate with peers.
+CampusLynk is a social networking platform for college students built with React, TypeScript, and Vite for the frontend, and a Node.js/Express backend. It enables students to connect, share opportunities, join clubs, and communicate with peers.
 
 ## Project Structure
 

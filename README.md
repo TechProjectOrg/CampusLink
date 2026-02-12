@@ -1,5 +1,5 @@
 
-  # CampusLink Platform Development
+  # CampusLynk Platform Development
 
   ## Running the code
 

@@ -4,9 +4,9 @@ This file provides guidance to WARP (warp.dev) when working with code in this re
 
 ## Project Overview
 
-CampusLink is a social networking platform for college students built with React, TypeScript, and Vite. It enables students to connect, share opportunities, join clubs, and communicate with peers. The application features a comprehensive feed system, networking capabilities, real-time chat, and profile management.
+CampusLynk is a social networking platform for college students built with React, TypeScript, and Vite. It enables students to connect, share opportunities, join clubs, and communicate with peers. The application features a comprehensive feed system, networking capabilities, real-time chat, and profile management.
 
-Original design: https://www.figma.com/design/yZvdhlk5S5huZMnwcNqsJM/CampusLink-Platform-Development
+Original design: https://www.figma.com/design/yZvdhlk5S5huZMnwcNqsJM/CampusLynk-Platform-Development
 
 ## Commands
 

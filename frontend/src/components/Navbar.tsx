@@ -53,7 +53,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
             <div className="bg-white/20 backdrop-blur-lg text-white rounded-xl p-2 shadow-lg hover-lift border border-white/30">
               <Users className="w-6 h-6" />
             </div>
-            <span className="text-white text-xl tracking-tight hidden sm:inline">CampusLink</span>
+            <span className="text-white text-xl tracking-tight hidden sm:inline">CampusLynk</span>
           </div>
 
           {/* Search Bar - Desktop */}

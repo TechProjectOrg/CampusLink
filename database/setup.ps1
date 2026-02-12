@@ -1,4 +1,4 @@
-# CampusLink Database Setup Script
+# CampusLynk Database Setup Script
 # Run this script to create and initialize your database
 
 param(
@@ -11,7 +11,7 @@ param(
 )
 
 Write-Host "==================================" -ForegroundColor Cyan
-Write-Host "CampusLink Database Setup" -ForegroundColor Cyan
+Write-Host "CampusLynk Database Setup" -ForegroundColor Cyan
 Write-Host "==================================" -ForegroundColor Cyan
 Write-Host ""
 

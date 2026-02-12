@@ -1,6 +1,6 @@
 # Social Media Platform Database
 
-Complete PostgreSQL database implementation for a social media platform (CampusLink).
+Complete PostgreSQL database implementation for a social media platform (CampusLynk).
 
 ## 📋 Overview
 
@@ -335,7 +335,7 @@ For issues or questions:
 
 ## 📄 License
 
-This database schema is part of the CampusLink Final Year Project.
+This database schema is part of the CampusLynk Final Year Project.
 
 ---
 
