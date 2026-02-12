@@ -10,6 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
+import { useAuth } from '../context/AuthContext';
 
 interface NavbarProps {
   activeTab: string;
@@ -21,11 +22,7 @@ interface NavbarProps {
 
 export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifications = 0, onSearch }: NavbarProps) {
   const [searchQuery, setSearchQuery] = useState('');
-
-  const handleSignOut = () => {
-    localStorage.removeItem('token');
-    window.location.href = '/login';
-  };
+  const { logout } = useAuth();
 
   const navItems = [
     { id: 'feed', label: 'Feed', icon: Home },
@@ -139,7 +136,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={handleSignOut}
+                onClick={logout}
                 className="text-red-600 focus:text-red-600 focus:bg-red-50"
               >
                 <LogOut className="mr-2 h-4 w-4" />
