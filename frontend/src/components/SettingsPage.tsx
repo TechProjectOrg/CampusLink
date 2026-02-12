@@ -232,18 +232,7 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
 
                 <Separator className="my-6" />
 
-                <div className="space-y-4">
-                  <h3 className="text-gray-900">Active Sessions</h3>
-                  <div className="p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-gray-900">Current Device</p>
-                        <p className="text-sm text-gray-600">Last active: Now</p>
-                      </div>
-                      <Button variant="outline" size="sm">Sign Out</Button>
-                    </div>
-                  </div>
-                </div>
+
               </CardContent>
             </Card>
           </TabsContent>
