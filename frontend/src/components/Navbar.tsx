@@ -26,8 +26,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
     { id: 'feed', label: 'Feed', icon: Home },
     { id: 'network', label: 'Network', icon: Users },
     { id: 'chat', label: 'Chat', icon: MessageCircle, badge: unreadCount },
-    { id: 'clubs', label: 'Clubs', icon: BookOpen },
-    { id: 'profile', label: 'Profile', icon: User }
+    { id: 'clubs', label: 'Clubs', icon: BookOpen }
   ];
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -113,15 +112,38 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
             )}
           </button>
 
-          {/* Settings - Desktop */}
-          <button 
-            onClick={() => onTabChange('settings')}
-            className={`hidden md:flex p-2 rounded-xl relative transition-all duration-300 hover:scale-110 border border-white/20 ${
-              activeTab === 'settings' ? 'bg-white/20' : 'hover:bg-white/10'
-            }`}
-          >
-            <Settings className="w-5 h-5 text-white" />
-          </button>
+          {/* Profile Dropdown */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className={`hidden md:flex p-2 rounded-xl relative transition-all duration-300 hover:scale-110 border border-white/20 hover:bg-white/10`}
+              >
+                <User className="w-5 h-5 text-white" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-48" align="end">
+              <DropdownMenuItem onClick={() => onTabChange('profile')}>
+                <User className="mr-2 h-4 w-4" />
+                <span>Profile</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onTabChange('settings')}>
+                <Settings className="mr-2 h-4 w-4" />
+                <span>Settings</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => {
+                  localStorage.removeItem('token');
+                  window.location.href = '/login';
+                }}
+                className="text-red-600 focus:text-red-600 focus:bg-red-50"
+              >
+                <span>Sign Out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+
 
           {/* Search Icon - Mobile */}
           <button 
