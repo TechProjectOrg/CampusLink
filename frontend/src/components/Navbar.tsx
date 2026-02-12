@@ -100,11 +100,12 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
           {/* Notifications - Desktop */}
           <button 
             onClick={() => onTabChange('notifications')}
-            className={`hidden md:flex p-2 rounded-xl relative transition-all duration-300 hover:scale-110 border border-white/20 ${
-              activeTab === 'notifications' ? 'bg-white/20' : 'hover:bg-white/10'
+            className={`hidden md:flex flex-col items-center gap-1 px-4 py-2 rounded-xl relative transition-all duration-300 ${
+              activeTab === 'notifications' ? 'text-white bg-white/20 shadow-lg scale-105 border border-white/30' : 'text-white/80 hover:bg-white/10 hover:text-white hover:scale-105'
             }`}
           >
-            <Bell className="w-5 h-5 text-white" />
+            <Bell className="w-5 h-5" />
+            <span className="text-xs">Notifications</span>
             {unreadNotifications > 0 && (
               <Badge className="absolute -top-1 -right-1 bg-destructive text-white px-1.5 py-0 min-w-5 h-5 flex items-center justify-center animate-pulse shadow-lg">
                 {unreadNotifications}
@@ -116,9 +117,10 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                className={`hidden md:flex p-2 rounded-xl relative transition-all duration-300 hover:scale-110 border border-white/20 hover:bg-white/10`}
+                className={`hidden md:flex flex-col items-center gap-1 px-4 py-2 rounded-xl relative transition-all duration-300 text-white/80 hover:bg-white/10 hover:text-white hover:scale-105 border border-white/20`}
               >
-                <User className="w-5 h-5 text-white" />
+                <User className="w-5 h-5" />
+                <span className="text-xs">Me</span>
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-48" align="end">
