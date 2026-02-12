@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Home, Search, Users, MessageCircle, BookOpen, User, Bell, Settings } from 'lucide-react';
+import { Home, Search, Users, MessageCircle, BookOpen, User, Bell, Settings, LogOut } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
 import {
@@ -21,6 +21,11 @@ interface NavbarProps {
 
 export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifications = 0, onSearch }: NavbarProps) {
   const [searchQuery, setSearchQuery] = useState('');
+
+  const handleSignOut = () => {
+    localStorage.removeItem('token');
+    window.location.href = '/login';
+  };
 
   const navItems = [
     { id: 'feed', label: 'Feed', icon: Home },
@@ -134,12 +139,10 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => {
-                  localStorage.removeItem('token');
-                  window.location.href = '/login';
-                }}
+                onClick={handleSignOut}
                 className="text-red-600 focus:text-red-600 focus:bg-red-50"
               >
+                <LogOut className="mr-2 h-4 w-4" />
                 <span>Sign Out</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
