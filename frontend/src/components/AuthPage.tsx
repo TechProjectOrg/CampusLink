@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Users, Mail, Lock, GraduationCap, Sparkles, TrendingUp, Award, Zap } from 'lucide-react';
+import { Users, Mail, Lock, GraduationCap, Sparkles, TrendingUp, Award, Zap, Eye, EyeOff } from 'lucide-react';
 import Lottie from 'lottie-react';
 import loadingAnimation from '../assets/loading_animation.json';
 import { Button } from './ui/button';
@@ -262,13 +262,20 @@ export function AuthPage() {
                         <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 transition-colors duration-300" />
                         <Input
                           id="login-password"
-                          type="password"
+                          type={showLoginPassword ? 'text' : 'password'}
                           placeholder="••••••••"
                           value={loginPassword}
                           onChange={(e) => setLoginPassword(e.target.value)}
-                          className="pl-10 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
+                          className="pl-10 pr-10 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
                           required
                         />
+                        <button
+                          type="button"
+                          onClick={() => setShowLoginPassword(!showLoginPassword)}
+                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          {showLoginPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                        </button>
                       </div>
                     </div>
 
@@ -437,9 +444,16 @@ export function AuthPage() {
                             setPasswordValidationMessages(getPasswordValidationMessage(newPassword));
                             setSignupError('');
                           }}
-                          className="pl-10 pr-16 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
+                          className="pl-10 pr-10 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
                           required
                         />
+                        <button
+                          type="button"
+                          onClick={() => setShowStudentPassword(!showStudentPassword)}
+                          className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          {showStudentPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                        </button>
                       </div>
                       {passwordValidationMessages.length > 0 && (
                         <ul className="text-xs text-red-500 list-disc list-inside">
@@ -465,9 +479,16 @@ export function AuthPage() {
                                 setSignupError('Passwords do not match');
                               }
                             }}
-                            className="pl-10 pr-16 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
+                            className="pl-10 pr-10 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
                             required
                           />
+                          <button
+                            type="button"
+                            onClick={() => setShowStudentConfirmPassword(!showStudentConfirmPassword)}
+                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          >
+                            {showStudentConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                          </button>
                         </div>
                       </div>
                     </>
@@ -566,9 +587,16 @@ export function AuthPage() {
                               setPasswordValidationMessages(getPasswordValidationMessage(newPassword));
                               setSignupError('');
                             }}
-                            className="pl-10 pr-16 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
+                            className="pl-10 pr-10 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
                             required
                           />
+                          <button
+                            type="button"
+                            onClick={() => setShowAlumniPassword(!showAlumniPassword)}
+                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          >
+                            {showAlumniPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                          </button>
                         </div>
                         {passwordValidationMessages.length > 0 && (
                             <ul className="text-xs text-red-500 list-disc list-inside">
@@ -594,10 +622,16 @@ export function AuthPage() {
                                   setSignupError('Passwords do not match');
                               }
                             }}
-                            className="pl-10 pr-16 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
+                            className="pl-10 pr-10 border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
                             required
                           />
-                        
+                          <button
+                            type="button"
+                            onClick={() => setShowAlumniConfirmPassword(!showAlumniConfirmPassword)}
+                            className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                          >
+                            {showAlumniConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                          </button>
                         </div>
                       </div>
                     </>
