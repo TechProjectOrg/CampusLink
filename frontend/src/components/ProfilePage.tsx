@@ -73,7 +73,6 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
   // Certifications are backend-driven for the authenticated user's profile.
   const [loadedCertifications, setLoadedCertifications] = useState<UserCertification[]>(student.certifications);
   const [certificationsLoading, setCertificationsLoading] = useState(false);
-  const [certificationsError, setCertificationsError] = useState<string | null>(null);
   const [newCertName, setNewCertName] = useState('');
   const [newCertDescription, setNewCertDescription] = useState('');
   const [newCertImageUrl, setNewCertImageUrl] = useState('');
@@ -112,16 +111,15 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
     if (!student.id) return; // Ensure we have a student ID to fetch for
 
     setCertificationsLoading(true);
-    setCertificationsError(null);
     try {
       const list = await apiFetchUserCertifications(student.id, authToken);
       setLoadedCertifications(list);
       if (isOwnProfile && onEdit) {
         onEdit({ certifications: list });
       }
-    } catch (e) {
-      const message = e instanceof Error ? e.message : 'Unable to load certifications';
-      setCertificationsError(message);
+    } catch {
+      // Silently handle fetch errors - show empty state instead of error
+      setLoadedCertifications([]);
     } finally {
       setCertificationsLoading(false);
     }
@@ -214,7 +212,6 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
 
     if (!name) return;
 
-    setCertificationsError(null);
     try {
       await apiCreateUserCertification(
         authUserId,
@@ -231,9 +228,8 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
       setNewCertImageUrl('');
 
       loadCertifications();
-    } catch (e) {
-      const message = e instanceof Error ? e.message : 'Unable to add certification';
-      setCertificationsError(message);
+    } catch {
+      // Silently handle error - user can retry
     }
   };
 
@@ -298,13 +294,26 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
                 <div className="flex items-start justify-between">
                   <div>
                     {isEditing ? (
-                      <Input
-                        value={editedStudent.name}
-                        onChange={(e) => setEditedStudent({ ...editedStudent, name: e.target.value })}
-                        className="mb-2"
-                      />
+                      <>
+                        <Input
+                          value={editedStudent.name}
+                          onChange={(e) => setEditedStudent({ ...editedStudent, name: e.target.value })}
+                          className="mb-2"
+                        />
+                        <Input
+                          value={editedStudent.headline || ''}
+                          onChange={(e) => setEditedStudent({ ...editedStudent, headline: e.target.value })}
+                          placeholder="Add a headline (e.g., ML Enthusiast | Python Developer)"
+                          className="mb-2 text-sm"
+                        />
+                      </>
                     ) : (
-                      <h1 className="text-gray-900">{student.name}</h1>
+                      <>
+                        <h1 className="text-gray-900">{student.name}</h1>
+                        {student.headline && (
+                          <p className="text-sm text-gray-500 mt-1 font-medium">{student.headline}</p>
+                        )}
+                      </>
                     )}
                     <div className="flex flex-wrap gap-3 mt-2 text-gray-600">
                       <div className="flex items-center gap-1">
@@ -483,16 +492,24 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
             <h2 className="text-gray-900">Certifications</h2>
           </CardHeader>
           <CardContent>
-            {certificationsError && (
-              <p className="text-sm text-red-600 mb-3">
-                {certificationsError}
-              </p>
-            )}
-
             {certificationsLoading ? (
               <p className="text-sm text-gray-500">Loading certifications…</p>
             ) : loadedCertifications.length === 0 ? (
-              <p className="text-sm text-gray-500">No certifications added yet.</p>
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <p className="text-4xl mb-3">🏆</p>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">No Certifications Added</h3>
+                <p className="text-sm text-gray-500 mb-4">Add your certifications to showcase your achievements.</p>
+                {isOwnProfile && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsEditing(true)}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Certification
+                  </Button>
+                )}
+              </div>
             ) : (
               <div className="space-y-4">
                 {loadedCertifications.map((cert) => (

@@ -1,6 +1,5 @@
-<<<<<<< HEAD
 export type AccountType = 'public' | 'private';
-=======
+
 export interface Certification {
   id: string;
   name: string;
@@ -9,11 +8,11 @@ export interface Certification {
   issuedAt?: string | null;
   createdAt?: string;
 }
->>>>>>> HimaniBranch
 
 export interface Student {
   id: string;
   name: string;
+  headline?: string;
   username: string;
   email: string;
   branch: string;
