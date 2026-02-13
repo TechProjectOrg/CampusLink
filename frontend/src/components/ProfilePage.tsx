@@ -85,6 +85,28 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
     description: '',
   });
 
+  // Experience for the authenticated user's profile.
+  const [newExperience, setNewExperience] = useState({
+    roleTitle: '',
+    organization: '',
+    duration: '',
+    description: '',
+  });
+
+  // Societies for the authenticated user's profile.
+  const [newSociety, setNewSociety] = useState({
+    societyName: '',
+    role: '',
+    duration: '',
+  });
+
+  // Achievements for the authenticated user's profile.
+  const [newAchievement, setNewAchievement] = useState({
+    title: '',
+    year: '',
+    description: '',
+  });
+
   const authUserId = auth.currentUser?.id ?? auth.session?.userId;
   const authToken = auth.session?.token;
 
@@ -268,6 +290,98 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
     }
   };
 
+  const handleAddExperience = () => {
+    if (!isOwnProfile) return;
+
+    const { roleTitle, organization, duration, description } = newExperience;
+    if (!roleTitle.trim() || !organization.trim() || !duration.trim() || !description.trim()) {
+      return;
+    }
+
+    const id = `exp-${Date.now()}`; // Simple unique ID generation for mock data
+    const updatedExperience = [
+      ...(editedStudent.experience || []),
+      { id, roleTitle: roleTitle.trim(), organization: organization.trim(), duration: duration.trim(), description: description.trim() },
+    ];
+
+    setEditedStudent({ ...editedStudent, experience: updatedExperience });
+    setNewExperience({ roleTitle: '', organization: '', duration: '', description: '' });
+  };
+
+  const handleRemoveExperience = (experienceId: string) => {
+    if (!isOwnProfile) return;
+
+    const updatedExperience = (editedStudent.experience || []).filter(
+      (exp) => exp.id !== experienceId
+    );
+    setEditedStudent({ ...editedStudent, experience: updatedExperience });
+  };
+
+  const handleAddSociety = () => {
+    if (!isOwnProfile) return;
+
+    const { societyName, role, duration } = newSociety;
+    if (!societyName.trim() || !role.trim() || !duration.trim()) {
+      return;
+    }
+
+    const id = `soc-${Date.now()}`; // Simple unique ID generation for mock data
+    const updatedSocieties = [
+      ...(editedStudent.societies || []),
+      { id, societyName: societyName.trim(), role: role.trim(), duration: duration.trim() },
+    ];
+
+    setEditedStudent({ ...editedStudent, societies: updatedSocieties });
+    setNewSociety({ societyName: '', role: '', duration: '' });
+  };
+
+  const handleRemoveSociety = (societyId: string) => {
+    if (!isOwnProfile) return;
+
+    const updatedSocieties = (editedStudent.societies || []).filter(
+      (soc) => soc.id !== societyId
+    );
+    setEditedStudent({ ...editedStudent, societies: updatedSocieties });
+  };
+
+  const handleAddAchievement = () => {
+    if (!isOwnProfile) return;
+
+    const { title, year, description } = newAchievement;
+    if (!title.trim() || !year.trim()) {
+      return;
+    }
+
+    const id = `ach-${Date.now()}`; // Simple unique ID generation for mock data
+    const parsedYear = parseInt(year.trim(), 10);
+    if (isNaN(parsedYear)) {
+      // Optionally show an error to the user about invalid year
+      return;
+    }
+
+    const updatedAchievements = [
+      ...(editedStudent.achievements || []),
+      {
+        id,
+        title: title.trim(),
+        year: parsedYear,
+        description: description?.trim() || undefined,
+      },
+    ];
+
+    setEditedStudent({ ...editedStudent, achievements: updatedAchievements });
+    setNewAchievement({ title: '', year: '', description: '' });
+  };
+
+  const handleRemoveAchievement = (achievementId: string) => {
+    if (!isOwnProfile) return;
+
+    const updatedAchievements = (editedStudent.achievements || []).filter(
+      (ach) => ach.id !== achievementId
+    );
+    setEditedStudent({ ...editedStudent, achievements: updatedAchievements });
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
       <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
@@ -360,16 +474,7 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
                   </div>
                 </div>
 
-                {/* Bio */}
-                {isEditing ? (
-                  <Textarea
-                    value={editedStudent.bio}
-                    onChange={(e) => setEditedStudent({ ...editedStudent, bio: e.target.value })}
-                    rows={3}
-                  />
-                ) : (
-                  <p className="text-gray-600">{student.bio}</p>
-                )}
+                {/* Bio - This section is moved to its own card below */}
 
                 {/* Resume */}
                 {student.resumeUrl && (
@@ -402,6 +507,28 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
                 </div>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* About Card */}
+        <Card>
+          <CardHeader>
+            <h2 className="text-gray-900">About</h2>
+          </CardHeader>
+          <CardContent>
+            {isEditing ? (
+              <Textarea
+                value={editedStudent.bio || ''}
+                onChange={(e) => setEditedStudent({ ...editedStudent, bio: e.target.value })}
+                rows={4}
+                maxLength={250}
+                placeholder="Write a short introduction about yourself..."
+              />
+            ) : (
+              <p className="text-gray-600">
+                {student.bio || 'Write a short introduction about yourself...'}
+              </p>
+            )}
           </CardContent>
         </Card>
 
@@ -657,6 +784,245 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
                 <Button type="button" onClick={handleAddProject} disabled={!newProject.title.trim() || !newProject.description.trim()}>
                   <Plus className="w-4 h-4 mr-2" />
                   Add Project
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Experience */}
+        <Card>
+          <CardHeader>
+            <h2 className="text-gray-900">Experience</h2>
+          </CardHeader>
+          <CardContent>
+            {(editedStudent.experience || []).length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <p className="text-4xl mb-3">💼</p>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">No experience added yet.</h3>
+                <p className="text-sm text-gray-500 mb-4">Showcase your professional journey and accomplishments.</p>
+                {isOwnProfile && isEditing && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => { /* This button will trigger the add form */ }}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Experience
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {(editedStudent.experience || []).map((exp) => (
+                  <div key={exp.id} className="p-4 border rounded-lg space-y-1 relative">
+                    {isOwnProfile && isEditing && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemoveExperience(exp.id)}
+                        className="absolute top-2 right-2 text-gray-500 hover:text-red-600"
+                        aria-label={`Remove ${exp.roleTitle}`}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    )}
+                    <h3 className="text-gray-900">{exp.roleTitle}</h3>
+                    <p className="text-sm text-gray-700 font-medium">{exp.organization}</p>
+                    <p className="text-xs text-gray-500">{exp.duration}</p>
+                    <p className="text-gray-600">{exp.description}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {isOwnProfile && isEditing && (
+              <div className="mt-6 p-4 border rounded-lg space-y-3">
+                <h3 className="text-gray-900">Add New Experience</h3>
+                <Input
+                  value={newExperience.roleTitle}
+                  onChange={(e) => setNewExperience({ ...newExperience, roleTitle: e.target.value })}
+                  placeholder="Role Title (e.g., Software Engineer Intern)"
+                />
+                <Input
+                  value={newExperience.organization}
+                  onChange={(e) => setNewExperience({ ...newExperience, organization: e.target.value })}
+                  placeholder="Organization (e.g., Google)"
+                />
+                <Input
+                  value={newExperience.duration}
+                  onChange={(e) => setNewExperience({ ...newExperience, duration: e.target.value })}
+                  placeholder="Duration (e.g., May 2023 - Aug 2023)"
+                />
+                <Textarea
+                  value={newExperience.description}
+                  onChange={(e) => setNewExperience({ ...newExperience, description: e.target.value })}
+                  placeholder="Short Description of Responsibilities and Achievements"
+                  rows={3}
+                />
+                <Button
+                  type="button"
+                  onClick={handleAddExperience}
+                  disabled={!newExperience.roleTitle.trim() || !newExperience.organization.trim() || !newExperience.duration.trim() || !newExperience.description.trim()}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Experience
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Societies & Clubs */}
+        <Card>
+          <CardHeader>
+            <h2 className="text-gray-900">Societies & Clubs</h2>
+          </CardHeader>
+          <CardContent>
+            {(editedStudent.societies || []).length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <p className="text-4xl mb-3">🤝</p>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">No societies joined yet.</h3>
+                <p className="text-sm text-gray-500 mb-4">Join a society or club to connect with peers and enrich your campus life.</p>
+                {isOwnProfile && isEditing && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => { /* This button will trigger the add form */ }}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Society
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {(editedStudent.societies || []).map((soc) => (
+                  <div key={soc.id} className="p-4 border rounded-lg space-y-1 relative">
+                    {isOwnProfile && isEditing && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemoveSociety(soc.id)}
+                        className="absolute top-2 right-2 text-gray-500 hover:text-red-600"
+                        aria-label={`Remove ${soc.societyName}`}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    )}
+                    <h3 className="text-gray-900">{soc.societyName}</h3>
+                    <p className="text-sm text-gray-700 font-medium">{soc.role}</p>
+                    <p className="text-xs text-gray-500">{soc.duration}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {isOwnProfile && isEditing && (
+              <div className="mt-6 p-4 border rounded-lg space-y-3">
+                <h3 className="text-gray-900">Add New Society/Club</h3>
+                <Input
+                  value={newSociety.societyName}
+                  onChange={(e) => setNewSociety({ ...newSociety, societyName: e.target.value })}
+                  placeholder="Society/Club Name (e.g., Google Developers Club)"
+                />
+                <Input
+                  value={newSociety.role}
+                  onChange={(e) => setNewSociety({ ...newSociety, role: e.target.value })}
+                  placeholder="Role (e.g., Member, Lead, Volunteer)"
+                />
+                <Input
+                  value={newSociety.duration}
+                  onChange={(e) => setNewSociety({ ...newSociety, duration: e.target.value })}
+                  placeholder="Duration (e.g., Sep 2022 - Present)"
+                />
+                <Button
+                  type="button"
+                  onClick={handleAddSociety}
+                  disabled={!newSociety.societyName.trim() || !newSociety.role.trim() || !newSociety.duration.trim()}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Society
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Achievements */}
+        <Card>
+          <CardHeader>
+            <h2 className="text-gray-900">Achievements</h2>
+          </CardHeader>
+          <CardContent>
+            {(editedStudent.achievements || []).length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">No achievements added yet.</h3>
+                <p className="text-sm text-gray-500 mb-4">Showcase your accomplishments and milestones.</p>
+                {isOwnProfile && isEditing && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => { /* This button will trigger the add form */ }}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Achievement
+                  </Button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {(editedStudent.achievements || []).map((ach) => (
+                  <div key={ach.id} className="p-4 border rounded-lg space-y-1 relative">
+                    {isOwnProfile && isEditing && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleRemoveAchievement(ach.id)}
+                        className="absolute top-2 right-2 text-gray-500 hover:text-red-600"
+                        aria-label={`Remove ${ach.title}`}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    )}
+                    <h3 className="text-gray-900">{ach.title}</h3>
+                    <p className="text-sm text-gray-700 font-medium">{ach.year}</p>
+                    {ach.description && <p className="text-gray-600">{ach.description}</p>}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {isOwnProfile && isEditing && (
+              <div className="mt-6 p-4 border rounded-lg space-y-3">
+                <h3 className="text-gray-900">Add New Achievement</h3>
+                <Input
+                  value={newAchievement.title}
+                  onChange={(e) => setNewAchievement({ ...newAchievement, title: e.target.value })}
+                  placeholder="Achievement Title (e.g., Hackathon Winner)"
+                />
+                <Input
+                  value={newAchievement.year}
+                  onChange={(e) => setNewAchievement({ ...newAchievement, year: e.target.value })}
+                  placeholder="Year (e.g., 2024)"
+                  type="number"
+                />
+                <Textarea
+                  value={newAchievement.description}
+                  onChange={(e) => setNewAchievement({ ...newAchievement, description: e.target.value })}
+                  placeholder="Optional Description"
+                  rows={2}
+                />
+                <Button
+                  type="button"
+                  onClick={handleAddAchievement}
+                  disabled={!newAchievement.title.trim() || !newAchievement.year.trim()}
+                >
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Achievement
                 </Button>
               </div>
             )}

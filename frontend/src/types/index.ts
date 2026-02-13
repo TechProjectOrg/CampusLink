@@ -9,6 +9,28 @@ export interface Certification {
   createdAt?: string;
 }
 
+export interface Experience {
+  id: string;
+  roleTitle: string;
+  organization: string;
+  duration: string;
+  description: string;
+}
+
+export interface Society {
+  id: string;
+  societyName: string;
+  role: string;
+  duration: string;
+}
+
+export interface Achievement {
+  id: string;
+  title: string;
+  year: number;
+  description?: string;
+}
+
 export interface Student {
   id: string;
   name: string;
@@ -18,10 +40,13 @@ export interface Student {
   branch: string;
   year: number;
   avatar: string;
-  bio: string;
+  bio?: string;
   skills: string[];
   interests: string[];
   certifications: Certification[];
+  experience: Experience[];
+  societies: Society[];
+  achievements: Achievement[];
   projects: Project[];
   resumeUrl?: string;
   accountType: AccountType;
