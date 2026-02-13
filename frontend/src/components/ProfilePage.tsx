@@ -589,12 +589,6 @@ export function ProfilePage({
   const EmptyState = ({ message, onAdd }: { message: string; onAdd?: () => void }) => (
     <div className="text-center py-8">
       <p className="text-gray-400 text-sm mb-3">{message}</p>
-      {isOwnProfile && onAdd && (
-        <Button variant="outline" size="sm" onClick={onAdd} className="text-blue-600 border-blue-200 hover:bg-blue-50">
-          <Plus className="w-4 h-4 mr-1" />
-          Add
-        </Button>
-      )}
     </div>
   );
 
