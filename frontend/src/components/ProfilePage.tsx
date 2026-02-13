@@ -81,7 +81,6 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
   // Projects are backend-driven for all profiles.
   const [loadedProjects, setLoadedProjects] = useState<UserProject[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
-  const [projectsError, setProjectsError] = useState<string | null>(null);
   const [newProject, setNewProject] = useState({
     title: '',
     description: '',
@@ -132,13 +131,12 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
     if (!student.id) return;
 
     setProjectsLoading(true);
-    setProjectsError(null);
     try {
       const list = await apiFetchUserProjects(student.id, authToken);
       setLoadedProjects(list);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : 'Unable to load projects';
-      setProjectsError(message);
+    } catch {
+      // Silently handle fetch errors - show empty state instead of error
+      setLoadedProjects([]);
     } finally {
       setProjectsLoading(false);
     }
@@ -244,11 +242,9 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
 
     const { title, description } = newProject;
     if (!title.trim() || !description.trim()) {
-      setProjectsError('Project title and description are required.');
       return;
     }
 
-    setProjectsError(null);
     try {
       await apiCreateUserProject(
         authUserId,
@@ -260,22 +256,19 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
       );
       setNewProject({ title: '', description: '' });
       loadProjects();
-    } catch (e) {
-      const message = e instanceof Error ? e.message : 'Unable to add project';
-      setProjectsError(message);
+    } catch {
+      // Silently handle error - user can retry
     }
   };
 
   const handleRemoveProject = async (projectId: string) => {
     if (!isOwnProfile || !authUserId) return;
 
-    setProjectsError(null);
     try {
       await apiDeleteUserProject(authUserId, projectId, authToken);
       loadProjects();
-    } catch (e) {
-      const message = e instanceof Error ? e.message : 'Unable to remove project';
-      setProjectsError(message);
+    } catch {
+      // Silently handle error - user can retry
     }
   };
 
@@ -561,16 +554,24 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
             <h2 className="text-gray-900">Projects</h2>
           </CardHeader>
           <CardContent>
-            {projectsError && (
-              <p className="text-sm text-red-600 mb-3">
-                {projectsError}
-              </p>
-            )}
-
             {projectsLoading ? (
               <p className="text-sm text-gray-500">Loading projects…</p>
             ) : loadedProjects.length === 0 ? (
-              <p className="text-sm text-gray-500">No projects added yet.</p>
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <p className="text-4xl mb-3">📂</p>
+                <h3 className="text-lg font-semibold text-gray-900 mb-1">No Projects Yet</h3>
+                <p className="text-sm text-gray-500 mb-4">Add your academic or personal projects to showcase your skills.</p>
+                {isOwnProfile && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsEditing(true)}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Project
+                  </Button>
+                )}
+              </div>
             ) : (
               <div className="space-y-4">
                 {loadedProjects.map((project) => (
