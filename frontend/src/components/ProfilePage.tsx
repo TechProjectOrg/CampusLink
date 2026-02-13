@@ -702,7 +702,6 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
               <p className="text-sm text-gray-500">Loading projects…</p>
             ) : loadedProjects.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
-                <p className="text-4xl mb-3">📂</p>
                 <h3 className="text-lg font-semibold text-gray-900 mb-1">No Projects Yet</h3>
                 <p className="text-sm text-gray-500 mb-4">Add your academic or personal projects to showcase your skills.</p>
                 {isOwnProfile && (
@@ -798,7 +797,6 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
           <CardContent>
             {(editedStudent.experience || []).length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
-                <p className="text-4xl mb-3">💼</p>
                 <h3 className="text-lg font-semibold text-gray-900 mb-1">No experience added yet.</h3>
                 <p className="text-sm text-gray-500 mb-4">Showcase your professional journey and accomplishments.</p>
                 {isOwnProfile && isEditing && (
@@ -882,7 +880,6 @@ export function ProfilePage({ student, isOwnProfile, onEdit, opportunities, onLi
           <CardContent>
             {(editedStudent.societies || []).length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
-                <p className="text-4xl mb-3">🤝</p>
                 <h3 className="text-lg font-semibold text-gray-900 mb-1">No societies joined yet.</h3>
                 <p className="text-sm text-gray-500 mb-4">Join a society or club to connect with peers and enrich your campus life.</p>
                 {isOwnProfile && isEditing && (
