@@ -507,7 +507,7 @@ export default function App() {
         unreadNotifications={unreadNotifications}
         onSearch={setSearchQuery}
       />
-      <div className="flex justify-center h-[calc(100vh-4rem)] overflow-hidden">
+      <div className="flex justify-center flex-1">
         {activeTab === 'feed' ? (
           <div className="flex w-full xl:max-w-7xl">
             {/* Profile Section (Left) - Visible on XL screens and up */}

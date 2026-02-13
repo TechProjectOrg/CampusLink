@@ -342,7 +342,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
 
   return (
     <div className="flex flex-col flex-1 pb-20 md:pb-0 bg-white">
-      <div className="flex-1 w-full flex border-x border-gray-200 overflow-hidden">
+      <div className="flex-1 w-full flex border-x border-gray-200">
         {/* Conversations List - Instagram Style */}
         <div className={`${selectedChat ? 'hidden md:flex' : 'flex'} w-full md:w-96 flex-shrink-0 overflow-hidden border-r border-gray-200 flex-col bg-white`}>
           {/* Header */}
