@@ -1,6 +1,6 @@
 import type { ApiUserProfile } from '../types';
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:4000';
+const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined)?.trim() || 'http://localhost:4000';
 
 export interface LoginResult {
   profile: ApiUserProfile;
@@ -28,8 +28,17 @@ function authHeaders(token?: string): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+async function safeFetch(input: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'Network request failed';
+    throw new Error(`Cannot reach backend at ${API_BASE}. ${reason}`);
+  }
+}
+
 export async function apiLogin(email: string, password: string): Promise<LoginResult> {
-  const response = await fetch(`${API_BASE}/auth/login`, {
+  const response = await safeFetch(`${API_BASE}/auth/login`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -47,7 +56,7 @@ export async function apiLogin(email: string, password: string): Promise<LoginRe
 }
 
 export async function apiSignupStudent(payload: StudentSignupPayload): Promise<LoginResult> {
-  const response = await fetch(`${API_BASE}/auth/signup/student`, {
+  const response = await safeFetch(`${API_BASE}/auth/signup/student`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -65,7 +74,7 @@ export async function apiSignupStudent(payload: StudentSignupPayload): Promise<L
 }
 
 export async function apiSignupAlumni(payload: AlumniSignupPayload): Promise<LoginResult> {
-  const response = await fetch(`${API_BASE}/auth/signup/alumni`, {
+  const response = await safeFetch(`${API_BASE}/auth/signup/alumni`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -83,7 +92,7 @@ export async function apiSignupAlumni(payload: AlumniSignupPayload): Promise<Log
 }
 
 export async function apiFetchUserProfile(userId: string, token?: string): Promise<ApiUserProfile> {
-  const response = await fetch(`${API_BASE}/users/${encodeURIComponent(userId)}`, {
+  const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}`, {
     headers: {
       ...authHeaders(token),
     },
@@ -98,7 +107,7 @@ export async function apiFetchUserProfile(userId: string, token?: string): Promi
 }
 
 export async function apiDeleteAccount(userId: string, password: string, token?: string): Promise<void> {
-  const response = await fetch(`${API_BASE}/users/${encodeURIComponent(userId)}`, {
+  const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}`, {
     method: 'DELETE',
     headers: {
       'Content-Type': 'application/json',
