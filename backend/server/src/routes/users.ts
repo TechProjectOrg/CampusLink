@@ -98,7 +98,13 @@ router.get('/:userId/skills', async (req: Request<{ userId: string }>, res: Resp
 
     return res
       .status(200)
-      .json(rows.map((r) => ({ id: r.skill_id, name: r.name, createdAt: r.created_at.toISOString() })));
+      .json(
+        rows.map((r: { skill_id: string; name: string; created_at: Date }) => ({
+          id: r.skill_id,
+          name: r.name,
+          createdAt: r.created_at.toISOString(),
+        }))
+      );
   } catch (err) {
     console.error('Error fetching skills:', err);
     return res.status(500).json({ message: 'Internal server error' });
@@ -194,7 +200,14 @@ router.get('/:userId/certifications', async (req: Request<{ userId: string }>, r
     `;
 
     return res.status(200).json(
-      rows.map((r) => ({
+      rows.map((r: {
+        certification_id: string;
+        name: string;
+        issuer: string | null;
+        credential_url: string | null;
+        issued_at: Date | null;
+        created_at: Date;
+      }) => ({
         id: r.certification_id,
         name: r.name,
         issuer: r.issuer,

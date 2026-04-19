@@ -1,0 +1,128 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model comments {
+  comment_id        String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  post_id           String     @db.Uuid
+  user_id           String     @db.Uuid
+  parent_comment_id String?    @db.Uuid
+  content           String     @db.VarChar(500)
+  created_at        DateTime   @default(now()) @db.Timestamp(6)
+  comments          comments?  @relation("commentsTocomments", fields: [parent_comment_id], references: [comment_id], onDelete: Cascade, onUpdate: NoAction)
+  other_comments    comments[] @relation("commentsTocomments")
+  posts             posts      @relation(fields: [post_id], references: [post_id], onDelete: Cascade, onUpdate: NoAction)
+  users             users      @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([parent_comment_id], map: "idx_comment_parent_id")
+  @@index([post_id, created_at], map: "idx_comment_post_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model follows {
+  follower_id                      String   @db.Uuid
+  followee_id                      String   @db.Uuid
+  created_at                       DateTime @default(now()) @db.Timestamp(6)
+  users_follows_followee_idTousers users    @relation("follows_followee_idTousers", fields: [followee_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+  users_follows_follower_idTousers users    @relation("follows_follower_idTousers", fields: [follower_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([follower_id, followee_id])
+  @@index([followee_id], map: "idx_followee_id")
+  @@index([follower_id], map: "idx_follower_id")
+}
+
+model hashtags {
+  tag_id     String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tag_name   String     @unique @db.VarChar(100)
+  created_at DateTime   @default(now()) @db.Timestamp(6)
+  posttags   posttags[]
+  projecttags projecttags[]
+
+  @@index([tag_name], map: "idx_tag_name")
+}
+
+model likes {
+  user_id    String   @db.Uuid
+  post_id    String   @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamp(6)
+  posts      posts    @relation(fields: [post_id], references: [post_id], onDelete: Cascade, onUpdate: NoAction)
+  users      users    @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([user_id, post_id])
+  @@index([post_id], map: "idx_like_post_id")
+}
+
+model posts {
+  post_id      String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id      String     @db.Uuid
+  content_text String?
+  media_url    String?    @db.VarChar(255)
+  media_type   String?    @db.VarChar(10)
+  view_count   Int        @default(0)
+  created_at   DateTime   @default(now()) @db.Timestamp(6)
+  comments     comments[]
+  likes        likes[]
+  users        users      @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+  posttags     posttags[]
+
+  @@index([created_at(sort: Desc)], map: "idx_post_created_at")
+  @@index([user_id, created_at(sort: Desc)], map: "idx_post_user_id")
+}
+
+model posttags {
+  post_id  String   @db.Uuid
+  tag_id   String   @db.Uuid
+  posts    posts    @relation(fields: [post_id], references: [post_id], onDelete: Cascade, onUpdate: NoAction)
+  hashtags hashtags @relation(fields: [tag_id], references: [tag_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([post_id, tag_id])
+  @@index([tag_id], map: "idx_posttag_tag_id")
+}
+
+model projects {
+  project_id  String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id     String        @db.Uuid
+  title       String        @db.VarChar(100)
+  description String        @db.VarChar(1000)
+  link        String?       @db.VarChar(255)
+  image_url   String?       @db.VarChar(255)
+  created_at  DateTime      @default(now()) @db.Timestamp(6)
+  users       users         @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+  projecttags projecttags[]
+
+  @@index([user_id], map: "idx_project_user_id")
+}
+
+model projecttags {
+  project_id String   @db.Uuid
+  tag_id     String   @db.Uuid
+  projects   projects @relation(fields: [project_id], references: [project_id], onDelete: Cascade, onUpdate: NoAction)
+  hashtags   hashtags @relation(fields: [tag_id], references: [tag_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([project_id, tag_id])
+  @@index([tag_id], map: "idx_projecttag_tag_id")
+}
+
+model users {
+  user_id                            String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  username                           String     @unique @db.VarChar(50)
+  email                              String     @unique @db.VarChar(100)
+  password_hash                      String     @db.Char(64)
+  bio                                String?    @db.VarChar(500)
+  profile_picture_url                String?    @db.VarChar(255)
+  is_public                          Boolean    @default(true)
+  created_at                         DateTime   @default(now()) @db.Timestamp(6)
+  comments                           comments[]
+  follows_follows_followee_idTousers follows[]  @relation("follows_followee_idTousers")
+  follows_follows_follower_idTousers follows[]  @relation("follows_follower_idTousers")
+  likes                              likes[]
+  posts                              posts[]
+  projects                           projects[]
+
+  @@index([email], map: "idx_user_email")
+  @@index([username], map: "idx_user_username")
+}

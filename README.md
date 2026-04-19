@@ -3,7 +3,17 @@
 
   ## Running the code
 
-  Run `npm i` to install the dependencies.
+  Install dependencies separately for each app:
 
-  Run `npm run dev` to start the development server.
+  `cd frontend && npm install`
+
+  `cd backend && npm install`
+
+  Start the frontend:
+
+  `cd frontend && npm run dev`
+
+  Start the backend:
+
+  `cd backend && npm run dev`
   
