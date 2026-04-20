@@ -1,17 +1,27 @@
-import express, { Request, Response } from 'express';
-import crypto from 'crypto';
+import express, { NextFunction, Request, RequestHandler, Response } from 'express';
 import prisma from '../prisma';
 import { getUserProfileById } from '../services/userProfile';
+import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
+import { verifyPassword } from '../lib/auth';
 
 const router = express.Router();
-
-function hashPassword(password: string): string {
-  return crypto.createHash('sha256').update(password).digest('hex');
-}
 
 interface GetUserParams {
   userId: string;
 }
+
+const requireOwnUser: RequestHandler = (req, res, next: NextFunction) => {
+  const authedRequest = req as unknown as AuthedRequest;
+  const { userId } = req.params as unknown as GetUserParams;
+
+  if (!authedRequest.auth || authedRequest.auth.userId !== userId) {
+    return res.status(403).json({ message: 'You can only access your own account data' });
+  }
+
+  return next();
+};
+
+router.use('/:userId', authenticateToken, requireOwnUser);
 
 router.get('/:userId', async (req: Request<GetUserParams>, res: Response) => {
   const { userId } = req.params;
@@ -63,8 +73,8 @@ router.delete('/:userId', async (req: Request<GetUserParams, unknown, Partial<De
       return res.status(404).json({ message: 'User not found' });
     }
 
-    const incomingHash = hashPassword(password);
-    if (incomingHash !== row.password_hash) {
+    const passwordMatches = await verifyPassword(password, row.password_hash);
+    if (!passwordMatches) {
       return res.status(401).json({ message: 'Invalid password' });
     }
 
