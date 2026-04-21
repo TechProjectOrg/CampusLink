@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 
-export type AuthUserType = 'student' | 'alumni' | 'teacher' | 'unknown';
+export type AuthUserType = 'student' | 'alumni';
 
 export interface AuthTokenPayload {
   userId: string;
@@ -58,7 +58,7 @@ export function verifyAuthToken(token: string): AuthTokenPayload {
     throw new Error('Invalid token payload');
   }
 
-  const allowedTypes: AuthUserType[] = ['student', 'alumni', 'teacher', 'unknown'];
+  const allowedTypes: AuthUserType[] = ['student', 'alumni'];
   if (!allowedTypes.includes(decoded.type as AuthUserType)) {
     throw new Error('Invalid token payload');
   }

@@ -98,16 +98,21 @@ router.post('/signup/student', validatePassword, async (req: Request, res: Respo
     const createdUsers = await prisma.$queryRaw<
       { user_id: string; username: string; email: string; created_at: Date }[]
     >`
-      INSERT INTO users (username, email, password_hash, profile_picture_url)
-      VALUES (${username}, ${email}, ${passwordHash}, NULL)
+      INSERT INTO users (username, email, password_hash, user_type, profile_photo_url, is_private)
+      VALUES (${username}, ${email}, ${passwordHash}, 'student'::"UserType", NULL, FALSE)
       RETURNING user_id, username, email, created_at
     `;
 
     const user = createdUsers[0];
 
     await prisma.$queryRaw`
-      INSERT INTO studentprofiles (user_id, branch, year)
+      INSERT INTO student_profiles (user_id, branch, year)
       VALUES (${user.user_id}, ${branch}, ${numericYear})
+    `;
+
+    await prisma.$queryRaw`
+      INSERT INTO user_settings (user_id)
+      VALUES (${user.user_id})
     `;
 
     const profile = await getUserProfileById(user.user_id);
@@ -118,8 +123,12 @@ router.post('/signup/student', validatePassword, async (req: Request, res: Respo
       type: 'student' as const,
       createdAt: user.created_at,
       bio: null,
+      headline: null,
       profilePictureUrl: null,
       isPublic: true,
+      isActive: true,
+      isOnline: false,
+      lastSeenAt: null,
       details: {
         branch,
         year: numericYear,
@@ -160,16 +169,21 @@ router.post('/signup/alumni', validatePassword, async (req: Request, res: Respon
     const createdUsers = await prisma.$queryRaw<
       { user_id: string; username: string; email: string; created_at: Date }[]
     >`
-      INSERT INTO users (username, email, password_hash, profile_picture_url)
-      VALUES (${username}, ${email}, ${passwordHash}, NULL)
+      INSERT INTO users (username, email, password_hash, user_type, profile_photo_url, is_private)
+      VALUES (${username}, ${email}, ${passwordHash}, 'alumni'::"UserType", NULL, FALSE)
       RETURNING user_id, username, email, created_at
     `;
 
     const user = createdUsers[0];
 
     await prisma.$queryRaw`
-      INSERT INTO alumniprofiles (user_id, branch, passing_year)
-      VALUES (${user.user_id}, ${branch}, ${numericGradYear})
+      INSERT INTO alumni_profiles (user_id, branch, passing_year, current_status)
+      VALUES (${user.user_id}, ${branch}, ${numericGradYear}, ${currentStatus})
+    `;
+
+    await prisma.$queryRaw`
+      INSERT INTO user_settings (user_id)
+      VALUES (${user.user_id})
     `;
 
     const profile = await getUserProfileById(user.user_id);
@@ -180,8 +194,12 @@ router.post('/signup/alumni', validatePassword, async (req: Request, res: Respon
       type: 'alumni' as const,
       createdAt: user.created_at,
       bio: null,
+      headline: null,
       profilePictureUrl: null,
       isPublic: true,
+      isActive: true,
+      isOnline: false,
+      lastSeenAt: null,
       details: {
         branch,
         passingYear: numericGradYear,
@@ -214,10 +232,11 @@ router.post('/login', async (req: Request, res: Response) => {
         username: string;
         email: string;
         password_hash: string;
+        user_type: 'student' | 'alumni';
         created_at: Date;
       }[]
     >`
-      SELECT user_id, username, email, password_hash, created_at
+      SELECT user_id, username, email, password_hash, user_type, created_at
       FROM users
       WHERE email = ${email}
     `;
@@ -250,11 +269,15 @@ router.post('/login', async (req: Request, res: Response) => {
         userId: user.user_id,
         username: user.username,
         email: user.email,
-        type: 'unknown',
+        type: user.user_type,
         createdAt: user.created_at,
         bio: null,
+        headline: null,
         profilePictureUrl: null,
         isPublic: true,
+        isActive: true,
+        isOnline: false,
+        lastSeenAt: null,
         details: {},
         stats: {
           followerCount: 0,
@@ -266,7 +289,7 @@ router.post('/login', async (req: Request, res: Response) => {
             userId: user.user_id,
             email: user.email,
             username: user.username,
-            type: 'unknown',
+            type: user.user_type,
           }
         ),
       });
