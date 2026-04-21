@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { User, Lock, Bell, Shield, Trash2, Save, Eye, EyeOff } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Bell, Edit2, Eye, EyeOff, Lock, Save, Shield, Trash2, User, X } from 'lucide-react';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -10,6 +10,7 @@ import { Separator } from './ui/separator';
 import { toast } from 'sonner@2.0.3';
 import { Student } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { apiUpdateUserProfile } from '../lib/authApi';
 
 interface SettingsPageProps {
   student: Student;
@@ -19,10 +20,31 @@ interface SettingsPageProps {
 
 export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPageProps) {
   const auth = useAuth();
+  const accountStudent = auth.currentUser ?? student;
   const isAlumni = auth.profile?.type === 'alumni';
-  const alumniPassingYear = auth.profile?.details?.passingYear ?? student.year;
+  const yearValue = isAlumni
+    ? auth.profile?.details?.passingYear ?? accountStudent.year
+    : auth.profile?.details?.year ?? accountStudent.year;
   const currentCalendarYear = new Date().getFullYear();
   const passingYearOptions = Array.from({ length: 41 }, (_, index) => currentCalendarYear - 20 + index);
+  const branchOptions = Array.from(
+    new Set([
+      'Computer Science',
+      'Information Technology',
+      'Electronics',
+      'Mechanical',
+      'Civil',
+      accountStudent.branch,
+    ].filter(Boolean))
+  );
+
+  const [isEditingAccount, setIsEditingAccount] = useState(false);
+  const [isSavingAccount, setIsSavingAccount] = useState(false);
+  const [accountData, setAccountData] = useState({
+    username: accountStudent.username,
+    branch: accountStudent.branch,
+    year: String(yearValue ?? accountStudent.year),
+  });
 
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -42,11 +64,21 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
   });
 
   const [privacySettings, setPrivacySettings] = useState({
-    accountType: student.accountType,
+    accountType: accountStudent.accountType,
     showEmail: true,
     showProjects: true,
     allowMessages: true,
   });
+
+  useEffect(() => {
+    if (isEditingAccount) return;
+
+    setAccountData({
+      username: accountStudent.username,
+      branch: accountStudent.branch,
+      year: String(yearValue ?? accountStudent.year),
+    });
+  }, [accountStudent, isEditingAccount, yearValue]);
 
   const handlePasswordChange = (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,6 +102,62 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
   const handleSavePrivacy = () => {
     onUpdateSettings({ privacy: privacySettings });
     toast.success('Privacy settings saved');
+  };
+
+  const handleCancelAccountEdit = () => {
+    setAccountData({
+      username: accountStudent.username,
+      branch: accountStudent.branch,
+      year: String(yearValue ?? accountStudent.year),
+    });
+    setIsEditingAccount(false);
+  };
+
+  const handleSaveAccount = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    const trimmedUsername = accountData.username.trim();
+    const trimmedBranch = accountData.branch.trim();
+    const parsedYear = Number.parseInt(accountData.year, 10);
+
+    if (!trimmedUsername || !trimmedBranch || Number.isNaN(parsedYear)) {
+      toast.error('Please complete all account fields');
+      return;
+    }
+
+    if (!auth.session?.userId) {
+      toast.error('You must be signed in to update your profile');
+      return;
+    }
+
+    setIsSavingAccount(true);
+
+    try {
+      await apiUpdateUserProfile(
+        auth.session.userId,
+        {
+          username: trimmedUsername,
+          branch: trimmedBranch,
+          year: parsedYear,
+        },
+        auth.session.token
+      );
+
+      onEdit({
+        name: trimmedUsername,
+        username: trimmedUsername,
+        branch: trimmedBranch,
+        year: parsedYear,
+      });
+
+      await auth.refreshProfile();
+      setIsEditingAccount(false);
+      toast.success('Account information updated');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Unable to update account information');
+    } finally {
+      setIsSavingAccount(false);
+    }
   };
 
   const handleDeleteAccount = async () => {
@@ -123,61 +211,104 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
           {/* Account Settings */}
           <TabsContent value="account">
             <Card>
-              <CardHeader>
-                <h2 className="text-gray-900">Account Information</h2>
-                <p className="text-gray-600">Update your account details</p>
+              <CardHeader className="flex flex-row items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-gray-900">Account Information</h2>
+                  <p className="text-gray-600">Update your account details</p>
+                </div>
+                {!isEditingAccount ? (
+                  <Button type="button" variant="outline" size="sm" onClick={() => setIsEditingAccount(true)}>
+                    <Edit2 className="w-4 h-4 mr-2" />
+                    Edit
+                  </Button>
+                ) : (
+                  <Button type="button" variant="outline" size="sm" onClick={handleCancelAccountEdit}>
+                    <X className="w-4 h-4 mr-2" />
+                    Cancel
+                  </Button>
+                )}
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Full Name</Label>
-                  <Input id="name" defaultValue={student.name} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email Address</Label>
-                  <Input id="email" type="email" defaultValue={student.email} disabled />
-                  <p className="text-xs text-gray-500">Email cannot be changed</p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="branch">Branch</Label>
-                  <select
-                    id="branch"
-                    defaultValue={student.branch}
-                    className="w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  >
-                    <option value="Computer Science">Computer Science</option>
-                    <option value="Information Technology">Information Technology</option>
-                    <option value="Electronics">Electronics</option>
-                    <option value="Mechanical">Mechanical</option>
-                    <option value="Civil">Civil</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="year">{isAlumni ? 'Passing Year' : 'Year'}</Label>
-                  <select
-                    id="year"
-                    defaultValue={isAlumni ? alumniPassingYear : student.year}
-                    className="w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  >
-                    {isAlumni ? (
-                      passingYearOptions.map((year) => (
-                        <option key={year} value={year}>
-                          {year}
-                        </option>
-                      ))
+              <CardContent>
+                <form onSubmit={handleSaveAccount} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="username">Username</Label>
+                    {isEditingAccount ? (
+                      <Input
+                        id="username"
+                        value={accountData.username}
+                        onChange={(e) => setAccountData({ ...accountData, username: e.target.value })}
+                      />
                     ) : (
-                      <>
-                        <option value="1">1st Year</option>
-                        <option value="2">2nd Year</option>
-                        <option value="3">3rd Year</option>
-                        <option value="4">4th Year</option>
-                      </>
+                      <div className="rounded-xl border bg-white px-4 py-2 text-gray-900">{accountStudent.username}</div>
                     )}
-                  </select>
-                </div>
-                <Button className="w-full gradient-primary">
-                  <Save className="w-4 h-4 mr-2" />
-                  Save Changes
-                </Button>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email Address</Label>
+                    <Input id="email" type="email" value={accountStudent.email} disabled />
+                    <p className="text-xs text-gray-500">Email cannot be changed</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="branch">Branch</Label>
+                    {isEditingAccount ? (
+                      <select
+                        id="branch"
+                        value={accountData.branch}
+                        onChange={(e) => setAccountData({ ...accountData, branch: e.target.value })}
+                        className="w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      >
+                        {branchOptions.map((branch) => (
+                          <option key={branch} value={branch}>
+                            {branch}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="rounded-xl border bg-white px-4 py-2 text-gray-900">{accountStudent.branch}</div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="year">{isAlumni ? 'Passing Year' : 'Current Year'}</Label>
+                    {isEditingAccount ? (
+                      <select
+                        id="year"
+                        value={accountData.year}
+                        onChange={(e) => setAccountData({ ...accountData, year: e.target.value })}
+                        className="w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      >
+                        {isAlumni ? (
+                          passingYearOptions.map((year) => (
+                            <option key={year} value={year}>
+                              {year}
+                            </option>
+                          ))
+                        ) : (
+                          <>
+                            <option value="1">1st Year</option>
+                            <option value="2">2nd Year</option>
+                            <option value="3">3rd Year</option>
+                            <option value="4">4th Year</option>
+                          </>
+                        )}
+                      </select>
+                    ) : (
+                      <div className="rounded-xl border bg-white px-4 py-2 text-gray-900">
+                        {isAlumni
+                          ? `Passing Year ${yearValue}`
+                          : `${yearValue}${yearValue === 1 ? 'st' : yearValue === 2 ? 'nd' : yearValue === 3 ? 'rd' : 'th'} Year`}
+                      </div>
+                    )}
+                  </div>
+
+                  {isEditingAccount && (
+                    <Button type="submit" className="w-full gradient-primary" disabled={isSavingAccount}>
+                      <Save className="w-4 h-4 mr-2" />
+                      {isSavingAccount ? 'Saving...' : 'Save Changes'}
+                    </Button>
+                  )}
+                </form>
               </CardContent>
             </Card>
           </TabsContent>

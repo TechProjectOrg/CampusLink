@@ -23,6 +23,12 @@ const requireOwnUser: RequestHandler = (req, res, next: NextFunction) => {
 
 router.use('/:userId', authenticateToken, requireOwnUser);
 
+interface UpdateUserBody {
+  username: string;
+  branch: string;
+  year: string | number;
+}
+
 router.get('/:userId', async (req: Request<GetUserParams>, res: Response) => {
   const { userId } = req.params;
 
@@ -42,6 +48,83 @@ router.get('/:userId', async (req: Request<GetUserParams>, res: Response) => {
     return res.status(500).json({ message: 'Internal server error' });
   }
 });
+
+router.patch(
+  '/:userId',
+  async (req: Request<GetUserParams, unknown, Partial<UpdateUserBody>>, res: Response) => {
+    const { userId } = req.params;
+    const { username, branch, year } = req.body;
+
+    const trimmedUsername = username?.trim();
+    const trimmedBranch = branch?.trim();
+    const numericYear = typeof year === 'string' ? Number.parseInt(year, 10) : year;
+
+    if (!trimmedUsername || !trimmedBranch || year === undefined || year === null) {
+      return res.status(400).json({ message: 'Username, branch, and year are required' });
+    }
+
+    if (Number.isNaN(numericYear)) {
+      return res.status(400).json({ message: 'Year must be a valid number' });
+    }
+
+    try {
+      const profileRows = await prisma.$queryRaw<{ user_type: 'student' | 'alumni' }[]>`
+        SELECT user_type
+        FROM users
+        WHERE user_id = ${userId}
+      `;
+
+      const profileRow = profileRows[0];
+      if (!profileRow) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      if (
+        profileRow.user_type === 'student' &&
+        (!Number.isInteger(numericYear) || numericYear < 1 || numericYear > 4)
+      ) {
+        return res.status(400).json({ message: 'Student year must be between 1 and 4' });
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`
+          UPDATE users
+          SET username = ${trimmedUsername}
+          WHERE user_id = ${userId}
+        `;
+
+        if (profileRow.user_type === 'student') {
+          await tx.$queryRaw`
+            UPDATE student_profiles
+            SET branch = ${trimmedBranch}, year = ${numericYear}
+            WHERE user_id = ${userId}
+          `;
+          return;
+        }
+
+        await tx.$queryRaw`
+          UPDATE alumni_profiles
+          SET branch = ${trimmedBranch}, passing_year = ${numericYear}
+          WHERE user_id = ${userId}
+        `;
+      });
+
+      const updatedProfile = await getUserProfileById(userId);
+      if (!updatedProfile) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      return res.status(200).json(updatedProfile);
+    } catch (err: any) {
+      if (err?.code === '23505') {
+        return res.status(409).json({ message: 'Username already exists' });
+      }
+
+      console.error('Error updating user profile:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
 
 interface DeleteUserBody {
   password: string;
