@@ -124,6 +124,17 @@
     @apply border-border outline-ring/50;
   }
 
+  input[type='password']::-ms-reveal,
+  input[type='password']::-ms-clear,
+  input[type='password']::-webkit-credentials-auto-fill-button,
+  input[type='password']::-webkit-contacts-auto-fill-button,
+  input[type='password']::-webkit-strong-password-auto-fill-button,
+  input[type='password']::-webkit-textfield-decoration-container {
+    display: none !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
   body {
     @apply bg-background text-foreground;
   }
