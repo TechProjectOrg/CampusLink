@@ -3,6 +3,7 @@ import { NotificationsCard } from './NotificationsCard';
 
 interface NotificationsPageProps {
   notifications: Notification[];
+  pendingIncomingRequestIds: string[];
   onMarkAsRead: (id: string) => void;
   onMarkAllAsRead: () => void;
   onNotificationClick?: (notification: Notification) => void;
@@ -12,6 +13,7 @@ interface NotificationsPageProps {
 
 export function NotificationsPage({
   notifications,
+  pendingIncomingRequestIds,
   onMarkAsRead,
   onMarkAllAsRead,
   onNotificationClick,
@@ -23,6 +25,7 @@ export function NotificationsPage({
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         <NotificationsCard
           notifications={notifications}
+          pendingIncomingRequestIds={pendingIncomingRequestIds}
           onMarkAsRead={onMarkAsRead}
           onMarkAllAsRead={onMarkAllAsRead}
           onNotificationClick={onNotificationClick}

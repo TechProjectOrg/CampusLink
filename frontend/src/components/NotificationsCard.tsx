@@ -10,6 +10,7 @@ import { Separator } from './ui/separator';
 
 interface NotificationsCardProps {
   notifications: Notification[];
+  pendingIncomingRequestIds: string[];
   onMarkAsRead: (id: string) => void;
   onMarkAllAsRead: () => void;
   onNotificationClick?: (notification: Notification) => void;
@@ -19,6 +20,7 @@ interface NotificationsCardProps {
 
 export function NotificationsCard({ 
   notifications, 
+  pendingIncomingRequestIds,
   onMarkAsRead, 
   onMarkAllAsRead,
   onNotificationClick,
@@ -26,6 +28,16 @@ export function NotificationsCard({
   onRejectFollowRequest
 }: NotificationsCardProps) {
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
+  const [handledFollowRequestIds, setHandledFollowRequestIds] = useState<Set<string>>(new Set());
+  const pendingRequestIdSet = new Set(pendingIncomingRequestIds);
+
+  const markFollowRequestHandled = (notificationId: string) => {
+    setHandledFollowRequestIds((prev) => {
+      const next = new Set(prev);
+      next.add(notificationId);
+      return next;
+    });
+  };
 
   const getNotificationIcon = (type: Notification['type']) => {
     switch (type) {
@@ -192,13 +204,18 @@ export function NotificationsCard({
                       </p>
                       
                       {/* Action buttons for follow requests */}
-                      {notification.type === 'follow_request' && notification.actorId && (
+                      {notification.type === 'follow_request' &&
+                        notification.actorId &&
+                        notification.entityId &&
+                        pendingRequestIdSet.has(notification.entityId) &&
+                        !handledFollowRequestIds.has(notification.id) && (
                         <div className="flex gap-2 mt-3">
                           <Button 
                             size="sm" 
                             className="bg-primary text-white h-8"
                             onClick={(e: React.MouseEvent) => {
                               e.stopPropagation();
+                              markFollowRequestHandled(notification.id);
                               if (onAcceptFollowRequest) onAcceptFollowRequest(notification.actorId!);
                               // Mark as read when acted upon
                               if (!notification.read) onMarkAsRead(notification.id);
@@ -212,6 +229,7 @@ export function NotificationsCard({
                             className="h-8"
                             onClick={(e: React.MouseEvent) => {
                               e.stopPropagation();
+                              markFollowRequestHandled(notification.id);
                               if (onRejectFollowRequest) onRejectFollowRequest(notification.actorId!);
                               if (!notification.read) onMarkAsRead(notification.id);
                             }}

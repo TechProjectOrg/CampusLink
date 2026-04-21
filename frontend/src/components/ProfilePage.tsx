@@ -323,9 +323,9 @@ export function ProfilePage({
     closeModal();
   };
 
-  const currentProfilePhoto = auth.profile?.profilePictureUrl ?? null;
-  const hasCustomProfilePhoto = Boolean(auth.profile?.profilePictureUrl);
-  const displayedProfilePhoto = currentProfilePhoto ?? student.avatar;
+  const currentProfilePhoto = isOwnProfile ? auth.profile?.profilePictureUrl ?? null : null;
+  const hasCustomProfilePhoto = isOwnProfile && Boolean(auth.profile?.profilePictureUrl);
+  const displayedProfilePhoto = isOwnProfile ? currentProfilePhoto ?? student.avatar : student.avatar;
 
   const handleProfilePhotoChange = async (payload: { file?: File; previewUrl?: string; remove?: boolean }) => {
     if (!isOwnProfile || !authUserId) return;

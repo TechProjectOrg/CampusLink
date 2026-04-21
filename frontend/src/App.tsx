@@ -202,6 +202,9 @@ export default function App() {
     if (tab === 'profile' && profileId) {
         path += `/${profileId}`;
         state.profileId = profileId;
+        setViewingProfileId(profileId);
+    } else if (tab !== 'profile') {
+        setViewingProfileId(null);
     }
     window.history.pushState(state, '', path);
     setActiveTab(tab); // Set active tab to trigger re-render
@@ -280,11 +283,17 @@ export default function App() {
   useEffect(() => {
     if (activeTab === 'notifications') {
       refreshNotifications();
+      refreshFollowGraph();
     }
     if (activeTab === 'network') {
       refreshFollowGraph();
     }
   }, [activeTab, refreshNotifications, refreshFollowGraph]);
+
+  const pendingIncomingRequestIds = useMemo(
+    () => Object.values(requestIdMap).map((r) => r.requestId),
+    [requestIdMap]
+  );
 
   // Ensure the authenticated user is present in the in-memory students list.
   useEffect(() => {
@@ -553,7 +562,9 @@ export default function App() {
   };
 
   const handleViewProfile = (studentId: string) => {
-    setViewingProfileId(studentId);
+    if (!studentId || typeof studentId !== 'string') {
+      return;
+    }
     navigate('profile', studentId);
   };
 
@@ -827,6 +838,7 @@ export default function App() {
         ) : activeTab === 'notifications' ? (
           <NotificationsPage
             notifications={notifications}
+            pendingIncomingRequestIds={pendingIncomingRequestIds}
             onMarkAsRead={handleMarkAsRead}
             onMarkAllAsRead={handleMarkAllAsRead}
             onNotificationClick={handleNotificationClick}
