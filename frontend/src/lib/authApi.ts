@@ -1,4 +1,4 @@
-import type { ApiUserProfile } from '../types';
+import type { ApiUserProfile, ApiUserSession } from '../types';
 
 const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined)?.trim() || 'http://localhost:4000';
 
@@ -104,6 +104,35 @@ export async function apiFetchUserProfile(userId: string, token?: string): Promi
   }
 
   return (await response.json()) as ApiUserProfile;
+}
+
+export async function apiFetchUserSessions(token?: string): Promise<ApiUserSession[]> {
+  const response = await safeFetch(`${API_BASE}/auth/sessions`, {
+    headers: {
+      ...authHeaders(token),
+    },
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to fetch active sessions');
+  }
+
+  return (await response.json()) as ApiUserSession[];
+}
+
+export async function apiRevokeUserSession(sessionId: string, token?: string): Promise<void> {
+  const response = await safeFetch(`${API_BASE}/auth/sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'DELETE',
+    headers: {
+      ...authHeaders(token),
+    },
+  });
+
+  if (!response.ok && response.status !== 204) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to revoke session');
+  }
 }
 
 export interface PasswordChangeVerifyResult {

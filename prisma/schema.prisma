@@ -89,6 +89,7 @@ model User {
   studentProfile         StudentProfile?
   alumniProfile          AlumniProfile?
   settings               UserSetting?
+  sessions               UserSession[]
   skills                 UserSkill[]
   certifications         UserCertification[]
   projects               UserProject[]
@@ -115,6 +116,25 @@ model User {
   @@index([username], map: "idx_users_username")
   @@index([userType], map: "idx_users_user_type")
   @@map("users")
+}
+
+model UserSession {
+  sessionId    String    @id @default(dbgenerated("gen_random_uuid()")) @map("session_id") @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  userAgent    String?   @map("user_agent") @db.Text
+  browserName  String?   @map("browser_name") @db.VarChar(100)
+  platform     String?   @db.VarChar(100)
+  deviceName   String?   @map("device_name") @db.VarChar(100)
+  locationLabel String?  @map("location_label") @db.VarChar(255)
+  ipAddress    String?   @map("ip_address") @db.VarChar(45)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  lastSeenAt   DateTime? @map("last_seen_at") @db.Timestamp(6)
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamp(6)
+  user         User      @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId], map: "idx_user_sessions_user_id")
+  @@index([revokedAt], map: "idx_user_sessions_revoked_at")
+  @@map("user_sessions")
 }
 
 model StudentProfile {

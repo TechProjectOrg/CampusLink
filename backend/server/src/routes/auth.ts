@@ -1,7 +1,9 @@
+import crypto from 'crypto';
 import express, { Request, Response } from 'express';
 import prisma from '../prisma';
 import validatePassword from '../middleware/validatePassword';
 import { getUserProfileById } from '../services/userProfile';
+import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
 import { hashPassword, signAuthToken, verifyPassword } from '../lib/auth';
 
 const router = express.Router();
@@ -48,8 +50,155 @@ function buildResponseWithToken(profile: NonNullable<Awaited<ReturnType<typeof g
     email: profile.email,
     username: profile.username,
     type: profile.type,
+    sessionId: crypto.randomUUID(),
   });
   return { ...profile, token };
+}
+
+interface UserSessionRow {
+  session_id: string;
+  user_id: string;
+  user_agent: string | null;
+  browser_name: string | null;
+  platform: string | null;
+  device_name: string | null;
+  location_label: string | null;
+  ip_address: string | null;
+  created_at: Date;
+  last_seen_at: Date | null;
+  revoked_at: Date | null;
+}
+
+function getClientIp(req: Request): string | null {
+  const forwarded = req.headers['x-forwarded-for'];
+
+  if (typeof forwarded === 'string' && forwarded.trim().length > 0) {
+    return forwarded.split(',')[0]?.trim() || null;
+  }
+
+  if (Array.isArray(forwarded) && forwarded.length > 0) {
+    return forwarded[0].split(',')[0]?.trim() || null;
+  }
+
+  return req.ip || null;
+}
+
+function getSingleHeaderValue(req: Request, headerName: string): string | null {
+  const value = req.header(headerName);
+  if (!value) return null;
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function inferLocationLabel(req: Request, ipAddress: string | null): string {
+  const city =
+    getSingleHeaderValue(req, 'x-vercel-ip-city') ||
+    getSingleHeaderValue(req, 'x-appengine-city');
+  const region =
+    getSingleHeaderValue(req, 'x-vercel-ip-country-region') ||
+    getSingleHeaderValue(req, 'x-appengine-region');
+  const country =
+    getSingleHeaderValue(req, 'x-vercel-ip-country') ||
+    getSingleHeaderValue(req, 'cf-ipcountry') ||
+    getSingleHeaderValue(req, 'x-appengine-country');
+
+  const parts = [city, region, country].filter((part): part is string => !!part);
+  if (parts.length > 0) {
+    return parts.join(', ');
+  }
+
+  return ipAddress ? `IP ${ipAddress}` : 'Unknown location';
+}
+
+function detectBrowser(userAgent: string | null): string {
+  if (!userAgent) return 'Unknown browser';
+  if (/edg\//i.test(userAgent)) return 'Microsoft Edge';
+  if (/opr\//i.test(userAgent) || /opera/i.test(userAgent)) return 'Opera';
+  if (/chrome\//i.test(userAgent) && !/edg\//i.test(userAgent) && !/opr\//i.test(userAgent)) return 'Chrome';
+  if (/firefox\//i.test(userAgent)) return 'Firefox';
+  if (/safari\//i.test(userAgent) && !/chrome\//i.test(userAgent)) return 'Safari';
+  return 'Unknown browser';
+}
+
+function detectPlatform(userAgent: string | null): string {
+  if (!userAgent) return 'Unknown platform';
+  if (/windows/i.test(userAgent)) return 'Windows';
+  if (/macintosh|mac os x/i.test(userAgent)) return 'macOS';
+  if (/android/i.test(userAgent)) return 'Android';
+  if (/iphone|ipad|ios/i.test(userAgent)) return 'iOS';
+  if (/linux/i.test(userAgent)) return 'Linux';
+  return 'Unknown platform';
+}
+
+function describeDevice(platform: string): string {
+  if (platform === 'Android' || platform === 'iOS') return 'Mobile device';
+  if (platform === 'Windows' || platform === 'macOS' || platform === 'Linux') return 'Desktop';
+  return 'Unknown device';
+}
+
+async function createAuthSession(userId: string, req: Request): Promise<UserSessionRow> {
+  const sessionId = crypto.randomUUID();
+  const userAgent = req.get('user-agent') ?? null;
+  const browserName = detectBrowser(userAgent);
+  const platform = detectPlatform(userAgent);
+  const deviceName = describeDevice(platform);
+  const ipAddress = getClientIp(req);
+  const locationLabel = inferLocationLabel(req, ipAddress);
+
+  const rows = await prisma.$queryRaw<UserSessionRow[]>`
+    INSERT INTO user_sessions (
+      session_id,
+      user_id,
+      user_agent,
+      browser_name,
+      platform,
+      device_name,
+      location_label,
+      ip_address,
+      last_seen_at
+    )
+    VALUES (
+      ${sessionId},
+      ${userId},
+      ${userAgent},
+      ${browserName},
+      ${platform},
+      ${deviceName},
+      ${locationLabel},
+      ${ipAddress},
+      NOW()
+    )
+    RETURNING
+      session_id,
+      user_id,
+      user_agent,
+      browser_name,
+      platform,
+      device_name,
+      location_label,
+      ip_address,
+      created_at,
+      last_seen_at,
+      revoked_at
+  `;
+
+  return rows[0];
+}
+
+function sessionToResponse(row: UserSessionRow, currentSessionId?: string) {
+  return {
+    sessionId: row.session_id,
+    deviceName: row.device_name ?? 'Unknown device',
+    browserName: row.browser_name ?? 'Unknown browser',
+    platform: row.platform ?? 'Unknown platform',
+    locationLabel: row.location_label ?? (row.ip_address ? `IP ${row.ip_address}` : 'Unknown location'),
+    ipAddress: row.ip_address,
+    userAgent: row.user_agent,
+    createdAt: row.created_at.toISOString(),
+    lastSeenAt: row.last_seen_at ? row.last_seen_at.toISOString() : null,
+    isCurrent: currentSessionId ? row.session_id === currentSessionId : false,
+  };
 }
 
 interface StudentSignupBody {
@@ -115,6 +264,7 @@ router.post('/signup/student', validatePassword, async (req: Request, res: Respo
       VALUES (${user.user_id})
     `;
 
+    const session = await createAuthSession(user.user_id, req);
     const profile = await getUserProfileById(user.user_id);
     const responsePayload = profile ?? {
       userId: user.user_id,
@@ -140,7 +290,16 @@ router.post('/signup/student', validatePassword, async (req: Request, res: Respo
       },
     };
 
-    return res.status(201).json(buildResponseWithToken(responsePayload));
+    return res.status(201).json({
+      ...responsePayload,
+      token: signAuthToken({
+        userId: responsePayload.userId,
+        email: responsePayload.email,
+        username: responsePayload.username,
+        type: responsePayload.type,
+        sessionId: session.session_id,
+      }),
+    });
   } catch (err) {
     console.error('Error during student signup:', err);
     return res.status(500).json({ message: 'Internal server error' });
@@ -186,6 +345,7 @@ router.post('/signup/alumni', validatePassword, async (req: Request, res: Respon
       VALUES (${user.user_id})
     `;
 
+    const session = await createAuthSession(user.user_id, req);
     const profile = await getUserProfileById(user.user_id);
     const responsePayload = profile ?? {
       userId: user.user_id,
@@ -211,7 +371,16 @@ router.post('/signup/alumni', validatePassword, async (req: Request, res: Respon
       },
     };
 
-    return res.status(201).json(buildResponseWithToken(responsePayload));
+    return res.status(201).json({
+      ...responsePayload,
+      token: signAuthToken({
+        userId: responsePayload.userId,
+        email: responsePayload.email,
+        username: responsePayload.username,
+        type: responsePayload.type,
+        sessionId: session.session_id,
+      }),
+    });
   } catch (err) {
     console.error('Error during alumni signup:', err);
     return res.status(500).json({ message: 'Internal server error' });
@@ -262,6 +431,7 @@ router.post('/login', async (req: Request, res: Response) => {
       `;
     }
 
+    const session = await createAuthSession(user.user_id, req);
     const profile = await getUserProfileById(user.user_id);
     if (!profile) {
       // Should never happen since we just fetched the user, but keep a safe fallback.
@@ -290,14 +460,94 @@ router.post('/login', async (req: Request, res: Response) => {
             email: user.email,
             username: user.username,
             type: user.user_type,
+            sessionId: session.session_id,
           }
         ),
       });
     }
 
-    return res.status(200).json(buildResponseWithToken(profile));
+    return res.status(200).json({
+      ...profile,
+      token: signAuthToken({
+        userId: profile.userId,
+        email: profile.email,
+        username: profile.username,
+        type: profile.type,
+        sessionId: session.session_id,
+      }),
+    });
   } catch (err) {
     console.error('Error during login:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.get('/sessions', authenticateToken, async (req: Request, res: Response) => {
+  const authedRequest = req as AuthedRequest;
+  const userId = authedRequest.auth?.userId;
+  const currentSessionId = authedRequest.auth?.sessionId;
+
+  if (!userId || !currentSessionId) {
+    return res.status(401).json({ message: 'Missing authorization context' });
+  }
+
+  try {
+    const rows = await prisma.$queryRaw<UserSessionRow[]>`
+      SELECT
+        session_id,
+        user_id,
+        user_agent,
+        browser_name,
+        platform,
+        device_name,
+        location_label,
+        ip_address,
+        created_at,
+        last_seen_at,
+        revoked_at
+      FROM user_sessions
+      WHERE user_id = ${userId}
+        AND revoked_at IS NULL
+      ORDER BY COALESCE(last_seen_at, created_at) DESC
+    `;
+
+    return res.status(200).json(rows.map((row) => sessionToResponse(row, currentSessionId)));
+  } catch (err) {
+    console.error('Error fetching sessions:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.delete('/sessions/:sessionId', authenticateToken, async (req: Request, res: Response) => {
+  const authedRequest = req as AuthedRequest;
+  const userId = authedRequest.auth?.userId;
+  const { sessionId } = req.params as { sessionId: string };
+
+  if (!userId) {
+    return res.status(401).json({ message: 'Missing authorization context' });
+  }
+
+  try {
+    const result = await prisma.$queryRaw<{ count: number }[]>`
+      WITH revoked AS (
+        UPDATE user_sessions
+        SET revoked_at = NOW()
+        WHERE session_id = ${sessionId}
+          AND user_id = ${userId}
+          AND revoked_at IS NULL
+        RETURNING 1
+      )
+      SELECT COUNT(*)::int AS count FROM revoked
+    `;
+
+    const count = result[0]?.count ?? 0;
+    if (count === 0) {
+      return res.status(404).json({ message: 'Session not found' });
+    }
+
+    return res.status(204).send();
+  } catch (err) {
+    console.error('Error revoking session:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });

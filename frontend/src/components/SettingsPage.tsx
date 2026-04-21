@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Bell, Check, ChevronRight, Clock, Edit2, Globe, KeyRound, Lock, MapPin, MonitorSmartphone, Save, Shield, Trash2, User, X } from 'lucide-react';
+import { ArrowLeft, Bell, Check, ChevronDown, ChevronRight, ChevronUp, Clock, Edit2, Globe, KeyRound, Lock, MapPin, MonitorSmartphone, Save, Shield, Trash2, User, X } from 'lucide-react';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -8,9 +8,9 @@ import { Switch } from './ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Separator } from './ui/separator';
 import { toast } from 'sonner@2.0.3';
-import { Student } from '../types';
+import type { ApiUserSession, Student } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { apiChangePassword, apiUpdateUserProfile, apiVerifyPasswordChange } from '../lib/authApi';
+import { apiChangePassword, apiFetchUserSessions, apiRevokeUserSession, apiUpdateUserProfile, apiVerifyPasswordChange } from '../lib/authApi';
 
 const PASSWORD_REQUIREMENTS = [
   'At least 8 characters long',
@@ -22,6 +22,19 @@ const PASSWORD_REQUIREMENTS = [
 
 function meetsPasswordRequirements(password: string): boolean {
   return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/.test(password);
+}
+
+function formatSessionIp(ipAddress: string | null): string {
+  if (!ipAddress) return 'Not available';
+  if (ipAddress === '::1' || ipAddress === '127.0.0.1') {
+    return '::1 (localhost)';
+  }
+
+  return ipAddress;
+}
+
+function formatSessionLastActive(lastSeenAt: string | null, createdAt: string): string {
+  return new Date(lastSeenAt ?? createdAt).toLocaleString();
 }
 
 interface SettingsPageProps {
@@ -66,32 +79,11 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
     confirmPassword: ''
   });
 
-  const demoSessions = [
-    {
-      id: 'session-1',
-      device: 'Chrome on Windows',
-      location: 'Greater Noida, India',
-      browser: 'Chrome 125',
-      lastActive: 'Active now',
-      isCurrent: true,
-    },
-    {
-      id: 'session-2',
-      device: 'Safari on iPhone',
-      location: 'Delhi, India',
-      browser: 'Safari Mobile',
-      lastActive: '2 hours ago',
-      isCurrent: false,
-    },
-    {
-      id: 'session-3',
-      device: 'Edge on Laptop',
-      location: 'Lucknow, India',
-      browser: 'Microsoft Edge',
-      lastActive: 'Yesterday',
-      isCurrent: false,
-    },
-  ];
+  const [sessions, setSessions] = useState<ApiUserSession[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
+  const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
 
   const [notificationSettings, setNotificationSettings] = useState({
     emailNotifications: true,
@@ -118,6 +110,40 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
       year: String(yearValue ?? accountStudent.year),
     });
   }, [accountStudent, isEditingAccount, yearValue]);
+
+  useEffect(() => {
+    if (securityView !== 'sessions') return;
+    if (!auth.session?.token) return;
+
+    let cancelled = false;
+
+    const loadSessions = async () => {
+      setSessionsLoading(true);
+      setSessionsError(null);
+
+      try {
+        const list = await apiFetchUserSessions(auth.session?.token);
+        if (!cancelled) {
+          setSessions(list);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setSessions([]);
+          setSessionsError(err instanceof Error ? err.message : 'Unable to load active sessions');
+        }
+      } finally {
+        if (!cancelled) {
+          setSessionsLoading(false);
+        }
+      }
+    };
+
+    void loadSessions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [securityView, auth.session?.token]);
 
   const handlePasswordChange = (e: React.FormEvent) => {
     e.preventDefault();
@@ -177,6 +203,30 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
 
   const handleBackToSecurityMenu = () => {
     setSecurityView('menu');
+  };
+
+  const handleRevokeSession = async (session: ApiUserSession) => {
+    if (!auth.session?.token) return;
+
+    setRevokingSessionId(session.sessionId);
+
+    try {
+      await apiRevokeUserSession(session.sessionId, auth.session.token);
+
+      if (session.isCurrent) {
+        auth.logout();
+        toast.success('This device has been logged out');
+        return;
+      }
+
+      const nextSessions = await apiFetchUserSessions(auth.session.token);
+      setSessions(nextSessions);
+      toast.success('Session logged out');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Unable to log out session');
+    } finally {
+      setRevokingSessionId(null);
+    }
   };
 
   const renderPasswordForm = () => (
@@ -264,7 +314,7 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
       <CardHeader className="flex flex-row items-start justify-between gap-4">
         <div>
           <h2 className="text-gray-900">Where You Are Logged In</h2>
-          <p className="text-gray-600">Demo view of devices, browsers, and recent locations.</p>
+          <p className="text-gray-600">Active sessions from your account.</p>
         </div>
         <Button type="button" variant="outline" size="sm" onClick={handleBackToSecurityMenu}>
           <ArrowLeft className="w-4 h-4 mr-2" />
@@ -272,44 +322,93 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
-        {demoSessions.map((session) => (
-          <div key={session.id} className="rounded-2xl border bg-white p-4 shadow-sm">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <MonitorSmartphone className="h-5 w-5 text-primary" />
-                  <h3 className="text-gray-900">{session.device}</h3>
+        {sessionsLoading ? (
+          <div className="rounded-xl border border-dashed bg-gray-50 p-4 text-sm text-gray-600">Loading active sessions...</div>
+        ) : sessionsError ? (
+          <div className="rounded-xl border border-dashed bg-red-50 p-4 text-sm text-red-700">{sessionsError}</div>
+        ) : sessions.length === 0 ? (
+          <div className="rounded-xl border border-dashed bg-gray-50 p-4 text-sm text-gray-600">No active sessions found.</div>
+        ) : (
+          sessions.map((session) => (
+          <div key={session.sessionId} className="rounded-2xl border bg-white p-4 shadow-sm">
+            <button
+              type="button"
+              className="w-full text-left"
+              onClick={() =>
+                setExpandedSessionId((prev) =>
+                  prev === session.sessionId ? null : session.sessionId
+                )
+              }
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <MonitorSmartphone className="h-5 w-5 text-primary" />
+                    <h3 className="text-gray-900">{session.deviceName}</h3>
+                  </div>
+                  {expandedSessionId !== session.sessionId && (
+                    <div className="flex flex-wrap gap-3 text-sm text-gray-600">
+                      <span className="inline-flex items-center gap-1">
+                        <Globe className="h-4 w-4" />
+                        {session.browserName} on {session.platform}
+                      </span>
+                      <span className="inline-flex items-center gap-1 max-w-[280px] truncate">
+                        <MapPin className="h-4 w-4 shrink-0" />
+                        {session.locationLabel}
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <Clock className="h-4 w-4" />
+                        {formatSessionLastActive(session.lastSeenAt, session.createdAt)}
+                      </span>
+                    </div>
+                  )}
                 </div>
-                <div className="flex flex-wrap gap-3 text-sm text-gray-600">
-                  <span className="inline-flex items-center gap-1">
-                    <Globe className="h-4 w-4" />
-                    {session.browser}
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <MapPin className="h-4 w-4" />
-                    {session.location}
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <Clock className="h-4 w-4" />
-                    {session.lastActive}
-                  </span>
+                <div className="flex items-center gap-2">
+                  {session.isCurrent ? (
+                    <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">
+                      Current session
+                    </span>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void handleRevokeSession(session);
+                      }}
+                      disabled={revokingSessionId === session.sessionId}
+                    >
+                      {revokingSessionId === session.sessionId ? 'Logging out...' : 'Log out'}
+                    </Button>
+                  )}
+                  {expandedSessionId === session.sessionId ? (
+                    <ChevronUp className="h-4 w-4 text-gray-500" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-gray-500" />
+                  )}
                 </div>
               </div>
-              {session.isCurrent ? (
-                <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">
-                  Current session
-                </span>
-              ) : (
-                <Button type="button" variant="outline" size="sm">
-                  Log out
-                </Button>
-              )}
-            </div>
+            </button>
+            {expandedSessionId === session.sessionId && (
+              <div className="mt-4 rounded-xl border border-dashed bg-gray-50 p-3 text-sm text-gray-700 space-y-2">
+                <p>
+                  <span className="font-medium text-gray-900">Location:</span>{' '}
+                  {session.locationLabel}
+                </p>
+                <p className="break-all">
+                  <span className="font-medium text-gray-900">IP:</span>{' '}
+                  {formatSessionIp(session.ipAddress)}
+                </p>
+                <p>
+                  <span className="font-medium text-gray-900">Last active:</span>{' '}
+                  {formatSessionLastActive(session.lastSeenAt, session.createdAt)}
+                </p>
+              </div>
+            )}
           </div>
-        ))}
-        <div className="rounded-xl border border-dashed bg-gray-50 p-4 text-sm text-gray-600">
-          This is a demo list for now. When backend session tracking is added, this view can show real active devices.
-        </div>
+          ))
+        )}
       </CardContent>
     </Card>
   );

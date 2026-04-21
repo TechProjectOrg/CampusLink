@@ -164,3 +164,16 @@ export interface ApiUserProfile {
     postCount: number;
   };
 }
+
+export interface ApiUserSession {
+  sessionId: string;
+  deviceName: string;
+  browserName: string;
+  platform: string;
+  locationLabel: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: string;
+  lastSeenAt: string | null;
+  isCurrent: boolean;
+}

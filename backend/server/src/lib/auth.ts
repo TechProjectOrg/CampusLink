@@ -9,6 +9,7 @@ export interface AuthTokenPayload {
   email: string;
   username: string;
   type: AuthUserType;
+  sessionId: string;
 }
 
 export interface PasswordChangeTokenPayload {
@@ -59,7 +60,8 @@ export function verifyAuthToken(token: string): AuthTokenPayload {
     typeof decoded.userId !== 'string' ||
     typeof decoded.email !== 'string' ||
     typeof decoded.username !== 'string' ||
-    typeof decoded.type !== 'string'
+    typeof decoded.type !== 'string' ||
+    typeof decoded.sessionId !== 'string'
   ) {
     throw new Error('Invalid token payload');
   }
@@ -74,6 +76,7 @@ export function verifyAuthToken(token: string): AuthTokenPayload {
     email: decoded.email,
     username: decoded.username,
     type: decoded.type as AuthUserType,
+    sessionId: decoded.sessionId,
   };
 }
 
