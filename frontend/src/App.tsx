@@ -24,6 +24,7 @@ import { Student, Opportunity, Club, Notification } from './types';
 import { ProfileCard } from './components/ProfileCard';
 import { SuggestionsCard } from './components/SuggestionsCard';
 import { useAuth } from './context/AuthContext';
+import { apiFetchUserProfile } from './lib/authApi';
 import {
   apiGetFollowGraph,
   apiFollow,
@@ -42,6 +43,7 @@ import {
   apiMarkAllNotificationsRead,
   type ApiNotification,
 } from './lib/notificationsApi';
+import type { ApiUserProfile } from './types';
 
 // ============================================================
 // FollowGraph adapter: backend shape → frontend FollowGraph shape
@@ -72,9 +74,6 @@ function buildFollowGraph(
   for (const r of data.incomingRequests) {
     requestIdMap[r.userId] = r;
   }
-  for (const r of data.outgoingRequests) {
-    requestIdMap[r.userId] = r;
-  }
 
   return { graph, requestIdMap };
 }
@@ -87,13 +86,15 @@ function apiNotificationToLocal(n: ApiNotification): Notification {
 
   return {
     id: n.id,
-    type: (n.type === 'follow_request' || n.type === 'follow_accept' ? 'follow' : n.type) as Notification['type'],
+    type: n.type as Notification['type'],
     title: n.title,
     message: n.message,
     avatar,
     timestamp: n.createdAt,
     read: n.read,
     actionUrl: undefined,
+    entityId: n.entityId,
+    actorId: n.actor?.userId,
   };
 }
 
@@ -371,8 +372,11 @@ export default function App() {
     return students.find((s) => s.id === userId)?.accountType ?? 'public';
   };
 
-  const handleFollow = async (targetUserId: string) => {
-    const targetAccountType = getAccountType(targetUserId);
+  const handleFollow = async (
+    targetUserId: string,
+    passedAccountType?: 'public' | 'private'
+  ) => {
+    const targetAccountType = passedAccountType || getAccountType(targetUserId);
 
     // Optimistic update
     setFollowGraph((prev) => {
@@ -472,11 +476,7 @@ export default function App() {
   };
 
   const handleAcceptFollowRequest = async (requesterUserId: string) => {
-    const requestEntry = requestIdMap[requesterUserId];
-    if (!requestEntry) {
-      toast.error('Follow request not found');
-      return;
-    }
+    const requestIdentifier = requestIdMap[requesterUserId]?.requestId ?? requesterUserId;
 
     // Optimistic update
     setFollowGraph((prev) => ({
@@ -500,7 +500,7 @@ export default function App() {
     }));
 
     try {
-      await apiAcceptFollowRequest(requestEntry.requestId, authToken);
+      await apiAcceptFollowRequest(requestIdentifier, authToken);
     } catch (err: any) {
       toast.error(err?.message || 'Accept request failed');
       refreshFollowGraph();
@@ -508,11 +508,7 @@ export default function App() {
   };
 
   const handleRejectFollowRequest = async (requesterUserId: string) => {
-    const requestEntry = requestIdMap[requesterUserId];
-    if (!requestEntry) {
-      toast.error('Follow request not found');
-      return;
-    }
+    const requestIdentifier = requestIdMap[requesterUserId]?.requestId ?? requesterUserId;
 
     // Optimistic update
     setFollowGraph((prev) => ({
@@ -528,7 +524,7 @@ export default function App() {
     }));
 
     try {
-      await apiRejectFollowRequest(requestEntry.requestId, authToken);
+      await apiRejectFollowRequest(requestIdentifier, authToken);
     } catch (err: any) {
       toast.error(err?.message || 'Reject request failed');
       refreshFollowGraph();
@@ -560,6 +556,35 @@ export default function App() {
     setViewingProfileId(studentId);
     navigate('profile', studentId);
   };
+
+  useEffect(() => {
+    if (!authToken) return;
+    if (activeTab !== 'profile') return;
+    if (!viewingProfileId || viewingProfileId === currentUserId) return;
+
+    const alreadyLoaded = students.some((s) => s.id === viewingProfileId);
+    if (alreadyLoaded) return;
+
+    let cancelled = false;
+
+    const loadViewedProfile = async () => {
+      try {
+        const profile = await apiFetchUserProfile(viewingProfileId, authToken);
+        if (cancelled) return;
+
+        const nextStudent = apiProfileToStudent(profile);
+        setStudents((prev) => (prev.some((s) => s.id === nextStudent.id) ? prev : [...prev, nextStudent]));
+      } catch (err) {
+        console.error('Failed to fetch viewed profile:', err);
+      }
+    };
+
+    loadViewedProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, viewingProfileId, currentUserId, students, authToken]);
 
   // Club handlers
   const handleJoinClub = (clubId: string) => {
@@ -627,6 +652,8 @@ export default function App() {
     // Handle different notification types
     switch (notification.type) {
       case 'follow':
+      case 'follow_request':
+      case 'follow_accept':
         navigate('network');
         break;
       case 'message':
@@ -672,15 +699,13 @@ export default function App() {
   if (!auth.isAuthenticated) {
     return <AuthPage />;
   }
-  const displayedStudent = viewingProfileId 
-    ? students.find(s => s.id === viewingProfileId) || currentUser
+  const displayedStudent = viewingProfileId
+    ? students.find((s) => s.id === viewingProfileId)
     : currentUser;
 
-  // Reset viewing profile when switching tabs
+  // Reset viewing profile when switching tabs from Navbar
   const handleTabChange = (tab: string) => {
-    if (tab !== 'profile') {
-      setViewingProfileId(null);
-    }
+    setViewingProfileId(null);
     if (tab !== 'search') {
       setSearchQuery('');
     }
@@ -718,7 +743,6 @@ export default function App() {
                 onLike={handleLike}
                 onSave={handleSave}
                 onComment={handleComment}
-                onDelete={handleDeleteOpportunity}
                 onCreateOpportunity={handleCreateOpportunity}
                 onCreatePost={handleCreatePost}
                 onCreateEvent={handleCreateEvent}
@@ -782,26 +806,32 @@ export default function App() {
             onViewProfile={handleViewProfile}
           />
         ) : activeTab === 'profile' ? (
-          <ProfilePage
-            student={displayedStudent}
-            currentUserId={currentUserId}
-            isOwnProfile={displayedStudent.id === currentUserId}
-            followGraph={followGraph}
-            onFollow={handleFollow}
-            onUnfollow={handleUnfollow}
-            onCancelRequest={handleCancelRequest}
-            onEdit={handleEditProfile}
-            opportunities={opportunities}
-            onLike={handleLike}
-            onSave={handleSave}
-            onComment={handleComment}
-          />
+          displayedStudent ? (
+            <ProfilePage
+              student={displayedStudent}
+              currentUserId={currentUserId}
+              isOwnProfile={displayedStudent.id === currentUserId}
+              followGraph={followGraph}
+              onFollow={handleFollow}
+              onUnfollow={handleUnfollow}
+              onCancelRequest={handleCancelRequest}
+              onEdit={handleEditProfile}
+              opportunities={opportunities}
+              onLike={handleLike}
+              onSave={handleSave}
+              onComment={handleComment}
+            />
+          ) : (
+            <LoadingState type="profile" />
+          )
         ) : activeTab === 'notifications' ? (
           <NotificationsPage
             notifications={notifications}
             onMarkAsRead={handleMarkAsRead}
             onMarkAllAsRead={handleMarkAllAsRead}
             onNotificationClick={handleNotificationClick}
+            onAcceptFollowRequest={handleAcceptFollowRequest}
+            onRejectFollowRequest={handleRejectFollowRequest}
           />
         ) : activeTab === 'settings' ? (
           <SettingsPage
@@ -823,4 +853,27 @@ export default function App() {
       <Toaster />
     </div>
   );
+}
+
+function apiProfileToStudent(profile: ApiUserProfile): Student {
+  const seed = encodeURIComponent(profile.username || profile.email || profile.userId);
+
+  return {
+    id: profile.userId,
+    name: profile.username,
+    username: profile.username,
+    email: profile.email,
+    branch: profile.details?.branch ?? 'Unknown',
+    year: profile.details?.year ?? profile.details?.passingYear ?? 0,
+    avatar: profile.profilePictureUrl ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`,
+    bio: profile.bio ?? '',
+    skills: [],
+    interests: [],
+    certifications: [],
+    experience: [],
+    societies: [],
+    achievements: [],
+    projects: [],
+    accountType: profile.isPublic ? 'public' : 'private',
+  };
 }

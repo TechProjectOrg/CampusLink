@@ -61,7 +61,7 @@ interface ProfilePageProps {
   currentUserId: string;
   isOwnProfile: boolean;
   followGraph: FollowGraph;
-  onFollow: (targetUserId: string) => void;
+  onFollow: (targetUserId: string, accountType?: 'public' | 'private') => void;
   onUnfollow: (targetUserId: string) => void;
   onCancelRequest: (targetUserId: string) => void;
   onEdit?: (updates: Partial<Student>) => void;
@@ -682,7 +682,7 @@ export function ProfilePage({
                         isFollowing={isFollowing}
                         isFollower={isFollower}
                         requestStatus={requestStatus}
-                        onFollow={() => onFollow(student.id)}
+                        onFollow={() => onFollow(student.id, student.accountType)}
                         onUnfollow={() => onUnfollow(student.id)}
                         onCancelRequest={() => onCancelRequest(student.id)}
                       />

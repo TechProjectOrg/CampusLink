@@ -33,23 +33,6 @@ function mapMinimalUser(r: MinimalUserRow) {
   };
 }
 
-const minimalUserSelect = `
-  u.user_id,
-  u.username,
-  u.profile_photo_url,
-  u.is_private,
-  u.user_type,
-  sp.branch AS student_branch,
-  sp.year   AS student_year,
-  ap.branch AS alumni_branch,
-  ap.passing_year AS alumni_passing_year
-`;
-
-const minimalUserJoins = `
-  LEFT JOIN student_profiles sp ON sp.user_id = u.user_id
-  LEFT JOIN alumni_profiles  ap ON ap.user_id = u.user_id
-`;
-
 // ============================================================
 // GET /network/graph — full follow state of current user
 // ============================================================
@@ -61,20 +44,40 @@ router.get('/graph', async (req: Request, res: Response) => {
   try {
     // Followers (people who follow me)
     const followerRows = await prisma.$queryRaw<MinimalUserRow[]>`
-      SELECT ${prisma.$queryRawUnsafe(minimalUserSelect)}
+      SELECT
+        u.user_id,
+        u.username,
+        u.profile_photo_url,
+        u.is_private,
+        u.user_type,
+        sp.branch AS student_branch,
+        sp.year   AS student_year,
+        ap.branch AS alumni_branch,
+        ap.passing_year AS alumni_passing_year
       FROM follows f
       JOIN users u ON u.user_id = f.follower_user_id
-      ${prisma.$queryRawUnsafe(minimalUserJoins)}
+      LEFT JOIN student_profiles sp ON sp.user_id = u.user_id
+      LEFT JOIN alumni_profiles  ap ON ap.user_id = u.user_id
       WHERE f.followed_user_id = ${userId}
       ORDER BY f.created_at DESC
     `;
 
     // Following (people I follow)
     const followingRows = await prisma.$queryRaw<MinimalUserRow[]>`
-      SELECT ${prisma.$queryRawUnsafe(minimalUserSelect)}
+      SELECT
+        u.user_id,
+        u.username,
+        u.profile_photo_url,
+        u.is_private,
+        u.user_type,
+        sp.branch AS student_branch,
+        sp.year   AS student_year,
+        ap.branch AS alumni_branch,
+        ap.passing_year AS alumni_passing_year
       FROM follows f
       JOIN users u ON u.user_id = f.followed_user_id
-      ${prisma.$queryRawUnsafe(minimalUserJoins)}
+      LEFT JOIN student_profiles sp ON sp.user_id = u.user_id
+      LEFT JOIN alumni_profiles  ap ON ap.user_id = u.user_id
       WHERE f.follower_user_id = ${userId}
       ORDER BY f.created_at DESC
     `;
@@ -82,10 +85,19 @@ router.get('/graph', async (req: Request, res: Response) => {
     // Incoming follow requests (pending)
     const incomingRows = await prisma.$queryRaw<(MinimalUserRow & { follow_request_id: string })[]>`
       SELECT fr.follow_request_id,
-             ${prisma.$queryRawUnsafe(minimalUserSelect)}
+             u.user_id,
+             u.username,
+             u.profile_photo_url,
+             u.is_private,
+             u.user_type,
+             sp.branch AS student_branch,
+             sp.year   AS student_year,
+             ap.branch AS alumni_branch,
+             ap.passing_year AS alumni_passing_year
       FROM follow_requests fr
       JOIN users u ON u.user_id = fr.requester_user_id
-      ${prisma.$queryRawUnsafe(minimalUserJoins)}
+      LEFT JOIN student_profiles sp ON sp.user_id = u.user_id
+      LEFT JOIN alumni_profiles  ap ON ap.user_id = u.user_id
       WHERE fr.target_user_id = ${userId}
         AND fr.status = 'pending'
       ORDER BY fr.created_at DESC
@@ -94,10 +106,19 @@ router.get('/graph', async (req: Request, res: Response) => {
     // Outgoing follow requests (pending)
     const outgoingRows = await prisma.$queryRaw<(MinimalUserRow & { follow_request_id: string })[]>`
       SELECT fr.follow_request_id,
-             ${prisma.$queryRawUnsafe(minimalUserSelect)}
+             u.user_id,
+             u.username,
+             u.profile_photo_url,
+             u.is_private,
+             u.user_type,
+             sp.branch AS student_branch,
+             sp.year   AS student_year,
+             ap.branch AS alumni_branch,
+             ap.passing_year AS alumni_passing_year
       FROM follow_requests fr
       JOIN users u ON u.user_id = fr.target_user_id
-      ${prisma.$queryRawUnsafe(minimalUserJoins)}
+      LEFT JOIN student_profiles sp ON sp.user_id = u.user_id
+      LEFT JOIN alumni_profiles  ap ON ap.user_id = u.user_id
       WHERE fr.requester_user_id = ${userId}
         AND fr.status = 'pending'
       ORDER BY fr.created_at DESC
@@ -288,10 +309,19 @@ router.get('/requests/incoming', async (req: Request, res: Response) => {
   try {
     const rows = await prisma.$queryRaw<(MinimalUserRow & { follow_request_id: string; created_at: Date })[]>`
       SELECT fr.follow_request_id, fr.created_at,
-             ${prisma.$queryRawUnsafe(minimalUserSelect)}
+             u.user_id,
+             u.username,
+             u.profile_photo_url,
+             u.is_private,
+             u.user_type,
+             sp.branch AS student_branch,
+             sp.year   AS student_year,
+             ap.branch AS alumni_branch,
+             ap.passing_year AS alumni_passing_year
       FROM follow_requests fr
       JOIN users u ON u.user_id = fr.requester_user_id
-      ${prisma.$queryRawUnsafe(minimalUserJoins)}
+      LEFT JOIN student_profiles sp ON sp.user_id = u.user_id
+      LEFT JOIN alumni_profiles  ap ON ap.user_id = u.user_id
       WHERE fr.target_user_id = ${userId}
         AND fr.status = 'pending'
       ORDER BY fr.created_at DESC
@@ -321,10 +351,19 @@ router.get('/requests/outgoing', async (req: Request, res: Response) => {
   try {
     const rows = await prisma.$queryRaw<(MinimalUserRow & { follow_request_id: string; created_at: Date })[]>`
       SELECT fr.follow_request_id, fr.created_at,
-             ${prisma.$queryRawUnsafe(minimalUserSelect)}
+             u.user_id,
+             u.username,
+             u.profile_photo_url,
+             u.is_private,
+             u.user_type,
+             sp.branch AS student_branch,
+             sp.year   AS student_year,
+             ap.branch AS alumni_branch,
+             ap.passing_year AS alumni_passing_year
       FROM follow_requests fr
       JOIN users u ON u.user_id = fr.target_user_id
-      ${prisma.$queryRawUnsafe(minimalUserJoins)}
+      LEFT JOIN student_profiles sp ON sp.user_id = u.user_id
+      LEFT JOIN alumni_profiles  ap ON ap.user_id = u.user_id
       WHERE fr.requester_user_id = ${userId}
         AND fr.status = 'pending'
       ORDER BY fr.created_at DESC
@@ -350,16 +389,19 @@ router.get('/requests/outgoing', async (req: Request, res: Response) => {
 router.post('/requests/:requestId/accept', async (req: Request, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const currentUserId = authed.auth!.userId;
-  const requestId = req.params.requestId as string;
+  const requestIdentifier = req.params.requestId as string;
 
   try {
-    // Verify the request exists, is pending, and targets the current user
+    // Allow accepting by either follow_request_id or requester_user_id.
+    // This makes the API resilient when clients only have requester user IDs.
     const requestRows = await prisma.$queryRaw<{ follow_request_id: string; requester_user_id: string; target_user_id: string }[]>`
       SELECT follow_request_id, requester_user_id, target_user_id
       FROM follow_requests
-      WHERE follow_request_id = ${requestId}
+      WHERE (follow_request_id = ${requestIdentifier} OR requester_user_id = ${requestIdentifier})
         AND target_user_id = ${currentUserId}
         AND status = 'pending'
+      ORDER BY created_at DESC
+      LIMIT 1
     `;
 
     const request = requestRows[0];
@@ -380,7 +422,7 @@ router.post('/requests/:requestId/accept', async (req: Request, res: Response) =
       await tx.$queryRaw`
         UPDATE follow_requests
         SET status = 'accepted', responded_at = NOW()
-        WHERE follow_request_id = ${requestId}
+        WHERE follow_request_id = ${request.follow_request_id}
       `;
 
       // Create the follow relationship (requester now follows the target)
@@ -398,7 +440,7 @@ router.post('/requests/:requestId/accept', async (req: Request, res: Response) =
       title: currentUsername,
       message: 'accepted your follow request',
       entityType: 'follow_request',
-      entityId: requestId,
+      entityId: request.follow_request_id,
     });
 
     return res.status(200).json({ message: 'Follow request accepted' });
@@ -415,16 +457,24 @@ router.post('/requests/:requestId/accept', async (req: Request, res: Response) =
 router.post('/requests/:requestId/reject', async (req: Request, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const currentUserId = authed.auth!.userId;
-  const requestId = req.params.requestId as string;
+  const requestIdentifier = req.params.requestId as string;
 
   try {
     const result = await prisma.$queryRaw<{ count: number }[]>`
-      WITH updated AS (
-        UPDATE follow_requests
-        SET status = 'rejected', responded_at = NOW()
-        WHERE follow_request_id = ${requestId}
+      WITH candidate AS (
+        SELECT follow_request_id
+        FROM follow_requests
+        WHERE (follow_request_id = ${requestIdentifier} OR requester_user_id = ${requestIdentifier})
           AND target_user_id = ${currentUserId}
           AND status = 'pending'
+        ORDER BY created_at DESC
+        LIMIT 1
+      ),
+      updated AS (
+        UPDATE follow_requests fr
+        SET status = 'rejected', responded_at = NOW()
+        FROM candidate c
+        WHERE fr.follow_request_id = c.follow_request_id
         RETURNING 1
       )
       SELECT COUNT(*)::int AS count FROM updated

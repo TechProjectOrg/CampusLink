@@ -13,13 +13,17 @@ interface NotificationsCardProps {
   onMarkAsRead: (id: string) => void;
   onMarkAllAsRead: () => void;
   onNotificationClick?: (notification: Notification) => void;
+  onAcceptFollowRequest?: (requesterUserId: string) => void;
+  onRejectFollowRequest?: (requesterUserId: string) => void;
 }
 
 export function NotificationsCard({ 
   notifications, 
   onMarkAsRead, 
   onMarkAllAsRead,
-  onNotificationClick 
+  onNotificationClick,
+  onAcceptFollowRequest,
+  onRejectFollowRequest
 }: NotificationsCardProps) {
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
@@ -183,15 +187,45 @@ export function NotificationsCard({
                       <p className="text-sm text-gray-600 line-clamp-2 mb-1">
                         {notification.message}
                       </p>
-                      <p className="text-xs text-gray-500">
+                      <p className="text-xs text-gray-500 mt-1">
                         {formatTimestamp(notification.timestamp)}
                       </p>
+                      
+                      {/* Action buttons for follow requests */}
+                      {notification.type === 'follow_request' && notification.actorId && (
+                        <div className="flex gap-2 mt-3">
+                          <Button 
+                            size="sm" 
+                            className="bg-primary text-white h-8"
+                            onClick={(e: React.MouseEvent) => {
+                              e.stopPropagation();
+                              if (onAcceptFollowRequest) onAcceptFollowRequest(notification.actorId!);
+                              // Mark as read when acted upon
+                              if (!notification.read) onMarkAsRead(notification.id);
+                            }}
+                          >
+                            Accept
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="h-8"
+                            onClick={(e: React.MouseEvent) => {
+                              e.stopPropagation();
+                              if (onRejectFollowRequest) onRejectFollowRequest(notification.actorId!);
+                              if (!notification.read) onMarkAsRead(notification.id);
+                            }}
+                          >
+                            Ignore
+                          </Button>
+                        </div>
+                      )}
                     </div>
 
                     {/* Mark as Read Button (shown on hover) */}
                     {!notification.read && (
                       <button
-                        onClick={(e) => {
+                        onClick={(e: React.MouseEvent) => {
                           e.stopPropagation();
                           onMarkAsRead(notification.id);
                         }}

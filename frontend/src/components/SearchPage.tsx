@@ -15,7 +15,7 @@ interface SearchPageProps {
   students: Student[];
   currentUserId: string;
   followGraph: FollowGraph;
-  onFollow: (targetUserId: string) => void;
+  onFollow: (targetUserId: string, accountType?: 'public' | 'private') => void;
   onUnfollow: (targetUserId: string) => void;
   onCancelRequest: (targetUserId: string) => void;
   onViewProfile: (studentId: string) => void;
@@ -240,7 +240,7 @@ export function SearchPage({
                         isFollowing={(followGraph.followingByUserId[currentUserId] ?? []).includes(student.id)}
                         isFollower={(followGraph.followersByUserId[currentUserId] ?? []).includes(student.id)}
                         requestStatus={(followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id) ? 'requested' : 'none'}
-                        onFollow={() => onFollow(student.id)}
+                        onFollow={() => onFollow(student.id, student.accountType)}
                         onUnfollow={() => onUnfollow(student.id)}
                         onCancelRequest={() => onCancelRequest(student.id)}
                       />
