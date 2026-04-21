@@ -332,7 +332,8 @@ export function ProfilePage({
 
     if (payload.remove) {
       await apiUpdateUserProfilePicture(authUserId, null, authToken);
-      onEdit?.({ avatar: student.avatar });
+      const seed = encodeURIComponent(student.username || student.email || student.id);
+      onEdit?.({ avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}` });
       await auth.refreshProfile();
       return;
     }

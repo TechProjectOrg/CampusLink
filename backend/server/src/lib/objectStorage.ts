@@ -137,12 +137,14 @@ export async function deleteManagedPhotoByUrl(photoUrl: string | null): Promise<
 
   const storageEnv = getStorageEnv();
 
-  const base = `${storageEnv.publicBaseUrl}/`;
-  if (!photoUrl.startsWith(base)) {
-    return;
+  let key: string | null = null;
+  const prefix = `${storageEnv.profilePhotosPrefix}/`;
+  const prefixIdx = photoUrl.indexOf(prefix);
+  
+  if (prefixIdx !== -1) {
+    key = photoUrl.slice(prefixIdx);
   }
 
-  const key = photoUrl.slice(base.length);
   if (!key) return;
 
   await getS3Client().send(
