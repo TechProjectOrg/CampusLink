@@ -38,6 +38,60 @@ interface ChangePasswordBody {
   newPassword: string;
 }
 
+interface UserSettingsRow {
+  is_private: boolean;
+  email_notifications: boolean | null;
+  follow_request_notifications: boolean | null;
+  message_notifications: boolean | null;
+  opportunity_alerts: boolean | null;
+  club_update_notifications: boolean | null;
+  weekly_digest_enabled: boolean | null;
+  show_email: boolean | null;
+  show_projects: boolean | null;
+  allow_messages: boolean | null;
+}
+
+interface UserSettingsResponse {
+  notifications: {
+    emailNotifications: boolean;
+    followRequests: boolean;
+    newMessages: boolean;
+    opportunityAlerts: boolean;
+    clubUpdates: boolean;
+    weeklyDigest: boolean;
+  };
+  privacy: {
+    accountType: 'public' | 'private';
+    showEmail: boolean;
+    showProjects: boolean;
+    allowMessages: boolean;
+  };
+}
+
+interface UpdateUserSettingsBody {
+  notifications?: Partial<UserSettingsResponse['notifications']>;
+  privacy?: Partial<UserSettingsResponse['privacy']>;
+}
+
+function settingsFromRow(row: UserSettingsRow): UserSettingsResponse {
+  return {
+    notifications: {
+      emailNotifications: row.email_notifications ?? true,
+      followRequests: row.follow_request_notifications ?? true,
+      newMessages: row.message_notifications ?? true,
+      opportunityAlerts: row.opportunity_alerts ?? true,
+      clubUpdates: row.club_update_notifications ?? true,
+      weeklyDigest: row.weekly_digest_enabled ?? false,
+    },
+    privacy: {
+      accountType: row.is_private ? 'private' : 'public',
+      showEmail: row.show_email ?? true,
+      showProjects: row.show_projects ?? true,
+      allowMessages: row.allow_messages ?? true,
+    },
+  };
+}
+
 const passwordRequirements = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/;
 
 function passwordRequirementMessage(): string {
@@ -63,6 +117,157 @@ router.get('/:userId', async (req: Request<GetUserParams>, res: Response) => {
     return res.status(500).json({ message: 'Internal server error' });
   }
 });
+
+router.get('/:userId/settings', async (req: Request<GetUserParams>, res: Response) => {
+  const { userId } = req.params;
+
+  try {
+    const rows = await prisma.$queryRaw<UserSettingsRow[]>`
+      SELECT
+        u.is_private,
+        us.email_notifications,
+        us.follow_request_notifications,
+        us.message_notifications,
+        us.opportunity_alerts,
+        us.club_update_notifications,
+        us.weekly_digest_enabled,
+        us.show_email,
+        us.show_projects,
+        us.allow_messages
+      FROM users u
+      LEFT JOIN user_settings us ON us.user_id = u.user_id
+      WHERE u.user_id = ${userId}
+      LIMIT 1
+    `;
+
+    const row = rows[0];
+    if (!row) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    return res.status(200).json(settingsFromRow(row));
+  } catch (err) {
+    console.error('Error fetching user settings:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.patch(
+  '/:userId/settings',
+  async (req: Request<GetUserParams, unknown, UpdateUserSettingsBody>, res: Response) => {
+    const { userId } = req.params;
+    const { notifications, privacy } = req.body;
+
+    if (!notifications && !privacy) {
+      return res.status(400).json({ message: 'No settings payload provided' });
+    }
+
+    if (
+      privacy?.accountType !== undefined &&
+      privacy.accountType !== 'public' &&
+      privacy.accountType !== 'private'
+    ) {
+      return res.status(400).json({ message: 'accountType must be either public or private' });
+    }
+
+    try {
+      const rows = await prisma.$queryRaw<UserSettingsRow[]>`
+        SELECT
+          u.is_private,
+          us.email_notifications,
+          us.follow_request_notifications,
+          us.message_notifications,
+          us.opportunity_alerts,
+          us.club_update_notifications,
+          us.weekly_digest_enabled,
+          us.show_email,
+          us.show_projects,
+          us.allow_messages
+        FROM users u
+        LEFT JOIN user_settings us ON us.user_id = u.user_id
+        WHERE u.user_id = ${userId}
+        LIMIT 1
+      `;
+
+      const row = rows[0];
+      if (!row) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      const current = settingsFromRow(row);
+
+      const next: UserSettingsResponse = {
+        notifications: {
+          emailNotifications:
+            notifications?.emailNotifications ?? current.notifications.emailNotifications,
+          followRequests: notifications?.followRequests ?? current.notifications.followRequests,
+          newMessages: notifications?.newMessages ?? current.notifications.newMessages,
+          opportunityAlerts:
+            notifications?.opportunityAlerts ?? current.notifications.opportunityAlerts,
+          clubUpdates: notifications?.clubUpdates ?? current.notifications.clubUpdates,
+          weeklyDigest: notifications?.weeklyDigest ?? current.notifications.weeklyDigest,
+        },
+        privacy: {
+          accountType: privacy?.accountType ?? current.privacy.accountType,
+          showEmail: privacy?.showEmail ?? current.privacy.showEmail,
+          showProjects: privacy?.showProjects ?? current.privacy.showProjects,
+          allowMessages: privacy?.allowMessages ?? current.privacy.allowMessages,
+        },
+      };
+
+      await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`
+          UPDATE users
+          SET is_private = ${next.privacy.accountType === 'private'}
+          WHERE user_id = ${userId}
+        `;
+
+        await tx.$queryRaw`
+          INSERT INTO user_settings (
+            user_id,
+            email_notifications,
+            follow_request_notifications,
+            message_notifications,
+            opportunity_alerts,
+            club_update_notifications,
+            weekly_digest_enabled,
+            show_email,
+            show_projects,
+            allow_messages
+          )
+          VALUES (
+            ${userId},
+            ${next.notifications.emailNotifications},
+            ${next.notifications.followRequests},
+            ${next.notifications.newMessages},
+            ${next.notifications.opportunityAlerts},
+            ${next.notifications.clubUpdates},
+            ${next.notifications.weeklyDigest},
+            ${next.privacy.showEmail},
+            ${next.privacy.showProjects},
+            ${next.privacy.allowMessages}
+          )
+          ON CONFLICT (user_id)
+          DO UPDATE SET
+            email_notifications = EXCLUDED.email_notifications,
+            follow_request_notifications = EXCLUDED.follow_request_notifications,
+            message_notifications = EXCLUDED.message_notifications,
+            opportunity_alerts = EXCLUDED.opportunity_alerts,
+            club_update_notifications = EXCLUDED.club_update_notifications,
+            weekly_digest_enabled = EXCLUDED.weekly_digest_enabled,
+            show_email = EXCLUDED.show_email,
+            show_projects = EXCLUDED.show_projects,
+            allow_messages = EXCLUDED.allow_messages
+        `;
+      });
+
+      return res.status(200).json(next);
+    } catch (err) {
+      console.error('Error updating user settings:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
 
 router.patch(
   '/:userId',

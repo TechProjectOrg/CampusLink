@@ -1,4 +1,4 @@
-import type { ApiUserProfile, ApiUserSession } from '../types';
+import type { ApiUserProfile, ApiUserSession, ApiUserSettings } from '../types';
 
 const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined)?.trim() || 'http://localhost:4000';
 
@@ -104,6 +104,43 @@ export async function apiFetchUserProfile(userId: string, token?: string): Promi
   }
 
   return (await response.json()) as ApiUserProfile;
+}
+
+export async function apiFetchUserSettings(userId: string, token?: string): Promise<ApiUserSettings> {
+  const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}/settings`, {
+    headers: {
+      ...authHeaders(token),
+    },
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to fetch user settings');
+  }
+
+  return (await response.json()) as ApiUserSettings;
+}
+
+export async function apiUpdateUserSettings(
+  userId: string,
+  payload: Partial<ApiUserSettings>,
+  token?: string
+): Promise<ApiUserSettings> {
+  const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}/settings`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(token),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to update user settings');
+  }
+
+  return (await response.json()) as ApiUserSettings;
 }
 
 export async function apiFetchUserSessions(token?: string): Promise<ApiUserSession[]> {

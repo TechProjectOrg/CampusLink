@@ -55,6 +55,46 @@ function buildResponseWithToken(profile: NonNullable<Awaited<ReturnType<typeof g
   return { ...profile, token };
 }
 
+async function createDefaultUserSettings(userId: string): Promise<void> {
+  await prisma.$queryRaw`
+    INSERT INTO user_settings (
+      user_id,
+      email_notifications,
+      follow_request_notifications,
+      message_notifications,
+      opportunity_alerts,
+      club_update_notifications,
+      weekly_digest_enabled,
+      show_email,
+      show_projects,
+      allow_messages
+    )
+    VALUES (
+      ${userId},
+      TRUE,
+      TRUE,
+      TRUE,
+      TRUE,
+      TRUE,
+      FALSE,
+      TRUE,
+      TRUE,
+      TRUE
+    )
+    ON CONFLICT (user_id)
+    DO UPDATE SET
+      email_notifications = EXCLUDED.email_notifications,
+      follow_request_notifications = EXCLUDED.follow_request_notifications,
+      message_notifications = EXCLUDED.message_notifications,
+      opportunity_alerts = EXCLUDED.opportunity_alerts,
+      club_update_notifications = EXCLUDED.club_update_notifications,
+      weekly_digest_enabled = EXCLUDED.weekly_digest_enabled,
+      show_email = EXCLUDED.show_email,
+      show_projects = EXCLUDED.show_projects,
+      allow_messages = EXCLUDED.allow_messages
+  `;
+}
+
 interface UserSessionRow {
   session_id: string;
   user_id: string;
@@ -259,10 +299,7 @@ router.post('/signup/student', validatePassword, async (req: Request, res: Respo
       VALUES (${user.user_id}, ${branch}, ${numericYear})
     `;
 
-    await prisma.$queryRaw`
-      INSERT INTO user_settings (user_id)
-      VALUES (${user.user_id})
-    `;
+    await createDefaultUserSettings(user.user_id);
 
     const session = await createAuthSession(user.user_id, req);
     const profile = await getUserProfileById(user.user_id);
@@ -340,10 +377,7 @@ router.post('/signup/alumni', validatePassword, async (req: Request, res: Respon
       VALUES (${user.user_id}, ${branch}, ${numericGradYear}, ${currentStatus})
     `;
 
-    await prisma.$queryRaw`
-      INSERT INTO user_settings (user_id)
-      VALUES (${user.user_id})
-    `;
+    await createDefaultUserSettings(user.user_id);
 
     const session = await createAuthSession(user.user_id, req);
     const profile = await getUserProfileById(user.user_id);

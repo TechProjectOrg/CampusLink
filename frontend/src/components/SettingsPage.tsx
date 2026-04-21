@@ -10,7 +10,7 @@ import { Separator } from './ui/separator';
 import { toast } from 'sonner@2.0.3';
 import type { ApiUserSession, Student } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { apiChangePassword, apiFetchUserSessions, apiRevokeUserSession, apiUpdateUserProfile, apiVerifyPasswordChange } from '../lib/authApi';
+import { apiChangePassword, apiFetchUserSessions, apiFetchUserSettings, apiRevokeUserSession, apiUpdateUserProfile, apiUpdateUserSettings, apiVerifyPasswordChange } from '../lib/authApi';
 
 const PASSWORD_REQUIREMENTS = [
   'At least 8 characters long',
@@ -84,6 +84,9 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
   const [sessionsError, setSessionsError] = useState<string | null>(null);
   const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [savingNotifications, setSavingNotifications] = useState(false);
+  const [savingPrivacy, setSavingPrivacy] = useState(false);
 
   const [notificationSettings, setNotificationSettings] = useState({
     emailNotifications: true,
@@ -100,6 +103,37 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
     showProjects: true,
     allowMessages: true,
   });
+
+  useEffect(() => {
+    if (!auth.session?.userId) return;
+
+    let cancelled = false;
+
+    const loadSettings = async () => {
+      setSettingsLoading(true);
+      try {
+        const settings = await apiFetchUserSettings(auth.session.userId, auth.session?.token);
+        if (cancelled) return;
+
+        setNotificationSettings(settings.notifications);
+        setPrivacySettings(settings.privacy);
+      } catch (err) {
+        if (!cancelled) {
+          toast.error(err instanceof Error ? err.message : 'Unable to load settings');
+        }
+      } finally {
+        if (!cancelled) {
+          setSettingsLoading(false);
+        }
+      }
+    };
+
+    void loadSettings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.session?.userId, auth.session?.token]);
 
   useEffect(() => {
     if (isEditingAccount) return;
@@ -433,14 +467,52 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
     : [];
   const isPasswordActionInProgress = passwordChangeStatus !== 'idle';
 
-  const handleSaveNotifications = () => {
-    onUpdateSettings({ notifications: notificationSettings });
-    toast.success('Notification preferences saved');
+  const persistNotificationSettings = async (nextNotifications: typeof notificationSettings) => {
+    if (!auth.session?.userId) {
+      toast.error('You must be signed in to save settings');
+      return;
+    }
+
+    setSavingNotifications(true);
+    try {
+      const updated = await apiUpdateUserSettings(
+        auth.session.userId,
+        { notifications: nextNotifications },
+        auth.session.token
+      );
+      setNotificationSettings(updated.notifications);
+      setPrivacySettings(updated.privacy);
+      onUpdateSettings({ notifications: updated.notifications });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Unable to save notification settings');
+    } finally {
+      setSavingNotifications(false);
+    }
   };
 
-  const handleSavePrivacy = () => {
-    onUpdateSettings({ privacy: privacySettings });
-    toast.success('Privacy settings saved');
+  const persistPrivacySettings = async (nextPrivacy: typeof privacySettings) => {
+    if (!auth.session?.userId) {
+      toast.error('You must be signed in to save settings');
+      return;
+    }
+
+    setSavingPrivacy(true);
+    try {
+      const updated = await apiUpdateUserSettings(
+        auth.session.userId,
+        { privacy: nextPrivacy },
+        auth.session.token
+      );
+      setNotificationSettings(updated.notifications);
+      setPrivacySettings(updated.privacy);
+      onEdit({ accountType: updated.privacy.accountType });
+      await auth.refreshProfile();
+      onUpdateSettings({ privacy: updated.privacy });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Unable to save privacy settings');
+    } finally {
+      setSavingPrivacy(false);
+    }
   };
 
   const handleCancelAccountEdit = () => {
@@ -719,9 +791,12 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                   </div>
                   <Switch
                     checked={notificationSettings.emailNotifications}
-                    onCheckedChange={(checked) =>
-                      setNotificationSettings({ ...notificationSettings, emailNotifications: checked })
-                    }
+                    disabled={settingsLoading || savingNotifications}
+                    onCheckedChange={(checked) => {
+                      const next = { ...notificationSettings, emailNotifications: checked };
+                      setNotificationSettings(next);
+                      void persistNotificationSettings(next);
+                    }}
                   />
                 </div>
 
@@ -734,9 +809,12 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                   </div>
                   <Switch
                     checked={notificationSettings.followRequests}
-                    onCheckedChange={(checked) =>
-                      setNotificationSettings({ ...notificationSettings, followRequests: checked })
-                    }
+                    disabled={settingsLoading || savingNotifications}
+                    onCheckedChange={(checked) => {
+                      const next = { ...notificationSettings, followRequests: checked };
+                      setNotificationSettings(next);
+                      void persistNotificationSettings(next);
+                    }}
                   />
                 </div>
 
@@ -747,9 +825,12 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                   </div>
                   <Switch
                     checked={notificationSettings.newMessages}
-                    onCheckedChange={(checked) =>
-                      setNotificationSettings({ ...notificationSettings, newMessages: checked })
-                    }
+                    disabled={settingsLoading || savingNotifications}
+                    onCheckedChange={(checked) => {
+                      const next = { ...notificationSettings, newMessages: checked };
+                      setNotificationSettings(next);
+                      void persistNotificationSettings(next);
+                    }}
                   />
                 </div>
 
@@ -760,9 +841,12 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                   </div>
                   <Switch
                     checked={notificationSettings.opportunityAlerts}
-                    onCheckedChange={(checked) =>
-                      setNotificationSettings({ ...notificationSettings, opportunityAlerts: checked })
-                    }
+                    disabled={settingsLoading || savingNotifications}
+                    onCheckedChange={(checked) => {
+                      const next = { ...notificationSettings, opportunityAlerts: checked };
+                      setNotificationSettings(next);
+                      void persistNotificationSettings(next);
+                    }}
                   />
                 </div>
 
@@ -773,9 +857,12 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                   </div>
                   <Switch
                     checked={notificationSettings.clubUpdates}
-                    onCheckedChange={(checked) =>
-                      setNotificationSettings({ ...notificationSettings, clubUpdates: checked })
-                    }
+                    disabled={settingsLoading || savingNotifications}
+                    onCheckedChange={(checked) => {
+                      const next = { ...notificationSettings, clubUpdates: checked };
+                      setNotificationSettings(next);
+                      void persistNotificationSettings(next);
+                    }}
                   />
                 </div>
 
@@ -786,16 +873,14 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                   </div>
                   <Switch
                     checked={notificationSettings.weeklyDigest}
-                    onCheckedChange={(checked) =>
-                      setNotificationSettings({ ...notificationSettings, weeklyDigest: checked })
-                    }
+                    disabled={settingsLoading || savingNotifications}
+                    onCheckedChange={(checked) => {
+                      const next = { ...notificationSettings, weeklyDigest: checked };
+                      setNotificationSettings(next);
+                      void persistNotificationSettings(next);
+                    }}
                   />
                 </div>
-
-                <Button onClick={handleSaveNotifications} className="w-full gradient-primary">
-                  <Save className="w-4 h-4 mr-2" />
-                  Save Preferences
-                </Button>
               </CardContent>
             </Card>
           </TabsContent>
@@ -813,9 +898,12 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                   <select
                     id="account-type"
                     value={privacySettings.accountType}
-                    onChange={(e) =>
-                      setPrivacySettings({ ...privacySettings, accountType: e.target.value as any })
-                    }
+                    disabled={settingsLoading || savingPrivacy}
+                    onChange={(e) => {
+                      const next = { ...privacySettings, accountType: e.target.value as any };
+                      setPrivacySettings(next);
+                      void persistPrivacySettings(next);
+                    }}
                     className="w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50"
                   >
                     <option value="public">Public - Anyone can follow instantly</option>
@@ -832,9 +920,12 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                   </div>
                   <Switch
                     checked={privacySettings.showEmail}
-                    onCheckedChange={(checked) =>
-                      setPrivacySettings({ ...privacySettings, showEmail: checked })
-                    }
+                    disabled={settingsLoading || savingPrivacy}
+                    onCheckedChange={(checked) => {
+                      const next = { ...privacySettings, showEmail: checked };
+                      setPrivacySettings(next);
+                      void persistPrivacySettings(next);
+                    }}
                   />
                 </div>
 
@@ -845,9 +936,12 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                   </div>
                   <Switch
                     checked={privacySettings.showProjects}
-                    onCheckedChange={(checked) =>
-                      setPrivacySettings({ ...privacySettings, showProjects: checked })
-                    }
+                    disabled={settingsLoading || savingPrivacy}
+                    onCheckedChange={(checked) => {
+                      const next = { ...privacySettings, showProjects: checked };
+                      setPrivacySettings(next);
+                      void persistPrivacySettings(next);
+                    }}
                   />
                 </div>
 
@@ -858,17 +952,14 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                   </div>
                   <Switch
                     checked={privacySettings.allowMessages}
-                    onCheckedChange={(checked) =>
-                      setPrivacySettings({ ...privacySettings, allowMessages: checked })
-                    }
+                    disabled={settingsLoading || savingPrivacy}
+                    onCheckedChange={(checked) => {
+                      const next = { ...privacySettings, allowMessages: checked };
+                      setPrivacySettings(next);
+                      void persistPrivacySettings(next);
+                    }}
                   />
                 </div>
-
-
-                <Button onClick={handleSavePrivacy} className="w-full gradient-primary">
-                  <Save className="w-4 h-4 mr-2" />
-                  Save Settings
-                </Button>
 
                 <Separator className="my-6" />
 

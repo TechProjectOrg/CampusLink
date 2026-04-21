@@ -177,3 +177,20 @@ export interface ApiUserSession {
   lastSeenAt: string | null;
   isCurrent: boolean;
 }
+
+export interface ApiUserSettings {
+  notifications: {
+    emailNotifications: boolean;
+    followRequests: boolean;
+    newMessages: boolean;
+    opportunityAlerts: boolean;
+    clubUpdates: boolean;
+    weeklyDigest: boolean;
+  };
+  privacy: {
+    accountType: AccountType;
+    showEmail: boolean;
+    showProjects: boolean;
+    allowMessages: boolean;
+  };
+}
