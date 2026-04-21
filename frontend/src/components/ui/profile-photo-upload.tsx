@@ -10,9 +10,15 @@ interface ProfilePhotoUploadProps {
   currentPhoto?: string;
   name: string;
   hasCustomPhoto: boolean;
-  onPhotoChange: (photoUrl: string | null) => Promise<void> | void;
+  onPhotoChange: (payload: { file?: File; previewUrl?: string; remove?: boolean }) => Promise<void> | void;
   size?: 'sm' | 'md' | 'lg';
   editable?: boolean;
+}
+
+async function dataUrlToFile(dataUrl: string, fileName: string): Promise<File> {
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  return new File([blob], fileName, { type: blob.type || 'image/jpeg' });
 }
 
 export function ProfilePhotoUpload({
@@ -76,10 +82,14 @@ export function ProfilePhotoUpload({
     setIsSaving(true);
     try {
       const croppedImage = await getCroppedImage(sourceImage, croppedAreaPixels);
+      const croppedFile = await dataUrlToFile(croppedImage, `profile-${Date.now()}.jpg`);
+      await onPhotoChange({ file: croppedFile, previewUrl: croppedImage });
       setLocalPhoto(croppedImage);
-      await onPhotoChange(croppedImage);
       setCropOpen(false);
       setSourceImage(null);
+    } catch (err) {
+      console.error('Error saving profile picture:', err);
+      alert(err instanceof Error ? err.message : 'Unable to save profile picture');
     } finally {
       setIsSaving(false);
     }
@@ -91,9 +101,12 @@ export function ProfilePhotoUpload({
 
     setIsRemoving(true);
     try {
+      await onPhotoChange({ remove: true });
       setLocalPhoto(null);
-      await onPhotoChange(null);
       setActionOpen(false);
+    } catch (err) {
+      console.error('Error removing profile picture:', err);
+      alert(err instanceof Error ? err.message : 'Unable to remove profile picture');
     } finally {
       setIsRemoving(false);
     }

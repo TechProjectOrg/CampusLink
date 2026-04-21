@@ -269,6 +269,30 @@ export async function apiUpdateUserProfilePicture(
   return (await response.json()) as ApiUserProfile;
 }
 
+export async function apiUploadUserProfilePicture(
+  userId: string,
+  file: File,
+  token?: string
+): Promise<ApiUserProfile> {
+  const formData = new FormData();
+  formData.append('image', file);
+
+  const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}/profile-picture`, {
+    method: 'PATCH',
+    headers: {
+      ...authHeaders(token),
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to upload profile picture');
+  }
+
+  return (await response.json()) as ApiUserProfile;
+}
+
 export async function apiDeleteAccount(userId: string, password: string, token?: string): Promise<void> {
   const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}`, {
     method: 'DELETE',

@@ -1,8 +1,10 @@
 import express, { NextFunction, Request, RequestHandler, Response } from 'express';
+import multer from 'multer';
 import prisma from '../prisma';
 import { getUserProfileById } from '../services/userProfile';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
 import { hashPassword, signPasswordChangeToken, verifyPassword, verifyPasswordChangeToken } from '../lib/auth';
+import { deleteManagedPhotoByUrl, uploadProfilePhotoToStorage } from '../lib/objectStorage';
 
 const router = express.Router();
 
@@ -32,6 +34,13 @@ interface UpdateUserBody {
 interface UpdateProfilePictureBody {
   profilePictureUrl?: string | null;
 }
+
+const profilePhotoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+  },
+});
 
 interface VerifyPasswordBody {
   currentPassword: string;
@@ -305,7 +314,7 @@ router.patch(
 
       if (
         profileRow.user_type === 'student' &&
-        (!Number.isInteger(numericYear) || numericYear < 1 || numericYear > 4)
+        (typeof numericYear !== 'number' || !Number.isInteger(numericYear) || numericYear < 1 || numericYear > 4)
       ) {
         return res.status(400).json({ message: 'Student year must be between 1 and 4' });
       }
@@ -352,32 +361,58 @@ router.patch(
 
 router.patch(
   '/:userId/profile-picture',
+  profilePhotoUpload.single('image') as unknown as RequestHandler<GetUserParams>,
   async (
-    req: Request<GetUserParams, unknown, UpdateProfilePictureBody>,
+    req: Request<GetUserParams, unknown, UpdateProfilePictureBody> & { file?: Express.Multer.File },
     res: Response,
   ) => {
     const { userId } = req.params;
     const { profilePictureUrl } = req.body;
+    const uploadedFile = req.file;
 
-    if (profilePictureUrl === undefined) {
-      return res.status(400).json({ message: 'profilePictureUrl is required' });
+    if (!uploadedFile && profilePictureUrl === undefined) {
+      return res.status(400).json({ message: 'Provide an image file or profilePictureUrl=null' });
     }
 
-    const nextPhoto =
-      typeof profilePictureUrl === 'string'
-        ? profilePictureUrl.trim() || null
-        : profilePictureUrl;
+    if (uploadedFile && !uploadedFile.mimetype.startsWith('image/')) {
+      return res.status(400).json({ message: 'Only image uploads are allowed' });
+    }
 
-    if (nextPhoto !== null && typeof nextPhoto !== 'string') {
-      return res.status(400).json({ message: 'profilePictureUrl must be a string or null' });
+    if (!uploadedFile && profilePictureUrl !== null) {
+      return res.status(400).json({ message: 'profilePictureUrl must be null when no file is uploaded' });
     }
 
     try {
+      const currentProfile = await getUserProfileById(userId);
+      if (!currentProfile) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      let nextPhoto: string | null = currentProfile.profilePictureUrl;
+
+      if (uploadedFile) {
+        nextPhoto = await uploadProfilePhotoToStorage({
+          userId,
+          fileBuffer: uploadedFile.buffer,
+          mimeType: uploadedFile.mimetype,
+        });
+      } else {
+        nextPhoto = null;
+      }
+
       await prisma.$queryRaw`
         UPDATE users
         SET profile_photo_url = ${nextPhoto}
         WHERE user_id = ${userId}
       `;
+
+      if (currentProfile.profilePictureUrl && currentProfile.profilePictureUrl !== nextPhoto) {
+        try {
+          await deleteManagedPhotoByUrl(currentProfile.profilePictureUrl);
+        } catch (storageErr) {
+          console.warn('Unable to delete previous profile photo from object storage:', storageErr);
+        }
+      }
 
       const updatedProfile = await getUserProfileById(userId);
       if (!updatedProfile) {
@@ -386,6 +421,14 @@ router.patch(
 
       return res.status(200).json(updatedProfile);
     } catch (err) {
+      if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ message: 'Profile picture must be 5MB or smaller' });
+      }
+
+      if (err instanceof Error && err.message.startsWith('Missing required environment variable')) {
+        return res.status(500).json({ message: 'Profile image storage is not configured on the server' });
+      }
+
       console.error('Error updating profile picture:', err);
       return res.status(500).json({ message: 'Internal server error' });
     }
@@ -538,9 +581,9 @@ router.get('/:userId/skills', async (req: Request<{ userId: string }>, res: Resp
 
   try {
     const rows = await prisma.$queryRaw<
-      { skill_id: string; name: string; created_at: Date }[]
+      { user_skill_id: string; name: string; created_at: Date }[]
     >`
-      SELECT skill_id, name, created_at
+      SELECT user_skill_id, name, created_at
       FROM user_skills
       WHERE user_id = ${userId}
       ORDER BY created_at DESC
@@ -549,8 +592,8 @@ router.get('/:userId/skills', async (req: Request<{ userId: string }>, res: Resp
     return res
       .status(200)
       .json(
-        rows.map((r: { skill_id: string; name: string; created_at: Date }) => ({
-          id: r.skill_id,
+        rows.map((r: { user_skill_id: string; name: string; created_at: Date }) => ({
+          id: r.user_skill_id,
           name: r.name,
           createdAt: r.created_at.toISOString(),
         }))

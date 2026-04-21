@@ -54,7 +54,7 @@ import { Modal } from './ui/modal';
 import { DatePicker } from './ui/date-picker';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { ProfilePhotoUpload } from './ui/profile-photo-upload';
-import { apiUpdateUserProfilePicture } from '../lib/authApi';
+import { apiUpdateUserProfilePicture, apiUploadUserProfilePicture } from '../lib/authApi';
 
 interface ProfilePageProps {
   student: Student;
@@ -327,11 +327,22 @@ export function ProfilePage({
   const hasCustomProfilePhoto = Boolean(auth.profile?.profilePictureUrl);
   const displayedProfilePhoto = currentProfilePhoto ?? student.avatar;
 
-  const handleProfilePhotoChange = async (photoUrl: string | null) => {
+  const handleProfilePhotoChange = async (payload: { file?: File; previewUrl?: string; remove?: boolean }) => {
     if (!isOwnProfile || !authUserId) return;
 
-    await apiUpdateUserProfilePicture(authUserId, photoUrl, authToken);
-    onEdit?.({ avatar: photoUrl ?? student.avatar });
+    if (payload.remove) {
+      await apiUpdateUserProfilePicture(authUserId, null, authToken);
+      onEdit?.({ avatar: student.avatar });
+      await auth.refreshProfile();
+      return;
+    }
+
+    if (!payload.file) return;
+
+    await apiUploadUserProfilePicture(authUserId, payload.file, authToken);
+    if (payload.previewUrl) {
+      onEdit?.({ avatar: payload.previewUrl });
+    }
     await auth.refreshProfile();
   };
 
