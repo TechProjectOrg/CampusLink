@@ -1,0 +1,89 @@
+const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined)?.trim() || 'http://localhost:4000';
+
+function authHeaders(token?: string): HeadersInit {
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function safeFetch(input: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(input, init);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'Network request failed';
+    throw new Error(`Cannot reach backend at ${API_BASE}. ${reason}`);
+  }
+}
+
+// ============================================================
+// Types
+// ============================================================
+
+export interface ApiNotification {
+  id: string;
+  type: string; // e.g. 'follow', 'follow_request', 'follow_accept'
+  title: string;
+  message: string;
+  entityType: string | null;
+  entityId: string | null;
+  read: boolean;
+  createdAt: string; // ISO string
+  actor: {
+    userId: string;
+    username: string | null;
+    profilePictureUrl: string | null;
+  } | null;
+}
+
+// ============================================================
+// Fetch Notifications
+// ============================================================
+
+export async function apiFetchNotifications(
+  token?: string,
+  unreadOnly = false
+): Promise<ApiNotification[]> {
+  const params = unreadOnly ? '?unread_only=true' : '';
+  const response = await safeFetch(`${API_BASE}/notifications${params}`, {
+    headers: { ...authHeaders(token) },
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Failed to fetch notifications');
+  }
+
+  return (await response.json()) as ApiNotification[];
+}
+
+// ============================================================
+// Mark as Read
+// ============================================================
+
+export async function apiMarkNotificationRead(
+  notificationId: string,
+  token?: string
+): Promise<void> {
+  const response = await safeFetch(
+    `${API_BASE}/notifications/${encodeURIComponent(notificationId)}/read`,
+    {
+      method: 'PATCH',
+      headers: { ...authHeaders(token) },
+    }
+  );
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Failed to mark notification as read');
+  }
+}
+
+export async function apiMarkAllNotificationsRead(token?: string): Promise<void> {
+  const response = await safeFetch(`${API_BASE}/notifications/read-all`, {
+    method: 'PATCH',
+    headers: { ...authHeaders(token) },
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Failed to mark all notifications as read');
+  }
+}

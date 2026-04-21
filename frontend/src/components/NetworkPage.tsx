@@ -1,7 +1,7 @@
 import { Users, UserPlus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { Student } from '../types';
-import type { FollowGraph } from '../lib/mockFollows';
+import type { FollowGraph } from '../App';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';

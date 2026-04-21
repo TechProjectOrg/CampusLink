@@ -27,7 +27,7 @@ import {
   Check,
 } from 'lucide-react';
 import { Student, Opportunity } from '../types';
-import type { FollowGraph } from '../lib/mockFollows';
+import type { FollowGraph } from '../App';
 import { FollowButton } from './network/FollowButton';
 import { useAuth } from '../context/AuthContext';
 import { apiAddUserSkill, apiDeleteUserSkill, apiFetchUserSkills, type UserSkill } from '../lib/skillsApi';

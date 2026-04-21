@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Navbar } from './components/Navbar';
 import { AuthPage } from './components/AuthPage';
 import { FeedPage } from './components/FeedPage';
@@ -18,14 +18,111 @@ import {
   mockOpportunities,
   mockClubs,
   mockConversations,
-  mockNotifications,
   getCurrentUser,
 } from './lib/mockData';
-import { mockFollowGraph, type FollowGraph } from './lib/mockFollows';
 import { Student, Opportunity, Club, Notification } from './types';
 import { ProfileCard } from './components/ProfileCard';
 import { SuggestionsCard } from './components/SuggestionsCard';
 import { useAuth } from './context/AuthContext';
+import {
+  apiGetFollowGraph,
+  apiFollow,
+  apiUnfollow,
+  apiCancelFollowRequest,
+  apiAcceptFollowRequest,
+  apiRejectFollowRequest,
+  apiRemoveFollower,
+  type FollowGraphResponse,
+  type NetworkUser,
+  type NetworkUserWithRequest,
+} from './lib/networkApi';
+import {
+  apiFetchNotifications,
+  apiMarkNotificationRead,
+  apiMarkAllNotificationsRead,
+  type ApiNotification,
+} from './lib/notificationsApi';
+
+// ============================================================
+// FollowGraph adapter: backend shape → frontend FollowGraph shape
+// ============================================================
+
+export interface FollowGraph {
+  followersByUserId: Record<string, string[]>;
+  followingByUserId: Record<string, string[]>;
+  incomingRequestsByUserId: Record<string, string[]>;
+  outgoingRequestsByUserId: Record<string, string[]>;
+}
+
+/** Map from requestId to the corresponding user entry */
+export type RequestIdMap = Record<string, NetworkUserWithRequest>;
+
+function buildFollowGraph(
+  data: FollowGraphResponse,
+  currentUserId: string
+): { graph: FollowGraph; requestIdMap: RequestIdMap } {
+  const graph: FollowGraph = {
+    followersByUserId: { [currentUserId]: data.followers.map((u) => u.userId) },
+    followingByUserId: { [currentUserId]: data.following.map((u) => u.userId) },
+    incomingRequestsByUserId: { [currentUserId]: data.incomingRequests.map((u) => u.userId) },
+    outgoingRequestsByUserId: { [currentUserId]: data.outgoingRequests.map((u) => u.userId) },
+  };
+
+  const requestIdMap: RequestIdMap = {};
+  for (const r of data.incomingRequests) {
+    requestIdMap[r.userId] = r;
+  }
+  for (const r of data.outgoingRequests) {
+    requestIdMap[r.userId] = r;
+  }
+
+  return { graph, requestIdMap };
+}
+
+/** Convert backend notification → frontend Notification type */
+function apiNotificationToLocal(n: ApiNotification): Notification {
+  const actorPfp = n.actor?.profilePictureUrl;
+  const seed = encodeURIComponent(n.actor?.username ?? n.title ?? 'user');
+  const avatar = actorPfp ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`;
+
+  return {
+    id: n.id,
+    type: (n.type === 'follow_request' || n.type === 'follow_accept' ? 'follow' : n.type) as Notification['type'],
+    title: n.title,
+    message: n.message,
+    avatar,
+    timestamp: n.createdAt,
+    read: n.read,
+    actionUrl: undefined,
+  };
+}
+
+// ============================================================
+// Merge network users into students list
+// ============================================================
+function networkUsersToStudents(users: NetworkUser[]): Student[] {
+  return users.map((u) => {
+    const seed = encodeURIComponent(u.username);
+    return {
+      id: u.userId,
+      name: u.username,
+      username: u.username,
+      email: '',
+      branch: u.branch ?? 'Unknown',
+      year: u.year ?? 0,
+      avatar: u.profilePictureUrl ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`,
+      bio: '',
+      skills: [],
+      interests: [],
+      certifications: [],
+      experience: [],
+      societies: [],
+      achievements: [],
+      projects: [],
+      accountType: u.isPrivate ? ('private' as const) : ('public' as const),
+    };
+  });
+}
 
 export default function App() {
   const auth = useAuth();
@@ -34,9 +131,15 @@ export default function App() {
   const [students, setStudents] = useState<Student[]>(mockStudents);
   const [opportunities, setOpportunities] = useState<Opportunity[]>(mockOpportunities);
   const [clubs, setClubs] = useState<Club[]>(mockClubs);
-  const [notifications, setNotifications] = useState<Notification[]>(mockNotifications);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [conversations, setConversations] = useState(mockConversations);
-  const [followGraph, setFollowGraph] = useState<FollowGraph>(mockFollowGraph);
+  const [followGraph, setFollowGraph] = useState<FollowGraph>({
+    followersByUserId: {},
+    followingByUserId: {},
+    incomingRequestsByUserId: {},
+    outgoingRequestsByUserId: {},
+  });
+  const [requestIdMap, setRequestIdMap] = useState<RequestIdMap>({});
   const [viewingProfileId, setViewingProfileId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -123,38 +226,66 @@ export default function App() {
   }, [auth.currentUser]);
 
   const currentUserId = currentUser.id;
+  const authToken = auth.session?.token;
 
-  // If a real authenticated user replaces the mock 'current' user, rewrite the mock follow graph
-  // so the UI still works (frontend-only state).
+  // ============================================================
+  // Fetch follow graph + notifications from backend on login
+  // ============================================================
+
+  const refreshFollowGraph = useCallback(async () => {
+    if (!authToken) return;
+    try {
+      const data = await apiGetFollowGraph(authToken);
+      const { graph, requestIdMap: rMap } = buildFollowGraph(data, currentUserId);
+      setFollowGraph(graph);
+      setRequestIdMap(rMap);
+
+      // Merge network users into the students list so Network/Profile pages can look users up
+      const allNetworkUsers: NetworkUser[] = [
+        ...data.followers,
+        ...data.following,
+        ...data.incomingRequests,
+        ...data.outgoingRequests,
+      ];
+      const newStudents = networkUsersToStudents(allNetworkUsers);
+      setStudents((prev) => {
+        const existingIds = new Set(prev.map((s) => s.id));
+        const toAdd = newStudents.filter((s) => !existingIds.has(s.id));
+        return [...prev, ...toAdd];
+      });
+    } catch (err) {
+      console.error('Failed to fetch follow graph:', err);
+    }
+  }, [authToken, currentUserId]);
+
+  const refreshNotifications = useCallback(async () => {
+    if (!authToken) return;
+    try {
+      const data = await apiFetchNotifications(authToken);
+      setNotifications(data.map(apiNotificationToLocal));
+    } catch (err) {
+      console.error('Failed to fetch notifications:', err);
+    }
+  }, [authToken]);
+
   useEffect(() => {
-    if (currentUserId === 'current') return;
+    if (auth.isAuthenticated && authToken) {
+      refreshFollowGraph();
+      refreshNotifications();
+    }
+  }, [auth.isAuthenticated, authToken, refreshFollowGraph, refreshNotifications]);
 
-    setFollowGraph((prev) => {
-      // Already normalized
-      if (prev.followersByUserId[currentUserId] || prev.followingByUserId[currentUserId]) {
-        return prev;
-      }
+  // Also refresh notifications when switching to the notifications tab
+  useEffect(() => {
+    if (activeTab === 'notifications') {
+      refreshNotifications();
+    }
+    if (activeTab === 'network') {
+      refreshFollowGraph();
+    }
+  }, [activeTab, refreshNotifications, refreshFollowGraph]);
 
-      const rewriteId = (id: string) => (id === 'current' ? currentUserId : id);
-
-      const rewriteRecord = (rec: Record<string, string[]>) => {
-        const out: Record<string, string[]> = {};
-        for (const [k, v] of Object.entries(rec)) {
-          out[rewriteId(k)] = v.map(rewriteId);
-        }
-        return out;
-      };
-
-      return {
-        followersByUserId: rewriteRecord(prev.followersByUserId),
-        followingByUserId: rewriteRecord(prev.followingByUserId),
-        incomingRequestsByUserId: rewriteRecord(prev.incomingRequestsByUserId),
-        outgoingRequestsByUserId: rewriteRecord(prev.outgoingRequestsByUserId),
-      };
-    });
-  }, [currentUserId]);
-
-  // Ensure the authenticated user is present in the in-memory students list (used by Network/Profile lookups).
+  // Ensure the authenticated user is present in the in-memory students list.
   useEffect(() => {
     if (!auth.currentUser) return;
 
@@ -230,8 +361,9 @@ export default function App() {
     setOpportunities([event, ...opportunities]);
   };
 
-  // Follow system handlers (frontend-only mock state; future API-ready)
-  const uniq = (arr: string[]) => Array.from(new Set(arr));
+  // ============================================================
+  // Follow system handlers (API-backed with optimistic UI updates)
+  // ============================================================
   const addUnique = (arr: string[], id: string) => (arr.includes(id) ? arr : [...arr, id]);
   const removeId = (arr: string[], id: string) => arr.filter((x) => x !== id);
 
@@ -239,9 +371,10 @@ export default function App() {
     return students.find((s) => s.id === userId)?.accountType ?? 'public';
   };
 
-  const handleFollow = (targetUserId: string) => {
+  const handleFollow = async (targetUserId: string) => {
     const targetAccountType = getAccountType(targetUserId);
 
+    // Optimistic update
     setFollowGraph((prev) => {
       const followersByUserId = { ...prev.followersByUserId };
       const followingByUserId = { ...prev.followingByUserId };
@@ -260,106 +393,146 @@ export default function App() {
         followersByUserId[targetUserId] = addUnique(followersByUserId[targetUserId] ?? [], currentUserId);
       }
 
-      // Keep arrays clean/unique.
-      followingByUserId[currentUserId] = uniq(followingByUserId[currentUserId] ?? []);
-      outgoingRequestsByUserId[currentUserId] = uniq(outgoingRequestsByUserId[currentUserId] ?? []);
-      incomingRequestsByUserId[targetUserId] = uniq(incomingRequestsByUserId[targetUserId] ?? []);
-      followersByUserId[targetUserId] = uniq(followersByUserId[targetUserId] ?? []);
-
-      return {
-        followersByUserId,
-        followingByUserId,
-        incomingRequestsByUserId,
-        outgoingRequestsByUserId,
-      };
+      return { followersByUserId, followingByUserId, incomingRequestsByUserId, outgoingRequestsByUserId };
     });
+
+    // Backend call
+    try {
+      await apiFollow(targetUserId, authToken);
+    } catch (err: any) {
+      toast.error(err?.message || 'Follow failed');
+      refreshFollowGraph(); // Revert to server state
+    }
   };
 
-  const handleUnfollow = (targetUserId: string) => {
-    setFollowGraph((prev) => {
-      const followersByUserId = { ...prev.followersByUserId };
-      const followingByUserId = { ...prev.followingByUserId };
+  const handleUnfollow = async (targetUserId: string) => {
+    // Optimistic update
+    setFollowGraph((prev) => ({
+      ...prev,
+      followingByUserId: {
+        ...prev.followingByUserId,
+        [currentUserId]: removeId(prev.followingByUserId[currentUserId] ?? [], targetUserId),
+      },
+      followersByUserId: {
+        ...prev.followersByUserId,
+        [targetUserId]: removeId(prev.followersByUserId[targetUserId] ?? [], currentUserId),
+      },
+    }));
 
-      followingByUserId[currentUserId] = removeId(followingByUserId[currentUserId] ?? [], targetUserId);
-      followersByUserId[targetUserId] = removeId(followersByUserId[targetUserId] ?? [], currentUserId);
-
-      return {
-        ...prev,
-        followersByUserId,
-        followingByUserId,
-      };
-    });
+    try {
+      await apiUnfollow(targetUserId, authToken);
+    } catch (err: any) {
+      toast.error(err?.message || 'Unfollow failed');
+      refreshFollowGraph();
+    }
   };
 
-  const handleCancelRequest = (targetUserId: string) => {
-    setFollowGraph((prev) => {
-      const incomingRequestsByUserId = { ...prev.incomingRequestsByUserId };
-      const outgoingRequestsByUserId = { ...prev.outgoingRequestsByUserId };
+  const handleCancelRequest = async (targetUserId: string) => {
+    // Optimistic update
+    setFollowGraph((prev) => ({
+      ...prev,
+      outgoingRequestsByUserId: {
+        ...prev.outgoingRequestsByUserId,
+        [currentUserId]: removeId(prev.outgoingRequestsByUserId[currentUserId] ?? [], targetUserId),
+      },
+      incomingRequestsByUserId: {
+        ...prev.incomingRequestsByUserId,
+        [targetUserId]: removeId(prev.incomingRequestsByUserId[targetUserId] ?? [], currentUserId),
+      },
+    }));
 
-      outgoingRequestsByUserId[currentUserId] = removeId(outgoingRequestsByUserId[currentUserId] ?? [], targetUserId);
-      incomingRequestsByUserId[targetUserId] = removeId(incomingRequestsByUserId[targetUserId] ?? [], currentUserId);
-
-      return {
-        ...prev,
-        incomingRequestsByUserId,
-        outgoingRequestsByUserId,
-      };
-    });
+    try {
+      await apiCancelFollowRequest(targetUserId, authToken);
+    } catch (err: any) {
+      toast.error(err?.message || 'Cancel request failed');
+      refreshFollowGraph();
+    }
   };
 
-  const handleRemoveFollower = (followerUserId: string) => {
-    setFollowGraph((prev) => {
-      const followersByUserId = { ...prev.followersByUserId };
-      const followingByUserId = { ...prev.followingByUserId };
+  const handleRemoveFollower = async (followerUserId: string) => {
+    // Optimistic update
+    setFollowGraph((prev) => ({
+      ...prev,
+      followersByUserId: {
+        ...prev.followersByUserId,
+        [currentUserId]: removeId(prev.followersByUserId[currentUserId] ?? [], followerUserId),
+      },
+      followingByUserId: {
+        ...prev.followingByUserId,
+        [followerUserId]: removeId(prev.followingByUserId[followerUserId] ?? [], currentUserId),
+      },
+    }));
 
-      followersByUserId[currentUserId] = removeId(followersByUserId[currentUserId] ?? [], followerUserId);
-      followingByUserId[followerUserId] = removeId(followingByUserId[followerUserId] ?? [], currentUserId);
-
-      return {
-        ...prev,
-        followersByUserId,
-        followingByUserId,
-      };
-    });
+    try {
+      await apiRemoveFollower(followerUserId, authToken);
+    } catch (err: any) {
+      toast.error(err?.message || 'Remove follower failed');
+      refreshFollowGraph();
+    }
   };
 
-  const handleAcceptFollowRequest = (requesterUserId: string) => {
-    setFollowGraph((prev) => {
-      const followersByUserId = { ...prev.followersByUserId };
-      const followingByUserId = { ...prev.followingByUserId };
-      const incomingRequestsByUserId = { ...prev.incomingRequestsByUserId };
-      const outgoingRequestsByUserId = { ...prev.outgoingRequestsByUserId };
+  const handleAcceptFollowRequest = async (requesterUserId: string) => {
+    const requestEntry = requestIdMap[requesterUserId];
+    if (!requestEntry) {
+      toast.error('Follow request not found');
+      return;
+    }
 
-      incomingRequestsByUserId[currentUserId] = removeId(incomingRequestsByUserId[currentUserId] ?? [], requesterUserId);
-      outgoingRequestsByUserId[requesterUserId] = removeId(outgoingRequestsByUserId[requesterUserId] ?? [], currentUserId);
+    // Optimistic update
+    setFollowGraph((prev) => ({
+      ...prev,
+      incomingRequestsByUserId: {
+        ...prev.incomingRequestsByUserId,
+        [currentUserId]: removeId(prev.incomingRequestsByUserId[currentUserId] ?? [], requesterUserId),
+      },
+      outgoingRequestsByUserId: {
+        ...prev.outgoingRequestsByUserId,
+        [requesterUserId]: removeId(prev.outgoingRequestsByUserId[requesterUserId] ?? [], currentUserId),
+      },
+      followersByUserId: {
+        ...prev.followersByUserId,
+        [currentUserId]: addUnique(prev.followersByUserId[currentUserId] ?? [], requesterUserId),
+      },
+      followingByUserId: {
+        ...prev.followingByUserId,
+        [requesterUserId]: addUnique(prev.followingByUserId[requesterUserId] ?? [], currentUserId),
+      },
+    }));
 
-      // Accepting turns the requester into a follower.
-      followersByUserId[currentUserId] = addUnique(followersByUserId[currentUserId] ?? [], requesterUserId);
-      followingByUserId[requesterUserId] = addUnique(followingByUserId[requesterUserId] ?? [], currentUserId);
-
-      return {
-        followersByUserId,
-        followingByUserId,
-        incomingRequestsByUserId,
-        outgoingRequestsByUserId,
-      };
-    });
+    try {
+      await apiAcceptFollowRequest(requestEntry.requestId, authToken);
+    } catch (err: any) {
+      toast.error(err?.message || 'Accept request failed');
+      refreshFollowGraph();
+    }
   };
 
-  const handleRejectFollowRequest = (requesterUserId: string) => {
-    setFollowGraph((prev) => {
-      const incomingRequestsByUserId = { ...prev.incomingRequestsByUserId };
-      const outgoingRequestsByUserId = { ...prev.outgoingRequestsByUserId };
+  const handleRejectFollowRequest = async (requesterUserId: string) => {
+    const requestEntry = requestIdMap[requesterUserId];
+    if (!requestEntry) {
+      toast.error('Follow request not found');
+      return;
+    }
 
-      incomingRequestsByUserId[currentUserId] = removeId(incomingRequestsByUserId[currentUserId] ?? [], requesterUserId);
-      outgoingRequestsByUserId[requesterUserId] = removeId(outgoingRequestsByUserId[requesterUserId] ?? [], currentUserId);
+    // Optimistic update
+    setFollowGraph((prev) => ({
+      ...prev,
+      incomingRequestsByUserId: {
+        ...prev.incomingRequestsByUserId,
+        [currentUserId]: removeId(prev.incomingRequestsByUserId[currentUserId] ?? [], requesterUserId),
+      },
+      outgoingRequestsByUserId: {
+        ...prev.outgoingRequestsByUserId,
+        [requesterUserId]: removeId(prev.outgoingRequestsByUserId[requesterUserId] ?? [], currentUserId),
+      },
+    }));
 
-      return {
-        ...prev,
-        incomingRequestsByUserId,
-        outgoingRequestsByUserId,
-      };
-    });
+    try {
+      await apiRejectFollowRequest(requestEntry.requestId, authToken);
+    } catch (err: any) {
+      toast.error(err?.message || 'Reject request failed');
+      refreshFollowGraph();
+    }
   };
 
   const handleMessage = (studentId: string) => {
@@ -423,15 +596,31 @@ export default function App() {
     }));
   };
 
-  // Notification handlers
-  const handleMarkAsRead = (notificationId: string) => {
-    setNotifications(notifications.map(notif => 
-      notif.id === notificationId ? { ...notif, read: true } : notif
-    ));
+  // Notification handlers (API-backed)
+  const handleMarkAsRead = async (notificationId: string) => {
+    // Optimistic update
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
+    );
+
+    try {
+      await apiMarkNotificationRead(notificationId, authToken);
+    } catch (err: any) {
+      console.error('Failed to mark notification as read:', err);
+      refreshNotifications();
+    }
   };
 
-  const handleMarkAllAsRead = () => {
-    setNotifications(notifications.map(notif => ({ ...notif, read: true })));
+  const handleMarkAllAsRead = async () => {
+    // Optimistic update
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+
+    try {
+      await apiMarkAllNotificationsRead(authToken);
+    } catch (err: any) {
+      console.error('Failed to mark all notifications as read:', err);
+      refreshNotifications();
+    }
   };
 
   const handleNotificationClick = (notification: Notification) => {

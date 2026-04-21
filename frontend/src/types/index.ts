@@ -1,3 +1,5 @@
+export type RequestStatus = 'none' | 'requested';
+
 export type AccountType = 'public' | 'private';
 
 export interface Certification {

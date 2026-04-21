@@ -1,4 +1,4 @@
-import { Student, Opportunity, Club, ChatConversation, Notification } from '../types';
+import { Student, Opportunity, Club, ChatConversation } from '../types';
 
 export const mockStudents: Student[] = [
   {
@@ -400,79 +400,4 @@ export const mockConversations: ChatConversation[] = [
   }
 ];
 
-export const mockNotifications: Notification[] = [
-  {
-    id: 'n1',
-    type: 'follow',
-    title: 'Alex Chen',
-    message: 'started following you',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alex',
-    timestamp: '2025-11-02T10:30:00Z',
-    read: false
-  },
-  {
-    id: 'n2',
-    type: 'like',
-    title: 'Sarah Martinez',
-    message: 'liked your post about the React workshop',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sarah',
-    timestamp: '2025-11-02T09:15:00Z',
-    read: false
-  },
-  {
-    id: 'n3',
-    type: 'comment',
-    title: 'Raj Patel',
-    message: 'commented on your hackathon post: "Count me in for the team!"',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Raj',
-    timestamp: '2025-11-01T18:45:00Z',
-    read: false
-  },
-  {
-    id: 'n4',
-    type: 'message',
-    title: 'Emily Johnson',
-    message: 'sent you a message',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Emily',
-    timestamp: '2025-11-01T16:20:00Z',
-    read: true
-  },
-  {
-    id: 'n5',
-    type: 'opportunity',
-    title: 'New Internship',
-    message: 'Google is hiring software engineering interns - Apply now!',
-    avatar: 'https://images.unsplash.com/photo-1573164713714-d95e436ab8d6?w=400',
-    timestamp: '2025-11-01T14:00:00Z',
-    read: true
-  },
-  {
-    id: 'n6',
-    type: 'club',
-    title: 'Coding Club',
-    message: 'Weekly contest starts in 1 hour!',
-    avatar: 'https://images.unsplash.com/photo-1638202677704-b74690bb8fa9?w=400',
-    timestamp: '2025-11-01T12:00:00Z',
-    read: true
-  },
-  {
-    id: 'n7',
-    type: 'follow',
-    title: 'Priya Sharma',
-    message: 'requested to follow you',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Priya',
-    timestamp: '2025-10-31T15:30:00Z',
-    read: true
-  },
-  {
-    id: 'n8',
-    type: 'like',
-    title: 'Michael Lee',
-    message: 'and 5 others liked your project',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Michael',
-    timestamp: '2025-10-31T11:20:00Z',
-    read: true
-  }
-];
-
-export const getCurrentUser = () => mockStudents.find(s => s.id === 'current')!;
+export const getCurrentUser = () => mockStudents.find(s => s.id === 'current')!;;

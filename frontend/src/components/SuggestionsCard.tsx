@@ -1,6 +1,6 @@
 import { TrendingUp, Users, Sparkles } from 'lucide-react';
 import type { Student } from '../types';
-import type { FollowGraph } from '../lib/mockFollows';
+import type { FollowGraph } from '../App';
 import { FollowButton } from './network/FollowButton';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
