@@ -1,14 +1,10 @@
 import express, { Request, Response } from 'express';
-import crypto from 'crypto';
 import prisma from '../prisma';
 import validatePassword from '../middleware/validatePassword';
 import { getUserProfileById } from '../services/userProfile';
+import { hashPassword, signAuthToken, verifyPassword } from '../lib/auth';
 
 const router = express.Router();
-
-function hashPassword(password: string): string {
-  return crypto.createHash('sha256').update(password).digest('hex');
-}
 
 async function emailExists(email: string): Promise<boolean> {
   const result = await prisma.$queryRaw<{ exists: boolean }[]>`
@@ -44,6 +40,16 @@ async function generateUsername(email: string, name?: string): Promise<string> {
     candidate = `${base}${suffix}`;
     suffix += 1;
   }
+}
+
+function buildResponseWithToken(profile: NonNullable<Awaited<ReturnType<typeof getUserProfileById>>>) {
+  const token = signAuthToken({
+    userId: profile.userId,
+    email: profile.email,
+    username: profile.username,
+    type: profile.type,
+  });
+  return { ...profile, token };
 }
 
 interface StudentSignupBody {
@@ -92,28 +98,49 @@ router.post('/signup/student', validatePassword, async (req: Request, res: Respo
     const createdUsers = await prisma.$queryRaw<
       { user_id: string; username: string; email: string; created_at: Date }[]
     >`
-      INSERT INTO users (username, email, password_hash, profile_picture_url)
-      VALUES (${username}, ${email}, ${passwordHash}, NULL)
+      INSERT INTO users (username, email, password_hash, user_type, profile_photo_url, is_private)
+      VALUES (${username}, ${email}, ${passwordHash}, 'student'::"UserType", NULL, FALSE)
       RETURNING user_id, username, email, created_at
     `;
 
     const user = createdUsers[0];
 
     await prisma.$queryRaw`
-      INSERT INTO studentprofiles (user_id, branch, year)
+      INSERT INTO student_profiles (user_id, branch, year)
       VALUES (${user.user_id}, ${branch}, ${numericYear})
     `;
 
+    await prisma.$queryRaw`
+      INSERT INTO user_settings (user_id)
+      VALUES (${user.user_id})
+    `;
+
     const profile = await getUserProfileById(user.user_id);
-    return res.status(201).json(
-      profile ?? {
-        userId: user.user_id,
-        username: user.username,
-        email: user.email,
-        type: 'student',
-        createdAt: user.created_at,
-      }
-    );
+    const responsePayload = profile ?? {
+      userId: user.user_id,
+      username: user.username,
+      email: user.email,
+      type: 'student' as const,
+      createdAt: user.created_at,
+      bio: null,
+      headline: null,
+      profilePictureUrl: null,
+      isPublic: true,
+      isActive: true,
+      isOnline: false,
+      lastSeenAt: null,
+      details: {
+        branch,
+        year: numericYear,
+      },
+      stats: {
+        followerCount: 0,
+        followingCount: 0,
+        postCount: 0,
+      },
+    };
+
+    return res.status(201).json(buildResponseWithToken(responsePayload));
   } catch (err) {
     console.error('Error during student signup:', err);
     return res.status(500).json({ message: 'Internal server error' });
@@ -142,28 +169,49 @@ router.post('/signup/alumni', validatePassword, async (req: Request, res: Respon
     const createdUsers = await prisma.$queryRaw<
       { user_id: string; username: string; email: string; created_at: Date }[]
     >`
-      INSERT INTO users (username, email, password_hash, profile_picture_url)
-      VALUES (${username}, ${email}, ${passwordHash}, NULL)
+      INSERT INTO users (username, email, password_hash, user_type, profile_photo_url, is_private)
+      VALUES (${username}, ${email}, ${passwordHash}, 'alumni'::"UserType", NULL, FALSE)
       RETURNING user_id, username, email, created_at
     `;
 
     const user = createdUsers[0];
 
     await prisma.$queryRaw`
-      INSERT INTO alumniprofiles (user_id, branch, passing_year)
-      VALUES (${user.user_id}, ${branch}, ${numericGradYear})
+      INSERT INTO alumni_profiles (user_id, branch, passing_year, current_status)
+      VALUES (${user.user_id}, ${branch}, ${numericGradYear}, ${currentStatus})
+    `;
+
+    await prisma.$queryRaw`
+      INSERT INTO user_settings (user_id)
+      VALUES (${user.user_id})
     `;
 
     const profile = await getUserProfileById(user.user_id);
-    return res.status(201).json(
-      profile ?? {
-        userId: user.user_id,
-        username: user.username,
-        email: user.email,
-        type: 'alumni',
-        createdAt: user.created_at,
-      }
-    );
+    const responsePayload = profile ?? {
+      userId: user.user_id,
+      username: user.username,
+      email: user.email,
+      type: 'alumni' as const,
+      createdAt: user.created_at,
+      bio: null,
+      headline: null,
+      profilePictureUrl: null,
+      isPublic: true,
+      isActive: true,
+      isOnline: false,
+      lastSeenAt: null,
+      details: {
+        branch,
+        passingYear: numericGradYear,
+      },
+      stats: {
+        followerCount: 0,
+        followingCount: 0,
+        postCount: 0,
+      },
+    };
+
+    return res.status(201).json(buildResponseWithToken(responsePayload));
   } catch (err) {
     console.error('Error during alumni signup:', err);
     return res.status(500).json({ message: 'Internal server error' });
@@ -184,10 +232,11 @@ router.post('/login', async (req: Request, res: Response) => {
         username: string;
         email: string;
         password_hash: string;
+        user_type: 'student' | 'alumni';
         created_at: Date;
       }[]
     >`
-      SELECT user_id, username, email, password_hash, created_at
+      SELECT user_id, username, email, password_hash, user_type, created_at
       FROM users
       WHERE email = ${email}
     `;
@@ -199,9 +248,18 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 
     const incomingHash = hashPassword(password);
+    const passwordMatches = await verifyPassword(password, user.password_hash);
 
-    if (incomingHash !== user.password_hash) {
+    if (!passwordMatches) {
       return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    if (!user.password_hash.startsWith('$2a$') && !user.password_hash.startsWith('$2b$') && !user.password_hash.startsWith('$2y$')) {
+      await prisma.$queryRaw`
+        UPDATE users
+        SET password_hash = ${incomingHash}
+        WHERE user_id = ${user.user_id}
+      `;
     }
 
     const profile = await getUserProfileById(user.user_id);
@@ -211,12 +269,33 @@ router.post('/login', async (req: Request, res: Response) => {
         userId: user.user_id,
         username: user.username,
         email: user.email,
-        type: 'unknown',
+        type: user.user_type,
         createdAt: user.created_at,
+        bio: null,
+        headline: null,
+        profilePictureUrl: null,
+        isPublic: true,
+        isActive: true,
+        isOnline: false,
+        lastSeenAt: null,
+        details: {},
+        stats: {
+          followerCount: 0,
+          followingCount: 0,
+          postCount: 0,
+        },
+        token: signAuthToken(
+          {
+            userId: user.user_id,
+            email: user.email,
+            username: user.username,
+            type: user.user_type,
+          }
+        ),
       });
     }
 
-    return res.status(200).json(profile);
+    return res.status(200).json(buildResponseWithToken(profile));
   } catch (err) {
     console.error('Error during login:', err);
     return res.status(500).json({ message: 'Internal server error' });

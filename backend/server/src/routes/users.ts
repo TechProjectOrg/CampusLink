@@ -1,17 +1,27 @@
-import express, { Request, Response } from 'express';
-import crypto from 'crypto';
+import express, { NextFunction, Request, RequestHandler, Response } from 'express';
 import prisma from '../prisma';
 import { getUserProfileById } from '../services/userProfile';
+import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
+import { verifyPassword } from '../lib/auth';
 
 const router = express.Router();
-
-function hashPassword(password: string): string {
-  return crypto.createHash('sha256').update(password).digest('hex');
-}
 
 interface GetUserParams {
   userId: string;
 }
+
+const requireOwnUser: RequestHandler = (req, res, next: NextFunction) => {
+  const authedRequest = req as unknown as AuthedRequest;
+  const { userId } = req.params as unknown as GetUserParams;
+
+  if (!authedRequest.auth || authedRequest.auth.userId !== userId) {
+    return res.status(403).json({ message: 'You can only access your own account data' });
+  }
+
+  return next();
+};
+
+router.use('/:userId', authenticateToken, requireOwnUser);
 
 router.get('/:userId', async (req: Request<GetUserParams>, res: Response) => {
   const { userId } = req.params;
@@ -63,8 +73,8 @@ router.delete('/:userId', async (req: Request<GetUserParams, unknown, Partial<De
       return res.status(404).json({ message: 'User not found' });
     }
 
-    const incomingHash = hashPassword(password);
-    if (incomingHash !== row.password_hash) {
+    const passwordMatches = await verifyPassword(password, row.password_hash);
+    if (!passwordMatches) {
       return res.status(401).json({ message: 'Invalid password' });
     }
 
@@ -91,7 +101,7 @@ router.get('/:userId/skills', async (req: Request<{ userId: string }>, res: Resp
       { skill_id: string; name: string; created_at: Date }[]
     >`
       SELECT skill_id, name, created_at
-      FROM skills
+      FROM user_skills
       WHERE user_id = ${userId}
       ORDER BY created_at DESC
     `;
@@ -123,16 +133,16 @@ router.post(
 
     try {
       const rows = await prisma.$queryRaw<
-        { skill_id: string; name: string; created_at: Date }[]
+      { user_skill_id: string; name: string; created_at: Date }[]
       >`
-        INSERT INTO skills (user_id, name)
+        INSERT INTO user_skills (user_id, name)
         VALUES (${userId}, ${name.trim()})
-        RETURNING skill_id, name, created_at
+        RETURNING user_skill_id, name, created_at
       `;
 
       const created = rows[0];
       return res.status(201).json({
-        id: created.skill_id,
+        id: created.user_skill_id,
         name: created.name,
         createdAt: created.created_at.toISOString(),
       });
@@ -156,8 +166,8 @@ router.delete(
     try {
       const result = await prisma.$queryRaw<{ count: number }[]>`
         WITH deleted AS (
-          DELETE FROM skills
-          WHERE user_id = ${userId} AND skill_id = ${skillId}
+          DELETE FROM user_skills
+          WHERE user_id = ${userId} AND user_skill_id = ${skillId}
           RETURNING 1
         )
         SELECT COUNT(*)::int AS count FROM deleted
@@ -188,13 +198,15 @@ router.get('/:userId/certifications', async (req: Request<{ userId: string }>, r
         certification_id: string;
         name: string;
         issuer: string | null;
+        description: string | null;
         credential_url: string | null;
+        image_url: string | null;
         issued_at: Date | null;
         created_at: Date;
       }[]
     >`
-      SELECT certification_id, name, issuer, credential_url, issued_at, created_at
-      FROM certifications
+      SELECT certification_id, name, issuer, description, credential_url, image_url, issued_at, created_at
+      FROM user_certifications
       WHERE user_id = ${userId}
       ORDER BY created_at DESC
     `;
@@ -204,14 +216,18 @@ router.get('/:userId/certifications', async (req: Request<{ userId: string }>, r
         certification_id: string;
         name: string;
         issuer: string | null;
+        description: string | null;
         credential_url: string | null;
+        image_url: string | null;
         issued_at: Date | null;
         created_at: Date;
       }) => ({
         id: r.certification_id,
         name: r.name,
         issuer: r.issuer,
+        description: r.description,
         credentialUrl: r.credential_url,
+        imageUrl: r.image_url,
         issuedAt: r.issued_at ? r.issued_at.toISOString().slice(0, 10) : null,
         createdAt: r.created_at.toISOString(),
       }))
@@ -246,9 +262,10 @@ router.post(
       return res.status(400).json({ message: 'Certification name is required' });
     }
 
-    // Accept the UI's {description, imageUrl} but store them in existing DB columns.
-    const issuerValue = (issuer ?? description ?? '').trim() || null;
-    const credentialUrlValue = (credentialUrl ?? imageUrl ?? '').trim() || null;
+    const issuerValue = issuer?.trim() || null;
+    const descriptionValue = description?.trim() || null;
+    const credentialUrlValue = credentialUrl?.trim() || null;
+    const imageUrlValue = imageUrl?.trim() || null;
 
     const issuedAtDate = issuedAt ? new Date(issuedAt) : null;
     if (issuedAt && Number.isNaN(issuedAtDate?.getTime())) {
@@ -261,14 +278,16 @@ router.post(
           certification_id: string;
           name: string;
           issuer: string | null;
+          description: string | null;
           credential_url: string | null;
+          image_url: string | null;
           issued_at: Date | null;
           created_at: Date;
         }[]
       >`
-        INSERT INTO certifications (user_id, name, issuer, credential_url, issued_at)
-        VALUES (${userId}, ${name.trim()}, ${issuerValue}, ${credentialUrlValue}, ${issuedAtDate})
-        RETURNING certification_id, name, issuer, credential_url, issued_at, created_at
+        INSERT INTO user_certifications (user_id, name, issuer, description, credential_url, image_url, issued_at)
+        VALUES (${userId}, ${name.trim()}, ${issuerValue}, ${descriptionValue}, ${credentialUrlValue}, ${imageUrlValue}, ${issuedAtDate})
+        RETURNING certification_id, name, issuer, description, credential_url, image_url, issued_at, created_at
       `;
 
       const created = rows[0];
@@ -276,7 +295,9 @@ router.post(
         id: created.certification_id,
         name: created.name,
         issuer: created.issuer,
+        description: created.description,
         credentialUrl: created.credential_url,
+        imageUrl: created.image_url,
         issuedAt: created.issued_at ? created.issued_at.toISOString().slice(0, 10) : null,
         createdAt: created.created_at.toISOString(),
       });
@@ -295,7 +316,7 @@ router.delete(
     try {
       const result = await prisma.$queryRaw<{ count: number }[]>`
         WITH deleted AS (
-          DELETE FROM certifications
+          DELETE FROM user_certifications
           WHERE user_id = ${userId} AND certification_id = ${certificationId}
           RETURNING 1
         )
@@ -310,6 +331,155 @@ router.delete(
       return res.status(204).send();
     } catch (err) {
       console.error('Error deleting certification:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
+
+// ==============================
+// Profile: Projects
+// ==============================
+router.get('/:userId/projects', async (req: Request<{ userId: string }>, res: Response) => {
+  const { userId } = req.params;
+
+  try {
+    const rows = await prisma.$queryRaw<
+      {
+        project_id: string;
+        title: string;
+        description: string;
+        source_url: string | null;
+        demo_url: string | null;
+        image_url: string | null;
+        created_at: Date;
+        tags: string[] | null;
+      }[]
+    >`
+      SELECT
+        p.project_id,
+        p.title,
+        p.description,
+        p.source_url,
+        p.demo_url,
+        p.image_url,
+        p.created_at,
+        COALESCE(
+          ARRAY_AGG(pt.tag_name ORDER BY pt.tag_name) FILTER (WHERE pt.tag_name IS NOT NULL),
+          ARRAY[]::text[]
+        ) AS tags
+      FROM user_projects p
+      LEFT JOIN project_tags pt ON pt.project_id = p.project_id
+      WHERE p.user_id = ${userId}
+      GROUP BY p.project_id, p.title, p.description, p.source_url, p.demo_url, p.image_url, p.created_at
+      ORDER BY p.created_at DESC
+    `;
+
+    return res.status(200).json(
+      rows.map((r) => ({
+        id: r.project_id,
+        title: r.title,
+        description: r.description,
+        link: r.demo_url ?? r.source_url,
+        sourceUrl: r.source_url,
+        demoUrl: r.demo_url,
+        imageUrl: r.image_url,
+        tags: r.tags ?? [],
+        createdAt: r.created_at.toISOString(),
+      }))
+    );
+  } catch (err) {
+    console.error('Error fetching projects:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.post(
+  '/:userId/projects',
+  async (
+    req: Request<
+      { userId: string },
+      unknown,
+      { title?: string; description?: string; sourceUrl?: string; demoUrl?: string; imageUrl?: string; tags?: string[] }
+    >,
+    res: Response
+  ) => {
+    const { userId } = req.params;
+    const { title, description, sourceUrl, demoUrl, imageUrl, tags } = req.body;
+
+    if (!title?.trim() || !description?.trim()) {
+      return res.status(400).json({ message: 'Project title and description are required' });
+    }
+
+    try {
+      const rows = await prisma.$queryRaw<
+        {
+          project_id: string;
+          title: string;
+          description: string;
+          source_url: string | null;
+          demo_url: string | null;
+          image_url: string | null;
+          created_at: Date;
+        }[]
+      >`
+        INSERT INTO user_projects (user_id, title, description, source_url, demo_url, image_url)
+        VALUES (${userId}, ${title.trim()}, ${description.trim()}, ${sourceUrl?.trim() || null}, ${demoUrl?.trim() || null}, ${imageUrl?.trim() || null})
+        RETURNING project_id, title, description, source_url, demo_url, image_url, created_at
+      `;
+
+      const created = rows[0];
+      const normalizedTags = Array.isArray(tags)
+        ? Array.from(new Set(tags.map((tag) => tag.trim()).filter(Boolean)))
+        : [];
+
+      for (const tagName of normalizedTags) {
+        await prisma.$queryRaw`
+          INSERT INTO project_tags (project_id, tag_name)
+          VALUES (${created.project_id}, ${tagName})
+        `;
+      }
+
+      return res.status(201).json({
+        id: created.project_id,
+        title: created.title,
+        description: created.description,
+        link: created.demo_url ?? created.source_url,
+        sourceUrl: created.source_url,
+        demoUrl: created.demo_url,
+        imageUrl: created.image_url,
+        tags: normalizedTags,
+        createdAt: created.created_at.toISOString(),
+      });
+    } catch (err) {
+      console.error('Error creating project:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
+
+router.delete(
+  '/:userId/projects/:projectId',
+  async (req: Request<{ userId: string; projectId: string }>, res: Response) => {
+    const { userId, projectId } = req.params;
+
+    try {
+      const result = await prisma.$queryRaw<{ count: number }[]>`
+        WITH deleted AS (
+          DELETE FROM user_projects
+          WHERE user_id = ${userId} AND project_id = ${projectId}
+          RETURNING 1
+        )
+        SELECT COUNT(*)::int AS count FROM deleted
+      `;
+
+      const count = result[0]?.count ?? 0;
+      if (count === 0) {
+        return res.status(404).json({ message: 'Project not found' });
+      }
+
+      return res.status(204).send();
+    } catch (err) {
+      console.error('Error deleting project:', err);
       return res.status(500).json({ message: 'Internal server error' });
     }
   }
