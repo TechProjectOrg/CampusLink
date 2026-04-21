@@ -895,20 +895,22 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
               <CardContent className="space-y-6">
                 <div className="space-y-2">
                   <Label htmlFor="account-type">Account Type</Label>
-                  <select
-                    id="account-type"
-                    value={privacySettings.accountType}
-                    disabled={settingsLoading || savingPrivacy}
-                    onChange={(e) => {
-                      const next = { ...privacySettings, accountType: e.target.value as any };
-                      setPrivacySettings(next);
-                      void persistPrivacySettings(next);
-                    }}
-                    className="w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  >
-                    <option value="public">Public - Anyone can follow instantly</option>
-                    <option value="private">Private - Follow requests require approval</option>
-                  </select>
+                  <div className="flex items-center justify-between rounded-xl border bg-white px-4 py-3">
+                    <div className="space-y-1">
+                      <p className="text-gray-900">
+                        {privacySettings.accountType === 'private' ? 'Private' : 'Public'}
+                      </p>
+                    </div>
+                    <Switch
+                      checked={privacySettings.accountType === 'private'}
+                      disabled={settingsLoading || savingPrivacy}
+                      onCheckedChange={(checked) => {
+                        const next = { ...privacySettings, accountType: checked ? 'private' : 'public' as const };
+                        setPrivacySettings(next);
+                        void persistPrivacySettings(next);
+                      }}
+                    />
+                  </div>
                 </div>
 
                 <Separator />
