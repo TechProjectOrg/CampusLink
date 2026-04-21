@@ -106,6 +106,53 @@ export async function apiFetchUserProfile(userId: string, token?: string): Promi
   return (await response.json()) as ApiUserProfile;
 }
 
+export interface PasswordChangeVerifyResult {
+  changeToken: string;
+}
+
+export async function apiVerifyPasswordChange(
+  userId: string,
+  currentPassword: string,
+  token?: string
+): Promise<PasswordChangeVerifyResult> {
+  const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}/password/verify`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(token),
+    },
+    body: JSON.stringify({ currentPassword }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to verify current password');
+  }
+
+  return (await response.json()) as PasswordChangeVerifyResult;
+}
+
+export async function apiChangePassword(
+  userId: string,
+  payload: { changeToken: string; newPassword: string },
+  token?: string
+): Promise<void> {
+  const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}/password`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(token),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    const detail = err?.details ? ` ${err.details}` : '';
+    throw new Error(err?.message ? `${err.message}${detail}` : 'Unable to change password');
+  }
+}
+
 export interface UpdateUserProfilePayload {
   username: string;
   branch: string;

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bell, Edit2, Eye, EyeOff, Lock, Save, Shield, Trash2, User, X } from 'lucide-react';
+import { Bell, Check, Edit2, Eye, EyeOff, Lock, Save, Shield, Trash2, User, X } from 'lucide-react';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -10,7 +10,19 @@ import { Separator } from './ui/separator';
 import { toast } from 'sonner@2.0.3';
 import { Student } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { apiUpdateUserProfile } from '../lib/authApi';
+import { apiChangePassword, apiUpdateUserProfile, apiVerifyPasswordChange } from '../lib/authApi';
+
+const PASSWORD_REQUIREMENTS = [
+  'At least 8 characters long',
+  'At least one lowercase letter',
+  'At least one uppercase letter',
+  'At least one number',
+  'At least one special character (!@#$%^&*)',
+];
+
+function meetsPasswordRequirements(password: string): boolean {
+  return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/.test(password);
+}
 
 interface SettingsPageProps {
   student: Student;
@@ -48,6 +60,7 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
 
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [passwordChangeStatus, setPasswordChangeStatus] = useState<'idle' | 'verifying' | 'changing'>('idle');
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
     newPassword: '',
@@ -82,17 +95,76 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
 
   const handlePasswordChange = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!auth.session?.userId) {
+      toast.error('You must be signed in to change your password');
+      return;
+    }
+
+    if (!passwordData.currentPassword.trim()) {
+      toast.error('Current password is required');
+      return;
+    }
+
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      toast.error('Passwords do not match');
+      toast.error('New password and confirmation do not match');
       return;
     }
-    if (passwordData.newPassword.length < 8) {
-      toast.error('Password must be at least 8 characters');
+
+    if (!meetsPasswordRequirements(passwordData.newPassword)) {
+      toast.error('New password does not meet the requirements');
       return;
     }
-    toast.success('Password updated successfully');
-    setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+
+    setPasswordChangeStatus('verifying');
+
+    const performPasswordChange = async () => {
+      try {
+        const verification = await apiVerifyPasswordChange(
+          auth.session.userId,
+          passwordData.currentPassword,
+          auth.session.token
+        );
+
+        setPasswordChangeStatus('changing');
+
+        await apiChangePassword(
+          auth.session.userId,
+          {
+            changeToken: verification.changeToken,
+            newPassword: passwordData.newPassword,
+          },
+          auth.session.token
+        );
+
+        toast.success('Password updated successfully');
+        setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Unable to change password');
+      } finally {
+        setPasswordChangeStatus('idle');
+      }
+    };
+
+    void performPasswordChange();
   };
+
+  const passwordMismatch =
+    passwordData.confirmPassword.length > 0 && passwordData.newPassword !== passwordData.confirmPassword;
+  const passwordRequirementStatus = PASSWORD_REQUIREMENTS.map((requirement) => ({
+    requirement,
+    met:
+      requirement === 'At least 8 characters long'
+        ? passwordData.newPassword.length >= 8
+        : requirement === 'At least one lowercase letter'
+          ? /[a-z]/.test(passwordData.newPassword)
+          : requirement === 'At least one uppercase letter'
+            ? /[A-Z]/.test(passwordData.newPassword)
+            : requirement === 'At least one number'
+              ? /\d/.test(passwordData.newPassword)
+              : /[!@#$%^&*]/.test(passwordData.newPassword),
+  }));
+  const isPasswordActionInProgress = passwordChangeStatus !== 'idle';
 
   const handleSaveNotifications = () => {
     onUpdateSettings({ notifications: notificationSettings });
@@ -330,12 +402,14 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                         type={showCurrentPassword ? 'text' : 'password'}
                         value={passwordData.currentPassword}
                         onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                        disabled={isPasswordActionInProgress}
                         required
                       />
                       <button
                         type="button"
                         onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"
+                        disabled={isPasswordActionInProgress}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 disabled:opacity-50"
                       >
                         {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
@@ -349,15 +423,28 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                         type={showNewPassword ? 'text' : 'password'}
                         value={passwordData.newPassword}
                         onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                        disabled={isPasswordActionInProgress}
                         required
                       />
                       <button
                         type="button"
                         onClick={() => setShowNewPassword(!showNewPassword)}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"
+                        disabled={isPasswordActionInProgress}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 disabled:opacity-50"
                       >
                         {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
+                    </div>
+                    <div className="rounded-xl border border-dashed bg-gray-50 p-4 space-y-2">
+                      <p className="text-sm font-medium text-gray-900">Password requirements</p>
+                      <ul className="space-y-2">
+                        {passwordRequirementStatus.map((item) => (
+                          <li key={item.requirement} className="flex items-start gap-2 text-sm text-gray-700">
+                            <Check className={`mt-0.5 h-4 w-4 ${item.met ? 'text-emerald-600' : 'text-gray-300'}`} />
+                            <span className={item.met ? 'text-gray-900' : ''}>{item.requirement}</span>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -367,11 +454,19 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                       type="password"
                       value={passwordData.confirmPassword}
                       onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+                      disabled={isPasswordActionInProgress}
                       required
                     />
+                    {passwordMismatch && (
+                      <p className="text-sm text-red-600">New password and confirmation do not match.</p>
+                    )}
                   </div>
-                  <Button type="submit" className="w-full gradient-primary">
-                    Update Password
+                  <Button type="submit" className="w-full gradient-primary" disabled={isPasswordActionInProgress}>
+                    {passwordChangeStatus === 'verifying'
+                      ? 'Verifying...'
+                      : passwordChangeStatus === 'changing'
+                        ? 'Changing password...'
+                        : 'Change Password'}
                   </Button>
                 </form>
 

@@ -2,7 +2,7 @@ import express, { NextFunction, Request, RequestHandler, Response } from 'expres
 import prisma from '../prisma';
 import { getUserProfileById } from '../services/userProfile';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
-import { verifyPassword } from '../lib/auth';
+import { hashPassword, signPasswordChangeToken, verifyPassword, verifyPasswordChangeToken } from '../lib/auth';
 
 const router = express.Router();
 
@@ -27,6 +27,21 @@ interface UpdateUserBody {
   username: string;
   branch: string;
   year: string | number;
+}
+
+interface VerifyPasswordBody {
+  currentPassword: string;
+}
+
+interface ChangePasswordBody {
+  changeToken: string;
+  newPassword: string;
+}
+
+const passwordRequirements = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/;
+
+function passwordRequirementMessage(): string {
+  return 'Password must be at least 8 characters long and contain at least one lowercase letter, one uppercase letter, one number, and one special character (!@#$%^&*).';
 }
 
 router.get('/:userId', async (req: Request<GetUserParams>, res: Response) => {
@@ -121,6 +136,97 @@ router.patch(
       }
 
       console.error('Error updating user profile:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
+
+router.post(
+  '/:userId/password/verify',
+  async (req: Request<GetUserParams, unknown, Partial<VerifyPasswordBody>>, res: Response) => {
+    const { userId } = req.params;
+    const { currentPassword } = req.body;
+
+    if (!currentPassword) {
+      return res.status(400).json({ message: 'Current password is required' });
+    }
+
+    try {
+      const rows = await prisma.$queryRaw<{ password_hash: string }[]>`
+        SELECT password_hash
+        FROM users
+        WHERE user_id = ${userId}
+      `;
+
+      const row = rows[0];
+      if (!row) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      const passwordMatches = await verifyPassword(currentPassword, row.password_hash);
+      if (!passwordMatches) {
+        return res.status(401).json({ message: 'Current password is incorrect' });
+      }
+
+      return res.status(200).json({ changeToken: signPasswordChangeToken(userId) });
+    } catch (err) {
+      console.error('Error verifying current password:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
+
+router.patch(
+  '/:userId/password',
+  async (req: Request<GetUserParams, unknown, Partial<ChangePasswordBody>>, res: Response) => {
+    const { userId } = req.params;
+    const { changeToken, newPassword } = req.body;
+
+    if (!changeToken) {
+      return res.status(400).json({ message: 'Password change token is required' });
+    }
+
+    if (!newPassword) {
+      return res.status(400).json({ message: 'New password is required' });
+    }
+
+    if (!passwordRequirements.test(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password does not meet the requirements.',
+        details: passwordRequirementMessage(),
+      });
+    }
+
+    try {
+      const tokenPayload = verifyPasswordChangeToken(changeToken);
+      if (tokenPayload.userId !== userId) {
+        return res.status(403).json({ message: 'Invalid password change token' });
+      }
+
+      const rows = await prisma.$queryRaw<{ user_id: string }[]>`
+        SELECT user_id
+        FROM users
+        WHERE user_id = ${userId}
+      `;
+
+      if (!rows[0]) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      await prisma.$queryRaw`
+        UPDATE users
+        SET password_hash = ${hashPassword(newPassword)}, updated_at = NOW()
+        WHERE user_id = ${userId}
+      `;
+
+      return res.status(200).json({ message: 'Password updated successfully' });
+    } catch (err) {
+      if (err instanceof Error && err.message === 'Invalid password change token') {
+        return res.status(401).json({ message: 'Invalid or expired password change token' });
+      }
+
+      console.error('Error updating password:', err);
       return res.status(500).json({ message: 'Internal server error' });
     }
   }
