@@ -19,6 +19,10 @@ interface SettingsPageProps {
 
 export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPageProps) {
   const auth = useAuth();
+  const isAlumni = auth.profile?.type === 'alumni';
+  const alumniPassingYear = auth.profile?.details?.passingYear ?? student.year;
+  const currentCalendarYear = new Date().getFullYear();
+  const passingYearOptions = Array.from({ length: 41 }, (_, index) => currentCalendarYear - 20 + index);
 
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
@@ -148,16 +152,26 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="year">Year</Label>
+                  <Label htmlFor="year">{isAlumni ? 'Passing Year' : 'Year'}</Label>
                   <select
                     id="year"
-                    defaultValue={student.year}
+                    defaultValue={isAlumni ? alumniPassingYear : student.year}
                     className="w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50"
                   >
-                    <option value="1">1st Year</option>
-                    <option value="2">2nd Year</option>
-                    <option value="3">3rd Year</option>
-                    <option value="4">4th Year</option>
+                    {isAlumni ? (
+                      passingYearOptions.map((year) => (
+                        <option key={year} value={year}>
+                          {year}
+                        </option>
+                      ))
+                    ) : (
+                      <>
+                        <option value="1">1st Year</option>
+                        <option value="2">2nd Year</option>
+                        <option value="3">3rd Year</option>
+                        <option value="4">4th Year</option>
+                      </>
+                    )}
                   </select>
                 </div>
                 <Button className="w-full gradient-primary">
