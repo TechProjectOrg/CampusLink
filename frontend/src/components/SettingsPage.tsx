@@ -1,5 +1,24 @@
 import { useEffect, useState } from 'react';
-import { Bell, Check, Edit2, Eye, EyeOff, Lock, Save, Shield, Trash2, User, X } from 'lucide-react';
+import {
+  ArrowLeft,
+  Bell,
+  Check,
+  ChevronRight,
+  Clock,
+  Edit2,
+  Eye,
+  EyeOff,
+  Globe,
+  KeyRound,
+  Lock,
+  MapPin,
+  MonitorSmartphone,
+  Save,
+  Shield,
+  Trash2,
+  User,
+  X,
+} from 'lucide-react';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -61,11 +80,39 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [passwordChangeStatus, setPasswordChangeStatus] = useState<'idle' | 'verifying' | 'changing'>('idle');
+  const [securityView, setSecurityView] = useState<'menu' | 'password' | 'sessions'>('menu');
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   });
+
+  const demoSessions = [
+    {
+      id: 'session-1',
+      device: 'Chrome on Windows',
+      location: 'Greater Noida, India',
+      browser: 'Chrome 125',
+      lastActive: 'Active now',
+      isCurrent: true,
+    },
+    {
+      id: 'session-2',
+      device: 'Safari on iPhone',
+      location: 'Delhi, India',
+      browser: 'Safari Mobile',
+      lastActive: '2 hours ago',
+      isCurrent: false,
+    },
+    {
+      id: 'session-3',
+      device: 'Edge on Laptop',
+      location: 'Lucknow, India',
+      browser: 'Microsoft Edge',
+      lastActive: 'Yesterday',
+      isCurrent: false,
+    },
+  ];
 
   const [notificationSettings, setNotificationSettings] = useState({
     emailNotifications: true,
@@ -148,6 +195,158 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
 
     void performPasswordChange();
   };
+
+  const handleBackToSecurityMenu = () => {
+    setSecurityView('menu');
+  };
+
+  const renderPasswordForm = () => (
+    <Card>
+      <CardHeader className="flex flex-row items-start justify-between gap-4">
+        <div>
+          <h2 className="text-gray-900">Change Password</h2>
+          <p className="text-gray-600">Update your password to keep your account secure</p>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={handleBackToSecurityMenu}>
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back
+        </Button>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handlePasswordChange} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="current-password">Current Password</Label>
+            <div className="relative">
+              <Input
+                id="current-password"
+                type={showCurrentPassword ? 'text' : 'password'}
+                value={passwordData.currentPassword}
+                onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+                disabled={isPasswordActionInProgress}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                disabled={isPasswordActionInProgress}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 disabled:opacity-50"
+              >
+                {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="new-password">New Password</Label>
+            <div className="relative">
+              <Input
+                id="new-password"
+                type={showNewPassword ? 'text' : 'password'}
+                value={passwordData.newPassword}
+                onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+                disabled={isPasswordActionInProgress}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowNewPassword(!showNewPassword)}
+                disabled={isPasswordActionInProgress}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 disabled:opacity-50"
+              >
+                {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <div className="rounded-xl border border-dashed bg-gray-50 p-4 space-y-2">
+              <p className="text-sm font-medium text-gray-900">Password requirements</p>
+              <ul className="space-y-2">
+                {passwordRequirementStatus.map((item) => (
+                  <li key={item.requirement} className="flex items-start gap-2 text-sm text-gray-700">
+                    <Check className={`mt-0.5 h-4 w-4 ${item.met ? 'text-emerald-600' : 'text-gray-300'}`} />
+                    <span className={item.met ? 'text-gray-900' : ''}>{item.requirement}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirm-password">Confirm New Password</Label>
+            <Input
+              id="confirm-password"
+              type="password"
+              value={passwordData.confirmPassword}
+              onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+              disabled={isPasswordActionInProgress}
+              required
+            />
+            {passwordMismatch && (
+              <p className="text-sm text-red-600">New password and confirmation do not match.</p>
+            )}
+          </div>
+          <Button type="submit" className="w-full gradient-primary" disabled={isPasswordActionInProgress}>
+            {passwordChangeStatus === 'verifying'
+              ? 'Verifying...'
+              : passwordChangeStatus === 'changing'
+                ? 'Changing password...'
+                : 'Change Password'}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
+
+  const renderSessionsView = () => (
+    <Card>
+      <CardHeader className="flex flex-row items-start justify-between gap-4">
+        <div>
+          <h2 className="text-gray-900">Where You Are Logged In</h2>
+          <p className="text-gray-600">Demo view of devices, browsers, and recent locations.</p>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={handleBackToSecurityMenu}>
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {demoSessions.map((session) => (
+          <div key={session.id} className="rounded-2xl border bg-white p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <MonitorSmartphone className="h-5 w-5 text-primary" />
+                  <h3 className="text-gray-900">{session.device}</h3>
+                </div>
+                <div className="flex flex-wrap gap-3 text-sm text-gray-600">
+                  <span className="inline-flex items-center gap-1">
+                    <Globe className="h-4 w-4" />
+                    {session.browser}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <MapPin className="h-4 w-4" />
+                    {session.location}
+                  </span>
+                  <span className="inline-flex items-center gap-1">
+                    <Clock className="h-4 w-4" />
+                    {session.lastActive}
+                  </span>
+                </div>
+              </div>
+              {session.isCurrent ? (
+                <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">
+                  Current session
+                </span>
+              ) : (
+                <Button type="button" variant="outline" size="sm">
+                  Log out
+                </Button>
+              )}
+            </div>
+          </div>
+        ))}
+        <div className="rounded-xl border border-dashed bg-gray-50 p-4 text-sm text-gray-600">
+          This is a demo list for now. When backend session tracking is added, this view can show real active devices.
+        </div>
+      </CardContent>
+    </Card>
+  );
 
   const passwordMismatch =
     passwordData.confirmPassword.length > 0 && passwordData.newPassword !== passwordData.confirmPassword;
@@ -387,94 +586,54 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
 
           {/* Security Settings */}
           <TabsContent value="security">
-            <Card>
-              <CardHeader>
-                <h2 className="text-gray-900">Change Password</h2>
-                <p className="text-gray-600">Update your password to keep your account secure</p>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handlePasswordChange} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="current-password">Current Password</Label>
-                    <div className="relative">
-                      <Input
-                        id="current-password"
-                        type={showCurrentPassword ? 'text' : 'password'}
-                        value={passwordData.currentPassword}
-                        onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                        disabled={isPasswordActionInProgress}
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                        disabled={isPasswordActionInProgress}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 disabled:opacity-50"
-                      >
-                        {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="new-password">New Password</Label>
-                    <div className="relative">
-                      <Input
-                        id="new-password"
-                        type={showNewPassword ? 'text' : 'password'}
-                        value={passwordData.newPassword}
-                        onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                        disabled={isPasswordActionInProgress}
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowNewPassword(!showNewPassword)}
-                        disabled={isPasswordActionInProgress}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 disabled:opacity-50"
-                      >
-                        {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                    <div className="rounded-xl border border-dashed bg-gray-50 p-4 space-y-2">
-                      <p className="text-sm font-medium text-gray-900">Password requirements</p>
-                      <ul className="space-y-2">
-                        {passwordRequirementStatus.map((item) => (
-                          <li key={item.requirement} className="flex items-start gap-2 text-sm text-gray-700">
-                            <Check className={`mt-0.5 h-4 w-4 ${item.met ? 'text-emerald-600' : 'text-gray-300'}`} />
-                            <span className={item.met ? 'text-gray-900' : ''}>{item.requirement}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="confirm-password">Confirm New Password</Label>
-                    <Input
-                      id="confirm-password"
-                      type="password"
-                      value={passwordData.confirmPassword}
-                      onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                      disabled={isPasswordActionInProgress}
-                      required
-                    />
-                    {passwordMismatch && (
-                      <p className="text-sm text-red-600">New password and confirmation do not match.</p>
-                    )}
-                  </div>
-                  <Button type="submit" className="w-full gradient-primary" disabled={isPasswordActionInProgress}>
-                    {passwordChangeStatus === 'verifying'
-                      ? 'Verifying...'
-                      : passwordChangeStatus === 'changing'
-                        ? 'Changing password...'
-                        : 'Change Password'}
-                  </Button>
-                </form>
+            <div className="space-y-4">
+              {securityView === 'menu' && (
+                <Card>
+                  <CardHeader>
+                    <h2 className="text-gray-900">Security</h2>
+                    <p className="text-gray-600">Choose what you want to manage</p>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <button
+                      type="button"
+                      onClick={() => setSecurityView('password')}
+                      className="flex w-full items-center justify-between rounded-2xl border bg-white px-4 py-4 text-left transition hover:border-primary/40 hover:bg-primary/5"
+                    >
+                      <span className="flex items-center gap-3">
+                        <span className="rounded-full bg-primary/10 p-2 text-primary">
+                          <KeyRound className="h-5 w-5" />
+                        </span>
+                        <span>
+                          <span className="block text-gray-900">Change Password</span>
+                          <span className="block text-sm text-gray-600">Update your account password</span>
+                        </span>
+                      </span>
+                      <ChevronRight className="h-5 w-5 text-gray-400" />
+                    </button>
 
-                <Separator className="my-6" />
+                    <button
+                      type="button"
+                      onClick={() => setSecurityView('sessions')}
+                      className="flex w-full items-center justify-between rounded-2xl border bg-white px-4 py-4 text-left transition hover:border-primary/40 hover:bg-primary/5"
+                    >
+                      <span className="flex items-center gap-3">
+                        <span className="rounded-full bg-primary/10 p-2 text-primary">
+                          <MonitorSmartphone className="h-5 w-5" />
+                        </span>
+                        <span>
+                          <span className="block text-gray-900">Where You Are Logged In</span>
+                          <span className="block text-sm text-gray-600">See devices, browsers, and locations</span>
+                        </span>
+                      </span>
+                      <ChevronRight className="h-5 w-5 text-gray-400" />
+                    </button>
+                  </CardContent>
+                </Card>
+              )}
 
-
-              </CardContent>
-            </Card>
+              {securityView === 'password' && renderPasswordForm()}
+              {securityView === 'sessions' && renderSessionsView()}
+            </div>
           </TabsContent>
 
           {/* Notification Settings */}
