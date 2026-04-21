@@ -146,6 +146,11 @@ export function ProfilePhotoUpload({
         isOpen={actionOpen}
         onClose={() => setActionOpen(false)}
         title={hasCustomPhoto ? 'Edit profile picture' : 'Add profile picture'}
+        style={{
+          width: 'min(24rem, calc(100vw - 2rem))',
+          minWidth: '18rem',
+          maxWidth: 'calc(100vw - 2rem)',
+        }}
       >
         <div className="space-y-4">
           <div className="flex items-center gap-3 rounded-2xl border bg-gray-50 p-3">
@@ -193,9 +198,14 @@ export function ProfilePhotoUpload({
           setSourceImage(null);
         }}
         title="Crop profile picture"
+        style={{
+          width: 'min(32rem, calc(100vw - 2rem))',
+          minWidth: '22rem',
+          maxWidth: 'calc(100vw - 2rem)',
+        }}
       >
-        <div className="space-y-4">
-          <div className="relative h-80 w-full overflow-hidden rounded-2xl bg-gray-950">
+        <div className="space-y-3">
+          <div className="relative mx-auto aspect-square w-full max-w-[19rem] overflow-hidden rounded-2xl bg-gray-950 sm:max-w-[20rem] md:max-w-[21rem] lg:max-w-[22rem]">
             {sourceImage && (
               <Cropper
                 image={sourceImage}
@@ -204,27 +214,12 @@ export function ProfilePhotoUpload({
                 aspect={1}
                 cropShape="round"
                 showGrid={false}
+                zoomWithScroll
                 onCropChange={setCrop}
                 onZoomChange={setZoom}
                 onCropComplete={(_, croppedPixels) => setCroppedAreaPixels(croppedPixels)}
               />
             )}
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between text-sm text-gray-600">
-              <span>Zoom</span>
-              <span>{Math.round(zoom * 100)}%</span>
-            </div>
-            <input
-              type="range"
-              min="1"
-              max="3"
-              step="0.01"
-              value={zoom}
-              onChange={(event) => setZoom(Number(event.target.value))}
-              className="w-full accent-blue-600"
-            />
           </div>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
