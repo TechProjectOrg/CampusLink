@@ -22,7 +22,7 @@ import {
   Trash2,
   Github,
   Globe,
-  Camera,
+  Upload,
   Link as LinkIcon,
   Check,
 } from 'lucide-react';
@@ -53,6 +53,8 @@ import { Checkbox } from './ui/checkbox';
 import { Modal } from './ui/modal';
 import { DatePicker } from './ui/date-picker';
 import { ImageWithFallback } from './figma/ImageWithFallback';
+import { ProfilePhotoUpload } from './ui/profile-photo-upload';
+import { apiUpdateUserProfilePicture } from '../lib/authApi';
 
 interface ProfilePageProps {
   student: Student;
@@ -135,12 +137,9 @@ export function ProfilePage({
   onCancelRequest,
 }: ProfilePageProps) {
   const auth = useAuth();
-  const photoInputRef = useRef<HTMLInputElement>(null);
 
   // Profile state
   const [editedStudent, setEditedStudent] = useState(student);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [isPhotoHovering, setIsPhotoHovering] = useState(false);
 
   // Skills state
   const [skills, setSkills] = useState<UserSkill[]>([]);
@@ -324,17 +323,16 @@ export function ProfilePage({
     closeModal();
   };
 
-  // Photo upload
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhotoPreview(reader.result as string);
-        setEditedStudent({ ...editedStudent, avatar: reader.result as string });
-      };
-      reader.readAsDataURL(file);
-    }
+  const currentProfilePhoto = auth.profile?.profilePictureUrl ?? null;
+  const hasCustomProfilePhoto = Boolean(auth.profile?.profilePictureUrl);
+  const displayedProfilePhoto = currentProfilePhoto ?? student.avatar;
+
+  const handleProfilePhotoChange = async (photoUrl: string | null) => {
+    if (!isOwnProfile || !authUserId) return;
+
+    await apiUpdateUserProfilePicture(authUserId, photoUrl, authToken);
+    onEdit?.({ avatar: photoUrl ?? student.avatar });
+    await auth.refreshProfile();
   };
 
   // Skill handlers
@@ -619,36 +617,13 @@ export function ProfilePage({
             <div className="flex flex-col md:flex-row md:items-end gap-4 -mt-16">
               {/* Profile Photo with Upload */}
               <div className="relative">
-                <input
-                  type="file"
-                  ref={photoInputRef}
-                  onChange={handlePhotoChange}
-                  className="hidden"
-                  accept="image/*"
+                <ProfilePhotoUpload
+                  currentPhoto={displayedProfilePhoto}
+                  hasCustomPhoto={hasCustomProfilePhoto}
+                  name={student.name}
+                  editable={isOwnProfile}
+                  onPhotoChange={handleProfilePhotoChange}
                 />
-                <div
-                  className="relative w-32 h-32 rounded-full cursor-pointer"
-                  onMouseEnter={() => setIsPhotoHovering(true)}
-                  onMouseLeave={() => setIsPhotoHovering(false)}
-                  onClick={() => isOwnProfile && photoInputRef.current?.click()}
-                >
-                  <Avatar className="w-32 h-32 ring-4 ring-white shadow-xl">
-                    <AvatarImage src={photoPreview || student.avatar} className="object-cover" />
-                    <AvatarFallback className="text-4xl bg-gradient-to-br from-blue-500 to-blue-600 text-white">
-                      {student.name[0]}
-                    </AvatarFallback>
-                  </Avatar>
-                  
-                  {/* Hover overlay for photo change */}
-                  {isOwnProfile && isPhotoHovering && (
-                    <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center transition-all">
-                      <div className="text-center text-white">
-                        <Camera className="w-6 h-6 mx-auto" />
-                        <span className="text-xs font-medium">Change</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
 
               {/* Profile Info */}
@@ -1140,7 +1115,7 @@ export function ProfilePage({
                 <img src={projectImagePreview} alt="Preview" className="w-full h-32 object-cover rounded-lg" />
               ) : (
                 <div className="py-4">
-                  <Camera className="w-8 h-8 mx-auto text-gray-400" />
+                  <Upload className="w-8 h-8 mx-auto text-gray-400" />
                   <p className="text-sm text-gray-500 mt-2">Click to upload image</p>
                 </div>
               )}
@@ -1234,7 +1209,7 @@ export function ProfilePage({
                 <img src={certImagePreview} alt="Preview" className="w-full h-24 object-cover rounded-lg" />
               ) : (
                 <div className="py-2">
-                  <Camera className="w-6 h-6 mx-auto text-gray-400" />
+                  <Upload className="w-6 h-6 mx-auto text-gray-400" />
                   <p className="text-xs text-gray-500 mt-1">Upload certificate image</p>
                 </div>
               )}

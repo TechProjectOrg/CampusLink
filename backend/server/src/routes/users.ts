@@ -29,6 +29,10 @@ interface UpdateUserBody {
   year: string | number;
 }
 
+interface UpdateProfilePictureBody {
+  profilePictureUrl?: string | null;
+}
+
 interface VerifyPasswordBody {
   currentPassword: string;
 }
@@ -341,6 +345,48 @@ router.patch(
       }
 
       console.error('Error updating user profile:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
+
+router.patch(
+  '/:userId/profile-picture',
+  async (
+    req: Request<GetUserParams, unknown, UpdateProfilePictureBody>,
+    res: Response,
+  ) => {
+    const { userId } = req.params;
+    const { profilePictureUrl } = req.body;
+
+    if (profilePictureUrl === undefined) {
+      return res.status(400).json({ message: 'profilePictureUrl is required' });
+    }
+
+    const nextPhoto =
+      typeof profilePictureUrl === 'string'
+        ? profilePictureUrl.trim() || null
+        : profilePictureUrl;
+
+    if (nextPhoto !== null && typeof nextPhoto !== 'string') {
+      return res.status(400).json({ message: 'profilePictureUrl must be a string or null' });
+    }
+
+    try {
+      await prisma.$queryRaw`
+        UPDATE users
+        SET profile_photo_url = ${nextPhoto}
+        WHERE user_id = ${userId}
+      `;
+
+      const updatedProfile = await getUserProfileById(userId);
+      if (!updatedProfile) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      return res.status(200).json(updatedProfile);
+    } catch (err) {
+      console.error('Error updating profile picture:', err);
       return res.status(500).json({ message: 'Internal server error' });
     }
   }

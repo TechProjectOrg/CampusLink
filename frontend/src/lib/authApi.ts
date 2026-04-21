@@ -247,6 +247,28 @@ export async function apiUpdateUserProfile(
   return (await response.json()) as ApiUserProfile;
 }
 
+export async function apiUpdateUserProfilePicture(
+  userId: string,
+  profilePictureUrl: string | null,
+  token?: string
+): Promise<ApiUserProfile> {
+  const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}/profile-picture`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(token),
+    },
+    body: JSON.stringify({ profilePictureUrl }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to update profile picture');
+  }
+
+  return (await response.json()) as ApiUserProfile;
+}
+
 export async function apiDeleteAccount(userId: string, password: string, token?: string): Promise<void> {
   const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}`, {
     method: 'DELETE',
