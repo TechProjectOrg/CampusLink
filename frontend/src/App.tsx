@@ -859,7 +859,7 @@ export default function App() {
   }, [opportunities, openedPost]);
 
   useEffect(() => {
-    if (activeTab !== 'post' || openedPost || !openedPostId || !authToken) return;
+    if (activeTab !== 'post' || !openedPostId || !authToken) return;
 
     let cancelled = false;
 
@@ -867,7 +867,11 @@ export default function App() {
       try {
         const post = await apiFetchPostById(openedPostId, authToken);
         if (cancelled) return;
-        setOpenedPost(userPostToOpportunity(post, currentUser));
+        const mapped = userPostToOpportunity(post, currentUser);
+        setOpenedPost(mapped);
+        setOpportunities((prev) =>
+          prev.map((item) => (item.id === mapped.id ? mapped : item))
+        );
       } catch (err) {
         if (cancelled) return;
         toast.error(err instanceof Error ? err.message : 'Unable to open post');
@@ -878,7 +882,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, openedPost, openedPostId, authToken, currentUser]);
+  }, [activeTab, openedPostId, authToken, currentUser]);
 
   const persistCreatedPost = async (draft: any) => {
     if (!authToken) {
@@ -1196,6 +1200,7 @@ export default function App() {
       const entityId = notification.entityId?.trim();
 
       if (entityType === 'post' && entityId) {
+        setOpenedPost(null);
         navigate('post', undefined, entityId);
         return;
       }
@@ -1206,6 +1211,7 @@ export default function App() {
           if (!context.postId) {
             throw new Error('Unable to locate post for this comment');
           }
+          setOpenedPost(null);
           navigate('post', undefined, context.postId, { commentId: context.commentId });
           return;
         } catch (err) {
@@ -1226,6 +1232,7 @@ export default function App() {
           break;
         case 'opportunity':
           if (entityId) {
+            setOpenedPost(null);
             navigate('post', undefined, entityId);
           } else {
             navigate('feed');
