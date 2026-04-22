@@ -85,7 +85,7 @@ interface UserSettingsResponse {
     newMessages: boolean;
     opportunityAlerts: boolean;
     clubUpdates: boolean;
-    weeklyDigest: boolean;
+    newPostAlerts: boolean;
   };
   privacy: {
     accountType: 'public' | 'private';
@@ -96,7 +96,7 @@ interface UserSettingsResponse {
 }
 
 interface UpdateUserSettingsBody {
-  notifications?: Partial<UserSettingsResponse['notifications']>;
+  notifications?: Partial<UserSettingsResponse['notifications']> & { weeklyDigest?: boolean };
   privacy?: Partial<UserSettingsResponse['privacy']>;
 }
 
@@ -283,7 +283,7 @@ function settingsFromRow(row: UserSettingsRow): UserSettingsResponse {
       newMessages: row.message_notifications ?? true,
       opportunityAlerts: row.opportunity_alerts ?? true,
       clubUpdates: row.club_update_notifications ?? true,
-      weeklyDigest: row.weekly_digest_enabled ?? false,
+      newPostAlerts: row.weekly_digest_enabled ?? false,
     },
     privacy: {
       accountType: row.is_private ? 'private' : 'public',
@@ -407,7 +407,10 @@ router.patch(
           opportunityAlerts:
             notifications?.opportunityAlerts ?? current.notifications.opportunityAlerts,
           clubUpdates: notifications?.clubUpdates ?? current.notifications.clubUpdates,
-          weeklyDigest: notifications?.weeklyDigest ?? current.notifications.weeklyDigest,
+          newPostAlerts:
+            notifications?.newPostAlerts ??
+            notifications?.weeklyDigest ??
+            current.notifications.newPostAlerts,
         },
         privacy: {
           accountType: privacy?.accountType ?? current.privacy.accountType,
@@ -444,7 +447,7 @@ router.patch(
             ${next.notifications.newMessages},
             ${next.notifications.opportunityAlerts},
             ${next.notifications.clubUpdates},
-            ${next.notifications.weeklyDigest},
+            ${next.notifications.newPostAlerts},
             ${next.privacy.showEmail},
             ${next.privacy.showProjects},
             ${next.privacy.allowMessages}

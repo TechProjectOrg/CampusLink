@@ -37,6 +37,63 @@ interface NotificationRealtimeRow {
   user_id: string;
 }
 
+interface NotificationSettingsRow {
+  follow_request_notifications: boolean | null;
+  message_notifications: boolean | null;
+  opportunity_alerts: boolean | null;
+  club_update_notifications: boolean | null;
+  weekly_digest_enabled: boolean | null;
+}
+
+interface NotificationPreferenceSnapshot {
+  followRequests: boolean;
+  newMessages: boolean;
+  opportunityAlerts: boolean;
+  clubUpdates: boolean;
+  newPostAlerts: boolean;
+}
+
+async function loadRecipientNotificationPreferences(userId: string): Promise<NotificationPreferenceSnapshot> {
+  const rows = await prisma.$queryRaw<NotificationSettingsRow[]>`
+    SELECT
+      follow_request_notifications,
+      message_notifications,
+      opportunity_alerts,
+      club_update_notifications,
+      weekly_digest_enabled
+    FROM user_settings
+    WHERE user_id = ${userId}
+    LIMIT 1
+  `;
+
+  const row = rows[0];
+  return {
+    followRequests: row?.follow_request_notifications ?? true,
+    newMessages: row?.message_notifications ?? true,
+    opportunityAlerts: row?.opportunity_alerts ?? true,
+    clubUpdates: row?.club_update_notifications ?? true,
+    newPostAlerts: row?.weekly_digest_enabled ?? false,
+  };
+}
+
+async function isNotificationEnabled(recipientUserId: string, type: NotificationType): Promise<boolean> {
+  const prefs = await loadRecipientNotificationPreferences(recipientUserId);
+
+  if (type === 'follow' || type === 'follow_request' || type === 'follow_accept' || type === 'follow_reject') {
+    return prefs.followRequests;
+  }
+
+  if (type === 'like' || type === 'comment' || type === 'reply') {
+    return prefs.opportunityAlerts;
+  }
+
+  if (type === 'opportunity') {
+    return prefs.newPostAlerts;
+  }
+
+  return true;
+}
+
 function buildGroupedLikeMessage(names: string[], total: number, target: 'post' | 'comment'): string {
   const safeNames = names.filter(Boolean);
   const first = safeNames[0] ?? 'Someone';
@@ -121,6 +178,18 @@ async function upsertGroupedLikeNotification(params: {
   entityId: string;
   message: string;
 }): Promise<void> {
+  const enabled = await isNotificationEnabled(params.recipientUserId, 'like');
+  if (!enabled) {
+    await prisma.$queryRaw`
+      DELETE FROM notifications
+      WHERE user_id = ${params.recipientUserId}
+        AND notification_type = 'like'
+        AND entity_type = ${params.entityType}
+        AND entity_id = ${params.entityId}
+    `;
+    return;
+  }
+
   const existingRows = await prisma.$queryRaw<{ notification_id: string }[]>`
     SELECT notification_id
     FROM notifications
@@ -179,6 +248,10 @@ async function upsertGroupedLikeNotification(params: {
 
 export async function createNotification(params: CreateNotificationParams): Promise<void> {
   try {
+    if (!(await isNotificationEnabled(params.recipientUserId, params.type))) {
+      return;
+    }
+
     const rows = await prisma.$queryRaw<{ notification_id: string }[]>`
       INSERT INTO notifications (
         user_id,
@@ -246,8 +319,10 @@ export async function createPostPublishedNotifications(params: {
         'post',
         ${params.postId}
       FROM follows f
+      LEFT JOIN user_settings us ON us.user_id = f.follower_user_id
       WHERE f.followed_user_id = ${params.authorUserId}
         AND f.follower_user_id <> ${params.authorUserId}
+        AND COALESCE(us.weekly_digest_enabled, FALSE) = TRUE
       RETURNING notification_id
     `;
 

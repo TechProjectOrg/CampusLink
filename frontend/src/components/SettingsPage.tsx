@@ -94,7 +94,7 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
     newMessages: true,
     opportunityAlerts: true,
     clubUpdates: true,
-    weeklyDigest: false
+    newPostAlerts: false
   });
 
   const [privacySettings, setPrivacySettings] = useState({
@@ -836,8 +836,8 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
 
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
-                    <p className="text-gray-900">Opportunity Alerts</p>
-                    <p className="text-sm text-gray-600">New internships, hackathons, and events</p>
+                    <p className="text-gray-900">Post Interactions</p>
+                    <p className="text-sm text-gray-600">Likes, comments, and replies on your posts/comments</p>
                   </div>
                   <Switch
                     checked={notificationSettings.opportunityAlerts}
@@ -868,14 +868,14 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
 
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
-                    <p className="text-gray-900">Weekly Digest</p>
-                    <p className="text-sm text-gray-600">Summary of your weekly activity</p>
+                    <p className="text-gray-900">New Post Alerts</p>
+                    <p className="text-sm text-gray-600">Get alerts when people you follow publish a new post</p>
                   </div>
                   <Switch
-                    checked={notificationSettings.weeklyDigest}
+                    checked={notificationSettings.newPostAlerts}
                     disabled={settingsLoading || savingNotifications}
                     onCheckedChange={(checked) => {
-                      const next = { ...notificationSettings, weeklyDigest: checked };
+                      const next = { ...notificationSettings, newPostAlerts: checked };
                       setNotificationSettings(next);
                       void persistNotificationSettings(next);
                     }}

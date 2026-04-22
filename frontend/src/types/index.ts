@@ -208,7 +208,7 @@ export interface ApiUserSettings {
     newMessages: boolean;
     opportunityAlerts: boolean;
     clubUpdates: boolean;
-    weeklyDigest: boolean;
+    newPostAlerts: boolean;
   };
   privacy: {
     accountType: AccountType;
