@@ -24,6 +24,7 @@ interface FeedPageProps {
   onDeleteComment: (commentId: string) => void;
   onEditPost: (postId: string, updates: Partial<Opportunity>) => void;
   onDeletePost: (postId: string) => void;
+  onOpenPost: (post: Opportunity) => void;
 
   onCreateOpportunity?: (opportunity: Opportunity) => void;
   onCreatePost?: (post: any) => void;
@@ -47,6 +48,7 @@ export function FeedPage({
   onDeleteComment,
   onEditPost,
   onDeletePost,
+  onOpenPost,
   onCreateOpportunity,
   onCreatePost,
   onCreateEvent,
@@ -150,6 +152,7 @@ export function FeedPage({
                     onDeleteComment={onDeleteComment}
                     onEditPost={onEditPost}
                     onDeletePost={onDeletePost}
+                    onOpenPost={onOpenPost}
 
                     onViewProfile={onViewStudentProfile}
                   />

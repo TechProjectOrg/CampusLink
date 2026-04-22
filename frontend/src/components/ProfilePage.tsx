@@ -76,6 +76,7 @@ interface ProfilePageProps {
   onDeleteComment?: (commentId: string) => void;
   onEditPost?: (postId: string, updates: Partial<Opportunity>) => void;
   onDeletePost?: (postId: string) => void;
+  onOpenPost?: (post: Opportunity) => void;
   postsRefreshToken?: number;
 }
 
@@ -143,6 +144,7 @@ export function ProfilePage({
   onDeleteComment,
   onEditPost,
   onDeletePost,
+  onOpenPost,
   postsRefreshToken = 0,
   currentUserId,
   followGraph,
@@ -918,6 +920,7 @@ export function ProfilePage({
                     onDeleteComment={(commentId) => onDeleteComment?.(commentId)}
                     onEditPost={(postId, updates) => onEditPost?.(postId, updates)}
                     onDeletePost={(postId) => onDeletePost?.(postId)}
+                    onOpenPost={onOpenPost}
                     onViewProfile={() => undefined}
                   />
                 ))}

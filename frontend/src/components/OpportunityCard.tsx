@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Heart, MessageCircle, Bookmark, ExternalLink, MapPin, Calendar, Trash2, Pencil } from 'lucide-react';
+import { Heart, MessageCircle, Bookmark, MapPin, Calendar, Trash2, Pencil } from 'lucide-react';
 import { Opportunity, Comment } from '../types';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -7,7 +7,6 @@ import { Badge } from './ui/badge';
 import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
 import { ImageWithFallback } from './figma/ImageWithFallback';
-import { Modal } from './ui/modal';
 
 interface OpportunityCardProps {
   opportunity: Opportunity;
@@ -22,6 +21,7 @@ interface OpportunityCardProps {
   onEditPost?: (postId: string, updates: Partial<Opportunity>) => void;
   onDeletePost?: (postId: string) => void;
   onViewProfile?: (authorId: string) => void;
+  onOpenPost?: (post: Opportunity) => void;
 }
 
 export function OpportunityCard({
@@ -37,6 +37,7 @@ export function OpportunityCard({
   onEditPost,
   onDeletePost,
   onViewProfile,
+  onOpenPost,
 }: OpportunityCardProps) {
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -44,7 +45,6 @@ export function OpportunityCard({
   const [openReplyByCommentId, setOpenReplyByCommentId] = useState<Record<string, boolean>>({});
   const [expandedRepliesByCommentId, setExpandedRepliesByCommentId] = useState<Record<string, boolean>>({});
   const [editingPost, setEditingPost] = useState(false);
-  const [isPostOpen, setIsPostOpen] = useState(false);
   const [editDraft, setEditDraft] = useState({
     title: opportunity.title,
     description: opportunity.description,
@@ -197,96 +197,6 @@ export function OpportunityCard({
     );
   };
 
-  const renderCommentItemExpanded = (comment: Comment, depth = 0) => {
-    const childComments = comment.replies ?? [];
-    const isCommentLiked = comment.isLikedByMe ?? false;
-    const commentLikes = comment.likeCount ?? 0;
-
-    return (
-      <div key={comment.id} className={`${depth > 0 ? 'ml-8 mt-3' : ''}`}>
-        <div className="flex gap-3">
-          <Avatar className="w-8 h-8 ring-2 ring-primary/10">
-            <AvatarImage src={comment.authorAvatar} />
-            <AvatarFallback>{comment.authorName[0]}</AvatarFallback>
-          </Avatar>
-          <div className="flex-1">
-            <div className="bg-gray-50 rounded-xl p-3">
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-sm text-gray-900">{comment.authorName}</p>
-                {comment.canDelete && onDeleteComment && (
-                  <button
-                    type="button"
-                    className="text-gray-400 hover:text-red-600"
-                    onClick={() => onDeleteComment(comment.id)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-              <p className="text-sm text-gray-600 mt-1">{comment.content}</p>
-            </div>
-            <div className="mt-2 flex items-center gap-3 text-xs text-gray-500">
-              <span>{new Date(comment.timestamp).toLocaleString()}</span>
-              <button
-                type="button"
-                className={`flex items-center gap-1 ${isCommentLiked ? 'text-red-600' : 'hover:text-gray-700'}`}
-                onClick={() => onLikeComment?.(comment.id, isCommentLiked)}
-              >
-                <Heart className={`w-3 h-3 ${isCommentLiked ? 'fill-current' : ''}`} />
-                {commentLikes}
-              </button>
-              {onReply && (
-                <button
-                  type="button"
-                  className={`flex items-center gap-1 ${openReplyByCommentId[comment.id] ? 'text-primary' : 'hover:text-gray-700'}`}
-                  onClick={() =>
-                    setOpenReplyByCommentId((prev) => ({
-                      ...prev,
-                      [comment.id]: !prev[comment.id],
-                    }))
-                  }
-                >
-                  <MessageCircle className="w-3 h-3" />
-                  Reply
-                </button>
-              )}
-            </div>
-            {onReply && openReplyByCommentId[comment.id] && (
-              <div className="mt-2 flex gap-2">
-                <Input
-                  value={replyByCommentId[comment.id] ?? ''}
-                  onChange={(e) =>
-                    setReplyByCommentId((prev) => ({
-                      ...prev,
-                      [comment.id]: e.target.value,
-                    }))
-                  }
-                  placeholder="Write a reply..."
-                  className="h-8 text-sm"
-                />
-                <Button size="sm" type="button" onClick={() => submitReply(comment.id)}>
-                  Reply
-                </Button>
-              </div>
-            )}
-
-            {childComments.length > 0 && (
-              <button
-                type="button"
-                className="mt-2 text-xs text-primary hover:underline"
-                onClick={() => toggleReplies(comment.id)}
-              >
-                {expandedRepliesByCommentId[comment.id] ? 'Hide replies' : `View replies (${childComments.length})`}
-              </button>
-            )}
-
-            {expandedRepliesByCommentId[comment.id] && childComments.map((reply) => renderCommentItemExpanded(reply, depth + 1))}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
   const submitPostEdit = () => {
     if (!onEditPost) return;
 
@@ -311,13 +221,13 @@ export function OpportunityCard({
 
   const postCore = (
     <>
-      <div className="space-y-2 cursor-pointer" onClick={() => setIsPostOpen(true)}>
+      <div className="space-y-2 cursor-pointer" onClick={() => onOpenPost?.(opportunity)}>
         <h3 className="text-gray-900">{opportunity.title}</h3>
         <p className="text-gray-600">{opportunity.description}</p>
       </div>
 
       {opportunity.image && (
-        <div className="relative w-full overflow-hidden group cursor-pointer" onClick={() => setIsPostOpen(true)}>
+        <div className="relative w-full overflow-hidden group cursor-pointer" onClick={() => onOpenPost?.(opportunity)}>
           <ImageWithFallback
             src={opportunity.image}
             alt={opportunity.title}
@@ -327,7 +237,7 @@ export function OpportunityCard({
         </div>
       )}
 
-      <div className="px-6 pt-4 cursor-pointer" onClick={() => setIsPostOpen(true)}>
+      <div className="px-6 pt-4 cursor-pointer" onClick={() => onOpenPost?.(opportunity)}>
         <div className="flex flex-wrap gap-4 text-sm text-gray-600">
           {opportunity.location && (
             <div className="flex items-center gap-1 transition-colors duration-300 hover:text-primary">
@@ -440,7 +350,7 @@ export function OpportunityCard({
               <button
                 type="button"
                 className="text-sm text-primary hover:underline"
-                onClick={() => setIsPostOpen(true)}
+                onClick={() => onOpenPost?.(opportunity)}
               >
                 View all comments ({topLevelComments.length})
               </button>
@@ -472,108 +382,6 @@ export function OpportunityCard({
           </div>
         )}
       </div>
-
-      <Modal
-        isOpen={isPostOpen}
-        onClose={() => setIsPostOpen(false)}
-        title={opportunity.title || 'Post'}
-        className="w-[min(72rem,calc(100vw-1rem))] min-w-0 max-h-[95vh]"
-      >
-        <div className="space-y-5">
-          <div className="flex items-center gap-3">
-            <Avatar>
-              <AvatarImage src={opportunity.authorAvatar} />
-              <AvatarFallback>{opportunity.authorName[0]}</AvatarFallback>
-            </Avatar>
-            <div>
-              <p className="text-gray-900">{opportunity.authorName}</p>
-              <p className="text-sm text-gray-500">{new Date(opportunity.date).toLocaleString()}</p>
-            </div>
-            <Badge className={`${typeColors[opportunity.type]} border ml-auto`}>
-              {opportunity.type.charAt(0).toUpperCase() + opportunity.type.slice(1)}
-            </Badge>
-          </div>
-
-          <div className="space-y-2">
-            <h2 className="text-xl text-gray-900">{opportunity.title}</h2>
-            <p className="text-gray-700 whitespace-pre-wrap">{opportunity.description}</p>
-          </div>
-
-          {opportunity.image && (
-            <ImageWithFallback src={opportunity.image} alt={opportunity.title} className="w-full max-h-[30rem] object-contain rounded-xl bg-gray-50" />
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-gray-700">
-            <div className="flex items-center gap-2"><Calendar className="w-4 h-4" /><span>Posted: {formatDate(opportunity.date)}</span></div>
-            {opportunity.location && <div className="flex items-center gap-2"><MapPin className="w-4 h-4" /><span>Location: {opportunity.location}</span></div>}
-            {opportunity.company && <div>Company: {opportunity.company}</div>}
-            {opportunity.deadline && <div>Deadline: {formatDate(opportunity.deadline)}</div>}
-            {opportunity.stipend && <div>Stipend: {opportunity.stipend}</div>}
-            {opportunity.duration && <div>Duration: {opportunity.duration}</div>}
-          </div>
-
-          {opportunity.link && (
-            <a href={opportunity.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-primary hover:underline">
-              <ExternalLink className="w-4 h-4" />
-              Open external link
-            </a>
-          )}
-
-          {opportunity.tags && opportunity.tags.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {opportunity.tags.map((tag) => (
-                <Badge key={`${opportunity.id}-${tag}`} className="bg-primary/10 text-primary border-primary/20">
-                  #{tag}
-                </Badge>
-              ))}
-            </div>
-          )}
-
-          <div className="flex items-center gap-2 pt-2 border-t border-primary/10">
-            <button
-              onClick={() => onLike(opportunity.id)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-xl transition-all duration-300 ${
-                isLiked ? 'text-red-600 bg-red-50' : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              <Heart className={`w-5 h-5 ${isLiked ? 'fill-current' : ''}`} />
-              <span className="text-sm">{likeCount}</span>
-            </button>
-            <button
-              onClick={() => onSave(opportunity.id)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-xl transition-all duration-300 ${
-                isSaved ? 'text-primary bg-primary/10' : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              <Bookmark className={`w-5 h-5 ${isSaved ? 'fill-current' : ''}`} />
-              <span className="text-sm">{saveCount}</span>
-            </button>
-            <span className="text-sm text-gray-600 ml-auto">{commentCount} comments</span>
-          </div>
-
-          <div className="space-y-4 border-t border-primary/10 pt-4">
-            {topLevelComments.map((comment) => renderCommentItemExpanded(comment))}
-            <div className="flex gap-3">
-              <Avatar className="w-8 h-8 ring-2 ring-primary/10">
-                <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=You" />
-                <AvatarFallback>Y</AvatarFallback>
-              </Avatar>
-              <div className="flex-1 space-y-2">
-                <Textarea
-                  value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                  placeholder="Write a comment..."
-                  className="resize-none border-primary/20 focus:border-primary rounded-xl"
-                  rows={3}
-                />
-                <Button onClick={handleComment} size="sm" disabled={!commentText.trim()} className="gradient-primary">
-                  Comment
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Modal>
     </>
   );
 }

@@ -9,6 +9,7 @@ import { ChatPage } from './components/ChatPage';
 import { ClubsPage } from './components/ClubsPage';
 import { NotificationsPage } from './components/NotificationsPage';
 import { SettingsPage } from './components/SettingsPage';
+import { PostPage } from './components/PostPage';
 import { FloatingChat } from './components/FloatingChat';
 import { LoadingState } from './components/LoadingState';
 import { Toaster } from './components/ui/sonner';
@@ -354,6 +355,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedHashtag, setSelectedHashtag] = useState<string | null>(null);
   const [postsRefreshToken, setPostsRefreshToken] = useState(0);
+  const [openedPost, setOpenedPost] = useState<Opportunity | null>(null);
 
   const prevAuthenticatedRef = useRef<boolean>(auth.isAuthenticated);
 
@@ -391,6 +393,10 @@ export default function App() {
 
         if (mainPath === 'profile' && pathParts[1]) {
             setViewingProfileId(pathParts[1]);
+        } else if (mainPath === 'post' && pathParts[1]) {
+            const matched = opportunities.find((item) => item.id === pathParts[1]) ?? null;
+            setOpenedPost(matched);
+            setViewingProfileId(null);
         } else {
             setViewingProfileId(null);
         }
@@ -407,17 +413,25 @@ export default function App() {
     return () => {
         window.removeEventListener('popstate', handlePopState);
     };
-  }, []);
+  }, [opportunities]);
 
-  const navigate = (tab: string, profileId?: string) => {
+  const navigate = (tab: string, profileId?: string, postId?: string) => {
     let path = `/${tab}`;
-    const state: { tab: string; profileId?: string } = { tab };
+    const state: { tab: string; profileId?: string; postId?: string } = { tab };
     if (tab === 'profile' && profileId) {
         path += `/${profileId}`;
         state.profileId = profileId;
         setViewingProfileId(profileId);
+        setOpenedPost(null);
+    } else if (tab === 'post' && postId) {
+        path += `/${postId}`;
+        state.postId = postId;
+        setViewingProfileId(null);
     } else if (tab !== 'profile') {
         setViewingProfileId(null);
+        if (tab !== 'post') {
+          setOpenedPost(null);
+        }
     }
     window.history.pushState(state, '', path);
     setActiveTab(tab); // Set active tab to trigger re-render
@@ -719,6 +733,19 @@ export default function App() {
       }
     })();
   };
+
+  const handleOpenPost = (post: Opportunity) => {
+    setOpenedPost(post);
+    navigate('post', undefined, post.id);
+  };
+
+  useEffect(() => {
+    if (!openedPost) return;
+    const latest = opportunities.find((item) => item.id === openedPost.id);
+    if (latest) {
+      setOpenedPost(latest);
+    }
+  }, [opportunities, openedPost]);
 
   const persistCreatedPost = async (draft: any) => {
     if (!authToken) {
@@ -1088,6 +1115,7 @@ export default function App() {
   // Reset viewing profile when switching tabs from Navbar
   const handleTabChange = (tab: string) => {
     setViewingProfileId(null);
+    setOpenedPost(null);
     if (tab !== 'search') {
       setSearchQuery('');
     }
@@ -1135,6 +1163,7 @@ export default function App() {
                 onDeleteComment={handleDeleteComment}
                 onEditPost={handleEditPost}
                 onDeletePost={handleDeletePost}
+                onOpenPost={handleOpenPost}
                 onCreateOpportunity={handleCreateOpportunity}
                 onCreatePost={handleCreatePost}
                 onCreateEvent={handleCreateEvent}
@@ -1221,10 +1250,28 @@ export default function App() {
               onDeleteComment={handleDeleteComment}
               onEditPost={handleEditPost}
               onDeletePost={handleDeletePost}
+              onOpenPost={handleOpenPost}
               postsRefreshToken={postsRefreshToken}
             />
           ) : (
             <LoadingState type="profile" />
+          )
+        ) : activeTab === 'post' ? (
+          openedPost ? (
+            <PostPage
+              post={openedPost}
+              currentUserId={currentUserId}
+              onBack={() => window.history.back()}
+              onLike={handleLike}
+              onSave={handleSave}
+              onComment={handleComment}
+              onReply={handleReply}
+              onLikeComment={handleLikeComment}
+              onDeleteComment={handleDeleteComment}
+              onViewProfile={handleViewProfile}
+            />
+          ) : (
+            <LoadingState type="feed" />
           )
         ) : activeTab === 'notifications' ? (
           <NotificationsPage
