@@ -10,6 +10,7 @@ import {
   uploadPostMediaToStorage,
   uploadProfilePhotoToStorage,
 } from '../lib/objectStorage';
+import { createPostPublishedNotifications } from '../lib/notifications';
 
 const router = express.Router();
 
@@ -1534,6 +1535,12 @@ router.post(
       if (!created) {
         return res.status(404).json({ message: 'Created post could not be loaded' });
       }
+
+      await createPostPublishedNotifications({
+        authorUserId: userId,
+        postId: created.post_id,
+        postTitle: created.title,
+      });
 
       return res.status(201).json(mapUserPostRow(created));
     } catch (err) {

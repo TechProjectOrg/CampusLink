@@ -2,6 +2,12 @@ import express, { Request, Response } from 'express';
 import prisma from '../prisma';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
 import { deleteManagedPostMediaByUrl } from '../lib/objectStorage';
+import {
+  notifyCommentReply,
+  notifyPostComment,
+  syncCommentLikeNotification,
+  syncPostLikeNotification,
+} from '../lib/notifications';
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -833,6 +839,8 @@ router.post('/posts/:postId/likes', async (req: Request<{ postId: string }>, res
       VALUES (${viewerUserId}, ${postId})
       ON CONFLICT (user_id, post_id) DO NOTHING
     `;
+
+    await syncPostLikeNotification({ postId, actorUserId: viewerUserId });
     return res.status(204).send();
   } catch (err) {
     console.error('Error liking post:', err);
@@ -850,6 +858,7 @@ router.delete('/posts/:postId/likes', async (req: Request<{ postId: string }>, r
       DELETE FROM post_likes
       WHERE user_id = ${viewerUserId} AND post_id = ${postId}
     `;
+    await syncPostLikeNotification({ postId, actorUserId: viewerUserId });
     return res.status(204).send();
   } catch (err) {
     console.error('Error unliking post:', err);
@@ -917,6 +926,8 @@ router.post('/posts/:postId/comments', async (req: Request<{ postId: string }>, 
       RETURNING comment_id
     `;
 
+    await notifyPostComment({ postId, actorUserId: viewerUserId });
+
     return res.status(201).json({ commentId: rows[0]?.comment_id });
   } catch (err) {
     console.error('Error creating comment:', err);
@@ -955,6 +966,12 @@ router.post('/posts/comments/:commentId/replies', async (req: Request<{ commentI
       VALUES (${parent.post_id}, ${viewerUserId}, ${commentId}, ${content.trim()})
       RETURNING comment_id
     `;
+
+    await notifyCommentReply({
+      parentCommentId: commentId,
+      actorUserId: viewerUserId,
+      postId: parent.post_id,
+    });
     return res.status(201).json({ commentId: rows[0]?.comment_id });
   } catch (err) {
     console.error('Error creating reply:', err);
@@ -1024,6 +1041,7 @@ router.post('/posts/comments/:commentId/likes', async (req: Request<{ commentId:
       VALUES (${viewerUserId}, ${commentId})
       ON CONFLICT (user_id, comment_id) DO NOTHING
     `;
+    await syncCommentLikeNotification({ commentId, actorUserId: viewerUserId });
     return res.status(204).send();
   } catch (err) {
     console.error('Error liking comment:', err);
@@ -1041,6 +1059,7 @@ router.delete('/posts/comments/:commentId/likes', async (req: Request<{ commentI
       DELETE FROM post_comment_likes
       WHERE user_id = ${viewerUserId} AND comment_id = ${commentId}
     `;
+    await syncCommentLikeNotification({ commentId, actorUserId: viewerUserId });
     return res.status(204).send();
   } catch (err) {
     console.error('Error unliking comment:', err);
