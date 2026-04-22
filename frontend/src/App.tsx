@@ -52,6 +52,7 @@ import {
   apiCreateUserPost,
   apiDeleteComment,
   apiDeletePost,
+  apiFetchCommentContext,
   apiFetchFeedPosts,
   apiFetchPostById,
   apiLikeComment,
@@ -114,6 +115,7 @@ function apiNotificationToLocal(n: ApiNotification): Notification {
     timestamp: n.createdAt,
     read: n.read,
     actionUrl: undefined,
+    entityType: n.entityType,
     entityId: n.entityId,
     actorId: n.actor?.userId,
   };
@@ -385,6 +387,7 @@ export default function App() {
   const [postsRefreshToken, setPostsRefreshToken] = useState(0);
   const [openedPost, setOpenedPost] = useState<Opportunity | null>(null);
   const [openedPostId, setOpenedPostId] = useState<string | null>(null);
+  const [focusedCommentId, setFocusedCommentId] = useState<string | null>(null);
 
   const prevAuthenticatedRef = useRef<boolean>(auth.isAuthenticated);
 
@@ -417,6 +420,7 @@ export default function App() {
   useEffect(() => {
     const setTabFromPath = () => {
         const pathParts = window.location.pathname.split('/').filter(p => p);
+        const searchParams = new URLSearchParams(window.location.search);
         const mainPath = pathParts[0] || 'feed';
         setActiveTab(mainPath);
 
@@ -424,15 +428,18 @@ export default function App() {
             setViewingProfileId(pathParts[1]);
             setOpenedPostId(null);
             setOpenedPost(null);
+            setFocusedCommentId(null);
         } else if (mainPath === 'post' && pathParts[1]) {
             setOpenedPostId(pathParts[1]);
             const matched = opportunities.find((item) => item.id === pathParts[1]) ?? null;
             setOpenedPost(matched);
             setViewingProfileId(null);
+            setFocusedCommentId(searchParams.get('commentId')?.trim() || null);
         } else {
             setViewingProfileId(null);
             setOpenedPostId(null);
             setOpenedPost(null);
+            setFocusedCommentId(null);
         }
     };
 
@@ -449,25 +456,32 @@ export default function App() {
     };
   }, [opportunities]);
 
-  const navigate = (tab: string, profileId?: string, postId?: string) => {
+  const navigate = (tab: string, profileId?: string, postId?: string, options?: { commentId?: string }) => {
     let path = `/${tab}`;
-    const state: { tab: string; profileId?: string; postId?: string } = { tab };
+    const state: { tab: string; profileId?: string; postId?: string; commentId?: string } = { tab };
     if (tab === 'profile' && profileId) {
         path += `/${profileId}`;
         state.profileId = profileId;
         setViewingProfileId(profileId);
         setOpenedPost(null);
         setOpenedPostId(null);
+        setFocusedCommentId(null);
     } else if (tab === 'post' && postId) {
         path += `/${postId}`;
+        if (options?.commentId) {
+          path += `?commentId=${encodeURIComponent(options.commentId)}`;
+          state.commentId = options.commentId;
+        }
         state.postId = postId;
         setViewingProfileId(null);
         setOpenedPostId(postId);
+        setFocusedCommentId(options?.commentId?.trim() || null);
     } else if (tab !== 'profile') {
         setViewingProfileId(null);
         if (tab !== 'post') {
           setOpenedPost(null);
           setOpenedPostId(null);
+          setFocusedCommentId(null);
         }
     }
     window.history.pushState(state, '', path);
@@ -833,7 +847,7 @@ export default function App() {
   const handleOpenPost = (post: Opportunity) => {
     setOpenedPost(post);
     setOpenedPostId(post.id);
-    navigate('post', undefined, post.id);
+    navigate('post', undefined, post.id, { commentId: undefined });
   };
 
   useEffect(() => {
@@ -1177,23 +1191,54 @@ export default function App() {
   };
 
   const handleNotificationClick = (notification: Notification) => {
-    // Handle different notification types
-    switch (notification.type) {
-      case 'follow':
-      case 'follow_request':
-      case 'follow_accept':
-        navigate('network');
-        break;
-      case 'message':
-        navigate('chat');
-        break;
-      case 'opportunity':
-        navigate('feed');
-        break;
-      case 'club':
-        navigate('clubs');
-        break;
-    }
+    void (async () => {
+      const entityType = notification.entityType?.toLowerCase();
+      const entityId = notification.entityId?.trim();
+
+      if (entityType === 'post' && entityId) {
+        navigate('post', undefined, entityId);
+        return;
+      }
+
+      if (entityType === 'comment' && entityId) {
+        try {
+          const context = await apiFetchCommentContext(entityId, authToken);
+          if (!context.postId) {
+            throw new Error('Unable to locate post for this comment');
+          }
+          navigate('post', undefined, context.postId, { commentId: context.commentId });
+          return;
+        } catch (err) {
+          toast.error(err instanceof Error ? err.message : 'Unable to open this notification target');
+          return;
+        }
+      }
+
+      switch (notification.type) {
+        case 'follow':
+        case 'follow_request':
+        case 'follow_accept':
+        case 'follow_reject':
+          navigate('network');
+          break;
+        case 'message':
+          navigate('chat');
+          break;
+        case 'opportunity':
+          if (entityId) {
+            navigate('post', undefined, entityId);
+          } else {
+            navigate('feed');
+          }
+          break;
+        case 'club':
+          navigate('clubs');
+          break;
+        default:
+          navigate('notifications');
+          break;
+      }
+    })();
   };
 
 
@@ -1235,6 +1280,7 @@ export default function App() {
   const handleTabChange = (tab: string) => {
     setViewingProfileId(null);
     setOpenedPost(null);
+    setFocusedCommentId(null);
     if (tab !== 'search') {
       setSearchQuery('');
     }
@@ -1380,6 +1426,7 @@ export default function App() {
             <PostPage
               post={openedPost}
               currentUserId={currentUserId}
+              focusCommentId={focusedCommentId}
               onBack={() => window.history.back()}
               onLike={handleLike}
               onSave={handleSave}

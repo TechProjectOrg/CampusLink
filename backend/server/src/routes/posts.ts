@@ -905,6 +905,39 @@ router.delete('/posts/:postId/saves', async (req: Request<{ postId: string }>, r
   }
 });
 
+router.get('/posts/comments/:commentId/context', async (req: Request<{ commentId: string }>, res: Response) => {
+  const authed = req as unknown as AuthedRequest;
+  const viewerUserId = authed.auth!.userId;
+  const { commentId } = req.params;
+
+  try {
+    const rows = await prisma.$queryRaw<{ comment_id: string; post_id: string; parent_comment_id: string | null }[]>`
+      SELECT comment_id, post_id, parent_comment_id
+      FROM post_comments
+      WHERE comment_id = ${commentId}
+      LIMIT 1
+    `;
+
+    const row = rows[0];
+    if (!row) {
+      return res.status(404).json({ message: 'Comment not found' });
+    }
+
+    if (!(await canViewerAccessPost(viewerUserId, row.post_id))) {
+      return res.status(403).json({ message: 'You are not allowed to view this comment' });
+    }
+
+    return res.status(200).json({
+      commentId: row.comment_id,
+      postId: row.post_id,
+      parentCommentId: row.parent_comment_id,
+    });
+  } catch (err) {
+    console.error('Error fetching comment context:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 router.post('/posts/:postId/comments', async (req: Request<{ postId: string }>, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const viewerUserId = authed.auth!.userId;
@@ -925,10 +958,14 @@ router.post('/posts/:postId/comments', async (req: Request<{ postId: string }>, 
       VALUES (${postId}, ${viewerUserId}, ${content.trim()})
       RETURNING comment_id
     `;
+    const createdCommentId = rows[0]?.comment_id;
+    if (!createdCommentId) {
+      return res.status(500).json({ message: 'Failed to create comment' });
+    }
 
-    await notifyPostComment({ postId, actorUserId: viewerUserId });
+    await notifyPostComment({ postId, commentId: createdCommentId, actorUserId: viewerUserId });
 
-    return res.status(201).json({ commentId: rows[0]?.comment_id });
+    return res.status(201).json({ commentId: createdCommentId });
   } catch (err) {
     console.error('Error creating comment:', err);
     return res.status(500).json({ message: 'Internal server error' });
@@ -966,13 +1003,17 @@ router.post('/posts/comments/:commentId/replies', async (req: Request<{ commentI
       VALUES (${parent.post_id}, ${viewerUserId}, ${commentId}, ${content.trim()})
       RETURNING comment_id
     `;
+    const createdReplyId = rows[0]?.comment_id;
+    if (!createdReplyId) {
+      return res.status(500).json({ message: 'Failed to create reply' });
+    }
 
     await notifyCommentReply({
       parentCommentId: commentId,
+      replyCommentId: createdReplyId,
       actorUserId: viewerUserId,
-      postId: parent.post_id,
     });
-    return res.status(201).json({ commentId: rows[0]?.comment_id });
+    return res.status(201).json({ commentId: createdReplyId });
   } catch (err) {
     console.error('Error creating reply:', err);
     return res.status(500).json({ message: 'Internal server error' });

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Bookmark, Calendar, Heart, MapPin, MessageCircle, Trash2 } from 'lucide-react';
 import { Opportunity, Comment } from '../types';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -11,6 +11,7 @@ import { ImageWithFallback } from './figma/ImageWithFallback';
 interface PostPageProps {
   post: Opportunity;
   currentUserId: string;
+  focusCommentId?: string | null;
   onBack: () => void;
   onLike: (id: string) => void;
   onSave: (id: string) => void;
@@ -24,6 +25,7 @@ interface PostPageProps {
 export function PostPage({
   post,
   currentUserId,
+  focusCommentId,
   onBack,
   onLike,
   onSave,
@@ -37,6 +39,7 @@ export function PostPage({
   const [replyByCommentId, setReplyByCommentId] = useState<Record<string, string>>({});
   const [openReplyByCommentId, setOpenReplyByCommentId] = useState<Record<string, boolean>>({});
   const [expandedRepliesByCommentId, setExpandedRepliesByCommentId] = useState<Record<string, boolean>>({});
+  const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
 
   const isLiked = post.isLikedByMe ?? post.likes.includes(currentUserId);
   const isSaved = post.isSavedByMe ?? post.saved.includes(currentUserId);
@@ -57,6 +60,55 @@ export function PostPage({
     () => (post.comments ?? []).filter((comment) => !comment.parentCommentId),
     [post.comments],
   );
+
+  const parentCommentById = useMemo(() => {
+    const parentMap = new Map<string, string | null>();
+
+    const walk = (comments: Comment[]) => {
+      for (const item of comments) {
+        parentMap.set(item.id, item.parentCommentId ?? null);
+        if (item.replies && item.replies.length > 0) {
+          walk(item.replies);
+        }
+      }
+    };
+
+    walk(post.comments ?? []);
+    return parentMap;
+  }, [post.comments]);
+
+  useEffect(() => {
+    if (!focusCommentId) return;
+    if (!parentCommentById.has(focusCommentId)) return;
+
+    const toExpand: Record<string, boolean> = {};
+    let cursor: string | null = focusCommentId;
+
+    while (cursor) {
+      const parentId = parentCommentById.get(cursor) ?? null;
+      if (!parentId) break;
+      toExpand[parentId] = true;
+      cursor = parentId;
+    }
+
+    if (Object.keys(toExpand).length > 0) {
+      setExpandedRepliesByCommentId((prev) => ({ ...prev, ...toExpand }));
+    }
+
+    setHighlightedCommentId(focusCommentId);
+    const scrollTimeout = window.setTimeout(() => {
+      const target = document.getElementById(`comment-${focusCommentId}`);
+      target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 120);
+    const clearTimeoutId = window.setTimeout(() => {
+      setHighlightedCommentId((prev) => (prev === focusCommentId ? null : prev));
+    }, 2000);
+
+    return () => {
+      window.clearTimeout(scrollTimeout);
+      window.clearTimeout(clearTimeoutId);
+    };
+  }, [focusCommentId, parentCommentById]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -84,7 +136,13 @@ export function PostPage({
     const commentLikes = comment.likeCount ?? 0;
 
     return (
-      <div key={comment.id} className={`${depth > 0 ? 'ml-8 mt-3' : ''}`}>
+      <div
+        key={comment.id}
+        id={`comment-${comment.id}`}
+        className={`${depth > 0 ? 'ml-8 mt-3' : ''} rounded-xl transition-colors duration-300 ${
+          highlightedCommentId === comment.id ? 'bg-yellow-100/70' : ''
+        }`}
+      >
         <div className="flex gap-3">
           <Avatar className="w-8 h-8 ring-2 ring-primary/10">
             <AvatarImage src={comment.authorAvatar} />

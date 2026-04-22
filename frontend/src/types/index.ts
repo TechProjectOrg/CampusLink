@@ -140,13 +140,24 @@ export interface ChatConversation {
 
 export interface Notification {
   id: string;
-  type: 'follow' | 'follow_request' | 'follow_accept' | 'like' | 'comment' | 'message' | 'opportunity' | 'club';
+  type:
+    | 'follow'
+    | 'follow_request'
+    | 'follow_accept'
+    | 'follow_reject'
+    | 'like'
+    | 'comment'
+    | 'reply'
+    | 'message'
+    | 'opportunity'
+    | 'club';
   title: string;
   message: string;
   avatar: string;
   timestamp: string;
   read: boolean;
   actionUrl?: string;
+  entityType?: string | null;
   entityId?: string | null;
   actorId?: string;
 }

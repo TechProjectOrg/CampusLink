@@ -47,6 +47,8 @@ export function NotificationsCard({
         return <Heart className="w-4 h-4" />;
       case 'comment':
         return <MessageCircle className="w-4 h-4" />;
+      case 'reply':
+        return <MessageCircle className="w-4 h-4" />;
       case 'message':
         return <MessageCircle className="w-4 h-4" />;
       case 'opportunity':
@@ -65,6 +67,8 @@ export function NotificationsCard({
       case 'like':
         return 'bg-destructive/10 text-destructive';
       case 'comment':
+        return 'bg-secondary/10 text-secondary';
+      case 'reply':
         return 'bg-secondary/10 text-secondary';
       case 'message':
         return 'bg-purple-100 text-purple-600';

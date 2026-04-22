@@ -453,6 +453,7 @@ export async function syncCommentLikeNotification(params: {
 
 export async function notifyPostComment(params: {
   postId: string;
+  commentId: string;
   actorUserId: string;
 }): Promise<void> {
   try {
@@ -475,8 +476,8 @@ export async function notifyPostComment(params: {
       type: 'comment',
       title: row.actor_username,
       message: 'commented on your post',
-      entityType: 'post',
-      entityId: params.postId,
+      entityType: 'comment',
+      entityId: params.commentId,
     });
   } catch (err) {
     console.error('Failed to notify post comment:', err);
@@ -485,8 +486,8 @@ export async function notifyPostComment(params: {
 
 export async function notifyCommentReply(params: {
   parentCommentId: string;
+  replyCommentId: string;
   actorUserId: string;
-  postId: string;
 }): Promise<void> {
   try {
     const rows = await prisma.$queryRaw<{ recipient_user_id: string; actor_username: string }[]>`
@@ -508,8 +509,8 @@ export async function notifyCommentReply(params: {
       type: 'reply',
       title: row.actor_username,
       message: 'replied to your comment',
-      entityType: 'post',
-      entityId: params.postId,
+      entityType: 'comment',
+      entityId: params.replyCommentId,
     });
   } catch (err) {
     console.error('Failed to notify comment reply:', err);

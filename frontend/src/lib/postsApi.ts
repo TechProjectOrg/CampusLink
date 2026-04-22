@@ -98,6 +98,12 @@ export interface UpdatePostPayload {
   hashtags?: string[];
 }
 
+export interface CommentContext {
+  commentId: string;
+  postId: string;
+  parentCommentId: string | null;
+}
+
 async function parseErrorMessage(response: Response): Promise<string> {
   const err = await response.json().catch(() => ({}));
   return err?.message || `Request failed (${response.status})`;
@@ -410,4 +416,23 @@ export async function apiUnlikeComment(commentId: string, token?: string): Promi
   if (!response.ok && response.status !== 204) {
     throw new Error(await parseErrorMessage(response));
   }
+}
+
+export async function apiFetchCommentContext(commentId: string, token?: string): Promise<CommentContext> {
+  const response = await fetch(`${API_BASE}/posts/comments/${encodeURIComponent(commentId)}/context`, {
+    headers: {
+      ...authHeaders(token),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response));
+  }
+
+  const data = (await response.json().catch(() => ({}))) as Partial<CommentContext>;
+  return {
+    commentId: String(data.commentId ?? commentId),
+    postId: String(data.postId ?? ''),
+    parentCommentId: data.parentCommentId ? String(data.parentCommentId) : null,
+  };
 }
