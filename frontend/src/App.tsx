@@ -20,7 +20,7 @@ import {
   mockConversations,
   getCurrentUser,
 } from './lib/mockData';
-import { Student, Opportunity, Club, Notification } from './types';
+import { Student, Opportunity, Club, Notification, Comment } from './types';
 import { ProfileCard } from './components/ProfileCard';
 import { SuggestionsCard } from './components/SuggestionsCard';
 import { useAuth } from './context/AuthContext';
@@ -234,6 +234,77 @@ function userPostToOpportunity(post: UserPost, currentUser: Student): Opportunit
     canEdit: post.canEdit,
     canDelete: post.canDelete,
   };
+}
+
+function findCommentStateById(
+  opportunities: Opportunity[],
+  commentId: string,
+): { isLiked: boolean; likeCount: number } | null {
+  const stack: Comment[] = [];
+  for (const opportunity of opportunities) {
+    stack.push(...(opportunity.comments ?? []));
+  }
+
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    if (current.id === commentId) {
+      return {
+        isLiked: Boolean(current.isLikedByMe),
+        likeCount: Math.max(current.likeCount ?? 0, 0),
+      };
+    }
+    stack.push(...(current.replies ?? []));
+  }
+
+  return null;
+}
+
+function updateCommentLikeState(comments: Comment[], commentId: string, nextLiked: boolean): Comment[] {
+  return comments.map((comment) => {
+    if (comment.id === commentId) {
+      const currentLikeCount = comment.likeCount ?? 0;
+      return {
+        ...comment,
+        isLikedByMe: nextLiked,
+        likeCount: Math.max(currentLikeCount + (nextLiked ? 1 : -1), 0),
+      };
+    }
+
+    if (!comment.replies || comment.replies.length === 0) {
+      return comment;
+    }
+
+    return {
+      ...comment,
+      replies: updateCommentLikeState(comment.replies, commentId, nextLiked),
+    };
+  });
+}
+
+function restoreCommentLikeState(
+  comments: Comment[],
+  commentId: string,
+  likedState: boolean,
+  likeCount: number,
+): Comment[] {
+  return comments.map((comment) => {
+    if (comment.id === commentId) {
+      return {
+        ...comment,
+        isLikedByMe: likedState,
+        likeCount: Math.max(likeCount, 0),
+      };
+    }
+
+    if (!comment.replies || comment.replies.length === 0) {
+      return comment;
+    }
+
+    return {
+      ...comment,
+      replies: restoreCommentLikeState(comment.replies, commentId, likedState, likeCount),
+    };
+  });
 }
 
 // ============================================================
@@ -465,6 +536,8 @@ export default function App() {
     const target = opportunities.find((opp) => opp.id === opportunityId);
     if (!target) return;
     const nextLiked = !(target.isLikedByMe ?? target.likes.includes(currentUserId));
+    const previousLiked = Boolean(target.isLikedByMe ?? target.likes.includes(currentUserId));
+    const previousLikeCount = Math.max(target.likeCount ?? target.likes.length, 0);
 
     setOpportunities((prev) =>
       prev.map((opp) =>
@@ -487,7 +560,17 @@ export default function App() {
         }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Unable to update like');
-        await refreshFeedPosts();
+        setOpportunities((prev) =>
+          prev.map((opp) =>
+            opp.id !== opportunityId
+              ? opp
+              : {
+                  ...opp,
+                  isLikedByMe: previousLiked,
+                  likeCount: previousLikeCount,
+                },
+          ),
+        );
       }
     })();
   };
@@ -548,6 +631,19 @@ export default function App() {
   };
 
   const handleLikeComment = (commentId: string, alreadyLiked: boolean) => {
+    const existing = findCommentStateById(opportunities, commentId);
+    if (!existing) return;
+    const nextLiked = !alreadyLiked;
+    const previousLiked = existing.isLiked;
+    const previousLikeCount = existing.likeCount;
+
+    setOpportunities((prev) =>
+      prev.map((opp) => ({
+        ...opp,
+        comments: updateCommentLikeState(opp.comments ?? [], commentId, nextLiked),
+      })),
+    );
+
     void (async () => {
       try {
         if (alreadyLiked) {
@@ -555,10 +651,19 @@ export default function App() {
         } else {
           await apiLikeComment(commentId, authToken);
         }
-        await refreshFeedPosts();
-        setPostsRefreshToken((prev) => prev + 1);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Unable to update comment like');
+        setOpportunities((prev) =>
+          prev.map((opp) => ({
+            ...opp,
+            comments: restoreCommentLikeState(
+              opp.comments ?? [],
+              commentId,
+              previousLiked,
+              previousLikeCount,
+            ),
+          })),
+        );
       }
     })();
   };

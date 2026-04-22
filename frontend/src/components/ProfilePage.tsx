@@ -398,7 +398,55 @@ export function ProfilePage({
   const requestStatus = (followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id)
     ? 'requested'
     : 'none';
-  const profilePosts = loadedPosts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const profilePosts = [...loadedPosts].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  const updateCommentLikeLocally = (comments: Opportunity['comments'], commentId: string, nextLiked: boolean): Opportunity['comments'] =>
+    comments.map((comment) => {
+      if (comment.id === commentId) {
+        const currentLikeCount = Math.max(comment.likeCount ?? 0, 0);
+        return {
+          ...comment,
+          isLikedByMe: nextLiked,
+          likeCount: Math.max(currentLikeCount + (nextLiked ? 1 : -1), 0),
+        };
+      }
+
+      if (!comment.replies || comment.replies.length === 0) {
+        return comment;
+      }
+
+      return {
+        ...comment,
+        replies: updateCommentLikeLocally(comment.replies, commentId, nextLiked),
+      };
+    });
+
+  const handleProfileLike = (postId: string) => {
+    setLoadedPosts((prev) =>
+      prev.map((post) => {
+        if (post.id !== postId) return post;
+        const isLiked = Boolean(post.isLikedByMe ?? post.likes.includes(currentUserId));
+        const nextLiked = !isLiked;
+        return {
+          ...post,
+          isLikedByMe: nextLiked,
+          likeCount: Math.max((post.likeCount ?? post.likes.length) + (nextLiked ? 1 : -1), 0),
+        };
+      }),
+    );
+    onLike?.(postId);
+  };
+
+  const handleProfileCommentLike = (commentId: string, alreadyLiked: boolean) => {
+    const nextLiked = !alreadyLiked;
+    setLoadedPosts((prev) =>
+      prev.map((post) => ({
+        ...post,
+        comments: updateCommentLikeLocally(post.comments, commentId, nextLiked),
+      })),
+    );
+    onLikeComment?.(commentId, alreadyLiked);
+  };
 
   // Handlers
   const closeModal = () => {
@@ -861,11 +909,12 @@ export function ProfilePage({
                     key={post.id}
                     opportunity={post}
                     currentUserId={currentUserId}
-                    onLike={(id) => onLike?.(id)}
+                    showManagementControls={isOwnProfile}
+                    onLike={handleProfileLike}
                     onSave={(id) => onSave?.(id)}
                     onComment={(id, comment) => onComment?.(id, comment)}
                     onReply={(commentId, comment) => onReply?.(commentId, comment)}
-                    onLikeComment={(commentId, alreadyLiked) => onLikeComment?.(commentId, alreadyLiked)}
+                    onLikeComment={handleProfileCommentLike}
                     onDeleteComment={(commentId) => onDeleteComment?.(commentId)}
                     onEditPost={(postId, updates) => onEditPost?.(postId, updates)}
                     onDeletePost={(postId) => onDeletePost?.(postId)}

@@ -141,6 +141,7 @@ export function FeedPage({
                   <OpportunityCard
                     opportunity={opportunity}
                     currentUserId={currentUserId}
+                    showManagementControls={false}
                     onLike={onLike}
                     onSave={onSave}
                     onComment={onComment}

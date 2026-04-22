@@ -11,6 +11,7 @@ import { ImageWithFallback } from './figma/ImageWithFallback';
 interface OpportunityCardProps {
   opportunity: Opportunity;
   currentUserId: string;
+  showManagementControls?: boolean;
   onLike: (id: string) => void;
   onSave: (id: string) => void;
   onComment: (id: string, comment: string) => void;
@@ -25,6 +26,7 @@ interface OpportunityCardProps {
 export function OpportunityCard({
   opportunity,
   currentUserId,
+  showManagementControls = false,
   onLike,
   onSave,
   onComment,
@@ -194,12 +196,12 @@ export function OpportunityCard({
             <Badge className={`${typeColors[opportunity.type]} border transition-all duration-300 hover:scale-110`}>
               {opportunity.type.charAt(0).toUpperCase() + opportunity.type.slice(1)}
             </Badge>
-            {opportunity.canEdit && (
+            {showManagementControls && opportunity.canEdit && (
               <button type="button" className="text-gray-400 hover:text-gray-700" onClick={() => setEditingPost((prev) => !prev)}>
                 <Pencil className="w-4 h-4" />
               </button>
             )}
-            {opportunity.canDelete && onDeletePost && (
+            {showManagementControls && opportunity.canDelete && onDeletePost && (
               <button type="button" className="text-gray-400 hover:text-red-600" onClick={() => onDeletePost(opportunity.id)}>
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -207,7 +209,7 @@ export function OpportunityCard({
           </div>
         </div>
 
-        {editingPost ? (
+        {showManagementControls && editingPost ? (
           <div className="space-y-2">
             <Input value={editDraft.title} onChange={(e) => setEditDraft((prev) => ({ ...prev, title: e.target.value }))} placeholder="Title" />
             <Textarea value={editDraft.description} onChange={(e) => setEditDraft((prev) => ({ ...prev, description: e.target.value }))} rows={3} placeholder="Description" />
