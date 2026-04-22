@@ -10,6 +10,7 @@ import { ClubsPage } from './components/ClubsPage';
 import { NotificationsPage } from './components/NotificationsPage';
 import { SettingsPage } from './components/SettingsPage';
 import { PostPage } from './components/PostPage';
+import { HashtagPostsPage } from './components/HashtagPostsPage';
 import { FloatingChat } from './components/FloatingChat';
 import { LoadingState } from './components/LoadingState';
 import { Toaster } from './components/ui/sonner';
@@ -52,6 +53,7 @@ import {
   apiCreateUserPost,
   apiDeleteComment,
   apiDeletePost,
+  apiFetchHashtagPosts,
   apiFetchCommentContext,
   apiFetchFeedPosts,
   apiFetchPostById,
@@ -388,6 +390,9 @@ export default function App() {
   const [openedPost, setOpenedPost] = useState<Opportunity | null>(null);
   const [openedPostId, setOpenedPostId] = useState<string | null>(null);
   const [focusedCommentId, setFocusedCommentId] = useState<string | null>(null);
+  const [hashtagPageTag, setHashtagPageTag] = useState<string | null>(null);
+  const [hashtagOpportunities, setHashtagOpportunities] = useState<Opportunity[]>([]);
+  const [isHashtagPostsLoading, setIsHashtagPostsLoading] = useState(false);
 
   const prevAuthenticatedRef = useRef<boolean>(auth.isAuthenticated);
 
@@ -429,17 +434,27 @@ export default function App() {
             setOpenedPostId(null);
             setOpenedPost(null);
             setFocusedCommentId(null);
+            setHashtagPageTag(null);
         } else if (mainPath === 'post' && pathParts[1]) {
             setOpenedPostId(pathParts[1]);
             const matched = opportunities.find((item) => item.id === pathParts[1]) ?? null;
             setOpenedPost(matched);
             setViewingProfileId(null);
             setFocusedCommentId(searchParams.get('commentId')?.trim() || null);
+            setHashtagPageTag(null);
+        } else if (mainPath === 'hashtag' && pathParts[1]) {
+            const decodedTag = decodeURIComponent(pathParts[1]).trim().replace(/^#+/, '');
+            setHashtagPageTag(decodedTag || null);
+            setViewingProfileId(null);
+            setOpenedPostId(null);
+            setOpenedPost(null);
+            setFocusedCommentId(null);
         } else {
             setViewingProfileId(null);
             setOpenedPostId(null);
             setOpenedPost(null);
             setFocusedCommentId(null);
+            setHashtagPageTag(null);
         }
     };
 
@@ -456,9 +471,14 @@ export default function App() {
     };
   }, [opportunities]);
 
-  const navigate = (tab: string, profileId?: string, postId?: string, options?: { commentId?: string }) => {
+  const navigate = (
+    tab: string,
+    profileId?: string,
+    postId?: string,
+    options?: { commentId?: string; hashtag?: string }
+  ) => {
     let path = `/${tab}`;
-    const state: { tab: string; profileId?: string; postId?: string; commentId?: string } = { tab };
+    const state: { tab: string; profileId?: string; postId?: string; commentId?: string; hashtag?: string } = { tab };
     if (tab === 'profile' && profileId) {
         path += `/${profileId}`;
         state.profileId = profileId;
@@ -466,6 +486,7 @@ export default function App() {
         setOpenedPost(null);
         setOpenedPostId(null);
         setFocusedCommentId(null);
+        setHashtagPageTag(null);
     } else if (tab === 'post' && postId) {
         path += `/${postId}`;
         if (options?.commentId) {
@@ -476,12 +497,25 @@ export default function App() {
         setViewingProfileId(null);
         setOpenedPostId(postId);
         setFocusedCommentId(options?.commentId?.trim() || null);
+        setHashtagPageTag(null);
+    } else if (tab === 'hashtag' && options?.hashtag) {
+        const normalized = options.hashtag.trim().replace(/^#+/, '');
+        path += `/${encodeURIComponent(normalized)}`;
+        state.hashtag = normalized;
+        setHashtagPageTag(normalized || null);
+        setViewingProfileId(null);
+        setOpenedPostId(null);
+        setOpenedPost(null);
+        setFocusedCommentId(null);
     } else if (tab !== 'profile') {
         setViewingProfileId(null);
         if (tab !== 'post') {
           setOpenedPost(null);
           setOpenedPostId(null);
           setFocusedCommentId(null);
+        }
+        if (tab !== 'hashtag') {
+          setHashtagPageTag(null);
         }
     }
     window.history.pushState(state, '', path);
@@ -563,6 +597,22 @@ export default function App() {
     }
   }, [authToken, currentUserId, currentUser, selectedHashtag]);
 
+  const refreshHashtagPosts = useCallback(async () => {
+    const tag = hashtagPageTag?.trim();
+    if (!authToken || !currentUserId || !tag) return;
+
+    setIsHashtagPostsLoading(true);
+    try {
+      const posts = await apiFetchHashtagPosts(tag, authToken, 100, 0);
+      setHashtagOpportunities(posts.map((post) => userPostToOpportunity(post, currentUser)));
+    } catch (err) {
+      console.error('Failed to fetch hashtag posts:', err);
+      setHashtagOpportunities([]);
+    } finally {
+      setIsHashtagPostsLoading(false);
+    }
+  }, [authToken, currentUserId, hashtagPageTag, currentUser]);
+
   useEffect(() => {
     if (auth.isAuthenticated && authToken) {
       refreshFollowGraph();
@@ -570,6 +620,13 @@ export default function App() {
       refreshFeedPosts();
     }
   }, [auth.isAuthenticated, authToken, refreshFollowGraph, refreshNotifications, refreshFeedPosts]);
+
+  useEffect(() => {
+    if (!auth.isAuthenticated || !authToken) return;
+    if (activeTab !== 'hashtag') return;
+    if (!hashtagPageTag) return;
+    void refreshHashtagPosts();
+  }, [auth.isAuthenticated, authToken, activeTab, hashtagPageTag, refreshHashtagPosts]);
 
   useEffect(() => {
     if (!authToken || !auth.isAuthenticated) return;
@@ -657,13 +714,26 @@ export default function App() {
 
   // Opportunity handlers
   const handleLike = (opportunityId: string) => {
-    const target = opportunities.find((opp) => opp.id === opportunityId);
+    const target =
+      opportunities.find((opp) => opp.id === opportunityId) ??
+      hashtagOpportunities.find((opp) => opp.id === opportunityId);
     if (!target) return;
     const nextLiked = !(target.isLikedByMe ?? target.likes.includes(currentUserId));
     const previousLiked = Boolean(target.isLikedByMe ?? target.likes.includes(currentUserId));
     const previousLikeCount = Math.max(target.likeCount ?? target.likes.length, 0);
 
     setOpportunities((prev) =>
+      prev.map((opp) =>
+        opp.id !== opportunityId
+          ? opp
+          : {
+              ...opp,
+              isLikedByMe: nextLiked,
+              likeCount: Math.max((opp.likeCount ?? opp.likes.length) + (nextLiked ? 1 : -1), 0),
+            },
+      ),
+    );
+    setHashtagOpportunities((prev) =>
       prev.map((opp) =>
         opp.id !== opportunityId
           ? opp
@@ -695,16 +765,40 @@ export default function App() {
                 },
           ),
         );
+        setHashtagOpportunities((prev) =>
+          prev.map((opp) =>
+            opp.id !== opportunityId
+              ? opp
+              : {
+                  ...opp,
+                  isLikedByMe: previousLiked,
+                  likeCount: previousLikeCount,
+                },
+          ),
+        );
       }
     })();
   };
 
   const handleSave = (opportunityId: string) => {
-    const target = opportunities.find((opp) => opp.id === opportunityId);
+    const target =
+      opportunities.find((opp) => opp.id === opportunityId) ??
+      hashtagOpportunities.find((opp) => opp.id === opportunityId);
     if (!target) return;
     const nextSaved = !(target.isSavedByMe ?? target.saved.includes(currentUserId));
 
     setOpportunities((prev) =>
+      prev.map((opp) =>
+        opp.id !== opportunityId
+          ? opp
+          : {
+              ...opp,
+              isSavedByMe: nextSaved,
+              saveCount: Math.max((opp.saveCount ?? opp.saved.length) + (nextSaved ? 1 : -1), 0),
+            },
+      ),
+    );
+    setHashtagOpportunities((prev) =>
       prev.map((opp) =>
         opp.id !== opportunityId
           ? opp
@@ -726,6 +820,9 @@ export default function App() {
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Unable to update save');
         await refreshFeedPosts();
+        if (hashtagPageTag) {
+          await refreshHashtagPosts();
+        }
       }
     })();
   };
@@ -735,6 +832,9 @@ export default function App() {
       try {
         await apiAddComment(opportunityId, commentText, authToken);
         await refreshFeedPosts();
+        if (hashtagPageTag) {
+          await refreshHashtagPosts();
+        }
         setPostsRefreshToken((prev) => prev + 1);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Unable to add comment');
@@ -747,6 +847,9 @@ export default function App() {
       try {
         await apiAddReply(commentId, content, authToken);
         await refreshFeedPosts();
+        if (hashtagPageTag) {
+          await refreshHashtagPosts();
+        }
         setPostsRefreshToken((prev) => prev + 1);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Unable to add reply');
@@ -755,13 +858,21 @@ export default function App() {
   };
 
   const handleLikeComment = (commentId: string, alreadyLiked: boolean) => {
-    const existing = findCommentStateById(opportunities, commentId);
+    const existing =
+      findCommentStateById(opportunities, commentId) ??
+      findCommentStateById(hashtagOpportunities, commentId);
     if (!existing) return;
     const nextLiked = !alreadyLiked;
     const previousLiked = existing.isLiked;
     const previousLikeCount = existing.likeCount;
 
     setOpportunities((prev) =>
+      prev.map((opp) => ({
+        ...opp,
+        comments: updateCommentLikeState(opp.comments ?? [], commentId, nextLiked),
+      })),
+    );
+    setHashtagOpportunities((prev) =>
       prev.map((opp) => ({
         ...opp,
         comments: updateCommentLikeState(opp.comments ?? [], commentId, nextLiked),
@@ -788,6 +899,17 @@ export default function App() {
             ),
           })),
         );
+        setHashtagOpportunities((prev) =>
+          prev.map((opp) => ({
+            ...opp,
+            comments: restoreCommentLikeState(
+              opp.comments ?? [],
+              commentId,
+              previousLiked,
+              previousLikeCount,
+            ),
+          })),
+        );
       }
     })();
   };
@@ -797,6 +919,9 @@ export default function App() {
       try {
         await apiDeleteComment(commentId, authToken);
         await refreshFeedPosts();
+        if (hashtagPageTag) {
+          await refreshHashtagPosts();
+        }
         setPostsRefreshToken((prev) => prev + 1);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Unable to delete comment');
@@ -824,6 +949,9 @@ export default function App() {
         );
         toast.success('Post updated successfully');
         await refreshFeedPosts();
+        if (hashtagPageTag) {
+          await refreshHashtagPosts();
+        }
         setPostsRefreshToken((prev) => prev + 1);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Unable to edit post');
@@ -837,6 +965,9 @@ export default function App() {
         await apiDeletePost(postId, authToken);
         toast.success('Post deleted successfully');
         await refreshFeedPosts();
+        if (hashtagPageTag) {
+          await refreshHashtagPosts();
+        }
         setPostsRefreshToken((prev) => prev + 1);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Unable to delete post');
@@ -852,11 +983,13 @@ export default function App() {
 
   useEffect(() => {
     if (!openedPost) return;
-    const latest = opportunities.find((item) => item.id === openedPost.id);
+    const latest =
+      opportunities.find((item) => item.id === openedPost.id) ??
+      hashtagOpportunities.find((item) => item.id === openedPost.id);
     if (latest) {
       setOpenedPost(latest);
     }
-  }, [opportunities, openedPost]);
+  }, [opportunities, hashtagOpportunities, openedPost]);
 
   useEffect(() => {
     if (activeTab !== 'post' || !openedPostId || !authToken) return;
@@ -870,6 +1003,9 @@ export default function App() {
         const mapped = userPostToOpportunity(post, currentUser);
         setOpenedPost(mapped);
         setOpportunities((prev) =>
+          prev.map((item) => (item.id === mapped.id ? mapped : item))
+        );
+        setHashtagOpportunities((prev) =>
           prev.map((item) => (item.id === mapped.id ? mapped : item))
         );
       } catch (err) {
@@ -1288,6 +1424,7 @@ export default function App() {
     setViewingProfileId(null);
     setOpenedPost(null);
     setFocusedCommentId(null);
+    setHashtagPageTag(null);
     if (tab !== 'search') {
       setSearchQuery('');
     }
@@ -1366,10 +1503,27 @@ export default function App() {
             onCancelRequest={handleCancelRequest}
             onViewProfile={handleViewProfile}
             onSelectHashtag={(hashtag) => {
-              setSelectedHashtag(hashtag);
-              navigate('feed');
+              navigate('hashtag', undefined, undefined, { hashtag });
             }}
             initialSearchQuery={searchQuery}
+          />
+        ) : activeTab === 'hashtag' ? (
+          <HashtagPostsPage
+            hashtag={hashtagPageTag ?? ''}
+            posts={hashtagOpportunities}
+            isLoading={isHashtagPostsLoading}
+            currentUserId={currentUserId}
+            onBack={() => window.history.back()}
+            onLike={handleLike}
+            onSave={handleSave}
+            onComment={handleComment}
+            onReply={handleReply}
+            onLikeComment={handleLikeComment}
+            onDeleteComment={handleDeleteComment}
+            onEditPost={handleEditPost}
+            onDeletePost={handleDeletePost}
+            onOpenPost={handleOpenPost}
+            onViewProfile={handleViewProfile}
           />
         ) : activeTab === 'network' ? (
           <NetworkPage

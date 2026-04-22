@@ -541,6 +541,117 @@ router.get('/posts/feed', async (req: Request, res: Response) => {
   }
 });
 
+router.get('/posts/hashtags/:hashtag', async (req: Request<{ hashtag: string }>, res: Response) => {
+  const authed = req as unknown as AuthedRequest;
+  const viewerUserId = authed.auth!.userId;
+  const rawHashtag = req.params.hashtag ?? '';
+  const normalizedHashtag = normalizeHashtag(rawHashtag);
+  const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 50, 1), 100);
+  const offset = Math.max(parseInt(req.query.offset as string, 10) || 0, 0);
+
+  if (!normalizedHashtag) {
+    return res.status(400).json({ message: 'Invalid hashtag' });
+  }
+
+  try {
+    const rows = await prisma.$queryRaw<FeedPostRow[]>`
+      SELECT
+        p.post_id,
+        p.author_user_id,
+        au.username AS author_username,
+        au.profile_photo_url AS author_profile_photo_url,
+        p.club_id,
+        p.post_type,
+        p.opportunity_type,
+        p.title,
+        p.content_text,
+        p.company_name,
+        p.application_deadline,
+        p.stipend,
+        p.duration,
+        p.event_date,
+        p.location,
+        p.external_url,
+        p.visibility,
+        COALESCE(
+          (
+            SELECT ARRAY_AGG(h2.tag_name ORDER BY h2.tag_name)
+            FROM post_hashtags ph2
+            JOIN hashtags h2 ON h2.hashtag_id = ph2.hashtag_id
+            WHERE ph2.post_id = p.post_id
+          ),
+          ARRAY[]::text[]
+        ) AS hashtags,
+        COALESCE(
+          (
+            SELECT JSON_AGG(
+              JSON_BUILD_OBJECT(
+                'postMediaId', pm.post_media_id,
+                'mediaUrl', pm.media_url,
+                'mediaType', pm.media_type,
+                'sortOrder', pm.sort_order
+              )
+              ORDER BY pm.sort_order ASC, pm.created_at ASC
+            )
+            FROM post_media pm
+            WHERE pm.post_id = p.post_id
+          ),
+          '[]'::json
+        ) AS media,
+        (SELECT COUNT(*)::int FROM post_likes pl WHERE pl.post_id = p.post_id) AS like_count,
+        (SELECT COUNT(*)::int FROM post_comments pc WHERE pc.post_id = p.post_id) AS comment_count,
+        (SELECT COUNT(*)::int FROM post_saves ps WHERE ps.post_id = p.post_id) AS save_count,
+        EXISTS(SELECT 1 FROM post_likes plm WHERE plm.post_id = p.post_id AND plm.user_id = ${viewerUserId}) AS is_liked_by_me,
+        EXISTS(SELECT 1 FROM post_saves psm WHERE psm.post_id = p.post_id AND psm.user_id = ${viewerUserId}) AS is_saved_by_me,
+        p.created_at,
+        p.updated_at
+      FROM posts p
+      JOIN users au ON au.user_id = p.author_user_id
+      WHERE EXISTS (
+        SELECT 1
+        FROM post_hashtags ph
+        JOIN hashtags h ON h.hashtag_id = ph.hashtag_id
+        WHERE ph.post_id = p.post_id
+          AND h.tag_name = ${normalizedHashtag}
+      )
+      AND (
+        p.author_user_id = ${viewerUserId}
+        OR (
+          (
+            p.visibility = CAST('public' AS "PostVisibility")
+            OR (
+              p.visibility = CAST('followers' AS "PostVisibility")
+              AND EXISTS (
+                SELECT 1
+                FROM follows f
+                WHERE f.follower_user_id = ${viewerUserId}
+                  AND f.followed_user_id = p.author_user_id
+              )
+            )
+          )
+          AND (
+            NOT au.is_private
+            OR EXISTS (
+              SELECT 1
+              FROM follows f
+              WHERE f.follower_user_id = ${viewerUserId}
+                AND f.followed_user_id = p.author_user_id
+            )
+          )
+        )
+      )
+      ORDER BY p.created_at DESC
+      LIMIT ${limit}
+      OFFSET ${offset}
+    `;
+
+    return res.status(200).json(await mapFeedRows(rows, viewerUserId));
+  } catch (err) {
+    console.error('Error fetching hashtag posts:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 router.get('/posts/:postId', async (req: Request<{ postId: string }>, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const viewerUserId = authed.auth!.userId;
