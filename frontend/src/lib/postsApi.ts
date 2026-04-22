@@ -184,6 +184,21 @@ export async function apiFetchFeedPosts(token?: string, hashtag?: string): Promi
   return data.map((item) => normalizeUserPost(item));
 }
 
+export async function apiFetchPostById(postId: string, token?: string): Promise<UserPost> {
+  const response = await fetch(`${API_BASE}/posts/${encodeURIComponent(postId)}`, {
+    headers: {
+      ...authHeaders(token),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response));
+  }
+
+  const data = await response.json();
+  return normalizeUserPost(data);
+}
+
 export async function apiFetchUserPosts(userId: string, token?: string): Promise<UserPost[]> {
   return apiFetchProfilePosts(userId, token);
 }

@@ -51,6 +51,7 @@ import {
   apiDeleteComment,
   apiDeletePost,
   apiFetchFeedPosts,
+  apiFetchPostById,
   apiLikeComment,
   apiLikePost,
   apiSavePost,
@@ -356,6 +357,7 @@ export default function App() {
   const [selectedHashtag, setSelectedHashtag] = useState<string | null>(null);
   const [postsRefreshToken, setPostsRefreshToken] = useState(0);
   const [openedPost, setOpenedPost] = useState<Opportunity | null>(null);
+  const [openedPostId, setOpenedPostId] = useState<string | null>(null);
 
   const prevAuthenticatedRef = useRef<boolean>(auth.isAuthenticated);
 
@@ -393,12 +395,17 @@ export default function App() {
 
         if (mainPath === 'profile' && pathParts[1]) {
             setViewingProfileId(pathParts[1]);
+            setOpenedPostId(null);
+            setOpenedPost(null);
         } else if (mainPath === 'post' && pathParts[1]) {
+            setOpenedPostId(pathParts[1]);
             const matched = opportunities.find((item) => item.id === pathParts[1]) ?? null;
             setOpenedPost(matched);
             setViewingProfileId(null);
         } else {
             setViewingProfileId(null);
+            setOpenedPostId(null);
+            setOpenedPost(null);
         }
     };
 
@@ -423,14 +430,17 @@ export default function App() {
         state.profileId = profileId;
         setViewingProfileId(profileId);
         setOpenedPost(null);
+        setOpenedPostId(null);
     } else if (tab === 'post' && postId) {
         path += `/${postId}`;
         state.postId = postId;
         setViewingProfileId(null);
+        setOpenedPostId(postId);
     } else if (tab !== 'profile') {
         setViewingProfileId(null);
         if (tab !== 'post') {
           setOpenedPost(null);
+          setOpenedPostId(null);
         }
     }
     window.history.pushState(state, '', path);
@@ -736,6 +746,7 @@ export default function App() {
 
   const handleOpenPost = (post: Opportunity) => {
     setOpenedPost(post);
+    setOpenedPostId(post.id);
     navigate('post', undefined, post.id);
   };
 
@@ -746,6 +757,28 @@ export default function App() {
       setOpenedPost(latest);
     }
   }, [opportunities, openedPost]);
+
+  useEffect(() => {
+    if (activeTab !== 'post' || openedPost || !openedPostId || !authToken) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const post = await apiFetchPostById(openedPostId, authToken);
+        if (cancelled) return;
+        setOpenedPost(userPostToOpportunity(post, currentUser));
+      } catch (err) {
+        if (cancelled) return;
+        toast.error(err instanceof Error ? err.message : 'Unable to open post');
+        navigate('feed');
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, openedPost, openedPostId, authToken, currentUser]);
 
   const persistCreatedPost = async (draft: any) => {
     if (!authToken) {
