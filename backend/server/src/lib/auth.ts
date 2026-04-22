@@ -9,10 +9,17 @@ export interface AuthTokenPayload {
   email: string;
   username: string;
   type: AuthUserType;
+  sessionId: string;
+}
+
+export interface PasswordChangeTokenPayload {
+  userId: string;
+  purpose: 'password-change';
 }
 
 const BCRYPT_SALT_ROUNDS = 12;
 const DEFAULT_TOKEN_TTL = '12h';
+const PASSWORD_CHANGE_TOKEN_TTL = '10m';
 
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
@@ -53,7 +60,8 @@ export function verifyAuthToken(token: string): AuthTokenPayload {
     typeof decoded.userId !== 'string' ||
     typeof decoded.email !== 'string' ||
     typeof decoded.username !== 'string' ||
-    typeof decoded.type !== 'string'
+    typeof decoded.type !== 'string' ||
+    typeof decoded.sessionId !== 'string'
   ) {
     throw new Error('Invalid token payload');
   }
@@ -68,5 +76,37 @@ export function verifyAuthToken(token: string): AuthTokenPayload {
     email: decoded.email,
     username: decoded.username,
     type: decoded.type as AuthUserType,
+    sessionId: decoded.sessionId,
+  };
+}
+
+export function signPasswordChangeToken(userId: string): string {
+  return jwt.sign(
+    {
+      userId,
+      purpose: 'password-change',
+    },
+    getJwtSecret(),
+    {
+      expiresIn: PASSWORD_CHANGE_TOKEN_TTL,
+    }
+  );
+}
+
+export function verifyPasswordChangeToken(token: string): PasswordChangeTokenPayload {
+  const decoded = jwt.verify(token, getJwtSecret());
+
+  if (
+    !decoded ||
+    typeof decoded !== 'object' ||
+    typeof decoded.userId !== 'string' ||
+    decoded.purpose !== 'password-change'
+  ) {
+    throw new Error('Invalid password change token');
+  }
+
+  return {
+    userId: decoded.userId,
+    purpose: 'password-change',
   };
 }

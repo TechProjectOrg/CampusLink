@@ -22,12 +22,12 @@ import {
   Trash2,
   Github,
   Globe,
-  Camera,
+  Upload,
   Link as LinkIcon,
   Check,
 } from 'lucide-react';
 import { Student, Opportunity } from '../types';
-import type { FollowGraph } from '../lib/mockFollows';
+import type { FollowGraph } from '../App';
 import { FollowButton } from './network/FollowButton';
 import { useAuth } from '../context/AuthContext';
 import { apiAddUserSkill, apiDeleteUserSkill, apiFetchUserSkills, type UserSkill } from '../lib/skillsApi';
@@ -53,13 +53,17 @@ import { Checkbox } from './ui/checkbox';
 import { Modal } from './ui/modal';
 import { DatePicker } from './ui/date-picker';
 import { ImageWithFallback } from './figma/ImageWithFallback';
+import { ProfilePhotoUpload } from './ui/profile-photo-upload';
+import { apiUpdateUserProfilePicture, apiUploadUserProfilePicture } from '../lib/authApi';
+import { OpportunityCard } from './OpportunityCard';
+import { apiFetchProfilePosts, type UserPost } from '../lib/postsApi';
 
 interface ProfilePageProps {
   student: Student;
   currentUserId: string;
   isOwnProfile: boolean;
   followGraph: FollowGraph;
-  onFollow: (targetUserId: string) => void;
+  onFollow: (targetUserId: string, accountType?: 'public' | 'private') => void;
   onUnfollow: (targetUserId: string) => void;
   onCancelRequest: (targetUserId: string) => void;
   onEdit?: (updates: Partial<Student>) => void;
@@ -67,6 +71,13 @@ interface ProfilePageProps {
   onLike?: (opportunityId: string) => void;
   onSave?: (opportunityId: string) => void;
   onComment?: (opportunityId: string, comment: string) => void;
+  onReply?: (commentId: string, comment: string) => void;
+  onLikeComment?: (commentId: string, alreadyLiked: boolean) => void;
+  onDeleteComment?: (commentId: string) => void;
+  onEditPost?: (postId: string, updates: Partial<Opportunity>) => void;
+  onDeletePost?: (postId: string) => void;
+  onOpenPost?: (post: Opportunity) => void;
+  postsRefreshToken?: number;
 }
 
 // Experience type with dates
@@ -128,6 +139,13 @@ export function ProfilePage({
   onLike,
   onSave,
   onComment,
+  onReply,
+  onLikeComment,
+  onDeleteComment,
+  onEditPost,
+  onDeletePost,
+  onOpenPost,
+  postsRefreshToken = 0,
   currentUserId,
   followGraph,
   onFollow,
@@ -135,12 +153,9 @@ export function ProfilePage({
   onCancelRequest,
 }: ProfilePageProps) {
   const auth = useAuth();
-  const photoInputRef = useRef<HTMLInputElement>(null);
 
   // Profile state
   const [editedStudent, setEditedStudent] = useState(student);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
-  const [isPhotoHovering, setIsPhotoHovering] = useState(false);
 
   // Skills state
   const [skills, setSkills] = useState<UserSkill[]>([]);
@@ -154,6 +169,8 @@ export function ProfilePage({
   // Projects state
   const [loadedProjects, setLoadedProjects] = useState<Project[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
+  const [loadedPosts, setLoadedPosts] = useState<Opportunity[]>([]);
+  const [postsLoading, setPostsLoading] = useState(false);
 
   // Experience state
   const [experiences, setExperiences] = useState<Experience[]>([]);
@@ -259,6 +276,87 @@ export function ProfilePage({
     }
   };
 
+  const mapApiPostToOpportunity = (post: UserPost): Opportunity => {
+    let mappedType: Opportunity['type'] = 'general';
+    if (post.postType === 'event') {
+      mappedType = 'event';
+    } else if (post.postType === 'opportunity') {
+      mappedType = (post.opportunityType ?? 'event') as Opportunity['type'];
+    }
+
+    return {
+      id: post.id,
+      authorId: student.id,
+      authorName: student.name,
+      authorAvatar: student.avatar,
+      type: mappedType,
+      title: post.title ?? '',
+      description: post.contentText ?? '',
+      date: post.createdAt,
+      company: post.company ?? undefined,
+      deadline: post.deadline ?? undefined,
+      stipend: post.stipend ?? undefined,
+      duration: post.duration ?? undefined,
+      location: post.location ?? undefined,
+      link: post.externalUrl ?? undefined,
+      image: post.media[0]?.mediaUrl,
+      tags: post.hashtags,
+      likes: [],
+      comments: (post.comments ?? []).map((comment) => ({
+        id: comment.id,
+        postId: comment.postId,
+        authorId: comment.authorUserId,
+        authorName: comment.authorUsername,
+        authorAvatar:
+          comment.authorProfilePictureUrl ??
+          `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(comment.authorUsername)}`,
+        content: comment.content,
+        timestamp: comment.createdAt,
+        parentCommentId: comment.parentCommentId,
+        likeCount: comment.likeCount,
+        isLikedByMe: comment.isLikedByMe,
+        canDelete: comment.canDelete,
+        replies: comment.replies.map((reply) => ({
+          id: reply.id,
+          postId: reply.postId,
+          authorId: reply.authorUserId,
+          authorName: reply.authorUsername,
+          authorAvatar:
+            reply.authorProfilePictureUrl ??
+            `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(reply.authorUsername)}`,
+          content: reply.content,
+          timestamp: reply.createdAt,
+          parentCommentId: reply.parentCommentId,
+          likeCount: reply.likeCount,
+          isLikedByMe: reply.isLikedByMe,
+          canDelete: reply.canDelete,
+          replies: [],
+        })),
+      })),
+      saved: [],
+      likeCount: post.likeCount,
+      saveCount: post.saveCount,
+      commentCount: post.commentCount,
+      isLikedByMe: post.isLikedByMe,
+      isSavedByMe: post.isSavedByMe,
+      canEdit: post.canEdit,
+      canDelete: post.canDelete,
+    };
+  };
+
+  const loadPosts = async () => {
+    if (!student.id) return;
+    setPostsLoading(true);
+    try {
+      const list = await apiFetchProfilePosts(student.id, authToken);
+      setLoadedPosts(list.map(mapApiPostToOpportunity));
+    } catch {
+      setLoadedPosts([]);
+    } finally {
+      setPostsLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (isOwnProfile && authUserId) {
       loadSkills();
@@ -269,6 +367,10 @@ export function ProfilePage({
     loadCertifications();
     loadProjects();
   }, [student.id, authToken]);
+
+  useEffect(() => {
+    loadPosts();
+  }, [student.id, authToken, isOwnProfile, authUserId, postsRefreshToken]);
 
   useEffect(() => {
     // Initialize from student data
@@ -298,6 +400,55 @@ export function ProfilePage({
   const requestStatus = (followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id)
     ? 'requested'
     : 'none';
+  const profilePosts = [...loadedPosts].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  const updateCommentLikeLocally = (comments: Opportunity['comments'], commentId: string, nextLiked: boolean): Opportunity['comments'] =>
+    comments.map((comment) => {
+      if (comment.id === commentId) {
+        const currentLikeCount = Math.max(comment.likeCount ?? 0, 0);
+        return {
+          ...comment,
+          isLikedByMe: nextLiked,
+          likeCount: Math.max(currentLikeCount + (nextLiked ? 1 : -1), 0),
+        };
+      }
+
+      if (!comment.replies || comment.replies.length === 0) {
+        return comment;
+      }
+
+      return {
+        ...comment,
+        replies: updateCommentLikeLocally(comment.replies, commentId, nextLiked),
+      };
+    });
+
+  const handleProfileLike = (postId: string) => {
+    setLoadedPosts((prev) =>
+      prev.map((post) => {
+        if (post.id !== postId) return post;
+        const isLiked = Boolean(post.isLikedByMe ?? post.likes.includes(currentUserId));
+        const nextLiked = !isLiked;
+        return {
+          ...post,
+          isLikedByMe: nextLiked,
+          likeCount: Math.max((post.likeCount ?? post.likes.length) + (nextLiked ? 1 : -1), 0),
+        };
+      }),
+    );
+    onLike?.(postId);
+  };
+
+  const handleProfileCommentLike = (commentId: string, alreadyLiked: boolean) => {
+    const nextLiked = !alreadyLiked;
+    setLoadedPosts((prev) =>
+      prev.map((post) => ({
+        ...post,
+        comments: updateCommentLikeLocally(post.comments, commentId, nextLiked),
+      })),
+    );
+    onLikeComment?.(commentId, alreadyLiked);
+  };
 
   // Handlers
   const closeModal = () => {
@@ -324,17 +475,28 @@ export function ProfilePage({
     closeModal();
   };
 
-  // Photo upload
-  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhotoPreview(reader.result as string);
-        setEditedStudent({ ...editedStudent, avatar: reader.result as string });
-      };
-      reader.readAsDataURL(file);
+  const currentProfilePhoto = isOwnProfile ? auth.profile?.profilePictureUrl ?? null : null;
+  const hasCustomProfilePhoto = isOwnProfile && Boolean(auth.profile?.profilePictureUrl);
+  const displayedProfilePhoto = isOwnProfile ? currentProfilePhoto ?? student.avatar : student.avatar;
+
+  const handleProfilePhotoChange = async (payload: { file?: File; previewUrl?: string; remove?: boolean }) => {
+    if (!isOwnProfile || !authUserId) return;
+
+    if (payload.remove) {
+      await apiUpdateUserProfilePicture(authUserId, null, authToken);
+      const seed = encodeURIComponent(student.username || student.email || student.id);
+      onEdit?.({ avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}` });
+      await auth.refreshProfile();
+      return;
     }
+
+    if (!payload.file) return;
+
+    await apiUploadUserProfilePicture(authUserId, payload.file, authToken);
+    if (payload.previewUrl) {
+      onEdit?.({ avatar: payload.previewUrl });
+    }
+    await auth.refreshProfile();
   };
 
   // Skill handlers
@@ -619,36 +781,13 @@ export function ProfilePage({
             <div className="flex flex-col md:flex-row md:items-end gap-4 -mt-16">
               {/* Profile Photo with Upload */}
               <div className="relative">
-                <input
-                  type="file"
-                  ref={photoInputRef}
-                  onChange={handlePhotoChange}
-                  className="hidden"
-                  accept="image/*"
+                <ProfilePhotoUpload
+                  currentPhoto={displayedProfilePhoto}
+                  hasCustomPhoto={hasCustomProfilePhoto}
+                  name={student.name}
+                  editable={isOwnProfile}
+                  onPhotoChange={handleProfilePhotoChange}
                 />
-                <div
-                  className="relative w-32 h-32 rounded-full cursor-pointer"
-                  onMouseEnter={() => setIsPhotoHovering(true)}
-                  onMouseLeave={() => setIsPhotoHovering(false)}
-                  onClick={() => isOwnProfile && photoInputRef.current?.click()}
-                >
-                  <Avatar className="w-32 h-32 ring-4 ring-white shadow-xl">
-                    <AvatarImage src={photoPreview || student.avatar} className="object-cover" />
-                    <AvatarFallback className="text-4xl bg-gradient-to-br from-blue-500 to-blue-600 text-white">
-                      {student.name[0]}
-                    </AvatarFallback>
-                  </Avatar>
-                  
-                  {/* Hover overlay for photo change */}
-                  {isOwnProfile && isPhotoHovering && (
-                    <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center transition-all">
-                      <div className="text-center text-white">
-                        <Camera className="w-6 h-6 mx-auto" />
-                        <span className="text-xs font-medium">Change</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
 
               {/* Profile Info */}
@@ -695,7 +834,7 @@ export function ProfilePage({
                         isFollowing={isFollowing}
                         isFollower={isFollower}
                         requestStatus={requestStatus}
-                        onFollow={() => onFollow(student.id)}
+                        onFollow={() => onFollow(student.id, student.accountType)}
                         onUnfollow={() => onUnfollow(student.id)}
                         onCancelRequest={() => onCancelRequest(student.id)}
                       />
@@ -755,6 +894,45 @@ export function ProfilePage({
               </div>
             ) : (
               <EmptyState message="Add a short bio to introduce yourself" onAdd={() => setActiveModal('about')} />
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ===== POSTS SECTION ===== */}
+        <Card className="shadow-sm border-0">
+          <CardContent className="p-6 space-y-4">
+            <SectionHeader title="Posts" icon={MessageCircle} />
+            {isOwnProfile && postsLoading ? (
+              <p className="text-gray-400 text-sm">Loading posts...</p>
+            ) : profilePosts.length > 0 ? (
+              <div className="space-y-4">
+                {profilePosts.map((post) => (
+                  <OpportunityCard
+                    key={post.id}
+                    opportunity={post}
+                    currentUserId={currentUserId}
+                    showManagementControls={isOwnProfile}
+                    onLike={handleProfileLike}
+                    onSave={(id) => onSave?.(id)}
+                    onComment={(id, comment) => onComment?.(id, comment)}
+                    onReply={(commentId, comment) => onReply?.(commentId, comment)}
+                    onLikeComment={handleProfileCommentLike}
+                    onDeleteComment={(commentId) => onDeleteComment?.(commentId)}
+                    onEditPost={(postId, updates) => onEditPost?.(postId, updates)}
+                    onDeletePost={(postId) => onDeletePost?.(postId)}
+                    onOpenPost={onOpenPost}
+                    onViewProfile={() => undefined}
+                  />
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                message={
+                  isOwnProfile
+                    ? 'Create your first post to see it here'
+                    : `${student.name} has not posted anything yet`
+                }
+              />
             )}
           </CardContent>
         </Card>
@@ -1140,7 +1318,7 @@ export function ProfilePage({
                 <img src={projectImagePreview} alt="Preview" className="w-full h-32 object-cover rounded-lg" />
               ) : (
                 <div className="py-4">
-                  <Camera className="w-8 h-8 mx-auto text-gray-400" />
+                  <Upload className="w-8 h-8 mx-auto text-gray-400" />
                   <p className="text-sm text-gray-500 mt-2">Click to upload image</p>
                 </div>
               )}
@@ -1234,7 +1412,7 @@ export function ProfilePage({
                 <img src={certImagePreview} alt="Preview" className="w-full h-24 object-cover rounded-lg" />
               ) : (
                 <div className="py-2">
-                  <Camera className="w-6 h-6 mx-auto text-gray-400" />
+                  <Upload className="w-6 h-6 mx-auto text-gray-400" />
                   <p className="text-xs text-gray-500 mt-1">Upload certificate image</p>
                 </div>
               )}

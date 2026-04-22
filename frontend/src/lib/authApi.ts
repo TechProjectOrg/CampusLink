@@ -1,4 +1,4 @@
-import type { ApiUserProfile } from '../types';
+import type { ApiUserProfile, ApiUserSession, ApiUserSettings } from '../types';
 
 const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined)?.trim() || 'http://localhost:4000';
 
@@ -101,6 +101,193 @@ export async function apiFetchUserProfile(userId: string, token?: string): Promi
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
     throw new Error(err?.message || 'Unable to fetch user profile');
+  }
+
+  return (await response.json()) as ApiUserProfile;
+}
+
+export async function apiFetchUserSettings(userId: string, token?: string): Promise<ApiUserSettings> {
+  const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}/settings`, {
+    headers: {
+      ...authHeaders(token),
+    },
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to fetch user settings');
+  }
+
+  return (await response.json()) as ApiUserSettings;
+}
+
+export async function apiUpdateUserSettings(
+  userId: string,
+  payload: Partial<ApiUserSettings>,
+  token?: string
+): Promise<ApiUserSettings> {
+  const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}/settings`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(token),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to update user settings');
+  }
+
+  return (await response.json()) as ApiUserSettings;
+}
+
+export async function apiFetchUserSessions(token?: string): Promise<ApiUserSession[]> {
+  const response = await safeFetch(`${API_BASE}/auth/sessions`, {
+    headers: {
+      ...authHeaders(token),
+    },
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to fetch active sessions');
+  }
+
+  return (await response.json()) as ApiUserSession[];
+}
+
+export async function apiRevokeUserSession(sessionId: string, token?: string): Promise<void> {
+  const response = await safeFetch(`${API_BASE}/auth/sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'DELETE',
+    headers: {
+      ...authHeaders(token),
+    },
+  });
+
+  if (!response.ok && response.status !== 204) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to revoke session');
+  }
+}
+
+export interface PasswordChangeVerifyResult {
+  changeToken: string;
+}
+
+export async function apiVerifyPasswordChange(
+  userId: string,
+  currentPassword: string,
+  token?: string
+): Promise<PasswordChangeVerifyResult> {
+  const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}/password/verify`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(token),
+    },
+    body: JSON.stringify({ currentPassword }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to verify current password');
+  }
+
+  return (await response.json()) as PasswordChangeVerifyResult;
+}
+
+export async function apiChangePassword(
+  userId: string,
+  payload: { changeToken: string; newPassword: string },
+  token?: string
+): Promise<void> {
+  const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}/password`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(token),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    const detail = err?.details ? ` ${err.details}` : '';
+    throw new Error(err?.message ? `${err.message}${detail}` : 'Unable to change password');
+  }
+}
+
+export interface UpdateUserProfilePayload {
+  username: string;
+  branch: string;
+  year: string | number;
+}
+
+export async function apiUpdateUserProfile(
+  userId: string,
+  payload: UpdateUserProfilePayload,
+  token?: string
+): Promise<ApiUserProfile> {
+  const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(token),
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to update user profile');
+  }
+
+  return (await response.json()) as ApiUserProfile;
+}
+
+export async function apiUpdateUserProfilePicture(
+  userId: string,
+  profilePictureUrl: string | null,
+  token?: string
+): Promise<ApiUserProfile> {
+  const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}/profile-picture`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(token),
+    },
+    body: JSON.stringify({ profilePictureUrl }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to update profile picture');
+  }
+
+  return (await response.json()) as ApiUserProfile;
+}
+
+export async function apiUploadUserProfilePicture(
+  userId: string,
+  file: File,
+  token?: string
+): Promise<ApiUserProfile> {
+  const formData = new FormData();
+  formData.append('image', file);
+
+  const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}/profile-picture`, {
+    method: 'PATCH',
+    headers: {
+      ...authHeaders(token),
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to upload profile picture');
   }
 
   return (await response.json()) as ApiUserProfile;

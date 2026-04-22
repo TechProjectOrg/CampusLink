@@ -12,11 +12,19 @@ import { CreateUnifiedPostModal } from './CreateUnifiedPostModal';
 interface FeedPageProps {
   opportunities: Opportunity[];
   currentUserId: string;
+  selectedHashtag?: string | null;
+  onClearHashtagFilter?: () => void;
   currentUser?: Student;
   students?: Student[];
   onLike: (id: string) => void;
   onSave: (id: string) => void;
   onComment: (id: string, comment: string) => void;
+  onReply: (commentId: string, content: string) => void;
+  onLikeComment: (commentId: string, alreadyLiked: boolean) => void;
+  onDeleteComment: (commentId: string) => void;
+  onEditPost: (postId: string, updates: Partial<Opportunity>) => void;
+  onDeletePost: (postId: string) => void;
+  onOpenPost: (post: Opportunity) => void;
 
   onCreateOpportunity?: (opportunity: Opportunity) => void;
   onCreatePost?: (post: any) => void;
@@ -28,11 +36,19 @@ interface FeedPageProps {
 export function FeedPage({ 
   opportunities, 
   currentUserId,
+  selectedHashtag,
+  onClearHashtagFilter,
   currentUser,
   students = [],
   onLike, 
   onSave, 
   onComment,
+  onReply,
+  onLikeComment,
+  onDeleteComment,
+  onEditPost,
+  onDeletePost,
+  onOpenPost,
   onCreateOpportunity,
   onCreatePost,
   onCreateEvent,
@@ -79,6 +95,18 @@ export function FeedPage({
 
             {/* Filters */}
             <div className="glass-morphism rounded-2xl border border-white/50 p-4 shadow-lg hover-lift animate-slide-in-up">
+              {selectedHashtag && (
+                <div className="mb-3 flex items-center gap-2">
+                  <Badge className="bg-primary/10 text-primary border-primary/20">#{selectedHashtag}</Badge>
+                  <button
+                    type="button"
+                    className="text-sm text-gray-600 hover:text-gray-900"
+                    onClick={onClearHashtagFilter}
+                  >
+                    Clear hashtag filter
+                  </button>
+                </div>
+              )}
               <div className="flex items-center gap-2 mb-3">
                 <Filter className="w-5 h-5 text-primary" />
                 <span className="text-gray-900">Filter by:</span>
@@ -115,9 +143,16 @@ export function FeedPage({
                   <OpportunityCard
                     opportunity={opportunity}
                     currentUserId={currentUserId}
+                    showManagementControls={false}
                     onLike={onLike}
                     onSave={onSave}
                     onComment={onComment}
+                    onReply={onReply}
+                    onLikeComment={onLikeComment}
+                    onDeleteComment={onDeleteComment}
+                    onEditPost={onEditPost}
+                    onDeletePost={onDeletePost}
+                    onOpenPost={onOpenPost}
 
                     onViewProfile={onViewStudentProfile}
                   />

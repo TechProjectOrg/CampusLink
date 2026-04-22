@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { User, Lock, Bell, Shield, Trash2, Save, Eye, EyeOff } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ArrowLeft, Bell, Check, ChevronDown, ChevronRight, ChevronUp, Clock, Edit2, Globe, KeyRound, Lock, MapPin, MonitorSmartphone, Save, Shield, Trash2, User, X } from 'lucide-react';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -8,8 +8,34 @@ import { Switch } from './ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Separator } from './ui/separator';
 import { toast } from 'sonner@2.0.3';
-import { Student } from '../types';
+import type { ApiUserSession, Student } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { apiChangePassword, apiFetchUserSessions, apiFetchUserSettings, apiRevokeUserSession, apiUpdateUserProfile, apiUpdateUserSettings, apiVerifyPasswordChange } from '../lib/authApi';
+
+const PASSWORD_REQUIREMENTS = [
+  'At least 8 characters long',
+  'At least one lowercase letter',
+  'At least one uppercase letter',
+  'At least one number',
+  'At least one special character (!@#$%^&*)',
+];
+
+function meetsPasswordRequirements(password: string): boolean {
+  return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/.test(password);
+}
+
+function formatSessionIp(ipAddress: string | null): string {
+  if (!ipAddress) return 'Not available';
+  if (ipAddress === '::1' || ipAddress === '127.0.0.1') {
+    return '::1 (localhost)';
+  }
+
+  return ipAddress;
+}
+
+function formatSessionLastActive(lastSeenAt: string | null, createdAt: string): string {
+  return new Date(lastSeenAt ?? createdAt).toLocaleString();
+}
 
 interface SettingsPageProps {
   student: Student;
@@ -19,14 +45,48 @@ interface SettingsPageProps {
 
 export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPageProps) {
   const auth = useAuth();
+  const accountStudent = auth.currentUser ?? student;
+  const isAlumni = auth.profile?.type === 'alumni';
+  const yearValue = isAlumni
+    ? auth.profile?.details?.passingYear ?? accountStudent.year
+    : auth.profile?.details?.year ?? accountStudent.year;
+  const currentCalendarYear = new Date().getFullYear();
+  const passingYearOptions = Array.from({ length: 41 }, (_, index) => currentCalendarYear - 20 + index);
+  const branchOptions = Array.from(
+    new Set([
+      'Computer Science',
+      'Information Technology',
+      'Electronics',
+      'Mechanical',
+      'Civil',
+      accountStudent.branch,
+    ].filter(Boolean))
+  );
 
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [isEditingAccount, setIsEditingAccount] = useState(false);
+  const [isSavingAccount, setIsSavingAccount] = useState(false);
+  const [accountData, setAccountData] = useState({
+    username: accountStudent.username,
+    branch: accountStudent.branch,
+    year: String(yearValue ?? accountStudent.year),
+  });
+
+  const [passwordChangeStatus, setPasswordChangeStatus] = useState<'idle' | 'verifying' | 'changing'>('idle');
+  const [securityView, setSecurityView] = useState<'menu' | 'password' | 'sessions'>('menu');
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   });
+
+  const [sessions, setSessions] = useState<ApiUserSession[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
+  const [revokingSessionId, setRevokingSessionId] = useState<string | null>(null);
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
+  const [settingsLoading, setSettingsLoading] = useState(false);
+  const [savingNotifications, setSavingNotifications] = useState(false);
+  const [savingPrivacy, setSavingPrivacy] = useState(false);
 
   const [notificationSettings, setNotificationSettings] = useState({
     emailNotifications: true,
@@ -34,38 +94,481 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
     newMessages: true,
     opportunityAlerts: true,
     clubUpdates: true,
-    weeklyDigest: false
+    newPostAlerts: false
   });
 
   const [privacySettings, setPrivacySettings] = useState({
-    accountType: student.accountType,
+    accountType: accountStudent.accountType,
     showEmail: true,
     showProjects: true,
     allowMessages: true,
   });
 
+  useEffect(() => {
+    if (!auth.session?.userId) return;
+
+    let cancelled = false;
+
+    const loadSettings = async () => {
+      setSettingsLoading(true);
+      try {
+        const settings = await apiFetchUserSettings(auth.session.userId, auth.session?.token);
+        if (cancelled) return;
+
+        setNotificationSettings(settings.notifications);
+        setPrivacySettings(settings.privacy);
+      } catch (err) {
+        if (!cancelled) {
+          toast.error(err instanceof Error ? err.message : 'Unable to load settings');
+        }
+      } finally {
+        if (!cancelled) {
+          setSettingsLoading(false);
+        }
+      }
+    };
+
+    void loadSettings();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.session?.userId, auth.session?.token]);
+
+  useEffect(() => {
+    if (isEditingAccount) return;
+
+    setAccountData({
+      username: accountStudent.username,
+      branch: accountStudent.branch,
+      year: String(yearValue ?? accountStudent.year),
+    });
+  }, [accountStudent, isEditingAccount, yearValue]);
+
+  useEffect(() => {
+    if (securityView !== 'sessions') return;
+    if (!auth.session?.token) return;
+
+    let cancelled = false;
+
+    const loadSessions = async () => {
+      setSessionsLoading(true);
+      setSessionsError(null);
+
+      try {
+        const list = await apiFetchUserSessions(auth.session?.token);
+        if (!cancelled) {
+          setSessions(list);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setSessions([]);
+          setSessionsError(err instanceof Error ? err.message : 'Unable to load active sessions');
+        }
+      } finally {
+        if (!cancelled) {
+          setSessionsLoading(false);
+        }
+      }
+    };
+
+    void loadSessions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [securityView, auth.session?.token]);
+
   const handlePasswordChange = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!auth.session?.userId) {
+      toast.error('You must be signed in to change your password');
+      return;
+    }
+
+    if (!passwordData.currentPassword.trim()) {
+      toast.error('Current password is required');
+      return;
+    }
+
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      toast.error('Passwords do not match');
+      toast.error('New password and confirmation do not match');
       return;
     }
-    if (passwordData.newPassword.length < 8) {
-      toast.error('Password must be at least 8 characters');
+
+    if (!meetsPasswordRequirements(passwordData.newPassword)) {
+      toast.error('New password does not meet the requirements');
       return;
     }
-    toast.success('Password updated successfully');
-    setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+
+    setPasswordChangeStatus('verifying');
+
+    const performPasswordChange = async () => {
+      try {
+        const verification = await apiVerifyPasswordChange(
+          auth.session.userId,
+          passwordData.currentPassword,
+          auth.session.token
+        );
+
+        setPasswordChangeStatus('changing');
+
+        await apiChangePassword(
+          auth.session.userId,
+          {
+            changeToken: verification.changeToken,
+            newPassword: passwordData.newPassword,
+          },
+          auth.session.token
+        );
+
+        toast.success('Password updated successfully');
+        setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Unable to change password');
+      } finally {
+        setPasswordChangeStatus('idle');
+      }
+    };
+
+    void performPasswordChange();
   };
 
-  const handleSaveNotifications = () => {
-    onUpdateSettings({ notifications: notificationSettings });
-    toast.success('Notification preferences saved');
+  const handleBackToSecurityMenu = () => {
+    setSecurityView('menu');
   };
 
-  const handleSavePrivacy = () => {
-    onUpdateSettings({ privacy: privacySettings });
-    toast.success('Privacy settings saved');
+  const handleRevokeSession = async (session: ApiUserSession) => {
+    if (!auth.session?.token) return;
+
+    setRevokingSessionId(session.sessionId);
+
+    try {
+      await apiRevokeUserSession(session.sessionId, auth.session.token);
+
+      if (session.isCurrent) {
+        auth.logout();
+        toast.success('This device has been logged out');
+        return;
+      }
+
+      const nextSessions = await apiFetchUserSessions(auth.session.token);
+      setSessions(nextSessions);
+      toast.success('Session logged out');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Unable to log out session');
+    } finally {
+      setRevokingSessionId(null);
+    }
+  };
+
+  const renderPasswordForm = () => (
+    <Card>
+      <CardHeader className="flex flex-row items-start justify-between gap-4">
+        <div>
+          <h2 className="text-gray-900">Change Password</h2>
+          <p className="text-gray-600">Update your password to keep your account secure</p>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={handleBackToSecurityMenu}>
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back
+        </Button>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handlePasswordChange} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="current-password">Current Password</Label>
+            <Input
+              id="current-password"
+              type="password"
+              value={passwordData.currentPassword}
+              onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
+              disabled={isPasswordActionInProgress}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="new-password">New Password</Label>
+            <Input
+              id="new-password"
+              type="password"
+              value={passwordData.newPassword}
+              onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
+              disabled={isPasswordActionInProgress}
+              required
+            />
+            {passwordData.newPassword.length > 0 && (
+              <div className="rounded-xl border border-dashed bg-gray-50 p-4 space-y-2">
+                <p className="text-sm font-medium text-gray-900">Password requirements</p>
+                <ul className="space-y-2">
+                  {visiblePasswordRequirements.length > 0 ? (
+                    visiblePasswordRequirements.map((item) => (
+                      <li key={item.requirement} className="text-sm text-gray-700">
+                        {item.requirement}
+                      </li>
+                    ))
+                  ) : (
+                    <li className="text-sm text-emerald-700">
+                      All password requirements are satisfied.
+                    </li>
+                  )}
+                </ul>
+              </div>
+            )}
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirm-password">Confirm New Password</Label>
+            <Input
+              id="confirm-password"
+              type="password"
+              value={passwordData.confirmPassword}
+              onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
+              disabled={isPasswordActionInProgress}
+              required
+            />
+            {passwordMismatch && (
+              <p className="text-sm text-red-600">New password and confirmation do not match.</p>
+            )}
+          </div>
+          <Button type="submit" className="w-full gradient-primary" disabled={isPasswordActionInProgress}>
+            {passwordChangeStatus === 'verifying'
+              ? 'Verifying...'
+              : passwordChangeStatus === 'changing'
+                ? 'Changing password...'
+                : 'Change Password'}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
+
+  const renderSessionsView = () => (
+    <Card>
+      <CardHeader className="flex flex-row items-start justify-between gap-4">
+        <div>
+          <h2 className="text-gray-900">Where You Are Logged In</h2>
+          <p className="text-gray-600">Active sessions from your account.</p>
+        </div>
+        <Button type="button" variant="outline" size="sm" onClick={handleBackToSecurityMenu}>
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back
+        </Button>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {sessionsLoading ? (
+          <div className="rounded-xl border border-dashed bg-gray-50 p-4 text-sm text-gray-600">Loading active sessions...</div>
+        ) : sessionsError ? (
+          <div className="rounded-xl border border-dashed bg-red-50 p-4 text-sm text-red-700">{sessionsError}</div>
+        ) : sessions.length === 0 ? (
+          <div className="rounded-xl border border-dashed bg-gray-50 p-4 text-sm text-gray-600">No active sessions found.</div>
+        ) : (
+          sessions.map((session) => (
+          <div key={session.sessionId} className="rounded-2xl border bg-white p-4 shadow-sm">
+            <button
+              type="button"
+              className="w-full text-left"
+              onClick={() =>
+                setExpandedSessionId((prev) =>
+                  prev === session.sessionId ? null : session.sessionId
+                )
+              }
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <MonitorSmartphone className="h-5 w-5 text-primary" />
+                    <h3 className="text-gray-900">{session.deviceName}</h3>
+                  </div>
+                  {expandedSessionId !== session.sessionId && (
+                    <div className="flex flex-wrap gap-3 text-sm text-gray-600">
+                      <span className="inline-flex items-center gap-1">
+                        <Globe className="h-4 w-4" />
+                        {session.browserName} on {session.platform}
+                      </span>
+                      <span className="inline-flex items-center gap-1 max-w-[280px] truncate">
+                        <MapPin className="h-4 w-4 shrink-0" />
+                        {session.locationLabel}
+                      </span>
+                      <span className="inline-flex items-center gap-1">
+                        <Clock className="h-4 w-4" />
+                        {formatSessionLastActive(session.lastSeenAt, session.createdAt)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {session.isCurrent ? (
+                    <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">
+                      Current session
+                    </span>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void handleRevokeSession(session);
+                      }}
+                      disabled={revokingSessionId === session.sessionId}
+                    >
+                      {revokingSessionId === session.sessionId ? 'Logging out...' : 'Log out'}
+                    </Button>
+                  )}
+                  {expandedSessionId === session.sessionId ? (
+                    <ChevronUp className="h-4 w-4 text-gray-500" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-gray-500" />
+                  )}
+                </div>
+              </div>
+            </button>
+            {expandedSessionId === session.sessionId && (
+              <div className="mt-4 rounded-xl border border-dashed bg-gray-50 p-3 text-sm text-gray-700 space-y-2">
+                <p>
+                  <span className="font-medium text-gray-900">Location:</span>{' '}
+                  {session.locationLabel}
+                </p>
+                <p className="break-all">
+                  <span className="font-medium text-gray-900">IP:</span>{' '}
+                  {formatSessionIp(session.ipAddress)}
+                </p>
+                <p>
+                  <span className="font-medium text-gray-900">Last active:</span>{' '}
+                  {formatSessionLastActive(session.lastSeenAt, session.createdAt)}
+                </p>
+              </div>
+            )}
+          </div>
+          ))
+        )}
+      </CardContent>
+    </Card>
+  );
+
+  const passwordMismatch =
+    passwordData.confirmPassword.length > 0 && passwordData.newPassword !== passwordData.confirmPassword;
+  const passwordRequirementStatus = PASSWORD_REQUIREMENTS.map((requirement) => ({
+    requirement,
+    met:
+      requirement === 'At least 8 characters long'
+        ? passwordData.newPassword.length >= 8
+        : requirement === 'At least one lowercase letter'
+          ? /[a-z]/.test(passwordData.newPassword)
+          : requirement === 'At least one uppercase letter'
+            ? /[A-Z]/.test(passwordData.newPassword)
+            : requirement === 'At least one number'
+              ? /\d/.test(passwordData.newPassword)
+              : /[!@#$%^&*]/.test(passwordData.newPassword),
+  }));
+  const visiblePasswordRequirements = passwordData.newPassword.length
+    ? passwordRequirementStatus.filter((item) => !item.met)
+    : [];
+  const isPasswordActionInProgress = passwordChangeStatus !== 'idle';
+
+  const persistNotificationSettings = async (nextNotifications: typeof notificationSettings) => {
+    if (!auth.session?.userId) {
+      toast.error('You must be signed in to save settings');
+      return;
+    }
+
+    setSavingNotifications(true);
+    try {
+      const updated = await apiUpdateUserSettings(
+        auth.session.userId,
+        { notifications: nextNotifications },
+        auth.session.token
+      );
+      setNotificationSettings(updated.notifications);
+      setPrivacySettings(updated.privacy);
+      onUpdateSettings({ notifications: updated.notifications });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Unable to save notification settings');
+    } finally {
+      setSavingNotifications(false);
+    }
+  };
+
+  const persistPrivacySettings = async (nextPrivacy: typeof privacySettings) => {
+    if (!auth.session?.userId) {
+      toast.error('You must be signed in to save settings');
+      return;
+    }
+
+    setSavingPrivacy(true);
+    try {
+      const updated = await apiUpdateUserSettings(
+        auth.session.userId,
+        { privacy: nextPrivacy },
+        auth.session.token
+      );
+      setNotificationSettings(updated.notifications);
+      setPrivacySettings(updated.privacy);
+      onEdit({ accountType: updated.privacy.accountType });
+      await auth.refreshProfile();
+      onUpdateSettings({ privacy: updated.privacy });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Unable to save privacy settings');
+    } finally {
+      setSavingPrivacy(false);
+    }
+  };
+
+  const handleCancelAccountEdit = () => {
+    setAccountData({
+      username: accountStudent.username,
+      branch: accountStudent.branch,
+      year: String(yearValue ?? accountStudent.year),
+    });
+    setIsEditingAccount(false);
+  };
+
+  const handleSaveAccount = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    const trimmedUsername = accountData.username.trim();
+    const trimmedBranch = accountData.branch.trim();
+    const parsedYear = Number.parseInt(accountData.year, 10);
+
+    if (!trimmedUsername || !trimmedBranch || Number.isNaN(parsedYear)) {
+      toast.error('Please complete all account fields');
+      return;
+    }
+
+    if (!auth.session?.userId) {
+      toast.error('You must be signed in to update your profile');
+      return;
+    }
+
+    setIsSavingAccount(true);
+
+    try {
+      await apiUpdateUserProfile(
+        auth.session.userId,
+        {
+          username: trimmedUsername,
+          branch: trimmedBranch,
+          year: parsedYear,
+        },
+        auth.session.token
+      );
+
+      onEdit({
+        name: trimmedUsername,
+        username: trimmedUsername,
+        branch: trimmedBranch,
+        year: parsedYear,
+      });
+
+      await auth.refreshProfile();
+      setIsEditingAccount(false);
+      toast.success('Account information updated');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Unable to update account information');
+    } finally {
+      setIsSavingAccount(false);
+    }
   };
 
   const handleDeleteAccount = async () => {
@@ -119,122 +622,158 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
           {/* Account Settings */}
           <TabsContent value="account">
             <Card>
-              <CardHeader>
-                <h2 className="text-gray-900">Account Information</h2>
-                <p className="text-gray-600">Update your account details</p>
+              <CardHeader className="flex flex-row items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-gray-900">Account Information</h2>
+                  <p className="text-gray-600">Update your account details</p>
+                </div>
+                {!isEditingAccount ? (
+                  <Button type="button" variant="outline" size="sm" onClick={() => setIsEditingAccount(true)}>
+                    <Edit2 className="w-4 h-4 mr-2" />
+                    Edit
+                  </Button>
+                ) : (
+                  <Button type="button" variant="outline" size="sm" onClick={handleCancelAccountEdit}>
+                    <X className="w-4 h-4 mr-2" />
+                    Cancel
+                  </Button>
+                )}
               </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Full Name</Label>
-                  <Input id="name" defaultValue={student.name} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email Address</Label>
-                  <Input id="email" type="email" defaultValue={student.email} disabled />
-                  <p className="text-xs text-gray-500">Email cannot be changed</p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="branch">Branch</Label>
-                  <select
-                    id="branch"
-                    defaultValue={student.branch}
-                    className="w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  >
-                    <option value="Computer Science">Computer Science</option>
-                    <option value="Information Technology">Information Technology</option>
-                    <option value="Electronics">Electronics</option>
-                    <option value="Mechanical">Mechanical</option>
-                    <option value="Civil">Civil</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="year">Year</Label>
-                  <select
-                    id="year"
-                    defaultValue={student.year}
-                    className="w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  >
-                    <option value="1">1st Year</option>
-                    <option value="2">2nd Year</option>
-                    <option value="3">3rd Year</option>
-                    <option value="4">4th Year</option>
-                  </select>
-                </div>
-                <Button className="w-full gradient-primary">
-                  <Save className="w-4 h-4 mr-2" />
-                  Save Changes
-                </Button>
+              <CardContent>
+                <form onSubmit={handleSaveAccount} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="username">Username</Label>
+                    {isEditingAccount ? (
+                      <Input
+                        id="username"
+                        value={accountData.username}
+                        onChange={(e) => setAccountData({ ...accountData, username: e.target.value })}
+                      />
+                    ) : (
+                      <div className="rounded-xl border bg-white px-4 py-2 text-gray-900">{accountStudent.username}</div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email Address</Label>
+                    <Input id="email" type="email" value={accountStudent.email} disabled />
+                    <p className="text-xs text-gray-500">Email cannot be changed</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="branch">Branch</Label>
+                    {isEditingAccount ? (
+                      <select
+                        id="branch"
+                        value={accountData.branch}
+                        onChange={(e) => setAccountData({ ...accountData, branch: e.target.value })}
+                        className="w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      >
+                        {branchOptions.map((branch) => (
+                          <option key={branch} value={branch}>
+                            {branch}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="rounded-xl border bg-white px-4 py-2 text-gray-900">{accountStudent.branch}</div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="year">{isAlumni ? 'Passing Year' : 'Current Year'}</Label>
+                    {isEditingAccount ? (
+                      <select
+                        id="year"
+                        value={accountData.year}
+                        onChange={(e) => setAccountData({ ...accountData, year: e.target.value })}
+                        className="w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50"
+                      >
+                        {isAlumni ? (
+                          passingYearOptions.map((year) => (
+                            <option key={year} value={year}>
+                              {year}
+                            </option>
+                          ))
+                        ) : (
+                          <>
+                            <option value="1">1st Year</option>
+                            <option value="2">2nd Year</option>
+                            <option value="3">3rd Year</option>
+                            <option value="4">4th Year</option>
+                          </>
+                        )}
+                      </select>
+                    ) : (
+                      <div className="rounded-xl border bg-white px-4 py-2 text-gray-900">
+                        {isAlumni
+                          ? `Passing Year ${yearValue}`
+                          : `${yearValue}${yearValue === 1 ? 'st' : yearValue === 2 ? 'nd' : yearValue === 3 ? 'rd' : 'th'} Year`}
+                      </div>
+                    )}
+                  </div>
+
+                  {isEditingAccount && (
+                    <Button type="submit" className="w-full gradient-primary" disabled={isSavingAccount}>
+                      <Save className="w-4 h-4 mr-2" />
+                      {isSavingAccount ? 'Saving...' : 'Save Changes'}
+                    </Button>
+                  )}
+                </form>
               </CardContent>
             </Card>
           </TabsContent>
 
           {/* Security Settings */}
           <TabsContent value="security">
-            <Card>
-              <CardHeader>
-                <h2 className="text-gray-900">Change Password</h2>
-                <p className="text-gray-600">Update your password to keep your account secure</p>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handlePasswordChange} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="current-password">Current Password</Label>
-                    <div className="relative">
-                      <Input
-                        id="current-password"
-                        type={showCurrentPassword ? 'text' : 'password'}
-                        value={passwordData.currentPassword}
-                        onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"
-                      >
-                        {showCurrentPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="new-password">New Password</Label>
-                    <div className="relative">
-                      <Input
-                        id="new-password"
-                        type={showNewPassword ? 'text' : 'password'}
-                        value={passwordData.newPassword}
-                        onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowNewPassword(!showNewPassword)}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500"
-                      >
-                        {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="confirm-password">Confirm New Password</Label>
-                    <Input
-                      id="confirm-password"
-                      type="password"
-                      value={passwordData.confirmPassword}
-                      onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <Button type="submit" className="w-full gradient-primary">
-                    Update Password
-                  </Button>
-                </form>
+            <div className="space-y-4">
+              {securityView === 'menu' && (
+                <Card>
+                  <CardHeader>
+                    <h2 className="text-gray-900">Security</h2>
+                    <p className="text-gray-600">Choose what you want to manage</p>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <button
+                      type="button"
+                      onClick={() => setSecurityView('password')}
+                      className="flex w-full items-center justify-between rounded-2xl border bg-white px-4 py-4 text-left transition hover:border-primary/40 hover:bg-primary/5"
+                    >
+                      <span className="flex items-center gap-3">
+                        <span className="rounded-full bg-primary/10 p-2 text-primary">
+                          <KeyRound className="h-5 w-5" />
+                        </span>
+                        <span>
+                          <span className="block text-gray-900">Change Password</span>
+                          <span className="block text-sm text-gray-600">Update your account password</span>
+                        </span>
+                      </span>
+                      <ChevronRight className="h-5 w-5 text-gray-400" />
+                    </button>
 
-                <Separator className="my-6" />
+                    <button
+                      type="button"
+                      onClick={() => setSecurityView('sessions')}
+                      className="flex w-full items-center justify-between rounded-2xl border bg-white px-4 py-4 text-left transition hover:border-primary/40 hover:bg-primary/5"
+                    >
+                      <span className="flex items-center gap-3">
+                        <span className="rounded-full bg-primary/10 p-2 text-primary">
+                          <MonitorSmartphone className="h-5 w-5" />
+                        </span>
+                        <span>
+                          <span className="block text-gray-900">Where You Are Logged In</span>
+                          <span className="block text-sm text-gray-600">See devices, browsers, and locations</span>
+                        </span>
+                      </span>
+                      <ChevronRight className="h-5 w-5 text-gray-400" />
+                    </button>
+                  </CardContent>
+                </Card>
+              )}
 
-
-              </CardContent>
-            </Card>
+              {securityView === 'password' && renderPasswordForm()}
+              {securityView === 'sessions' && renderSessionsView()}
+            </div>
           </TabsContent>
 
           {/* Notification Settings */}
@@ -252,9 +791,12 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                   </div>
                   <Switch
                     checked={notificationSettings.emailNotifications}
-                    onCheckedChange={(checked) =>
-                      setNotificationSettings({ ...notificationSettings, emailNotifications: checked })
-                    }
+                    disabled={settingsLoading || savingNotifications}
+                    onCheckedChange={(checked) => {
+                      const next = { ...notificationSettings, emailNotifications: checked };
+                      setNotificationSettings(next);
+                      void persistNotificationSettings(next);
+                    }}
                   />
                 </div>
 
@@ -267,9 +809,12 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                   </div>
                   <Switch
                     checked={notificationSettings.followRequests}
-                    onCheckedChange={(checked) =>
-                      setNotificationSettings({ ...notificationSettings, followRequests: checked })
-                    }
+                    disabled={settingsLoading || savingNotifications}
+                    onCheckedChange={(checked) => {
+                      const next = { ...notificationSettings, followRequests: checked };
+                      setNotificationSettings(next);
+                      void persistNotificationSettings(next);
+                    }}
                   />
                 </div>
 
@@ -280,22 +825,28 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                   </div>
                   <Switch
                     checked={notificationSettings.newMessages}
-                    onCheckedChange={(checked) =>
-                      setNotificationSettings({ ...notificationSettings, newMessages: checked })
-                    }
+                    disabled={settingsLoading || savingNotifications}
+                    onCheckedChange={(checked) => {
+                      const next = { ...notificationSettings, newMessages: checked };
+                      setNotificationSettings(next);
+                      void persistNotificationSettings(next);
+                    }}
                   />
                 </div>
 
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
-                    <p className="text-gray-900">Opportunity Alerts</p>
-                    <p className="text-sm text-gray-600">New internships, hackathons, and events</p>
+                    <p className="text-gray-900">Post Interactions</p>
+                    <p className="text-sm text-gray-600">Likes, comments, and replies on your posts/comments</p>
                   </div>
                   <Switch
                     checked={notificationSettings.opportunityAlerts}
-                    onCheckedChange={(checked) =>
-                      setNotificationSettings({ ...notificationSettings, opportunityAlerts: checked })
-                    }
+                    disabled={settingsLoading || savingNotifications}
+                    onCheckedChange={(checked) => {
+                      const next = { ...notificationSettings, opportunityAlerts: checked };
+                      setNotificationSettings(next);
+                      void persistNotificationSettings(next);
+                    }}
                   />
                 </div>
 
@@ -306,29 +857,30 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                   </div>
                   <Switch
                     checked={notificationSettings.clubUpdates}
-                    onCheckedChange={(checked) =>
-                      setNotificationSettings({ ...notificationSettings, clubUpdates: checked })
-                    }
+                    disabled={settingsLoading || savingNotifications}
+                    onCheckedChange={(checked) => {
+                      const next = { ...notificationSettings, clubUpdates: checked };
+                      setNotificationSettings(next);
+                      void persistNotificationSettings(next);
+                    }}
                   />
                 </div>
 
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
-                    <p className="text-gray-900">Weekly Digest</p>
-                    <p className="text-sm text-gray-600">Summary of your weekly activity</p>
+                    <p className="text-gray-900">New Post Alerts</p>
+                    <p className="text-sm text-gray-600">Get alerts when people you follow publish a new post</p>
                   </div>
                   <Switch
-                    checked={notificationSettings.weeklyDigest}
-                    onCheckedChange={(checked) =>
-                      setNotificationSettings({ ...notificationSettings, weeklyDigest: checked })
-                    }
+                    checked={notificationSettings.newPostAlerts}
+                    disabled={settingsLoading || savingNotifications}
+                    onCheckedChange={(checked) => {
+                      const next = { ...notificationSettings, newPostAlerts: checked };
+                      setNotificationSettings(next);
+                      void persistNotificationSettings(next);
+                    }}
                   />
                 </div>
-
-                <Button onClick={handleSaveNotifications} className="w-full gradient-primary">
-                  <Save className="w-4 h-4 mr-2" />
-                  Save Preferences
-                </Button>
               </CardContent>
             </Card>
           </TabsContent>
@@ -343,17 +895,22 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
               <CardContent className="space-y-6">
                 <div className="space-y-2">
                   <Label htmlFor="account-type">Account Type</Label>
-                  <select
-                    id="account-type"
-                    value={privacySettings.accountType}
-                    onChange={(e) =>
-                      setPrivacySettings({ ...privacySettings, accountType: e.target.value as any })
-                    }
-                    className="w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  >
-                    <option value="public">Public - Anyone can follow instantly</option>
-                    <option value="private">Private - Follow requests require approval</option>
-                  </select>
+                  <div className="flex items-center justify-between rounded-xl border bg-white px-4 py-3">
+                    <div className="space-y-1">
+                      <p className="text-gray-900">
+                        {privacySettings.accountType === 'private' ? 'Private' : 'Public'}
+                      </p>
+                    </div>
+                    <Switch
+                      checked={privacySettings.accountType === 'private'}
+                      disabled={settingsLoading || savingPrivacy}
+                      onCheckedChange={(checked) => {
+                        const next = { ...privacySettings, accountType: checked ? 'private' : 'public' as const };
+                        setPrivacySettings(next);
+                        void persistPrivacySettings(next);
+                      }}
+                    />
+                  </div>
                 </div>
 
                 <Separator />
@@ -365,9 +922,12 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                   </div>
                   <Switch
                     checked={privacySettings.showEmail}
-                    onCheckedChange={(checked) =>
-                      setPrivacySettings({ ...privacySettings, showEmail: checked })
-                    }
+                    disabled={settingsLoading || savingPrivacy}
+                    onCheckedChange={(checked) => {
+                      const next = { ...privacySettings, showEmail: checked };
+                      setPrivacySettings(next);
+                      void persistPrivacySettings(next);
+                    }}
                   />
                 </div>
 
@@ -378,9 +938,12 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                   </div>
                   <Switch
                     checked={privacySettings.showProjects}
-                    onCheckedChange={(checked) =>
-                      setPrivacySettings({ ...privacySettings, showProjects: checked })
-                    }
+                    disabled={settingsLoading || savingPrivacy}
+                    onCheckedChange={(checked) => {
+                      const next = { ...privacySettings, showProjects: checked };
+                      setPrivacySettings(next);
+                      void persistPrivacySettings(next);
+                    }}
                   />
                 </div>
 
@@ -391,17 +954,14 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                   </div>
                   <Switch
                     checked={privacySettings.allowMessages}
-                    onCheckedChange={(checked) =>
-                      setPrivacySettings({ ...privacySettings, allowMessages: checked })
-                    }
+                    disabled={settingsLoading || savingPrivacy}
+                    onCheckedChange={(checked) => {
+                      const next = { ...privacySettings, allowMessages: checked };
+                      setPrivacySettings(next);
+                      void persistPrivacySettings(next);
+                    }}
                   />
                 </div>
-
-
-                <Button onClick={handleSavePrivacy} className="w-full gradient-primary">
-                  <Save className="w-4 h-4 mr-2" />
-                  Save Settings
-                </Button>
 
                 <Separator className="my-6" />
 

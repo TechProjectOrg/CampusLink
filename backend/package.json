@@ -10,21 +10,28 @@
     "prisma:migrate": "prisma migrate dev --config prisma.config.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.888.0",
     "@prisma/adapter-pg": "^7.0.1",
     "@prisma/client": "^7.1.0",
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
-    "bcryptjs": "^3.0.3",
     "jsonwebtoken": "^9.0.3",
-    "pg": "^8.16.3"
+    "multer": "^2.0.2",
+    "pg": "^8.16.3",
+    "web-push": "^3.6.7",
+    "ws": "^8.20.0"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
-    "@types/node": "^20.19.25",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^20.19.25",
     "@types/pg": "^8.16.0",
+    "@types/web-push": "^3.6.4",
+    "@types/ws": "^8.18.1",
     "prisma": "^7.0.1",
     "ts-node-dev": "^2.0.0",
     "tsx": "^4.21.0",

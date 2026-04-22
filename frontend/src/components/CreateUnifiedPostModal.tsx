@@ -15,9 +15,9 @@ import { Opportunity } from '../types';
 interface CreateUnifiedPostModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreatePost: (post: any) => void;
-  onCreateEvent: (event: any) => void;
-  onCreateOpportunity: (opportunity: any) => void;
+  onCreatePost: (post: any) => Promise<void> | void;
+  onCreateEvent: (event: any) => Promise<void> | void;
+  onCreateOpportunity: (opportunity: any) => Promise<void> | void;
   currentUser: any;
 }
 
@@ -120,7 +120,7 @@ export function CreateUnifiedPostModal({
   };
 
   // Handlers for Post Form
-  const handlePostSubmit = (e: React.FormEvent) => {
+  const handlePostSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!postText) {
       toast.error('Post content cannot be empty');
@@ -136,15 +136,21 @@ export function CreateUnifiedPostModal({
       description: postText,
       date: new Date().toISOString(),
       image: postImageFile ? URL.createObjectURL(postImageFile) : undefined,
+      imageFile: postImageFile ?? undefined,
       tags: postTags,
       likes: [],
       comments: [],
       saved: []
     };
-    onCreatePost(newPost);
-    toast.success('Post created successfully!');
-    resetAllForms();
-    onClose();
+    try {
+      await onCreatePost(newPost);
+      toast.success('Post created successfully!');
+      resetAllForms();
+      onClose();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to create post';
+      toast.error(message);
+    }
   };
   const addPostTag = () => {
     if (postTagInput && !postTags.includes(postTagInput)) {
@@ -157,7 +163,7 @@ export function CreateUnifiedPostModal({
   };
 
   // Handlers for Event Form
-  const handleEventSubmit = (e: React.FormEvent) => {
+  const handleEventSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!eventFormData.title || !eventFormData.description || !eventFormData.dateTime) {
       toast.error('Please fill in all required fields');
@@ -174,19 +180,26 @@ export function CreateUnifiedPostModal({
       date: new Date().toISOString(),
       eventDate: eventFormData.dateTime,
       location: eventFormData.mode === 'Offline' ? eventFormData.location : 'Online',
+      link: eventFormData.registrationLink || undefined,
       image: eventFormData.coverImage ? URL.createObjectURL(eventFormData.coverImage) : undefined,
+      imageFile: eventFormData.coverImage ?? undefined,
       likes: [],
       comments: [],
       saved: []
     };
-    onCreateEvent(newEvent);
-    toast.success('Event created successfully!');
-    resetAllForms();
-    onClose();
+    try {
+      await onCreateEvent(newEvent);
+      toast.success('Event created successfully!');
+      resetAllForms();
+      onClose();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to create event';
+      toast.error(message);
+    }
   };
 
   // Handlers for Opportunity Form
-  const handleOpportunitySubmit = (e: React.FormEvent) => {
+  const handleOpportunitySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!opportunityFormData.title || !opportunityFormData.description || !opportunityFormData.deadline) {
       toast.error('Please fill in all required fields');
@@ -205,7 +218,9 @@ export function CreateUnifiedPostModal({
       location: opportunityFormData.location || undefined,
       link: opportunityFormData.link || undefined,
       deadline: opportunityFormData.deadline,
+      tags: opportunityFormData.tags,
       image: opportunityFormData.imageFile ? URL.createObjectURL(opportunityFormData.imageFile) : undefined,
+      imageFile: opportunityFormData.imageFile ?? undefined,
       likes: [],
       comments: [],
       saved: []
@@ -216,10 +231,15 @@ export function CreateUnifiedPostModal({
       newOpportunity.duration = opportunityFormData.duration;
     }
 
-    onCreateOpportunity(newOpportunity);
-    toast.success('Opportunity posted successfully!');
-    resetAllForms();
-    onClose();
+    try {
+      await onCreateOpportunity(newOpportunity);
+      toast.success('Opportunity posted successfully!');
+      resetAllForms();
+      onClose();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to post opportunity';
+      toast.error(message);
+    }
   };
   const addOpportunityTag = () => {
     if (opportunityTagInput && !opportunityFormData.tags.includes(opportunityTagInput)) {

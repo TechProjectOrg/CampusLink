@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { RequestStatus } from '../../lib/mockFollows';
+import type { RequestStatus } from '../../types';
 import { Button } from '../ui/button';
 import {
   AlertDialog,

@@ -1,7 +1,7 @@
 import { Users, UserPlus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { Student } from '../types';
-import type { FollowGraph } from '../lib/mockFollows';
+import type { FollowGraph } from '../App';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
@@ -25,7 +25,7 @@ interface NetworkPageProps {
   currentUserId: string;
   followGraph: FollowGraph;
 
-  onFollow: (targetUserId: string) => void;
+  onFollow: (targetUserId: string, accountType?: 'public' | 'private') => void;
   onUnfollow: (targetUserId: string) => void;
   onCancelRequest: (targetUserId: string) => void;
 
@@ -121,7 +121,7 @@ export function NetworkPage({
           <p className="text-gray-600">Followers, following, and requests — simple and student-first</p>
         </div>
 
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-6">
+        <Tabs value={activeTab} onValueChange={(v: string) => setActiveTab(v as any)} className="space-y-6">
           <TabsList className="bg-white/80 backdrop-blur-lg p-1 rounded-2xl border border-primary/10 shadow-lg">
             <TabsTrigger
               value="followers"
@@ -145,18 +145,16 @@ export function NetworkPage({
               <Badge className="bg-green-500 text-white ml-1">{followingCount}</Badge>
             </TabsTrigger>
 
-            {isPrivateAccount && (
-              <TabsTrigger
-                value="requests"
-                className={`flex items-center gap-2 rounded-xl data-[state=active]:gradient-primary data-[state=active]:text-white transition-all duration-300 ${
-                  activeTab === 'requests' ? 'gradient-primary text-white' : ''
-                }`}
-              >
-                <UserPlus className="w-4 h-4" />
-                Requests
-                {requestsCount > 0 && <Badge className="bg-destructive text-white ml-1">{requestsCount}</Badge>}
-              </TabsTrigger>
-            )}
+            <TabsTrigger
+              value="requests"
+              className={`flex items-center gap-2 rounded-xl data-[state=active]:gradient-primary data-[state=active]:text-white transition-all duration-300 ${
+                activeTab === 'requests' ? 'gradient-primary text-white' : ''
+              }`}
+            >
+              <UserPlus className="w-4 h-4" />
+              Requests
+              {requestsCount > 0 && <Badge className="bg-destructive text-white ml-1">{requestsCount}</Badge>}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="followers" className="space-y-3">
@@ -178,16 +176,36 @@ export function NetworkPage({
                       user={user}
                       onClick={() => onViewProfile(user.id)}
                       mutualFollowersCount={mutual}
-                      
                       action={
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10"
-                          onClick={() => setRemoveFollowerId(user.id)}
-                        >
-                         Remove
-                        </Button>
+                        <div className="flex gap-2">
+                          {!isFollowingBack && !outgoingRequestIds.includes(user.id) && (
+                            <Button
+                              size="sm"
+                              className="bg-primary text-white rounded-xl shadow-lg hover:shadow-xl"
+                              onClick={() => onFollow(user.id, user.accountType)}
+                            >
+                              Follow Back
+                            </Button>
+                          )}
+                          {!isFollowingBack && outgoingRequestIds.includes(user.id) && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="rounded-xl border-orange-500/30 text-orange-500 hover:bg-orange-500/10"
+                              onClick={() => setCancelRequestId(user.id)}
+                            >
+                              Requested
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10"
+                            onClick={() => setRemoveFollowerId(user.id)}
+                          >
+                           Remove
+                          </Button>
+                        </div>
                       }
                     />
                   );
@@ -206,11 +224,7 @@ export function NetworkPage({
             ) : (
               <div className="space-y-3">
                 {following.map((user) => {
-                  const isFollowing = followingIds.includes(user.id);
-                  const requestStatus = outgoingRequestIds.includes(user.id) ? 'requested' : 'none';
-                  const isFollower = followersIds.includes(user.id);
                   const mutual = mutualFollowersCount(user.id);
-
                   return (
                     <UserCard
                       key={user.id}
@@ -247,9 +261,10 @@ export function NetworkPage({
             )}
           </TabsContent>
 
-          {isPrivateAccount && (
-            <TabsContent value="requests" className="space-y-3">
-              <h2 className="text-xl font-semibold mb-4">Requests Received</h2>
+          <TabsContent value="requests" className="space-y-3">
+            {(isPrivateAccount || incomingRequests.length > 0) && (
+              <>
+                <h2 className="text-xl font-semibold mb-4">Requests Received</h2>
               {incomingRequests.length === 0 ? (
                 <Card className="border-primary/10 rounded-2xl shadow-lg">
                   <CardContent className="p-10 text-center">
@@ -294,8 +309,10 @@ export function NetworkPage({
                   )}
                 </div>
               )}
+            </>
+          )}
 
-              <h2 className="text-xl font-semibold mb-4 mt-8">Requests Sent</h2>
+          <h2 className="text-xl font-semibold mb-4 mt-8">Requests Sent</h2>
               {outgoingRequests.length === 0 ? (
                 <Card className="border-primary/10 rounded-2xl shadow-lg">
                   <CardContent className="p-10 text-center">
@@ -329,13 +346,12 @@ export function NetworkPage({
                 </div>
               )}
             </TabsContent>
-          )}
         </Tabs>
       </div>
 
       <AlertDialog
         open={removeFollowerId !== null || unfollowUserId !== null || cancelRequestId !== null}
-        onOpenChange={(open) => {
+        onOpenChange={(open: boolean) => {
           if (!open) {
             setRemoveFollowerId(null);
             setUnfollowUserId(null);

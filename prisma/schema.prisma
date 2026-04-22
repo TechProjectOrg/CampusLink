@@ -89,6 +89,7 @@ model User {
   studentProfile         StudentProfile?
   alumniProfile          AlumniProfile?
   settings               UserSetting?
+  sessions               UserSession[]
   skills                 UserSkill[]
   certifications         UserCertification[]
   projects               UserProject[]
@@ -104,17 +105,38 @@ model User {
   authoredPosts          Post[]              @relation("PostAuthor")
   postLikes              PostLike[]
   postComments           PostComment[]       @relation("PostCommentAuthor")
+  postCommentLikes       PostCommentLike[]
   postSaves              PostSave[]
   chatsCreated           Chat[]              @relation("ChatCreator")
   chatParticipants       ChatParticipant[]
   messagesSent           Message[]           @relation("MessageSender")
   notifications          Notification[]      @relation("NotificationUser")
   notificationsActed     Notification[]      @relation("NotificationActor")
+  pushSubscriptions      UserPushSubscription[]
 
   @@index([email], map: "idx_users_email")
   @@index([username], map: "idx_users_username")
   @@index([userType], map: "idx_users_user_type")
   @@map("users")
+}
+
+model UserSession {
+  sessionId    String    @id @default(dbgenerated("gen_random_uuid()")) @map("session_id") @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  userAgent    String?   @map("user_agent") @db.Text
+  browserName  String?   @map("browser_name") @db.VarChar(100)
+  platform     String?   @db.VarChar(100)
+  deviceName   String?   @map("device_name") @db.VarChar(100)
+  locationLabel String?  @map("location_label") @db.VarChar(255)
+  ipAddress    String?   @map("ip_address") @db.VarChar(45)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  lastSeenAt   DateTime? @map("last_seen_at") @db.Timestamp(6)
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamp(6)
+  user         User      @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId], map: "idx_user_sessions_user_id")
+  @@index([revokedAt], map: "idx_user_sessions_revoked_at")
+  @@map("user_sessions")
 }
 
 model StudentProfile {
@@ -333,6 +355,10 @@ model Post {
   opportunityType  OpportunityType? @map("opportunity_type")
   title            String?         @db.VarChar(255)
   contentText      String?         @map("content_text") @db.Text
+  companyName      String?         @map("company_name") @db.VarChar(255)
+  applicationDeadline DateTime?    @map("application_deadline") @db.Timestamp(6)
+  stipend          String?         @db.VarChar(100)
+  duration         String?         @db.VarChar(100)
   eventDate        DateTime?       @map("event_date") @db.Timestamp(6)
   location         String?         @db.VarChar(255)
   externalUrl      String?         @map("external_url") @db.Text
@@ -391,11 +417,24 @@ model PostComment {
   author           User          @relation("PostCommentAuthor", fields: [authorUserId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
   parentComment    PostComment?  @relation("PostCommentReplies", fields: [parentCommentId], references: [commentId], onDelete: Cascade, onUpdate: NoAction)
   replies          PostComment[] @relation("PostCommentReplies")
+  likedBy          PostCommentLike[]
 
   @@index([postId], map: "idx_post_comments_post_id")
   @@index([authorUserId], map: "idx_post_comments_author_user_id")
   @@index([parentCommentId], map: "idx_post_comments_parent_comment_id")
   @@map("post_comments")
+}
+
+model PostCommentLike {
+  userId    String      @map("user_id") @db.Uuid
+  commentId String      @map("comment_id") @db.Uuid
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamp(6)
+  user      User        @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+  comment   PostComment @relation(fields: [commentId], references: [commentId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([userId, commentId])
+  @@index([commentId], map: "idx_post_comment_likes_comment_id")
+  @@map("post_comment_likes")
 }
 
 model PostSave {
@@ -521,4 +560,21 @@ model Notification {
   @@index([notificationType], map: "idx_notifications_notification_type")
   @@index([isRead], map: "idx_notifications_is_read")
   @@map("notifications")
+}
+
+model UserPushSubscription {
+  pushSubscriptionId String    @id @default(dbgenerated("gen_random_uuid()")) @map("push_subscription_id") @db.Uuid
+  userId             String    @map("user_id") @db.Uuid
+  endpoint           String    @unique @db.Text
+  p256dhKey          String    @map("p256dh_key") @db.Text
+  authKey            String    @map("auth_key") @db.Text
+  userAgent          String?   @map("user_agent") @db.Text
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+  revokedAt          DateTime? @map("revoked_at") @db.Timestamp(6)
+  user               User      @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId], map: "idx_user_push_subscriptions_user_id")
+  @@index([revokedAt], map: "idx_user_push_subscriptions_revoked_at")
+  @@map("user_push_subscriptions")
 }
