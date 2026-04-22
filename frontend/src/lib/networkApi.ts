@@ -51,6 +51,16 @@ export interface SearchUserResult {
   year: number | null;
 }
 
+export interface SearchHashtagResult {
+  hashtag: string;
+  postCount: number;
+}
+
+export interface UnifiedSearchResult {
+  users: SearchUserResult[];
+  hashtags: SearchHashtagResult[];
+}
+
 // ============================================================
 // Search
 // ============================================================
@@ -72,6 +82,29 @@ export async function apiSearchUsers(
   }
 
   return (await response.json()) as SearchUserResult[];
+}
+
+export async function apiSearchAll(
+  query: string,
+  token?: string,
+  usersLimit = 20,
+  hashtagsLimit = 20
+): Promise<UnifiedSearchResult> {
+  const params = new URLSearchParams({
+    q: query,
+    usersLimit: String(usersLimit),
+    hashtagsLimit: String(hashtagsLimit),
+  });
+  const response = await safeFetch(`${API_BASE}/search/all?${params}`, {
+    headers: { ...authHeaders(token) },
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Search failed');
+  }
+
+  return (await response.json()) as UnifiedSearchResult;
 }
 
 // ============================================================

@@ -104,6 +104,7 @@ model User {
   authoredPosts          Post[]              @relation("PostAuthor")
   postLikes              PostLike[]
   postComments           PostComment[]       @relation("PostCommentAuthor")
+  postCommentLikes       PostCommentLike[]
   postSaves              PostSave[]
   chatsCreated           Chat[]              @relation("ChatCreator")
   chatParticipants       ChatParticipant[]
@@ -395,11 +396,24 @@ model PostComment {
   author           User          @relation("PostCommentAuthor", fields: [authorUserId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
   parentComment    PostComment?  @relation("PostCommentReplies", fields: [parentCommentId], references: [commentId], onDelete: Cascade, onUpdate: NoAction)
   replies          PostComment[] @relation("PostCommentReplies")
+  likedBy          PostCommentLike[]
 
   @@index([postId], map: "idx_post_comments_post_id")
   @@index([authorUserId], map: "idx_post_comments_author_user_id")
   @@index([parentCommentId], map: "idx_post_comments_parent_comment_id")
   @@map("post_comments")
+}
+
+model PostCommentLike {
+  userId    String      @map("user_id") @db.Uuid
+  commentId String      @map("comment_id") @db.Uuid
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamp(6)
+  user      User        @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+  comment   PostComment @relation(fields: [commentId], references: [commentId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([userId, commentId])
+  @@index([commentId], map: "idx_post_comment_likes_comment_id")
+  @@map("post_comment_likes")
 }
 
 model PostSave {

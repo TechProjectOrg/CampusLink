@@ -1,15 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Search, Filter, Loader2 } from 'lucide-react';
+import { Search, Filter, Loader2, Hash } from 'lucide-react';
 import type { Student } from '../types';
 import type { FollowGraph } from '../App';
 import { FollowButton } from './network/FollowButton';
 import { Input } from './ui/input';
-import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Card, CardContent } from './ui/card';
 import { useAuth } from '../context/AuthContext';
-import { apiSearchUsers, type SearchUserResult } from '../lib/networkApi';
+import { apiSearchAll, type SearchHashtagResult, type SearchUserResult } from '../lib/networkApi';
 
 interface SearchPageProps {
   students: Student[];
@@ -19,6 +18,7 @@ interface SearchPageProps {
   onUnfollow: (targetUserId: string) => void;
   onCancelRequest: (targetUserId: string) => void;
   onViewProfile: (studentId: string) => void;
+  onSelectHashtag: (hashtag: string) => void;
   initialSearchQuery?: string;
 }
 
@@ -45,7 +45,6 @@ function searchResultToStudent(r: SearchUserResult): Student {
 }
 
 export function SearchPage({
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   students: _students,
   currentUserId,
   followGraph,
@@ -53,11 +52,13 @@ export function SearchPage({
   onUnfollow,
   onCancelRequest,
   onViewProfile,
-  initialSearchQuery = ''
+  onSelectHashtag,
+  initialSearchQuery = '',
 }: SearchPageProps) {
   const auth = useAuth();
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [searchResults, setSearchResults] = useState<Student[]>([]);
+  const [hashtagResults, setHashtagResults] = useState<SearchHashtagResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
@@ -68,10 +69,10 @@ export function SearchPage({
   const [selectedBranch, setSelectedBranch] = useState<string>('all');
   const [selectedYear, setSelectedYear] = useState<string>('all');
 
-  // Debounced search
   useEffect(() => {
     if (!searchQuery.trim()) {
       setSearchResults([]);
+      setHashtagResults([]);
       setHasSearched(false);
       return;
     }
@@ -80,11 +81,13 @@ export function SearchPage({
       setIsLoading(true);
       setHasSearched(true);
       try {
-        const results = await apiSearchUsers(searchQuery.trim(), auth.session?.token, 50, 0);
-        setSearchResults(results.map(searchResultToStudent));
+        const result = await apiSearchAll(searchQuery.trim(), auth.session?.token, 50, 25);
+        setSearchResults(result.users.map(searchResultToStudent));
+        setHashtagResults(result.hashtags);
       } catch (err) {
         console.error('Search failed:', err);
         setSearchResults([]);
+        setHashtagResults([]);
       } finally {
         setIsLoading(false);
       }
@@ -93,33 +96,30 @@ export function SearchPage({
     return () => clearTimeout(timerId);
   }, [searchQuery, auth.session?.token]);
 
-  // Extract available branch values from search results
-  const branches = ['all', ...Array.from(new Set(searchResults.map(s => s.branch).filter(Boolean)))];
+  const branches = ['all', ...Array.from(new Set(searchResults.map((s) => s.branch).filter(Boolean)))];
   const years = ['all', '1', '2', '3', '4'];
 
-  const filteredStudents = searchResults.filter(student => {
+  const filteredStudents = searchResults.filter((student) => {
     const matchesBranch = selectedBranch === 'all' || student.branch === selectedBranch;
-    const matchesYear = selectedYear === 'all' || student.year === parseInt(selectedYear);
+    const matchesYear = selectedYear === 'all' || student.year === parseInt(selectedYear, 10);
     return matchesBranch && matchesYear;
   });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
       <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-        {/* Header */}
         <div className="animate-slide-in-down">
           <h1 className="text-gray-900 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-            Search Students
+            Search
           </h1>
-          <p className="text-gray-600">Find peers by username or email</p>
+          <p className="text-gray-600">Find users and hashtags in one place</p>
         </div>
 
-        {/* Search Bar */}
         <div className="relative animate-slide-in-up">
           <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-primary transition-all duration-300" />
           <Input
             type="text"
-            placeholder="Search by username or email..."
+            placeholder="Search users or hashtags..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-12 h-14 border-primary/20 focus:border-primary rounded-2xl shadow-lg transition-all duration-300 hover:shadow-xl"
@@ -129,20 +129,18 @@ export function SearchPage({
           )}
         </div>
 
-        {/* Filters — only show when we have results */}
         {searchResults.length > 0 && (
           <Card className="border-primary/10 shadow-lg hover-lift animate-slide-in-up rounded-2xl">
             <CardContent className="p-6">
               <div className="flex items-center gap-2 mb-4">
                 <Filter className="w-5 h-5 text-primary" />
-                <span className="text-gray-900">Filters:</span>
+                <span className="text-gray-900">User Filters:</span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Branch Filter */}
                 <div className="space-y-3">
                   <label className="text-sm text-gray-600">Branch</label>
                   <div className="flex flex-wrap gap-2">
-                    {branches.map(branch => (
+                    {branches.map((branch) => (
                       <Badge
                         key={branch}
                         onClick={() => setSelectedBranch(branch)}
@@ -158,11 +156,10 @@ export function SearchPage({
                   </div>
                 </div>
 
-                {/* Year Filter */}
                 <div className="space-y-3">
                   <label className="text-sm text-gray-600">Year</label>
                   <div className="flex flex-wrap gap-2">
-                    {years.map(year => (
+                    {years.map((year) => (
                       <Badge
                         key={year}
                         onClick={() => setSelectedYear(year)}
@@ -182,23 +179,44 @@ export function SearchPage({
           </Card>
         )}
 
-        {/* Results */}
+        {hashtagResults.length > 0 && (
+          <Card className="border-primary/10 shadow-lg rounded-2xl animate-slide-in-up">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Hash className="w-5 h-5 text-primary" />
+                <span className="text-gray-900">Hashtags</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {hashtagResults.map((tag) => (
+                  <button
+                    key={tag.hashtag}
+                    type="button"
+                    onClick={() => onSelectHashtag(tag.hashtag)}
+                    className="px-3 py-1.5 rounded-full border border-primary/20 text-primary hover:bg-primary/10 transition-colors"
+                  >
+                    #{tag.hashtag} ({tag.postCount})
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <div>
           {hasSearched && !isLoading && (
             <p className="text-gray-600 mb-4 animate-fade-in">
-              {filteredStudents.length} {filteredStudents.length === 1 ? 'student' : 'students'} found
+              {filteredStudents.length} {filteredStudents.length === 1 ? 'user' : 'users'} found
             </p>
           )}
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {filteredStudents.map((student, index) => (
-              <Card 
-                key={student.id} 
+              <Card
+                key={student.id}
                 className="hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border-primary/10 rounded-2xl animate-slide-in-up"
                 style={{ animationDelay: `${index * 50}ms` }}
               >
                 <CardContent className="p-6 space-y-4">
-                  {/* Avatar & Name */}
                   <div className="flex items-start gap-3">
                     <Avatar className="w-16 h-16 ring-2 ring-primary/20 transition-all duration-300 hover:ring-primary/40">
                       <AvatarImage src={student.avatar} />
@@ -211,7 +229,6 @@ export function SearchPage({
                     </div>
                   </div>
 
-                  {/* Stats */}
                   <div className="flex gap-4 text-sm text-gray-600 pt-2 border-t border-primary/10">
                     <div>
                       <span className="text-primary">{(followGraph.followersByUserId[student.id] ?? []).length}</span>
@@ -223,16 +240,14 @@ export function SearchPage({
                     </div>
                   </div>
 
-                  {/* Actions */}
                   <div className="flex gap-2 items-center">
-                    <Button
+                    <button
+                      type="button"
                       onClick={() => onViewProfile(student.id)}
-                      variant="outline"
-                      className="flex-1 border-primary/20 hover:border-primary transition-all duration-300 hover:scale-105 rounded-xl"
-                      size="sm"
+                      className="flex-1 border border-primary/20 hover:border-primary transition-all duration-300 hover:scale-105 rounded-xl px-3 py-2 text-sm"
                     >
                       View Profile
-                    </Button>
+                    </button>
                     <div className="flex-shrink-0">
                       <FollowButton
                         targetName={student.name}
@@ -251,25 +266,24 @@ export function SearchPage({
             ))}
           </div>
 
-          {/* Empty / Prompt states */}
           {!hasSearched && (
             <Card className="border-primary/10 rounded-2xl shadow-lg animate-fade-in">
               <CardContent className="p-12 text-center">
                 <div className="w-16 h-16 gradient-primary rounded-2xl mx-auto mb-4 flex items-center justify-center">
                   <Search className="w-8 h-8 text-white" />
                 </div>
-                <p className="text-gray-500">Start typing to search for students</p>
+                <p className="text-gray-500">Start typing to search users and hashtags</p>
               </CardContent>
             </Card>
           )}
 
-          {hasSearched && !isLoading && filteredStudents.length === 0 && (
+          {hasSearched && !isLoading && filteredStudents.length === 0 && hashtagResults.length === 0 && (
             <Card className="border-primary/10 rounded-2xl shadow-lg animate-fade-in">
               <CardContent className="p-12 text-center">
                 <div className="w-16 h-16 gradient-primary rounded-2xl mx-auto mb-4 flex items-center justify-center">
                   <Search className="w-8 h-8 text-white" />
                 </div>
-                <p className="text-gray-500">No students found matching your criteria.</p>
+                <p className="text-gray-500">No results found for this search.</p>
               </CardContent>
             </Card>
           )}

@@ -44,8 +44,19 @@ import {
   type ApiNotification,
 } from './lib/notificationsApi';
 import {
+  apiAddComment,
+  apiAddReply,
   apiCreateUserPost,
-  apiFetchUserPosts,
+  apiDeleteComment,
+  apiDeletePost,
+  apiFetchFeedPosts,
+  apiLikeComment,
+  apiLikePost,
+  apiSavePost,
+  apiUnlikeComment,
+  apiUnlikePost,
+  apiUnsavePost,
+  apiUpdatePost,
   type CreateUserPostPayload,
   type UserPost,
 } from './lib/postsApi';
@@ -160,6 +171,26 @@ function buildCreatePostPayloadFromDraft(draft: any): CreateUserPostPayload {
   };
 }
 
+function mapPostCommentToComment(comment: UserPost['comments'][number]): Opportunity['comments'][number] {
+  const fallbackSeed = encodeURIComponent(comment.authorUsername || comment.authorUserId || 'user');
+  return {
+    id: comment.id,
+    postId: comment.postId,
+    authorId: comment.authorUserId,
+    authorName: comment.authorUsername,
+    authorAvatar:
+      comment.authorProfilePictureUrl ??
+      `https://api.dicebear.com/7.x/avataaars/svg?seed=${fallbackSeed}`,
+    content: comment.content,
+    timestamp: comment.createdAt,
+    parentCommentId: comment.parentCommentId,
+    likeCount: comment.likeCount,
+    isLikedByMe: comment.isLikedByMe,
+    canDelete: comment.canDelete,
+    replies: comment.replies.map((reply) => mapPostCommentToComment(reply)),
+  };
+}
+
 function userPostToOpportunity(post: UserPost, currentUser: Student): Opportunity {
   let type: Opportunity['type'] = 'general';
   if (post.postType === 'event') {
@@ -168,11 +199,18 @@ function userPostToOpportunity(post: UserPost, currentUser: Student): Opportunit
     type = (post.opportunityType ?? 'event') as Opportunity['type'];
   }
 
+  const authorName = post.authorUsername ?? currentUser.name;
+  const authorAvatar =
+    post.authorProfilePictureUrl ??
+    (post.authorUserId === currentUser.id
+      ? currentUser.avatar
+      : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(authorName)}`);
+
   return {
     id: post.id,
     authorId: post.authorUserId,
-    authorName: currentUser.name,
-    authorAvatar: currentUser.avatar,
+    authorName,
+    authorAvatar,
     type,
     title: post.title ?? '',
     description: post.contentText ?? '',
@@ -186,8 +224,15 @@ function userPostToOpportunity(post: UserPost, currentUser: Student): Opportunit
     image: post.media[0]?.mediaUrl,
     tags: post.hashtags,
     likes: [],
-    comments: [],
+    comments: (post.comments ?? []).map((comment) => mapPostCommentToComment(comment)),
     saved: [],
+    likeCount: post.likeCount,
+    commentCount: post.commentCount,
+    saveCount: post.saveCount,
+    isLikedByMe: post.isLikedByMe,
+    isSavedByMe: post.isSavedByMe,
+    canEdit: post.canEdit,
+    canDelete: post.canDelete,
   };
 }
 
@@ -236,6 +281,8 @@ export default function App() {
   const [requestIdMap, setRequestIdMap] = useState<RequestIdMap>({});
   const [viewingProfileId, setViewingProfileId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedHashtag, setSelectedHashtag] = useState<string | null>(null);
+  const [postsRefreshToken, setPostsRefreshToken] = useState(0);
 
   const prevAuthenticatedRef = useRef<boolean>(auth.isAuthenticated);
 
@@ -248,6 +295,7 @@ export default function App() {
     if (!wasAuthenticated && isAuthenticated) {
       setViewingProfileId(null);
       setSearchQuery('');
+      setSelectedHashtag(null);
       setActiveTab('feed');
       window.history.pushState({ tab: 'feed' }, '', '/feed');
     }
@@ -256,6 +304,7 @@ export default function App() {
     if (wasAuthenticated && !isAuthenticated) {
       setViewingProfileId(null);
       setSearchQuery('');
+      setSelectedHashtag(null);
       setActiveTab('feed');
       window.history.pushState({ tab: 'feed' }, '', '/feed');
     }
@@ -365,29 +414,25 @@ export default function App() {
     }
   }, [authToken]);
 
-  const refreshOwnPosts = useCallback(async () => {
+  const refreshFeedPosts = useCallback(async () => {
     if (!authToken || !currentUserId) return;
 
     try {
-      const posts = await apiFetchUserPosts(currentUserId, authToken);
+      const posts = await apiFetchFeedPosts(authToken, selectedHashtag ?? undefined);
       const mapped = posts.map((post) => userPostToOpportunity(post, currentUser));
-
-      setOpportunities((prev) => {
-        const nonCurrentUserPosts = prev.filter((item) => item.authorId !== currentUserId);
-        return [...mapped, ...nonCurrentUserPosts];
-      });
+      setOpportunities(mapped);
     } catch (err) {
-      console.error('Failed to fetch user posts:', err);
+      console.error('Failed to fetch feed posts:', err);
     }
-  }, [authToken, currentUserId, currentUser]);
+  }, [authToken, currentUserId, currentUser, selectedHashtag]);
 
   useEffect(() => {
     if (auth.isAuthenticated && authToken) {
       refreshFollowGraph();
       refreshNotifications();
-      refreshOwnPosts();
+      refreshFeedPosts();
     }
-  }, [auth.isAuthenticated, authToken, refreshFollowGraph, refreshNotifications, refreshOwnPosts]);
+  }, [auth.isAuthenticated, authToken, refreshFollowGraph, refreshNotifications, refreshFeedPosts]);
 
   // Also refresh notifications when switching to the notifications tab
   useEffect(() => {
@@ -417,58 +462,157 @@ export default function App() {
 
   // Opportunity handlers
   const handleLike = (opportunityId: string) => {
-    setOpportunities(opportunities.map(opp => {
-      if (opp.id === opportunityId) {
-        const isLiked = opp.likes.includes(currentUserId);
-        return {
-          ...opp,
-          likes: isLiked 
-            ? opp.likes.filter(id => id !== currentUserId)
-            : [...opp.likes, currentUserId]
-        };
+    const target = opportunities.find((opp) => opp.id === opportunityId);
+    if (!target) return;
+    const nextLiked = !(target.isLikedByMe ?? target.likes.includes(currentUserId));
+
+    setOpportunities((prev) =>
+      prev.map((opp) =>
+        opp.id !== opportunityId
+          ? opp
+          : {
+              ...opp,
+              isLikedByMe: nextLiked,
+              likeCount: Math.max((opp.likeCount ?? opp.likes.length) + (nextLiked ? 1 : -1), 0),
+            },
+      ),
+    );
+
+    void (async () => {
+      try {
+        if (nextLiked) {
+          await apiLikePost(opportunityId, authToken);
+        } else {
+          await apiUnlikePost(opportunityId, authToken);
+        }
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Unable to update like');
+        await refreshFeedPosts();
       }
-      return opp;
-    }));
+    })();
   };
 
   const handleSave = (opportunityId: string) => {
-    setOpportunities(opportunities.map(opp => {
-      if (opp.id === opportunityId) {
-        const isSaved = opp.saved.includes(currentUserId);
-        return {
-          ...opp,
-          saved: isSaved 
-            ? opp.saved.filter(id => id !== currentUserId)
-            : [...opp.saved, currentUserId]
-        };
+    const target = opportunities.find((opp) => opp.id === opportunityId);
+    if (!target) return;
+    const nextSaved = !(target.isSavedByMe ?? target.saved.includes(currentUserId));
+
+    setOpportunities((prev) =>
+      prev.map((opp) =>
+        opp.id !== opportunityId
+          ? opp
+          : {
+              ...opp,
+              isSavedByMe: nextSaved,
+              saveCount: Math.max((opp.saveCount ?? opp.saved.length) + (nextSaved ? 1 : -1), 0),
+            },
+      ),
+    );
+
+    void (async () => {
+      try {
+        if (nextSaved) {
+          await apiSavePost(opportunityId, authToken);
+        } else {
+          await apiUnsavePost(opportunityId, authToken);
+        }
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Unable to update save');
+        await refreshFeedPosts();
       }
-      return opp;
-    }));
+    })();
   };
 
   const handleComment = (opportunityId: string, commentText: string) => {
-    setOpportunities(opportunities.map(opp => {
-      if (opp.id === opportunityId) {
-        const newComment = {
-          id: Date.now().toString(),
-          authorId: currentUserId,
-          authorName: currentUser.name,
-          authorAvatar: currentUser.avatar,
-          content: commentText,
-          timestamp: new Date().toISOString(),
-        };
-        return {
-          ...opp,
-          comments: [...opp.comments, newComment]
-        };
+    void (async () => {
+      try {
+        await apiAddComment(opportunityId, commentText, authToken);
+        await refreshFeedPosts();
+        setPostsRefreshToken((prev) => prev + 1);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Unable to add comment');
       }
-      return opp;
-    }));
+    })();
   };
 
-  const handleDeleteOpportunity = (opportunityId: string) => {
-    setOpportunities(opportunities.filter(opp => opp.id !== opportunityId));
-    toast.success('Post deleted successfully');
+  const handleReply = (commentId: string, content: string) => {
+    void (async () => {
+      try {
+        await apiAddReply(commentId, content, authToken);
+        await refreshFeedPosts();
+        setPostsRefreshToken((prev) => prev + 1);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Unable to add reply');
+      }
+    })();
+  };
+
+  const handleLikeComment = (commentId: string, alreadyLiked: boolean) => {
+    void (async () => {
+      try {
+        if (alreadyLiked) {
+          await apiUnlikeComment(commentId, authToken);
+        } else {
+          await apiLikeComment(commentId, authToken);
+        }
+        await refreshFeedPosts();
+        setPostsRefreshToken((prev) => prev + 1);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Unable to update comment like');
+      }
+    })();
+  };
+
+  const handleDeleteComment = (commentId: string) => {
+    void (async () => {
+      try {
+        await apiDeleteComment(commentId, authToken);
+        await refreshFeedPosts();
+        setPostsRefreshToken((prev) => prev + 1);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Unable to delete comment');
+      }
+    })();
+  };
+
+  const handleEditPost = (postId: string, updates: Partial<Opportunity>) => {
+    void (async () => {
+      try {
+        await apiUpdatePost(
+          postId,
+          {
+            title: updates.title,
+            contentText: updates.description,
+            company: updates.company,
+            deadline: updates.deadline,
+            stipend: updates.stipend,
+            duration: updates.duration,
+            location: updates.location,
+            externalUrl: updates.link,
+            hashtags: updates.tags,
+          },
+          authToken,
+        );
+        toast.success('Post updated successfully');
+        await refreshFeedPosts();
+        setPostsRefreshToken((prev) => prev + 1);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Unable to edit post');
+      }
+    })();
+  };
+
+  const handleDeletePost = (postId: string) => {
+    void (async () => {
+      try {
+        await apiDeletePost(postId, authToken);
+        toast.success('Post deleted successfully');
+        await refreshFeedPosts();
+        setPostsRefreshToken((prev) => prev + 1);
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : 'Unable to delete post');
+      }
+    })();
   };
 
   const persistCreatedPost = async (draft: any) => {
@@ -478,10 +622,9 @@ export default function App() {
 
     const payload = buildCreatePostPayloadFromDraft(draft);
     const mediaFiles = draft?.imageFile instanceof File ? [draft.imageFile] : [];
-    const created = await apiCreateUserPost(currentUserId, payload, authToken, mediaFiles);
-    const mapped = userPostToOpportunity(created, currentUser);
-
-    setOpportunities((prev) => [mapped, ...prev.filter((item) => item.id !== mapped.id)]);
+    await apiCreateUserPost(currentUserId, payload, authToken, mediaFiles);
+    await refreshFeedPosts();
+    setPostsRefreshToken((prev) => prev + 1);
   };
 
   // Create post handler
@@ -843,6 +986,9 @@ export default function App() {
     if (tab !== 'search') {
       setSearchQuery('');
     }
+    if (tab !== 'feed') {
+      setSelectedHashtag(null);
+    }
     navigate(tab);
   };
 
@@ -872,11 +1018,18 @@ export default function App() {
               <FeedPage
                 opportunities={opportunities}
                 currentUserId={currentUserId}
+                selectedHashtag={selectedHashtag}
+                onClearHashtagFilter={() => setSelectedHashtag(null)}
                 currentUser={currentUser}
                 students={students}
                 onLike={handleLike}
                 onSave={handleSave}
                 onComment={handleComment}
+                onReply={handleReply}
+                onLikeComment={handleLikeComment}
+                onDeleteComment={handleDeleteComment}
+                onEditPost={handleEditPost}
+                onDeletePost={handleDeletePost}
                 onCreateOpportunity={handleCreateOpportunity}
                 onCreatePost={handleCreatePost}
                 onCreateEvent={handleCreateEvent}
@@ -906,6 +1059,10 @@ export default function App() {
             onUnfollow={handleUnfollow}
             onCancelRequest={handleCancelRequest}
             onViewProfile={handleViewProfile}
+            onSelectHashtag={(hashtag) => {
+              setSelectedHashtag(hashtag);
+              navigate('feed');
+            }}
             initialSearchQuery={searchQuery}
           />
         ) : activeTab === 'network' ? (
@@ -954,6 +1111,12 @@ export default function App() {
               onLike={handleLike}
               onSave={handleSave}
               onComment={handleComment}
+              onReply={handleReply}
+              onLikeComment={handleLikeComment}
+              onDeleteComment={handleDeleteComment}
+              onEditPost={handleEditPost}
+              onDeletePost={handleDeletePost}
+              postsRefreshToken={postsRefreshToken}
             />
           ) : (
             <LoadingState type="profile" />

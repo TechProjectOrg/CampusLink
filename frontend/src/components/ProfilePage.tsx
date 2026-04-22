@@ -56,7 +56,7 @@ import { ImageWithFallback } from './figma/ImageWithFallback';
 import { ProfilePhotoUpload } from './ui/profile-photo-upload';
 import { apiUpdateUserProfilePicture, apiUploadUserProfilePicture } from '../lib/authApi';
 import { OpportunityCard } from './OpportunityCard';
-import { apiFetchUserPosts, type UserPost } from '../lib/postsApi';
+import { apiFetchProfilePosts, type UserPost } from '../lib/postsApi';
 
 interface ProfilePageProps {
   student: Student;
@@ -71,6 +71,12 @@ interface ProfilePageProps {
   onLike?: (opportunityId: string) => void;
   onSave?: (opportunityId: string) => void;
   onComment?: (opportunityId: string, comment: string) => void;
+  onReply?: (commentId: string, comment: string) => void;
+  onLikeComment?: (commentId: string, alreadyLiked: boolean) => void;
+  onDeleteComment?: (commentId: string) => void;
+  onEditPost?: (postId: string, updates: Partial<Opportunity>) => void;
+  onDeletePost?: (postId: string) => void;
+  postsRefreshToken?: number;
 }
 
 // Experience type with dates
@@ -132,6 +138,12 @@ export function ProfilePage({
   onLike,
   onSave,
   onComment,
+  onReply,
+  onLikeComment,
+  onDeleteComment,
+  onEditPost,
+  onDeletePost,
+  postsRefreshToken = 0,
   currentUserId,
   followGraph,
   onFollow,
@@ -288,16 +300,53 @@ export function ProfilePage({
       image: post.media[0]?.mediaUrl,
       tags: post.hashtags,
       likes: [],
-      comments: [],
+      comments: (post.comments ?? []).map((comment) => ({
+        id: comment.id,
+        postId: comment.postId,
+        authorId: comment.authorUserId,
+        authorName: comment.authorUsername,
+        authorAvatar:
+          comment.authorProfilePictureUrl ??
+          `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(comment.authorUsername)}`,
+        content: comment.content,
+        timestamp: comment.createdAt,
+        parentCommentId: comment.parentCommentId,
+        likeCount: comment.likeCount,
+        isLikedByMe: comment.isLikedByMe,
+        canDelete: comment.canDelete,
+        replies: comment.replies.map((reply) => ({
+          id: reply.id,
+          postId: reply.postId,
+          authorId: reply.authorUserId,
+          authorName: reply.authorUsername,
+          authorAvatar:
+            reply.authorProfilePictureUrl ??
+            `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(reply.authorUsername)}`,
+          content: reply.content,
+          timestamp: reply.createdAt,
+          parentCommentId: reply.parentCommentId,
+          likeCount: reply.likeCount,
+          isLikedByMe: reply.isLikedByMe,
+          canDelete: reply.canDelete,
+          replies: [],
+        })),
+      })),
       saved: [],
+      likeCount: post.likeCount,
+      saveCount: post.saveCount,
+      commentCount: post.commentCount,
+      isLikedByMe: post.isLikedByMe,
+      isSavedByMe: post.isSavedByMe,
+      canEdit: post.canEdit,
+      canDelete: post.canDelete,
     };
   };
 
   const loadPosts = async () => {
-    if (!isOwnProfile || !authUserId) return;
+    if (!student.id) return;
     setPostsLoading(true);
     try {
-      const list = await apiFetchUserPosts(authUserId, authToken);
+      const list = await apiFetchProfilePosts(student.id, authToken);
       setLoadedPosts(list.map(mapApiPostToOpportunity));
     } catch {
       setLoadedPosts([]);
@@ -318,10 +367,8 @@ export function ProfilePage({
   }, [student.id, authToken]);
 
   useEffect(() => {
-    if (isOwnProfile && authUserId) {
-      loadPosts();
-    }
-  }, [isOwnProfile, authUserId, authToken]);
+    loadPosts();
+  }, [student.id, authToken, isOwnProfile, authUserId, postsRefreshToken]);
 
   useEffect(() => {
     // Initialize from student data
@@ -351,17 +398,7 @@ export function ProfilePage({
   const requestStatus = (followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id)
     ? 'requested'
     : 'none';
-  const profilePosts = (
-    isOwnProfile
-      ? Array.from(
-          new Map(
-            [...loadedPosts, ...(opportunities ?? []).filter((opportunity) => opportunity.authorId === student.id)].map(
-              (post) => [post.id, post]
-            )
-          ).values()
-        )
-      : (opportunities ?? []).filter((opportunity) => opportunity.authorId === student.id)
-  ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const profilePosts = loadedPosts.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   // Handlers
   const closeModal = () => {
@@ -827,6 +864,11 @@ export function ProfilePage({
                     onLike={(id) => onLike?.(id)}
                     onSave={(id) => onSave?.(id)}
                     onComment={(id, comment) => onComment?.(id, comment)}
+                    onReply={(commentId, comment) => onReply?.(commentId, comment)}
+                    onLikeComment={(commentId, alreadyLiked) => onLikeComment?.(commentId, alreadyLiked)}
+                    onDeleteComment={(commentId) => onDeleteComment?.(commentId)}
+                    onEditPost={(postId, updates) => onEditPost?.(postId, updates)}
+                    onDeletePost={(postId) => onDeletePost?.(postId)}
                     onViewProfile={() => undefined}
                   />
                 ))}

@@ -83,15 +83,28 @@ export interface Opportunity {
   likes: string[];
   comments: Comment[];
   saved: string[];
+  likeCount?: number;
+  saveCount?: number;
+  commentCount?: number;
+  isLikedByMe?: boolean;
+  isSavedByMe?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }
 
 export interface Comment {
   id: string;
+  postId?: string;
   authorId: string;
   authorName: string;
   authorAvatar: string;
   content: string;
   timestamp: string;
+  parentCommentId?: string | null;
+  replies?: Comment[];
+  likeCount?: number;
+  isLikedByMe?: boolean;
+  canDelete?: boolean;
 }
 
 export interface Club {
