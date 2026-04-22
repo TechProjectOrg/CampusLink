@@ -1,4 +1,6 @@
 import prisma from '../prisma';
+import { emitNotificationEvent } from './realtime';
+import { sendPushNotificationToUser } from './push';
 
 export type NotificationType =
   | 'follow'
@@ -20,6 +22,21 @@ interface CreateNotificationParams {
   entityId?: string;
 }
 
+interface NotificationRealtimeRow {
+  notification_id: string;
+  notification_type: string;
+  title: string;
+  message: string;
+  entity_type: string | null;
+  entity_id: string | null;
+  is_read: boolean;
+  created_at: Date;
+  actor_user_id: string | null;
+  actor_username: string | null;
+  actor_profile_photo_url: string | null;
+  user_id: string;
+}
+
 function buildGroupedLikeMessage(names: string[], total: number, target: 'post' | 'comment'): string {
   const safeNames = names.filter(Boolean);
   const first = safeNames[0] ?? 'Someone';
@@ -29,6 +46,72 @@ function buildGroupedLikeMessage(names: string[], total: number, target: 'post' 
   if (total <= 1) return `${first} liked ${targetText}`;
   if (total === 2) return `${first} and ${second} liked ${targetText}`;
   return `${first}, ${second} and ${Math.max(total - 2, 1)} others liked ${targetText}`;
+}
+
+async function loadNotificationRealtimeRow(notificationId: string): Promise<NotificationRealtimeRow | null> {
+  const rows = await prisma.$queryRaw<NotificationRealtimeRow[]>`
+    SELECT
+      n.notification_id,
+      n.notification_type,
+      n.title,
+      n.message,
+      n.entity_type,
+      n.entity_id,
+      n.is_read,
+      n.created_at,
+      n.actor_user_id,
+      actor.username AS actor_username,
+      actor.profile_photo_url AS actor_profile_photo_url,
+      n.user_id
+    FROM notifications n
+    LEFT JOIN users actor ON actor.user_id = n.actor_user_id
+    WHERE n.notification_id = ${notificationId}
+    LIMIT 1
+  `;
+
+  return rows[0] ?? null;
+}
+
+async function fanoutNotification(notificationId: string, mode: 'new' | 'update'): Promise<void> {
+  try {
+    const row = await loadNotificationRealtimeRow(notificationId);
+    if (!row) return;
+
+    const payload = {
+      id: row.notification_id,
+      type: row.notification_type,
+      title: row.title,
+      message: row.message,
+      entityType: row.entity_type,
+      entityId: row.entity_id,
+      read: row.is_read,
+      createdAt: row.created_at.toISOString(),
+      actor: row.actor_user_id
+        ? {
+            userId: row.actor_user_id,
+            username: row.actor_username,
+            profilePictureUrl: row.actor_profile_photo_url,
+          }
+        : null,
+    };
+
+    emitNotificationEvent(row.user_id, {
+      type: mode === 'new' ? 'notification:new' : 'notification:update',
+      payload,
+    });
+
+    await sendPushNotificationToUser(row.user_id, {
+      notificationId: row.notification_id,
+      type: row.notification_type,
+      title: row.title,
+      message: row.message,
+      entityType: row.entity_type,
+      entityId: row.entity_id,
+      createdAt: row.created_at.toISOString(),
+    });
+  } catch (err) {
+    console.error('Failed to fanout notification:', err);
+  }
 }
 
 async function upsertGroupedLikeNotification(params: {
@@ -62,10 +145,12 @@ async function upsertGroupedLikeNotification(params: {
         created_at = NOW()
       WHERE notification_id = ${existing.notification_id}
     `;
+
+    await fanoutNotification(existing.notification_id, 'update');
     return;
   }
 
-  await prisma.$queryRaw`
+  const inserted = await prisma.$queryRaw<{ notification_id: string }[]>`
     INSERT INTO notifications (
       user_id,
       actor_user_id,
@@ -83,12 +168,18 @@ async function upsertGroupedLikeNotification(params: {
       ${params.entityType},
       ${params.entityId}
     )
+    RETURNING notification_id
   `;
+
+  const notificationId = inserted[0]?.notification_id;
+  if (notificationId) {
+    await fanoutNotification(notificationId, 'new');
+  }
 }
 
 export async function createNotification(params: CreateNotificationParams): Promise<void> {
   try {
-    await prisma.$queryRaw`
+    const rows = await prisma.$queryRaw<{ notification_id: string }[]>`
       INSERT INTO notifications (
         user_id,
         actor_user_id,
@@ -106,7 +197,13 @@ export async function createNotification(params: CreateNotificationParams): Prom
         ${params.entityType ?? null},
         ${params.entityId ?? null}
       )
+      RETURNING notification_id
     `;
+
+    const notificationId = rows[0]?.notification_id;
+    if (notificationId) {
+      await fanoutNotification(notificationId, 'new');
+    }
   } catch (err) {
     console.error('Failed to create notification:', err);
   }
@@ -130,7 +227,7 @@ export async function createPostPublishedNotifications(params: {
       ? `posted: ${params.postTitle.trim()}`
       : 'posted a new update';
 
-    await prisma.$queryRaw`
+    const inserted = await prisma.$queryRaw<{ notification_id: string }[]>`
       INSERT INTO notifications (
         user_id,
         actor_user_id,
@@ -151,7 +248,17 @@ export async function createPostPublishedNotifications(params: {
       FROM follows f
       WHERE f.followed_user_id = ${params.authorUserId}
         AND f.follower_user_id <> ${params.authorUserId}
+      RETURNING notification_id
     `;
+
+    await Promise.allSettled(
+      inserted
+        .map((row) => row.notification_id)
+        .filter(Boolean)
+        .map(async (notificationId) => {
+          await fanoutNotification(notificationId, 'new');
+        }),
+    );
   } catch (err) {
     console.error('Failed to create post publication notifications:', err);
   }

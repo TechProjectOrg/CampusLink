@@ -1,10 +1,77 @@
 import express, { Request, Response } from 'express';
 import prisma from '../prisma';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
+import { getWebPushPublicKey } from '../lib/push';
 
 const router = express.Router();
 
 router.use(authenticateToken);
+
+router.get('/push/public-key', async (_req: Request, res: Response) => {
+  return res.status(200).json({ publicKey: getWebPushPublicKey() });
+});
+
+router.post('/push/subscriptions', async (req: Request, res: Response) => {
+  const authed = req as unknown as AuthedRequest;
+  const userId = authed.auth!.userId;
+  const body = req.body as {
+    endpoint?: string;
+    keys?: { p256dh?: string; auth?: string };
+  };
+
+  const endpoint = body.endpoint?.trim();
+  const p256dh = body.keys?.p256dh?.trim();
+  const auth = body.keys?.auth?.trim();
+
+  if (!endpoint || !p256dh || !auth) {
+    return res.status(400).json({ message: 'endpoint, keys.p256dh and keys.auth are required' });
+  }
+
+  try {
+    await prisma.$queryRaw`
+      INSERT INTO user_push_subscriptions (user_id, endpoint, p256dh_key, auth_key, user_agent, revoked_at)
+      VALUES (${userId}, ${endpoint}, ${p256dh}, ${auth}, ${req.get('user-agent') ?? null}, NULL)
+      ON CONFLICT (endpoint)
+      DO UPDATE SET
+        user_id = EXCLUDED.user_id,
+        p256dh_key = EXCLUDED.p256dh_key,
+        auth_key = EXCLUDED.auth_key,
+        user_agent = EXCLUDED.user_agent,
+        revoked_at = NULL,
+        updated_at = NOW()
+    `;
+
+    return res.status(201).json({ message: 'Push subscription saved' });
+  } catch (err) {
+    console.error('Error saving push subscription:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.delete('/push/subscriptions', async (req: Request, res: Response) => {
+  const authed = req as unknown as AuthedRequest;
+  const userId = authed.auth!.userId;
+  const endpoint = (req.body as { endpoint?: string })?.endpoint?.trim();
+
+  if (!endpoint) {
+    return res.status(400).json({ message: 'endpoint is required' });
+  }
+
+  try {
+    await prisma.$queryRaw`
+      UPDATE user_push_subscriptions
+      SET revoked_at = NOW(), updated_at = NOW()
+      WHERE user_id = ${userId}
+        AND endpoint = ${endpoint}
+        AND revoked_at IS NULL
+    `;
+
+    return res.status(204).send();
+  } catch (err) {
+    console.error('Error removing push subscription:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
 
 // ============================================================
 // GET /notifications?unread_only=true

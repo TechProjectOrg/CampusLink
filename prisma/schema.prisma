@@ -112,6 +112,7 @@ model User {
   messagesSent           Message[]           @relation("MessageSender")
   notifications          Notification[]      @relation("NotificationUser")
   notificationsActed     Notification[]      @relation("NotificationActor")
+  pushSubscriptions      UserPushSubscription[]
 
   @@index([email], map: "idx_users_email")
   @@index([username], map: "idx_users_username")
@@ -559,4 +560,21 @@ model Notification {
   @@index([notificationType], map: "idx_notifications_notification_type")
   @@index([isRead], map: "idx_notifications_is_read")
   @@map("notifications")
+}
+
+model UserPushSubscription {
+  pushSubscriptionId String    @id @default(dbgenerated("gen_random_uuid()")) @map("push_subscription_id") @db.Uuid
+  userId             String    @map("user_id") @db.Uuid
+  endpoint           String    @unique @db.Text
+  p256dhKey          String    @map("p256dh_key") @db.Text
+  authKey            String    @map("auth_key") @db.Text
+  userAgent          String?   @map("user_agent") @db.Text
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+  revokedAt          DateTime? @map("revoked_at") @db.Timestamp(6)
+  user               User      @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId], map: "idx_user_push_subscriptions_user_id")
+  @@index([revokedAt], map: "idx_user_push_subscriptions_revoked_at")
+  @@map("user_push_subscriptions")
 }

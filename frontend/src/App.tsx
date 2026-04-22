@@ -40,8 +40,10 @@ import {
 } from './lib/networkApi';
 import {
   apiFetchNotifications,
+  apiFetchPushPublicKey,
   apiMarkNotificationRead,
   apiMarkAllNotificationsRead,
+  apiSavePushSubscription,
   type ApiNotification,
 } from './lib/notificationsApi';
 import {
@@ -115,6 +117,31 @@ function apiNotificationToLocal(n: ApiNotification): Notification {
     entityId: n.entityId,
     actorId: n.actor?.userId,
   };
+}
+
+function mergeRealtimeNotification(prev: Notification[], incoming: Notification): Notification[] {
+  const existingIndex = prev.findIndex((item) => item.id === incoming.id);
+  if (existingIndex === -1) {
+    return [incoming, ...prev];
+  }
+
+  const next = [...prev];
+  next[existingIndex] = {
+    ...next[existingIndex],
+    ...incoming,
+  };
+  return next;
+}
+
+function base64UrlToUint8Array(base64Url: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64Url.length % 4)) % 4);
+  const base64 = (base64Url + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = window.atob(base64);
+  const output = new Uint8Array(raw.length);
+  for (let index = 0; index < raw.length; index += 1) {
+    output[index] = raw.charCodeAt(index);
+  }
+  return output;
 }
 
 function buildCreatePostPayloadFromDraft(draft: any): CreateUserPostPayload {
@@ -468,6 +495,7 @@ export default function App() {
 
   const currentUserId = currentUser.id;
   const authToken = auth.session?.token;
+  const apiBase = (import.meta.env.VITE_API_BASE as string | undefined)?.trim() || 'http://localhost:4000';
 
   // ============================================================
   // Fetch follow graph + notifications from backend on login
@@ -528,6 +556,64 @@ export default function App() {
       refreshFeedPosts();
     }
   }, [auth.isAuthenticated, authToken, refreshFollowGraph, refreshNotifications, refreshFeedPosts]);
+
+  useEffect(() => {
+    if (!authToken || !auth.isAuthenticated) return;
+
+    const wsBase = apiBase.replace(/^http/i, 'ws').replace(/\/+$/, '');
+    const socket = new WebSocket(`${wsBase}/ws?token=${encodeURIComponent(authToken)}`);
+
+    socket.onmessage = (event) => {
+      try {
+        const parsed = JSON.parse(String(event.data)) as {
+          type?: 'notification:new' | 'notification:update';
+          payload?: ApiNotification;
+        };
+
+        if (!parsed?.payload || !parsed.type) return;
+        const local = apiNotificationToLocal(parsed.payload);
+        setNotifications((prev) => mergeRealtimeNotification(prev, local));
+      } catch (err) {
+        console.error('Failed to parse realtime notification payload:', err);
+      }
+    };
+
+    return () => {
+      socket.close();
+    };
+  }, [authToken, auth.isAuthenticated, apiBase]);
+
+  useEffect(() => {
+    if (!authToken || !auth.isAuthenticated) return;
+    if (typeof window === 'undefined') return;
+    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const publicKey = await apiFetchPushPublicKey(authToken);
+        if (cancelled || !publicKey) return;
+
+        const registration = await navigator.serviceWorker.ready;
+        let subscription = await registration.pushManager.getSubscription();
+        if (!subscription) {
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: base64UrlToUint8Array(publicKey),
+          });
+        }
+
+        await apiSavePushSubscription(subscription, authToken);
+      } catch (err) {
+        console.error('Push subscription setup skipped:', err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authToken, auth.isAuthenticated]);
 
   // Also refresh notifications when switching to the notifications tab
   useEffect(() => {

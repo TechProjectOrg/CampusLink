@@ -87,3 +87,47 @@ export async function apiMarkAllNotificationsRead(token?: string): Promise<void>
     throw new Error(err?.message || 'Failed to mark all notifications as read');
   }
 }
+
+export async function apiFetchPushPublicKey(token?: string): Promise<string | null> {
+  const response = await safeFetch(`${API_BASE}/notifications/push/public-key`, {
+    headers: { ...authHeaders(token) },
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Failed to fetch push public key');
+  }
+
+  const data = (await response.json().catch(() => ({}))) as { publicKey?: string | null };
+  return data.publicKey ?? null;
+}
+
+export async function apiSavePushSubscription(subscription: PushSubscription, token?: string): Promise<void> {
+  const json = subscription.toJSON();
+  const response = await safeFetch(`${API_BASE}/notifications/push/subscriptions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+    body: JSON.stringify({
+      endpoint: json.endpoint,
+      keys: json.keys,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Failed to save push subscription');
+  }
+}
+
+export async function apiDeletePushSubscription(endpoint: string, token?: string): Promise<void> {
+  const response = await safeFetch(`${API_BASE}/notifications/push/subscriptions`, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...authHeaders(token) },
+    body: JSON.stringify({ endpoint }),
+  });
+
+  if (!response.ok && response.status !== 204) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Failed to delete push subscription');
+  }
+}
