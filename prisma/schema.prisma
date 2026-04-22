@@ -353,6 +353,10 @@ model Post {
   opportunityType  OpportunityType? @map("opportunity_type")
   title            String?         @db.VarChar(255)
   contentText      String?         @map("content_text") @db.Text
+  companyName      String?         @map("company_name") @db.VarChar(255)
+  applicationDeadline DateTime?    @map("application_deadline") @db.Timestamp(6)
+  stipend          String?         @db.VarChar(100)
+  duration         String?         @db.VarChar(100)
   eventDate        DateTime?       @map("event_date") @db.Timestamp(6)
   location         String?         @db.VarChar(255)
   externalUrl      String?         @map("external_url") @db.Text

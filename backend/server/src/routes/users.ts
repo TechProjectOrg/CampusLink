@@ -4,7 +4,12 @@ import prisma from '../prisma';
 import { getUserProfileById } from '../services/userProfile';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
 import { hashPassword, signPasswordChangeToken, verifyPassword, verifyPasswordChangeToken } from '../lib/auth';
-import { deleteManagedPhotoByUrl, uploadProfilePhotoToStorage } from '../lib/objectStorage';
+import {
+  deleteManagedPhotoByUrl,
+  deleteManagedPostMediaByUrl,
+  uploadPostMediaToStorage,
+  uploadProfilePhotoToStorage,
+} from '../lib/objectStorage';
 
 const router = express.Router();
 
@@ -39,6 +44,14 @@ const profilePhotoUpload = multer({
   storage: multer.memoryStorage(),
   limits: {
     fileSize: 5 * 1024 * 1024,
+  },
+});
+
+const postMediaUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+    files: 10,
   },
 });
 
@@ -84,6 +97,181 @@ interface UserSettingsResponse {
 interface UpdateUserSettingsBody {
   notifications?: Partial<UserSettingsResponse['notifications']>;
   privacy?: Partial<UserSettingsResponse['privacy']>;
+}
+
+type DbPostType = 'general' | 'opportunity' | 'event' | 'club_activity';
+type DbOpportunityType = 'internship' | 'hackathon' | 'event' | 'contest' | 'club';
+type DbPostVisibility = 'public' | 'followers' | 'club_members';
+
+interface CreateUserPostBody {
+  postType?: DbPostType;
+  opportunityType?: DbOpportunityType | null;
+  title?: string;
+  contentText?: string;
+  company?: string;
+  deadline?: string;
+  stipend?: string;
+  duration?: string;
+  eventDate?: string;
+  location?: string;
+  externalUrl?: string;
+  visibility?: DbPostVisibility;
+  clubId?: string | null;
+  hashtags?: string[];
+  media?: Array<{
+    mediaUrl?: string;
+    mediaType?: string;
+    sortOrder?: number;
+  }>;
+}
+
+interface UserPostMediaResponse {
+  postMediaId: string;
+  mediaUrl: string;
+  mediaType: string;
+  sortOrder: number;
+}
+
+interface UserPostResponse {
+  id: string;
+  authorUserId: string;
+  clubId: string | null;
+  postType: DbPostType;
+  opportunityType: DbOpportunityType | null;
+  title: string | null;
+  contentText: string | null;
+  company: string | null;
+  deadline: string | null;
+  stipend: string | null;
+  duration: string | null;
+  eventDate: string | null;
+  location: string | null;
+  externalUrl: string | null;
+  visibility: DbPostVisibility;
+  hashtags: string[];
+  media: UserPostMediaResponse[];
+  likeCount: number;
+  commentCount: number;
+  saveCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface UserPostRow {
+  post_id: string;
+  author_user_id: string;
+  club_id: string | null;
+  post_type: DbPostType;
+  opportunity_type: DbOpportunityType | null;
+  title: string | null;
+  content_text: string | null;
+  company_name: string | null;
+  application_deadline: Date | null;
+  stipend: string | null;
+  duration: string | null;
+  event_date: Date | null;
+  location: string | null;
+  external_url: string | null;
+  visibility: DbPostVisibility;
+  hashtags: string[] | null;
+  media: unknown;
+  like_count: number;
+  comment_count: number;
+  save_count: number;
+  created_at: Date;
+  updated_at: Date;
+}
+
+function normalizeHashtag(rawTag: string): string | null {
+  const compact = rawTag.trim().replace(/^#+/, '').replace(/\s+/g, '').toLowerCase();
+  if (!compact) return null;
+  if (compact.length > 100) return null;
+  if (!/^[a-z0-9_][a-z0-9_-]*$/.test(compact)) return null;
+  return compact;
+}
+
+function normalizeHashtags(rawTags?: string[]): string[] {
+  if (!Array.isArray(rawTags)) return [];
+  const unique = new Set<string>();
+
+  for (const tag of rawTags) {
+    const normalized = normalizeHashtag(String(tag));
+    if (normalized) {
+      unique.add(normalized);
+    }
+  }
+
+  return Array.from(unique);
+}
+
+function parseMediaValue(rawMedia: unknown): UserPostMediaResponse[] {
+  let source: unknown = rawMedia;
+  if (typeof rawMedia === 'string') {
+    try {
+      source = JSON.parse(rawMedia) as unknown;
+    } catch {
+      return [];
+    }
+  }
+
+  if (!Array.isArray(source)) {
+    return [];
+  }
+
+  return source
+    .map((item) => {
+      if (!item || typeof item !== 'object') return null;
+      const mediaItem = item as Record<string, unknown>;
+      const postMediaId = mediaItem.postMediaId;
+      const mediaUrl = mediaItem.mediaUrl;
+      const mediaType = mediaItem.mediaType;
+      const sortOrder = mediaItem.sortOrder;
+
+      if (
+        typeof postMediaId !== 'string' ||
+        typeof mediaUrl !== 'string' ||
+        typeof mediaType !== 'string' ||
+        typeof sortOrder !== 'number'
+      ) {
+        return null;
+      }
+
+      return {
+        postMediaId,
+        mediaUrl,
+        mediaType,
+        sortOrder,
+      };
+    })
+    .filter((item): item is UserPostMediaResponse => item !== null)
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+function mapUserPostRow(row: UserPostRow): UserPostResponse {
+  return {
+    id: row.post_id,
+    authorUserId: row.author_user_id,
+    clubId: row.club_id,
+    postType: row.post_type,
+    opportunityType: row.opportunity_type,
+    title: row.title,
+    contentText: row.content_text,
+    company: row.company_name,
+    deadline: row.application_deadline ? row.application_deadline.toISOString() : null,
+    stipend: row.stipend,
+    duration: row.duration,
+    eventDate: row.event_date ? row.event_date.toISOString() : null,
+    location: row.location,
+    externalUrl: row.external_url,
+    visibility: row.visibility,
+    hashtags: row.hashtags ?? [],
+    media: parseMediaValue(row.media),
+    likeCount: row.like_count,
+    commentCount: row.comment_count,
+    saveCount: row.save_count,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString(),
+  };
 }
 
 function settingsFromRow(row: UserSettingsRow): UserSettingsResponse {
@@ -963,6 +1151,407 @@ router.delete(
       return res.status(204).send();
     } catch (err) {
       console.error('Error deleting project:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
+
+// ==============================
+// Profile: Posts
+// ==============================
+router.get('/:userId/posts', async (req: Request<{ userId: string }>, res: Response) => {
+  const { userId } = req.params;
+
+  try {
+    const rows = await prisma.$queryRaw<UserPostRow[]>`
+      SELECT
+        p.post_id,
+        p.author_user_id,
+        p.club_id,
+        p.post_type,
+        p.opportunity_type,
+        p.title,
+        p.content_text,
+        p.company_name,
+        p.application_deadline,
+        p.stipend,
+        p.duration,
+        p.event_date,
+        p.location,
+        p.external_url,
+        p.visibility,
+        COALESCE(
+          (
+            SELECT ARRAY_AGG(h.tag_name ORDER BY h.tag_name)
+            FROM post_hashtags ph
+            JOIN hashtags h ON h.hashtag_id = ph.hashtag_id
+            WHERE ph.post_id = p.post_id
+          ),
+          ARRAY[]::text[]
+        ) AS hashtags,
+        COALESCE(
+          (
+            SELECT JSON_AGG(
+              JSON_BUILD_OBJECT(
+                'postMediaId', pm.post_media_id,
+                'mediaUrl', pm.media_url,
+                'mediaType', pm.media_type,
+                'sortOrder', pm.sort_order
+              )
+              ORDER BY pm.sort_order ASC, pm.created_at ASC
+            )
+            FROM post_media pm
+            WHERE pm.post_id = p.post_id
+          ),
+          '[]'::json
+        ) AS media,
+        (SELECT COUNT(*)::int FROM post_likes pl WHERE pl.post_id = p.post_id) AS like_count,
+        (SELECT COUNT(*)::int FROM post_comments pc WHERE pc.post_id = p.post_id) AS comment_count,
+        (SELECT COUNT(*)::int FROM post_saves ps WHERE ps.post_id = p.post_id) AS save_count,
+        p.created_at,
+        p.updated_at
+      FROM posts p
+      WHERE p.author_user_id = ${userId}
+      ORDER BY p.created_at DESC
+    `;
+
+    return res.status(200).json(rows.map(mapUserPostRow));
+  } catch (err) {
+    console.error('Error fetching posts:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.post(
+  '/:userId/posts',
+  postMediaUpload.array('media', 10),
+  async (
+    req: Request<{ userId: string }, unknown, CreateUserPostBody & { payload?: string }>,
+    res: Response
+  ) => {
+    const { userId } = req.params;
+    let requestBody: CreateUserPostBody;
+    try {
+      requestBody =
+        typeof req.body?.payload === 'string'
+          ? (JSON.parse(req.body.payload) as CreateUserPostBody)
+          : req.body;
+    } catch {
+      return res.status(400).json({ message: 'Invalid JSON payload' });
+    }
+
+    const {
+      postType,
+      opportunityType,
+      title,
+      contentText,
+      company,
+      deadline,
+      stipend,
+      duration,
+      eventDate,
+      location,
+      externalUrl,
+      visibility,
+      clubId,
+      hashtags,
+      media,
+    } = requestBody;
+
+    const allowedPostTypes: DbPostType[] = ['general', 'event', 'opportunity', 'club_activity'];
+    const allowedOpportunityTypes: DbOpportunityType[] = ['internship', 'hackathon', 'event', 'contest', 'club'];
+    const allowedVisibilities: DbPostVisibility[] = ['public', 'followers', 'club_members'];
+
+    const nextPostType = (postType ?? 'general').toLowerCase() as DbPostType;
+    if (!allowedPostTypes.includes(nextPostType)) {
+      return res.status(400).json({ message: 'postType must be general, event, opportunity, or club_activity' });
+    }
+
+    const nextOpportunityType = opportunityType ? String(opportunityType).toLowerCase() as DbOpportunityType : null;
+    if (nextPostType === 'opportunity' && !nextOpportunityType) {
+      return res.status(400).json({ message: 'opportunityType is required when postType=opportunity' });
+    }
+
+    if (nextOpportunityType && !allowedOpportunityTypes.includes(nextOpportunityType)) {
+      return res.status(400).json({ message: 'Invalid opportunityType' });
+    }
+
+    if (nextPostType !== 'opportunity' && nextOpportunityType) {
+      return res.status(400).json({ message: 'opportunityType is only allowed when postType=opportunity' });
+    }
+
+    const nextVisibility = (visibility ?? 'public').toLowerCase() as DbPostVisibility;
+    if (!allowedVisibilities.includes(nextVisibility)) {
+      return res.status(400).json({ message: 'visibility must be public, followers, or club_members' });
+    }
+
+    const titleValue = title?.trim() || null;
+    const contentValue = contentText?.trim() || null;
+    const companyValue = company?.trim() || null;
+    const stipendValue = stipend?.trim() || null;
+    const durationValue = duration?.trim() || null;
+    const locationValue = location?.trim() || null;
+    const externalUrlValue = externalUrl?.trim() || null;
+    const clubIdValue = clubId?.trim() || null;
+
+    if (!titleValue && !contentValue) {
+      return res.status(400).json({ message: 'At least one of title or contentText is required' });
+    }
+
+    if (titleValue && titleValue.length > 255) {
+      return res.status(400).json({ message: 'title must be 255 characters or fewer' });
+    }
+
+    if (locationValue && locationValue.length > 255) {
+      return res.status(400).json({ message: 'location must be 255 characters or fewer' });
+    }
+
+    if (companyValue && companyValue.length > 255) {
+      return res.status(400).json({ message: 'company must be 255 characters or fewer' });
+    }
+
+    if (stipendValue && stipendValue.length > 100) {
+      return res.status(400).json({ message: 'stipend must be 100 characters or fewer' });
+    }
+
+    if (durationValue && durationValue.length > 100) {
+      return res.status(400).json({ message: 'duration must be 100 characters or fewer' });
+    }
+
+    if (nextPostType === 'general' && !contentValue) {
+      return res.status(400).json({ message: 'contentText is required for general posts' });
+    }
+
+    if (nextPostType === 'event' && !titleValue) {
+      return res.status(400).json({ message: 'title is required for event posts' });
+    }
+
+    if (nextPostType === 'opportunity' && (!titleValue || !contentValue)) {
+      return res.status(400).json({ message: 'title and contentText are required for opportunity posts' });
+    }
+
+    if (nextPostType === 'club_activity' && !clubIdValue) {
+      return res.status(400).json({ message: 'clubId is required for club_activity posts' });
+    }
+
+    if (nextVisibility === 'club_members' && !clubIdValue) {
+      return res.status(400).json({ message: 'clubId is required when visibility=club_members' });
+    }
+
+    const eventDateValue = eventDate ? new Date(eventDate) : null;
+    if (eventDate && Number.isNaN(eventDateValue?.getTime())) {
+      return res.status(400).json({ message: 'eventDate must be a valid ISO date string' });
+    }
+
+    const deadlineValue = deadline ? new Date(deadline) : null;
+    if (deadline && Number.isNaN(deadlineValue?.getTime())) {
+      return res.status(400).json({ message: 'deadline must be a valid ISO date string' });
+    }
+
+    const normalizedHashtags = normalizeHashtags(hashtags);
+    const explicitMedia = Array.isArray(media)
+      ? media
+          .map((item, index) => {
+            const mediaUrl = item.mediaUrl?.trim();
+            if (!mediaUrl) return null;
+
+            return {
+              mediaUrl,
+              mediaType: item.mediaType?.trim() || 'image',
+              sortOrder: Number.isInteger(item.sortOrder) ? Number(item.sortOrder) : index,
+            };
+          })
+          .filter((item): item is { mediaUrl: string; mediaType: string; sortOrder: number } => item !== null)
+      : [];
+
+    const uploadedFiles = Array.isArray(req.files)
+      ? req.files
+      : Object.values(req.files ?? {}).flat();
+    if (uploadedFiles.some((file) => !file.mimetype.startsWith('image/'))) {
+      return res.status(400).json({ message: 'Only image uploads are allowed for post media' });
+    }
+
+    if (explicitMedia.length + uploadedFiles.length > 10) {
+      return res.status(400).json({ message: 'A post can include at most 10 media items' });
+    }
+
+    let uploadedMediaEntries: Array<{ mediaUrl: string; mediaType: string; sortOrder: number }> = [];
+
+    try {
+      if (clubIdValue) {
+        const clubRows = await prisma.$queryRaw<{ club_id: string }[]>`
+          SELECT club_id
+          FROM clubs
+          WHERE club_id = ${clubIdValue}
+          LIMIT 1
+        `;
+
+        if (!clubRows[0]) {
+          return res.status(400).json({ message: 'clubId does not exist' });
+        }
+      }
+
+      uploadedMediaEntries = await Promise.all(
+        uploadedFiles.map(async (file, index) => ({
+          mediaUrl: await uploadPostMediaToStorage({
+            userId,
+            fileBuffer: file.buffer,
+            mimeType: file.mimetype,
+          }),
+          mediaType: file.mimetype,
+          sortOrder: explicitMedia.length + index,
+        }))
+      );
+
+      const normalizedMedia = [...explicitMedia, ...uploadedMediaEntries];
+
+      const createdPostId = await prisma.$transaction(async (tx) => {
+        const inserted = await tx.$queryRaw<{ post_id: string }[]>`
+          INSERT INTO posts (
+            author_user_id,
+            club_id,
+            post_type,
+            opportunity_type,
+            title,
+            content_text,
+            company_name,
+            application_deadline,
+            stipend,
+            duration,
+            event_date,
+            location,
+            external_url,
+            visibility
+          )
+          VALUES (
+            ${userId},
+            ${clubIdValue},
+            CAST(${nextPostType} AS "PostType"),
+            CAST(${nextOpportunityType} AS "OpportunityType"),
+            ${titleValue},
+            ${contentValue},
+            ${companyValue},
+            ${deadlineValue},
+            ${stipendValue},
+            ${durationValue},
+            ${eventDateValue},
+            ${locationValue},
+            ${externalUrlValue},
+            CAST(${nextVisibility} AS "PostVisibility")
+          )
+          RETURNING post_id
+        `;
+
+        const postId = inserted[0]?.post_id;
+        if (!postId) {
+          throw new Error('Failed to create post');
+        }
+
+        for (const tagName of normalizedHashtags) {
+          const hashtagRows = await tx.$queryRaw<{ hashtag_id: string }[]>`
+            INSERT INTO hashtags (tag_name)
+            VALUES (${tagName})
+            ON CONFLICT (tag_name)
+            DO UPDATE SET tag_name = EXCLUDED.tag_name
+            RETURNING hashtag_id
+          `;
+
+          const hashtagId = hashtagRows[0]?.hashtag_id;
+          if (!hashtagId) {
+            throw new Error('Failed to upsert hashtag');
+          }
+
+          await tx.$queryRaw`
+            INSERT INTO post_hashtags (post_id, hashtag_id)
+            VALUES (${postId}, ${hashtagId})
+            ON CONFLICT (post_id, hashtag_id) DO NOTHING
+          `;
+        }
+
+        for (const mediaItem of normalizedMedia) {
+          await tx.$queryRaw`
+            INSERT INTO post_media (post_id, media_url, media_type, sort_order)
+            VALUES (${postId}, ${mediaItem.mediaUrl}, ${mediaItem.mediaType}, ${mediaItem.sortOrder})
+          `;
+        }
+
+        return postId;
+      });
+
+      const rows = await prisma.$queryRaw<UserPostRow[]>`
+        SELECT
+          p.post_id,
+          p.author_user_id,
+          p.club_id,
+          p.post_type,
+          p.opportunity_type,
+          p.title,
+          p.content_text,
+          p.company_name,
+          p.application_deadline,
+          p.stipend,
+          p.duration,
+          p.event_date,
+          p.location,
+          p.external_url,
+          p.visibility,
+          COALESCE(
+            (
+              SELECT ARRAY_AGG(h.tag_name ORDER BY h.tag_name)
+              FROM post_hashtags ph
+              JOIN hashtags h ON h.hashtag_id = ph.hashtag_id
+              WHERE ph.post_id = p.post_id
+            ),
+            ARRAY[]::text[]
+          ) AS hashtags,
+          COALESCE(
+            (
+              SELECT JSON_AGG(
+                JSON_BUILD_OBJECT(
+                  'postMediaId', pm.post_media_id,
+                  'mediaUrl', pm.media_url,
+                  'mediaType', pm.media_type,
+                  'sortOrder', pm.sort_order
+                )
+                ORDER BY pm.sort_order ASC, pm.created_at ASC
+              )
+              FROM post_media pm
+              WHERE pm.post_id = p.post_id
+            ),
+            '[]'::json
+          ) AS media,
+          (SELECT COUNT(*)::int FROM post_likes pl WHERE pl.post_id = p.post_id) AS like_count,
+          (SELECT COUNT(*)::int FROM post_comments pc WHERE pc.post_id = p.post_id) AS comment_count,
+          (SELECT COUNT(*)::int FROM post_saves ps WHERE ps.post_id = p.post_id) AS save_count,
+          p.created_at,
+          p.updated_at
+        FROM posts p
+        WHERE p.author_user_id = ${userId} AND p.post_id = ${createdPostId}
+        LIMIT 1
+      `;
+
+      const created = rows[0];
+      if (!created) {
+        return res.status(404).json({ message: 'Created post could not be loaded' });
+      }
+
+      return res.status(201).json(mapUserPostRow(created));
+    } catch (err) {
+      await Promise.allSettled(
+        uploadedMediaEntries.map(async (item) => {
+          await deleteManagedPostMediaByUrl(item.mediaUrl);
+        })
+      );
+
+      if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ message: 'Post image must be 10MB or smaller' });
+      }
+
+      if (err instanceof Error && err.message.startsWith('Missing required environment variable')) {
+        return res.status(500).json({ message: 'Post media storage is not configured on the server' });
+      }
+
+      console.error('Error creating post:', err);
       return res.status(500).json({ message: 'Internal server error' });
     }
   }

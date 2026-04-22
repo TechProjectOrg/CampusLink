@@ -43,6 +43,12 @@ import {
   apiMarkAllNotificationsRead,
   type ApiNotification,
 } from './lib/notificationsApi';
+import {
+  apiCreateUserPost,
+  apiFetchUserPosts,
+  type CreateUserPostPayload,
+  type UserPost,
+} from './lib/postsApi';
 import type { ApiUserProfile } from './types';
 
 // ============================================================
@@ -95,6 +101,93 @@ function apiNotificationToLocal(n: ApiNotification): Notification {
     actionUrl: undefined,
     entityId: n.entityId,
     actorId: n.actor?.userId,
+  };
+}
+
+function buildCreatePostPayloadFromDraft(draft: any): CreateUserPostPayload {
+  const baseContent = typeof draft?.description === 'string' ? draft.description.trim() : '';
+  const normalizedTags = Array.isArray(draft?.tags)
+    ? Array.from(
+        new Set(
+          draft.tags
+            .map((tag: unknown) => String(tag).trim())
+            .filter(Boolean)
+        )
+      )
+    : [];
+
+  const mediaUrl = typeof draft?.image === 'string' && draft.image.trim().length > 0 ? draft.image.trim() : null;
+  const media = mediaUrl && !mediaUrl.startsWith('blob:') ? [{ mediaUrl, mediaType: 'image', sortOrder: 0 }] : [];
+
+  const draftType = String(draft?.type ?? 'general').toLowerCase();
+
+  if (draftType === 'event') {
+    return {
+      postType: 'event',
+      title: typeof draft?.title === 'string' ? draft.title.trim() : '',
+      contentText: baseContent,
+      eventDate: typeof draft?.eventDate === 'string' ? draft.eventDate : undefined,
+      location: typeof draft?.location === 'string' ? draft.location.trim() : undefined,
+      externalUrl: typeof draft?.link === 'string' ? draft.link.trim() : undefined,
+      hashtags: normalizedTags,
+      media,
+    };
+  }
+
+  if (['internship', 'hackathon', 'event', 'contest', 'club'].includes(draftType)) {
+    return {
+      postType: 'opportunity',
+      opportunityType: draftType as CreateUserPostPayload['opportunityType'],
+      title: typeof draft?.title === 'string' ? draft.title.trim() : '',
+      contentText: baseContent,
+      company: typeof draft?.company === 'string' ? draft.company.trim() : undefined,
+      deadline: typeof draft?.deadline === 'string' ? draft.deadline : undefined,
+      stipend: typeof draft?.stipend === 'string' ? draft.stipend.trim() : undefined,
+      duration: typeof draft?.duration === 'string' ? draft.duration.trim() : undefined,
+      eventDate: typeof draft?.deadline === 'string' ? draft.deadline : undefined,
+      location: typeof draft?.location === 'string' ? draft.location.trim() : undefined,
+      externalUrl: typeof draft?.link === 'string' ? draft.link.trim() : undefined,
+      hashtags: normalizedTags,
+      media,
+    };
+  }
+
+  return {
+    postType: 'general',
+    contentText: baseContent,
+    hashtags: normalizedTags,
+    media,
+  };
+}
+
+function userPostToOpportunity(post: UserPost, currentUser: Student): Opportunity {
+  let type: Opportunity['type'] = 'general';
+  if (post.postType === 'event') {
+    type = 'event';
+  } else if (post.postType === 'opportunity') {
+    type = (post.opportunityType ?? 'event') as Opportunity['type'];
+  }
+
+  return {
+    id: post.id,
+    authorId: post.authorUserId,
+    authorName: currentUser.name,
+    authorAvatar: currentUser.avatar,
+    type,
+    title: post.title ?? '',
+    description: post.contentText ?? '',
+    date: post.createdAt,
+    company: post.company ?? undefined,
+    deadline: post.deadline ?? undefined,
+    stipend: post.stipend ?? undefined,
+    duration: post.duration ?? undefined,
+    location: post.location ?? undefined,
+    link: post.externalUrl ?? undefined,
+    image: post.media[0]?.mediaUrl,
+    tags: post.hashtags,
+    likes: [],
+    comments: [],
+    saved: [],
   };
 }
 
@@ -272,12 +365,29 @@ export default function App() {
     }
   }, [authToken]);
 
+  const refreshOwnPosts = useCallback(async () => {
+    if (!authToken || !currentUserId) return;
+
+    try {
+      const posts = await apiFetchUserPosts(currentUserId, authToken);
+      const mapped = posts.map((post) => userPostToOpportunity(post, currentUser));
+
+      setOpportunities((prev) => {
+        const nonCurrentUserPosts = prev.filter((item) => item.authorId !== currentUserId);
+        return [...mapped, ...nonCurrentUserPosts];
+      });
+    } catch (err) {
+      console.error('Failed to fetch user posts:', err);
+    }
+  }, [authToken, currentUserId, currentUser]);
+
   useEffect(() => {
     if (auth.isAuthenticated && authToken) {
       refreshFollowGraph();
       refreshNotifications();
+      refreshOwnPosts();
     }
-  }, [auth.isAuthenticated, authToken, refreshFollowGraph, refreshNotifications]);
+  }, [auth.isAuthenticated, authToken, refreshFollowGraph, refreshNotifications, refreshOwnPosts]);
 
   // Also refresh notifications when switching to the notifications tab
   useEffect(() => {
@@ -361,14 +471,27 @@ export default function App() {
     toast.success('Post deleted successfully');
   };
 
+  const persistCreatedPost = async (draft: any) => {
+    if (!authToken) {
+      throw new Error('You must be logged in to create a post');
+    }
+
+    const payload = buildCreatePostPayloadFromDraft(draft);
+    const mediaFiles = draft?.imageFile instanceof File ? [draft.imageFile] : [];
+    const created = await apiCreateUserPost(currentUserId, payload, authToken, mediaFiles);
+    const mapped = userPostToOpportunity(created, currentUser);
+
+    setOpportunities((prev) => [mapped, ...prev.filter((item) => item.id !== mapped.id)]);
+  };
+
   // Create post handler
-  const handleCreatePost = (post: Opportunity) => {
-    setOpportunities([post, ...opportunities]);
+  const handleCreatePost = async (post: Opportunity) => {
+    await persistCreatedPost(post);
   };
 
   // Create event handler
-  const handleCreateEvent = (event: Opportunity) => {
-    setOpportunities([event, ...opportunities]);
+  const handleCreateEvent = async (event: Opportunity) => {
+    await persistCreatedPost(event);
   };
 
   // ============================================================
@@ -681,8 +804,8 @@ export default function App() {
 
 
   // Create opportunity handler
-  const handleCreateOpportunity = (opportunity: Opportunity) => {
-    setOpportunities([opportunity, ...opportunities]);
+  const handleCreateOpportunity = async (opportunity: Opportunity) => {
+    await persistCreatedPost(opportunity);
   };
 
   // Create club handler

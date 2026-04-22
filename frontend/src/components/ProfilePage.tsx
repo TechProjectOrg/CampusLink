@@ -55,6 +55,8 @@ import { DatePicker } from './ui/date-picker';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { ProfilePhotoUpload } from './ui/profile-photo-upload';
 import { apiUpdateUserProfilePicture, apiUploadUserProfilePicture } from '../lib/authApi';
+import { OpportunityCard } from './OpportunityCard';
+import { apiFetchUserPosts, type UserPost } from '../lib/postsApi';
 
 interface ProfilePageProps {
   student: Student;
@@ -153,6 +155,8 @@ export function ProfilePage({
   // Projects state
   const [loadedProjects, setLoadedProjects] = useState<Project[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
+  const [loadedPosts, setLoadedPosts] = useState<Opportunity[]>([]);
+  const [postsLoading, setPostsLoading] = useState(false);
 
   // Experience state
   const [experiences, setExperiences] = useState<Experience[]>([]);
@@ -258,6 +262,50 @@ export function ProfilePage({
     }
   };
 
+  const mapApiPostToOpportunity = (post: UserPost): Opportunity => {
+    let mappedType: Opportunity['type'] = 'general';
+    if (post.postType === 'event') {
+      mappedType = 'event';
+    } else if (post.postType === 'opportunity') {
+      mappedType = (post.opportunityType ?? 'event') as Opportunity['type'];
+    }
+
+    return {
+      id: post.id,
+      authorId: student.id,
+      authorName: student.name,
+      authorAvatar: student.avatar,
+      type: mappedType,
+      title: post.title ?? '',
+      description: post.contentText ?? '',
+      date: post.createdAt,
+      company: post.company ?? undefined,
+      deadline: post.deadline ?? undefined,
+      stipend: post.stipend ?? undefined,
+      duration: post.duration ?? undefined,
+      location: post.location ?? undefined,
+      link: post.externalUrl ?? undefined,
+      image: post.media[0]?.mediaUrl,
+      tags: post.hashtags,
+      likes: [],
+      comments: [],
+      saved: [],
+    };
+  };
+
+  const loadPosts = async () => {
+    if (!isOwnProfile || !authUserId) return;
+    setPostsLoading(true);
+    try {
+      const list = await apiFetchUserPosts(authUserId, authToken);
+      setLoadedPosts(list.map(mapApiPostToOpportunity));
+    } catch {
+      setLoadedPosts([]);
+    } finally {
+      setPostsLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (isOwnProfile && authUserId) {
       loadSkills();
@@ -268,6 +316,12 @@ export function ProfilePage({
     loadCertifications();
     loadProjects();
   }, [student.id, authToken]);
+
+  useEffect(() => {
+    if (isOwnProfile && authUserId) {
+      loadPosts();
+    }
+  }, [isOwnProfile, authUserId, authToken]);
 
   useEffect(() => {
     // Initialize from student data
@@ -297,6 +351,17 @@ export function ProfilePage({
   const requestStatus = (followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id)
     ? 'requested'
     : 'none';
+  const profilePosts = (
+    isOwnProfile
+      ? Array.from(
+          new Map(
+            [...loadedPosts, ...(opportunities ?? []).filter((opportunity) => opportunity.authorId === student.id)].map(
+              (post) => [post.id, post]
+            )
+          ).values()
+        )
+      : (opportunities ?? []).filter((opportunity) => opportunity.authorId === student.id)
+  ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   // Handlers
   const closeModal = () => {
@@ -742,6 +807,38 @@ export function ProfilePage({
               </div>
             ) : (
               <EmptyState message="Add a short bio to introduce yourself" onAdd={() => setActiveModal('about')} />
+            )}
+          </CardContent>
+        </Card>
+
+        {/* ===== POSTS SECTION ===== */}
+        <Card className="shadow-sm border-0">
+          <CardContent className="p-6 space-y-4">
+            <SectionHeader title="Posts" icon={MessageCircle} />
+            {isOwnProfile && postsLoading ? (
+              <p className="text-gray-400 text-sm">Loading posts...</p>
+            ) : profilePosts.length > 0 ? (
+              <div className="space-y-4">
+                {profilePosts.map((post) => (
+                  <OpportunityCard
+                    key={post.id}
+                    opportunity={post}
+                    currentUserId={currentUserId}
+                    onLike={(id) => onLike?.(id)}
+                    onSave={(id) => onSave?.(id)}
+                    onComment={(id, comment) => onComment?.(id, comment)}
+                    onViewProfile={() => undefined}
+                  />
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                message={
+                  isOwnProfile
+                    ? 'Create your first post to see it here'
+                    : `${student.name} has not posted anything yet`
+                }
+              />
             )}
           </CardContent>
         </Card>

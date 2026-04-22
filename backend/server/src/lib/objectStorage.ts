@@ -7,6 +7,7 @@ interface StorageEnv {
   endpoint?: string;
   publicBaseUrl: string;
   profilePhotosPrefix: string;
+  postMediaPrefix: string;
   accessKeyId: string;
   secretAccessKey: string;
 }
@@ -64,6 +65,9 @@ function buildStorageEnv(): StorageEnv {
     profilePhotosPrefix:
       optionalEnv(['STORAGE_S3_PROFILE_PHOTOS_PREFIX', 'S3_PROFILE_PHOTOS_PREFIX']) ??
       'users/profile-photos',
+    postMediaPrefix:
+      optionalEnv(['STORAGE_S3_POST_MEDIA_PREFIX', 'S3_POST_MEDIA_PREFIX']) ??
+      'posts/media',
     accessKeyId,
     secretAccessKey,
   };
@@ -132,6 +136,29 @@ export async function uploadProfilePhotoToStorage(params: {
   return `${storageEnv.publicBaseUrl}/${key}`;
 }
 
+export async function uploadPostMediaToStorage(params: {
+  userId: string;
+  fileBuffer: Buffer;
+  mimeType: string;
+}): Promise<string> {
+  const storageEnv = getStorageEnv();
+  const extension = extensionFromMime(params.mimeType);
+  const fileName = `${Date.now()}-${randomUUID()}.${extension}`;
+  const key = `${storageEnv.postMediaPrefix}/${params.userId}/${fileName}`;
+
+  await getS3Client().send(
+    new PutObjectCommand({
+      Bucket: storageEnv.bucketName,
+      Key: key,
+      Body: params.fileBuffer,
+      ContentType: params.mimeType,
+      CacheControl: 'public,max-age=31536000,immutable',
+    })
+  );
+
+  return `${storageEnv.publicBaseUrl}/${key}`;
+}
+
 export async function deleteManagedPhotoByUrl(photoUrl: string | null): Promise<void> {
   if (!photoUrl) return;
 
@@ -147,6 +174,24 @@ export async function deleteManagedPhotoByUrl(photoUrl: string | null): Promise<
 
   if (!key) return;
 
+  await getS3Client().send(
+    new DeleteObjectCommand({
+      Bucket: storageEnv.bucketName,
+      Key: key,
+    })
+  );
+}
+
+export async function deleteManagedPostMediaByUrl(mediaUrl: string | null): Promise<void> {
+  if (!mediaUrl) return;
+
+  const storageEnv = getStorageEnv();
+  const prefix = `${storageEnv.postMediaPrefix}/`;
+  const prefixIdx = mediaUrl.indexOf(prefix);
+
+  if (prefixIdx === -1) return;
+
+  const key = mediaUrl.slice(prefixIdx);
   await getS3Client().send(
     new DeleteObjectCommand({
       Bucket: storageEnv.bucketName,
