@@ -455,6 +455,7 @@ model Chat {
   chatType         ChatType          @map("chat_type")
   name             String?           @db.VarChar(255)
   avatarUrl        String?           @map("avatar_url") @db.Text
+  isRequest        Boolean           @default(false) @map("is_request")
   createdByUserId  String?           @map("created_by_user_id") @db.Uuid
   createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamp(6)
@@ -491,6 +492,7 @@ model Message {
   senderUserId            String             @map("sender_user_id") @db.Uuid
   messageType             MessageType        @map("message_type")
   content                 String?            @db.Text
+  reactions               Json               @default("{}") @map("reactions") @db.JsonB
   replyToMessageId        String?            @map("reply_to_message_id") @db.Uuid
   createdAt               DateTime           @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt               DateTime           @updatedAt @map("updated_at") @db.Timestamp(6)

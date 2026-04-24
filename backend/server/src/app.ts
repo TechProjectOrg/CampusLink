@@ -6,6 +6,7 @@ import postsRouter from './routes/posts';
 import searchRouter from './routes/search';
 import networkRouter from './routes/network';
 import notificationsRouter from './routes/notifications';
+import chatRouter from './routes/chat';
 import cors from 'cors';
 
 const app: Application = express();
@@ -24,6 +25,7 @@ app.use('/users', usersRouter);
 app.use('/search', searchRouter);
 app.use('/network', networkRouter);
 app.use('/notifications', notificationsRouter);
+app.use('/chat', chatRouter);
 
 app.get('/health', async (_req: Request, res: Response) => {
   try {
