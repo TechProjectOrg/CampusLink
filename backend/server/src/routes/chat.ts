@@ -15,6 +15,7 @@ import {
 } from '../lib/chat';
 import { uploadChatMediaToStorage } from '../lib/objectStorage';
 import { createNotification } from '../lib/notifications';
+import { encryptMessage, decryptMessage } from '../lib/encryption';
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -70,7 +71,7 @@ router.get('/conversations', async (req: Request, res: Response) => {
       participantId: r.other_user_id,
       participantName: r.other_username,
       participantAvatar: r.other_avatar,
-      lastMessage: r.last_message || 'No messages yet',
+      lastMessage: r.last_message ? decryptMessage(r.last_message) : 'No messages yet',
       timestamp: r.updated_at,
       unread: r.unread_count,
       isOnline: r.other_is_online,
@@ -137,7 +138,7 @@ router.get('/conversations/:chatId/messages', async (req: Request, res: Response
       senderName: m.sender_username,
       senderAvatar: m.sender_avatar,
       type: m.message_type,
-      content: m.content,
+      content: decryptMessage(m.content),
       reactions: m.reactions,
       timestamp: m.created_at,
       attachments: m.attachments || [],
@@ -164,9 +165,10 @@ router.post('/conversations/:chatId/messages', chatMessageRateLimiter, async (re
     const isParticipant = await isChatParticipant(userId, chatId);
     if (!isParticipant) return res.status(403).json({ message: 'Not a participant' });
 
+    const encryptedContent = encryptMessage(content);
     const rows = await prisma.$queryRaw<any[]>`
       INSERT INTO messages (chat_id, sender_user_id, message_type, content)
-      VALUES (${chatId}, ${userId}, 'text', ${content})
+      VALUES (${chatId}, ${userId}, 'text', ${encryptedContent})
       RETURNING message_id, created_at
     `;
     const messageId = rows[0].message_id;

@@ -47,6 +47,7 @@ import {
   apiSavePushSubscription,
   type ApiNotification,
 } from './lib/notificationsApi';
+import { apiFetchConversations } from './lib/chatApi';
 import {
   apiAddComment,
   apiAddReply,
@@ -375,7 +376,7 @@ export default function App() {
   const [opportunities, setOpportunities] = useState<Opportunity[]>(mockOpportunities);
   const [clubs, setClubs] = useState<Club[]>(mockClubs);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [conversations, setConversations] = useState(mockConversations);
+  const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [followGraph, setFollowGraph] = useState<FollowGraph>({
     followersByUserId: {},
     followingByUserId: {},
@@ -564,7 +565,9 @@ export default function App() {
         ...data.incomingRequests,
         ...data.outgoingRequests,
       ];
-      const newStudents = networkUsersToStudents(allNetworkUsers);
+      const uniqueUsersMap = new Map<string, NetworkUser>();
+      allNetworkUsers.forEach(u => uniqueUsersMap.set(u.userId, u));
+      const newStudents = networkUsersToStudents(Array.from(uniqueUsersMap.values()));
       setStudents((prev) => {
         const existingIds = new Set(prev.map((s) => s.id));
         const toAdd = newStudents.filter((s) => !existingIds.has(s.id));
@@ -613,13 +616,24 @@ export default function App() {
     }
   }, [authToken, currentUserId, hashtagPageTag, currentUser]);
 
+  const refreshConversations = useCallback(async () => {
+    if (!authToken) return;
+    try {
+      const convos = await apiFetchConversations(authToken, 'active');
+      setConversations(convos as any);
+    } catch (err) {
+      console.error('Failed to fetch conversations:', err);
+    }
+  }, [authToken]);
+
   useEffect(() => {
     if (auth.isAuthenticated && authToken) {
       refreshFollowGraph();
       refreshNotifications();
       refreshFeedPosts();
+      refreshConversations();
     }
-  }, [auth.isAuthenticated, authToken, refreshFollowGraph, refreshNotifications, refreshFeedPosts]);
+  }, [auth.isAuthenticated, authToken, refreshFollowGraph, refreshNotifications, refreshFeedPosts, refreshConversations]);
 
   useEffect(() => {
     if (!auth.isAuthenticated || !authToken) return;
@@ -637,15 +651,24 @@ export default function App() {
     socket.onmessage = (event) => {
       try {
         const parsed = JSON.parse(String(event.data)) as {
-          type?: 'notification:new' | 'notification:update';
-          payload?: ApiNotification;
+          type?: string;
+          payload?: any;
         };
 
-        if (!parsed?.payload || !parsed.type) return;
-        const local = apiNotificationToLocal(parsed.payload);
-        setNotifications((prev) => mergeRealtimeNotification(prev, local));
+        if (!parsed?.type || !parsed.payload) return;
+
+        if (parsed.type.startsWith('notification:')) {
+          const local = apiNotificationToLocal(parsed.payload);
+          setNotifications((prev) => mergeRealtimeNotification(prev, local));
+        } else if (parsed.type.startsWith('chat:')) {
+          window.dispatchEvent(new CustomEvent('campuslynk:chat', { detail: parsed }));
+          
+          if (parsed.type === 'chat:message' || parsed.type === 'chat:status') {
+            void refreshConversations();
+          }
+        }
       } catch (err) {
-        console.error('Failed to parse realtime notification payload:', err);
+        console.error('Failed to parse realtime payload:', err);
       }
     };
 
@@ -1232,6 +1255,10 @@ export default function App() {
     });
   };
 
+  const handleCreateChat = (conversation: ChatConversation) => {
+    setConversations(prev => [conversation, ...prev]);
+  };
+
   const handleViewProfile = (studentId: string) => {
     if (!studentId || typeof studentId !== 'string') {
       return;
@@ -1545,6 +1572,7 @@ export default function App() {
             currentUserId={currentUserId}
             onViewProfile={handleViewProfile}
             onChatClick={handleChatClick}
+            onCreateChat={handleCreateChat}
           />
         ) : activeTab === 'clubs' ? (
           <ClubsPage
