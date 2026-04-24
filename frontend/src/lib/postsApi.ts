@@ -205,6 +205,30 @@ export async function apiFetchPostById(postId: string, token?: string): Promise<
   return normalizeUserPost(data);
 }
 
+export async function apiFetchHashtagPosts(
+  hashtag: string,
+  token?: string,
+  limit = 50,
+  offset = 0,
+): Promise<UserPost[]> {
+  const response = await fetch(
+    `${API_BASE}/posts/hashtags/${encodeURIComponent(hashtag)}?limit=${encodeURIComponent(String(limit))}&offset=${encodeURIComponent(String(offset))}`,
+    {
+      headers: {
+        ...authHeaders(token),
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response));
+  }
+
+  const data = (await response.json().catch(() => [])) as unknown;
+  if (!Array.isArray(data)) return [];
+  return data.map((item) => normalizeUserPost(item));
+}
+
 export async function apiFetchUserPosts(userId: string, token?: string): Promise<UserPost[]> {
   return apiFetchProfilePosts(userId, token);
 }

@@ -68,7 +68,12 @@ async function searchUsers(currentUserId: string, q: string, limit: number, offs
 }
 
 async function searchHashtags(currentUserId: string, q: string, limit: number, offset: number) {
-  const pattern = `%${q}%`;
+  const normalized = q.trim().replace(/^#+/, '');
+  if (!normalized) {
+    return [];
+  }
+
+  const pattern = `%${normalized}%`;
 
   const rows = await prisma.$queryRaw<SearchHashtagRow[]>`
     SELECT

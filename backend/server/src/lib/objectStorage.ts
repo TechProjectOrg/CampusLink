@@ -8,6 +8,7 @@ interface StorageEnv {
   publicBaseUrl: string;
   profilePhotosPrefix: string;
   postMediaPrefix: string;
+  chatMediaPrefix: string;
   accessKeyId: string;
   secretAccessKey: string;
 }
@@ -68,6 +69,9 @@ function buildStorageEnv(): StorageEnv {
     postMediaPrefix:
       optionalEnv(['STORAGE_S3_POST_MEDIA_PREFIX', 'S3_POST_MEDIA_PREFIX']) ??
       'posts/media',
+    chatMediaPrefix:
+      optionalEnv(['STORAGE_S3_CHAT_MEDIA_PREFIX', 'S3_CHAT_MEDIA_PREFIX']) ??
+      'chat/media',
     accessKeyId,
     secretAccessKey,
   };
@@ -187,6 +191,47 @@ export async function deleteManagedPostMediaByUrl(mediaUrl: string | null): Prom
 
   const storageEnv = getStorageEnv();
   const prefix = `${storageEnv.postMediaPrefix}/`;
+  const prefixIdx = mediaUrl.indexOf(prefix);
+
+  if (prefixIdx === -1) return;
+
+  const key = mediaUrl.slice(prefixIdx);
+  await getS3Client().send(
+    new DeleteObjectCommand({
+      Bucket: storageEnv.bucketName,
+      Key: key,
+    })
+  );
+}
+
+export async function uploadChatMediaToStorage(params: {
+  userId: string;
+  fileBuffer: Buffer;
+  mimeType: string;
+}): Promise<string> {
+  const storageEnv = getStorageEnv();
+  const extension = extensionFromMime(params.mimeType);
+  const fileName = `${Date.now()}-${randomUUID()}.${extension}`;
+  const key = `${storageEnv.chatMediaPrefix}/${params.userId}/${fileName}`;
+
+  await getS3Client().send(
+    new PutObjectCommand({
+      Bucket: storageEnv.bucketName,
+      Key: key,
+      Body: params.fileBuffer,
+      ContentType: params.mimeType,
+      CacheControl: 'public,max-age=31536000,immutable',
+    })
+  );
+
+  return `${storageEnv.publicBaseUrl}/${key}`;
+}
+
+export async function deleteManagedChatMediaByUrl(mediaUrl: string | null): Promise<void> {
+  if (!mediaUrl) return;
+
+  const storageEnv = getStorageEnv();
+  const prefix = `${storageEnv.chatMediaPrefix}/`;
   const prefixIdx = mediaUrl.indexOf(prefix);
 
   if (prefixIdx === -1) return;

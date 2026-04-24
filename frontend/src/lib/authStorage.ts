@@ -41,3 +41,7 @@ export function clearStoredSession(): void {
     // ignore
   }
 }
+
+export function getAuthToken(): string | null {
+  return readStoredSession()?.token || null;
+}

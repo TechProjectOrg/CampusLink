@@ -10,7 +10,8 @@ export type NotificationType =
   | 'like'
   | 'comment'
   | 'reply'
-  | 'opportunity';
+  | 'opportunity'
+  | 'message';
 
 interface CreateNotificationParams {
   recipientUserId: string;

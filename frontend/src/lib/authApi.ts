@@ -1,6 +1,6 @@
 import type { ApiUserProfile, ApiUserSession, ApiUserSettings } from '../types';
 
-const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined)?.trim() || 'http://localhost:4000';
+export const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined)?.trim() || 'http://localhost:4000';
 
 export interface LoginResult {
   profile: ApiUserProfile;

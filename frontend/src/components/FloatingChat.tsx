@@ -6,6 +6,8 @@ import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
 import { ChatConversation } from '../types';
+import { apiFetchMessages, apiSendMessage, ChatMessageApi } from '../lib/chatApi';
+import { getAuthToken } from '../lib/authStorage';
 
 interface Message {
   id: string;
@@ -29,149 +31,69 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
   const [messageInput, setMessageInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Mock messages for each conversation
-  const [messages, setMessages] = useState<{ [key: string]: Message[] }>({
-    chat1: [
-      {
-        id: '1',
-        senderId: '1',
-        content: 'Hey! Want to team up for the hackathon?',
-        timestamp: new Date(Date.now() - 3600000).toISOString(),
-        isOwn: false
-      },
-      {
-        id: '2',
-        senderId: 'current',
-        content: 'Yeah, that sounds great! What tech stack are you thinking?',
-        timestamp: new Date(Date.now() - 3000000).toISOString(),
-        isOwn: true
-      },
-      {
-        id: '3',
-        senderId: '1',
-        content: 'I was thinking React + Python for ML. I can handle the ML part.',
-        timestamp: new Date(Date.now() - 2400000).toISOString(),
-        isOwn: false
-      },
-      {
-        id: '4',
-        senderId: 'current',
-        content: 'Perfect! I\'ll work on the frontend then.',
-        timestamp: new Date(Date.now() - 1800000).toISOString(),
-        isOwn: true
+  // Real messages for each conversation
+  const [messages, setMessages] = useState<{ [key: string]: ChatMessageApi[] }>({});
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+
+  // Load messages for the selected chat
+  useEffect(() => {
+    if (!selectedConversation) return;
+    if (messages[selectedConversation]) return;
+
+    let cancelled = false;
+    const token = getAuthToken();
+    if (!token) return;
+
+    setIsLoadingMessages(true);
+    apiFetchMessages(selectedConversation, token)
+      .then(fetchedMessages => {
+        if (!cancelled) {
+          setMessages(prev => ({ ...prev, [selectedConversation]: fetchedMessages }));
+        }
+      })
+      .catch(err => console.error('Failed to fetch messages', err))
+      .finally(() => {
+        if (!cancelled) setIsLoadingMessages(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [selectedConversation, messages]);
+
+  // Listen to real-time chat events
+  useEffect(() => {
+    const handleChatEvent = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const parsed = customEvent.detail;
+      
+      if (parsed.type === 'chat:message') {
+        const payload = parsed.payload;
+        if (!payload) return;
+        
+        const chatId = payload.chatId;
+        const mappedMessage: ChatMessageApi = {
+          id: payload.messageId,
+          senderId: payload.senderUserId,
+          senderName: payload.senderUsername,
+          senderAvatar: payload.senderProfilePhotoUrl,
+          type: payload.messageType,
+          content: payload.content,
+          reactions: payload.reactions,
+          timestamp: payload.createdAt,
+          attachments: payload.attachments || [],
+          isOwn: payload.senderUserId === currentUserId
+        };
+        
+        setMessages(prev => {
+          const currentList = prev[chatId] || [];
+          if (currentList.some(m => m.id === mappedMessage.id)) return prev;
+          return { ...prev, [chatId]: [...currentList, mappedMessage] };
+        });
       }
-    ],
-    chat2: [
-      {
-        id: '1',
-        senderId: '2',
-        content: 'Thanks for the UI feedback on my project!',
-        timestamp: new Date(Date.now() - 7200000).toISOString(),
-        isOwn: false
-      },
-      {
-        id: '2',
-        senderId: 'current',
-        content: 'No problem! The design looks great.',
-        timestamp: new Date(Date.now() - 6600000).toISOString(),
-        isOwn: true
-      }
-    ],
-    chat3: [
-      {
-        id: '1',
-        senderId: '3',
-        content: 'Can you help me with that DP problem?',
-        timestamp: new Date(Date.now() - 86400000).toISOString(),
-        isOwn: false
-      },
-      {
-        id: '2',
-        senderId: 'current',
-        content: 'Sure! Which problem is it?',
-        timestamp: new Date(Date.now() - 84600000).toISOString(),
-        isOwn: true
-      }
-    ],
-    chat4: [
-      {
-        id: '1',
-        senderId: '4',
-        content: 'Hey, are you coming to the IoT workshop tomorrow?',
-        timestamp: new Date(Date.now() - 1200000).toISOString(),
-        isOwn: false
-      },
-      {
-        id: '2',
-        senderId: 'current',
-        content: 'Yes! Looking forward to it.',
-        timestamp: new Date(Date.now() - 600000).toISOString(),
-        isOwn: true
-      }
-    ],
-    chat5: [
-      {
-        id: '1',
-        senderId: '6',
-        content: 'Remember the Flutter dev session on Friday!',
-        timestamp: new Date(Date.now() - 2400000).toISOString(),
-        isOwn: false
-      },
-      {
-        id: '2',
-        senderId: 'current',
-        content: 'Got it, thanks for the reminder!',
-        timestamp: new Date(Date.now() - 1800000).toISOString(),
-        isOwn: true
-      }
-    ],
-    group2: [
-      {
-        id: '1',
-        senderId: '3',
-        content: 'Meeting at 7 PM to discuss project ideas for the hackathon.',
-        timestamp: new Date(Date.now() - 3600000).toISOString(),
-        isOwn: false
-      },
-      {
-        id: '2',
-        senderId: 'current',
-        content: 'Sounds good! I\'ll be there.',
-        timestamp: new Date(Date.now() - 3000000).toISOString(),
-        isOwn: true
-      },
-      {
-        id: '3',
-        senderId: '6',
-        content: 'Great, see you all then!',
-        timestamp: new Date(Date.now() - 2400000).toISOString(),
-        isOwn: false
-      }
-    ],
-    group3: [
-      {
-        id: '1',
-        senderId: '1',
-        content: 'New tutorial on Next.js 14 out now!',
-        timestamp: new Date(Date.now() - 7200000).toISOString(),
-        isOwn: false
-      },
-      {
-        id: '2',
-        senderId: '2',
-        content: 'Oh, nice! I\'ll check it out.',
-        timestamp: new Date(Date.now() - 6600000).toISOString(),
-        isOwn: false
-      },
-      {
-        id: '3',
-        senderId: 'current',
-        content: 'Looks interesting, thanks for sharing!',
-        timestamp: new Date(Date.now() - 6000000).toISOString(),
-        isOwn: true
-      }
-    ]
-  });
+    };
+
+    window.addEventListener('campuslynk:chat', handleChatEvent);
+    return () => window.removeEventListener('campuslynk:chat', handleChatEvent);
+  }, [currentUserId]);
 
   const totalUnread = conversations.reduce((sum, conv) => sum + conv.unread, 0);
 
@@ -179,22 +101,42 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
     conv.participantName?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleSendMessage = (e?: React.FormEvent) => {
+  const handleSendMessage = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (messageInput.trim() && selectedConversation) {
-      const newMessage: Message = {
-        id: Date.now().toString(),
+      const content = messageInput.trim();
+      setMessageInput('');
+
+      const optimisticMessage: ChatMessageApi = {
+        id: `temp-${Date.now()}`,
         senderId: currentUserId,
-        content: messageInput,
+        senderName: 'You',
+        senderAvatar: null,
+        type: 'text',
+        content: content,
+        reactions: {},
         timestamp: new Date().toISOString(),
+        attachments: [],
         isOwn: true
       };
 
-      setMessages({
-        ...messages,
-        [selectedConversation]: [...(messages[selectedConversation] || []), newMessage]
-      });
-      setMessageInput('');
+      setMessages(prev => ({
+        ...prev,
+        [selectedConversation]: [...(prev[selectedConversation] || []), optimisticMessage]
+      }));
+
+      try {
+        const token = getAuthToken();
+        if (!token) return;
+        await apiSendMessage(selectedConversation, content, token);
+      } catch (err) {
+        console.error('Failed to send message:', err);
+        // Remove optimistic message on failure
+        setMessages(prev => ({
+          ...prev,
+          [selectedConversation]: (prev[selectedConversation] || []).filter(m => m.id !== optimisticMessage.id)
+        }));
+      }
     }
   };
 

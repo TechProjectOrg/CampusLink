@@ -8,6 +8,8 @@ import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
 import { NewChatModal } from './NewChatModal';
 import { GroupInfoPage } from './GroupInfoPage';
+import { apiFetchMessages, apiSendMessage, apiStartConversation, ChatMessageApi } from '../lib/chatApi';
+import { getAuthToken } from '../lib/authStorage';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -22,199 +24,79 @@ interface ChatPageProps {
   currentUserId: string;
   onViewProfile?: (studentId: string) => void;
   onChatClick?: (conversationId: string) => void;
+  onCreateChat?: (conversation: ChatConversation) => void;
 }
 
-export function ChatPage({ conversations, students, currentUserId, onViewProfile, onChatClick }: ChatPageProps) {
+export function ChatPage({ conversations, students, currentUserId, onViewProfile, onChatClick, onCreateChat }: ChatPageProps) {
   const [selectedChat, setSelectedChat] = useState<string | null>(conversations[0]?.id || null);
   const [message, setMessage] = useState('');
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
   const [viewingGroupInfo, setViewingGroupInfo] = useState<string | null>(null);
-  const [messages, setMessages] = useState<{ [key: string]: any[] }>(
-  {
-    chat1: [
-      {
-        id: '1',
-        senderId: '1',
-        content: 'Hey! Want to team up for the hackathon?',
-        timestamp: '2025-11-01T09:00:00Z',
-        isOwn: false
-      },
-      {
-        id: '2',
-        senderId: 'current',
-        content: 'Yeah, that sounds great! What tech stack are you thinking?',
-        timestamp: '2025-11-01T09:15:00Z',
-        isOwn: true
-      },
-      {
-        id: '3',
-        senderId: '1',
-        content: 'I was thinking React + Python for ML. I can handle the ML part.',
-        timestamp: '2025-11-01T09:20:00Z',
-        isOwn: false
-      },
-      {
-        id: '4',
-        senderId: 'current',
-        content: 'Perfect! I\'ll work on the frontend then. When should we start?',
-        timestamp: '2025-11-01T09:25:00Z',
-        isOwn: true
-      },
-      {
-        id: '5',
-        senderId: '1',
-        content: 'How about tomorrow? We can meet in the computer lab.',
-        timestamp: '2025-11-01T09:30:00Z',
-        isOwn: false
-      }
-    ],
-    chat2: [
-      {
-        id: '1',
-        senderId: '2',
-        content: 'Thanks for the UI feedback on my project!',
-        timestamp: '2025-10-31T16:00:00Z',
-        isOwn: false
-      },
-      {
-        id: '2',
-        senderId: 'current',
-        content: 'No problem! The design looks great. Love the color scheme.',
-        timestamp: '2025-10-31T16:15:00Z',
-        isOwn: true
-      },
-      {
-        id: '3',
-        senderId: '2',
-        content: 'I used Figma for the mockups. Happy to share the file if you want!',
-        timestamp: '2025-10-31T16:20:00Z',
-        isOwn: false
-      }
-    ],
-    chat3: [
-      {
-        id: '1',
-        senderId: '3',
-        content: 'Can you help me with that DP problem?',
-        timestamp: '2025-10-30T14:00:00Z',
-        isOwn: false
-      },
-      {
-        id: '2',
-        senderId: 'current',
-        content: 'Sure! Which problem is it?',
-        timestamp: '2025-10-30T14:10:00Z',
-        isOwn: true
-      },
-      {
-        id: '3',
-        senderId: '3',
-        content: 'The longest increasing subsequence one from yesterday\'s contest.',
-        timestamp: '2025-10-30T14:15:00Z',
-        isOwn: false
-      }
-    ],
-    chat4: [
-      {
-        id: '1',
-        senderId: '3',
-        content: 'Can you help me with that DP problem?',
-        timestamp: '2025-10-30T14:00:00Z',
-        isOwn: false
-      },
-      {
-        id: '2',
-        senderId: 'current',
-        content: 'Sure! Which problem is it?',
-        timestamp: '2025-10-30T14:10:00Z',
-        isOwn: true
-      },
-      {
-        id: '3',
-        senderId: '3',
-        content: 'The longest increasing subsequence one from yesterday\'s contest.',
-        timestamp: '2025-10-30T14:15:00Z',
-        isOwn: false
-      }
-    ],
-    chat5: [
-      {
-        id: '1',
-        senderId: '3',
-        content: 'Can you help me with that DP problem?',
-        timestamp: '2025-10-30T14:00:00Z',
-        isOwn: false
-      },
-      {
-        id: '2',
-        senderId: 'current',
-        content: 'Sure! Which problem is it?',
-        timestamp: '2025-10-30T14:10:00Z',
-        isOwn: true
-      },
-      {
-        id: '3',
-        senderId: '3',
-        content: 'The longest increasing subsequence one from yesterday\'s contest.',
-        timestamp: '2025-10-30T14:15:00Z',
-        isOwn: false
-      }
-    ],
-    group1: [
-      {
-        id: '1',
-        senderId: '1',
-        content: 'Hey team! I think we should focus on the backend API first.',
-        timestamp: '2025-11-02T10:00:00Z',
-        isOwn: false
-      },
-      {
-        id: '2',
-        senderId: '2',
-        content: 'Agreed! I can start working on the frontend mockups meanwhile.',
-        timestamp: '2025-11-02T10:15:00Z',
-        isOwn: false
-      },
-      {
-        id: '3',
-        senderId: 'current',
-        content: 'Sounds good! I\'ll set up the database schema today.',
-        timestamp: '2025-11-02T10:30:00Z',
-        isOwn: true
-      },
-      {
-        id: '4',
-        senderId: '5',
-        content: 'Perfect! I\'ll handle the deployment and CI/CD setup.',
-        timestamp: '2025-11-02T11:00:00Z',
-        isOwn: false
-      },
-      {
-        id: '5',
-        senderId: '1',
-        content: 'Let\'s have a quick sync call tonight at 8 PM?',
-        timestamp: '2025-11-02T14:30:00Z',
-        isOwn: false
-      },
-      {
-        id: '6',
-        senderId: 'current',
-        content: 'Works for me! 👍',
-        timestamp: '2025-11-02T15:00:00Z',
-        isOwn: true
-      },
-      {
-        id: '7',
-        senderId: '2',
-        content: 'Let\'s finalize the presentation slides by tomorrow',
-        timestamp: '2025-11-02T18:45:00Z',
-        isOwn: false
-      }
-    ]
-  });
+  const [messages, setMessages] = useState<{ [key: string]: ChatMessageApi[] }>({});
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
 
   const selectedConversation = conversations.find(c => c.id === selectedChat);
   const chatMessages = selectedChat ? messages[selectedChat] || [] : [];
+
+  // Load messages for the selected chat
+  useEffect(() => {
+    if (!selectedChat) return;
+    if (messages[selectedChat]) return; // Already loaded
+
+    let cancelled = false;
+    const token = getAuthToken();
+    if (!token) return;
+
+    setIsLoadingMessages(true);
+    apiFetchMessages(selectedChat, token)
+      .then(fetchedMessages => {
+        if (!cancelled) {
+          setMessages(prev => ({ ...prev, [selectedChat]: fetchedMessages }));
+        }
+      })
+      .catch(err => console.error('Failed to fetch messages', err))
+      .finally(() => {
+        if (!cancelled) setIsLoadingMessages(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [selectedChat, messages]);
+
+  // Listen to real-time chat events from App.tsx
+  useEffect(() => {
+    const handleChatEvent = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const parsed = customEvent.detail;
+      
+      if (parsed.type === 'chat:message') {
+        const payload = parsed.payload;
+        if (!payload) return;
+        
+        const chatId = payload.chatId;
+        const mappedMessage: ChatMessageApi = {
+          id: payload.messageId,
+          senderId: payload.senderUserId,
+          senderName: payload.senderUsername,
+          senderAvatar: payload.senderProfilePhotoUrl,
+          type: payload.messageType,
+          content: payload.content,
+          reactions: payload.reactions,
+          timestamp: payload.createdAt,
+          attachments: payload.attachments || [],
+          isOwn: payload.senderUserId === currentUserId
+        };
+        
+        setMessages(prev => {
+          const currentList = prev[chatId] || [];
+          if (currentList.some(m => m.id === mappedMessage.id)) return prev;
+          return { ...prev, [chatId]: [...currentList, mappedMessage] };
+        });
+      }
+    };
+
+    window.addEventListener('campuslynk:chat', handleChatEvent);
+    return () => window.removeEventListener('campuslynk:chat', handleChatEvent);
+  }, [currentUserId]);
 
   const messagesViewportRef = useRef<HTMLDivElement | null>(null);
 
@@ -229,22 +111,43 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     }
   }, [selectedChat, chatMessages.length]);
 
-  const handleSendMessage = () => {
+  const handleSendMessage = async () => {
     if (!message.trim() || !selectedChat) return;
 
-    const newMessage = {
-      id: Date.now().toString(),
+    const content = message.trim();
+    setMessage('');
+    
+    // Optimistic UI update
+    const optimisticMessage: ChatMessageApi = {
+      id: `temp-${Date.now()}`,
       senderId: currentUserId,
-      content: message,
+      senderName: 'You',
+      senderAvatar: null,
+      type: 'text',
+      content: content,
+      reactions: {},
       timestamp: new Date().toISOString(),
+      attachments: [],
       isOwn: true
     };
+    
+    setMessages(prev => ({
+      ...prev,
+      [selectedChat]: [...(prev[selectedChat] || []), optimisticMessage]
+    }));
 
-    setMessages({
-      ...messages,
-      [selectedChat]: [...(messages[selectedChat] || []), newMessage]
-    });
-    setMessage('');
+    try {
+      const token = getAuthToken();
+      if (!token) return;
+      await apiSendMessage(selectedChat, content, token);
+    } catch (err) {
+      console.error('Failed to send message:', err);
+      // Remove optimistic message on failure
+      setMessages(prev => ({
+        ...prev,
+        [selectedChat]: (prev[selectedChat] || []).filter(m => m.id !== optimisticMessage.id)
+      }));
+    }
   };
 
   const formatTime = (timestamp: string) => {
@@ -262,7 +165,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
-  const handleStartChat = (studentId: string) => {
+  const handleStartChat = async (studentId: string) => {
     // Check if conversation already exists
     const existingConvo = conversations.find(c => c.participantId === studentId);
     if (existingConvo) {
@@ -271,27 +174,30 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
       return;
     }
 
-    // Create new conversation (this would ideally trigger an update in App.tsx)
-    const student = students.find(s => s.id === studentId);
-    if (!student) return;
+    try {
+      const token = getAuthToken();
+      if (!token) return;
+      const { chatId } = await apiStartConversation(studentId, token);
 
-    const newConversation: ChatConversation = {
-      id: `chat${Date.now()}`,
-      participantId: studentId,
-      participantName: student.name,
-      participantAvatar: student.avatar,
-      lastMessage: 'Start a conversation...',
-      timestamp: new Date().toISOString(),
-      unread: 0,
-      isGroup: false
-    };
-
-    // For now, we're not adding to `conversations` here, as `App.tsx` owns that state.
-    // In a real app, `onStartChat` would likely be a prop from `App.tsx` that updates its state.
-    // For now, simply select the chat and let the parent reorder if it chooses.
-    setSelectedChat(newConversation.id);
-    setMessages({ ...messages, [newConversation.id]: [] });
-    setIsNewChatOpen(false);
+      const student = students.find(s => s.id === studentId);
+      if (student && onCreateChat) {
+        onCreateChat({
+          id: chatId,
+          participantId: studentId,
+          participantName: student.name,
+          participantAvatar: student.avatar,
+          lastMessage: 'Start a conversation...',
+          timestamp: new Date().toISOString(),
+          unread: 0,
+          isOnline: true
+        });
+      }
+      setSelectedChat(chatId);
+      setMessages(prev => ({ ...prev, [chatId]: [] }));
+      setIsNewChatOpen(false);
+    } catch (err) {
+      console.error('Failed to start conversation:', err);
+    }
   };
 
   const handleCreateGroup = (name: string, description: string, memberIds: string[]) => {
