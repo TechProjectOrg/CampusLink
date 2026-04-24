@@ -11,9 +11,24 @@ import cors from 'cors';
 
 const app: Application = express();
 
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173',
+  ...(process.env.CORS_ORIGINS ?? '')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+];
+
 app.use(
   cors({
-    origin: ['http://localhost:3000', 'http://localhost:5173'],
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error('Not allowed by CORS'));
+    },
   })
 );
 

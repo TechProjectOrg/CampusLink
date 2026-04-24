@@ -1,6 +1,7 @@
 import type { ApiUserProfile } from '../types';
+import { resolveApiBaseUrl } from './apiBase';
 
-const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.trim() ?? '';
+const API_BASE = resolveApiBaseUrl(import.meta.env.VITE_API_URL as string | undefined);
 
 function authHeaders(token?: string): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};

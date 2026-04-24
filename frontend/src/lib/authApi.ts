@@ -1,6 +1,7 @@
 import type { ApiUserProfile, ApiUserSession, ApiUserSettings } from '../types';
+import { resolveApiBaseUrl } from './apiBase';
 
-export const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.trim() ?? '';
+export const API_BASE = resolveApiBaseUrl(import.meta.env.VITE_API_URL as string | undefined);
 
 export interface LoginResult {
   profile: ApiUserProfile;

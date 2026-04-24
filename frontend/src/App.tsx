@@ -27,6 +27,7 @@ import { ProfileCard } from './components/ProfileCard';
 import { SuggestionsCard } from './components/SuggestionsCard';
 import { useAuth } from './context/AuthContext';
 import { apiFetchUserProfile } from './lib/authApi';
+import { resolveApiBaseUrl } from './lib/apiBase';
 import {
   apiGetFollowGraph,
   apiFollow,
@@ -544,7 +545,7 @@ export default function App() {
 
   const currentUserId = currentUser.id;
   const authToken = auth.session?.token;
-  const apiBase = (import.meta.env.VITE_API_URL as string | undefined)?.trim() ?? '';
+  const apiBase = resolveApiBaseUrl(import.meta.env.VITE_API_URL as string | undefined);
 
   // ============================================================
   // Fetch follow graph + notifications from backend on login
