@@ -1,4 +1,4 @@
-const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined)?.trim() || 'http://localhost:4000';
+const API_BASE = (import.meta.env.VITE_API_URL as string | undefined)?.trim() ?? '';
 
 function authHeaders(token?: string): HeadersInit {
   return token ? { Authorization: `Bearer ${token}` } : {};

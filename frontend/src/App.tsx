@@ -544,7 +544,7 @@ export default function App() {
 
   const currentUserId = currentUser.id;
   const authToken = auth.session?.token;
-  const apiBase = (import.meta.env.VITE_API_BASE as string | undefined)?.trim() || 'http://localhost:4000';
+  const apiBase = (import.meta.env.VITE_API_URL as string | undefined)?.trim() ?? '';
 
   // ============================================================
   // Fetch follow graph + notifications from backend on login
