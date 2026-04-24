@@ -15,11 +15,15 @@ function normalizeOrigin(origin: string): string {
   return origin.trim().replace(/\/+$/, '').toLowerCase();
 }
 
+function sanitizeOrigin(origin: string): string {
+  return origin.trim().replace(/^['\"]|['\"]$/g, '');
+}
+
 const allowedOrigins = new Set(
   [
     'http://localhost:3000',
     'http://localhost:5173',
-    ...(process.env.CORS_ORIGINS ?? '').split(',').map((origin) => origin.trim()),
+    ...(process.env.CORS_ORIGINS ?? '').split(',').map((origin) => sanitizeOrigin(origin)),
   ]
     .filter(Boolean)
     .map(normalizeOrigin)
