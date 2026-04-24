@@ -1,0 +1,582 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserType {
+  STUDENT @map("student")
+  ALUMNI  @map("alumni")
+}
+
+enum FollowRequestStatus {
+  PENDING   @map("pending")
+  ACCEPTED  @map("accepted")
+  REJECTED  @map("rejected")
+  CANCELLED @map("cancelled")
+}
+
+enum PostType {
+  GENERAL      @map("general")
+  OPPORTUNITY  @map("opportunity")
+  EVENT        @map("event")
+  CLUB_ACTIVITY @map("club_activity")
+}
+
+enum OpportunityType {
+  INTERNSHIP @map("internship")
+  HACKATHON  @map("hackathon")
+  EVENT      @map("event")
+  CONTEST    @map("contest")
+  CLUB       @map("club")
+}
+
+enum PostVisibility {
+  PUBLIC       @map("public")
+  FOLLOWERS    @map("followers")
+  CLUB_MEMBERS @map("club_members")
+}
+
+enum ClubMembershipRole {
+  OWNER  @map("owner")
+  ADMIN  @map("admin")
+  MEMBER @map("member")
+}
+
+enum ClubMembershipStatus {
+  ACTIVE  @map("active")
+  PENDING @map("pending")
+  REMOVED @map("removed")
+  LEFT    @map("left")
+}
+
+enum ChatType {
+  DIRECT @map("direct")
+  GROUP  @map("group")
+}
+
+enum ChatParticipantRole {
+  OWNER  @map("owner")
+  ADMIN  @map("admin")
+  MEMBER @map("member")
+}
+
+enum MessageType {
+  TEXT   @map("text")
+  IMAGE  @map("image")
+  FILE   @map("file")
+  SYSTEM @map("system")
+}
+
+model User {
+  userId                 String              @id @default(dbgenerated("gen_random_uuid()")) @map("user_id") @db.Uuid
+  username               String              @unique @db.VarChar(50)
+  email                  String              @unique @db.VarChar(100)
+  passwordHash           String              @map("password_hash") @db.VarChar(255)
+  userType               UserType            @map("user_type")
+  bio                    String?             @db.VarChar(500)
+  headline               String?             @db.VarChar(255)
+  profilePhotoUrl        String?             @map("profile_photo_url") @db.Text
+  coverPhotoUrl          String?             @map("cover_photo_url") @db.Text
+  isPrivate              Boolean             @default(false) @map("is_private")
+  isActive               Boolean             @default(true) @map("is_active")
+  isOnline               Boolean             @default(false) @map("is_online")
+  lastSeenAt             DateTime?           @map("last_seen_at") @db.Timestamp(6)
+  createdAt              DateTime            @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt              DateTime            @updatedAt @map("updated_at") @db.Timestamp(6)
+  studentProfile         StudentProfile?
+  alumniProfile          AlumniProfile?
+  settings               UserSetting?
+  sessions               UserSession[]
+  skills                 UserSkill[]
+  certifications         UserCertification[]
+  projects               UserProject[]
+  experiences            UserExperience[]
+  societies              UserSociety[]
+  achievements           UserAchievement[]
+  followRequestsSent     FollowRequest[]     @relation("FollowRequestRequester")
+  followRequestsReceived FollowRequest[]     @relation("FollowRequestTarget")
+  following              Follow[]            @relation("FollowFollower")
+  followers              Follow[]            @relation("FollowFollowed")
+  clubsCreated           Club[]              @relation("ClubCreator")
+  clubMemberships        ClubMembership[]
+  authoredPosts          Post[]              @relation("PostAuthor")
+  postLikes              PostLike[]
+  postComments           PostComment[]       @relation("PostCommentAuthor")
+  postCommentLikes       PostCommentLike[]
+  postSaves              PostSave[]
+  chatsCreated           Chat[]              @relation("ChatCreator")
+  chatParticipants       ChatParticipant[]
+  messagesSent           Message[]           @relation("MessageSender")
+  notifications          Notification[]      @relation("NotificationUser")
+  notificationsActed     Notification[]      @relation("NotificationActor")
+  pushSubscriptions      UserPushSubscription[]
+
+  @@index([email], map: "idx_users_email")
+  @@index([username], map: "idx_users_username")
+  @@index([userType], map: "idx_users_user_type")
+  @@map("users")
+}
+
+model UserSession {
+  sessionId    String    @id @default(dbgenerated("gen_random_uuid()")) @map("session_id") @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  userAgent    String?   @map("user_agent") @db.Text
+  browserName  String?   @map("browser_name") @db.VarChar(100)
+  platform     String?   @db.VarChar(100)
+  deviceName   String?   @map("device_name") @db.VarChar(100)
+  locationLabel String?  @map("location_label") @db.VarChar(255)
+  ipAddress    String?   @map("ip_address") @db.VarChar(45)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  lastSeenAt   DateTime? @map("last_seen_at") @db.Timestamp(6)
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamp(6)
+  user         User      @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId], map: "idx_user_sessions_user_id")
+  @@index([revokedAt], map: "idx_user_sessions_revoked_at")
+  @@map("user_sessions")
+}
+
+model StudentProfile {
+  userId    String   @id @map("user_id") @db.Uuid
+  branch    String   @db.VarChar(100)
+  year      Int
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  user      User     @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("student_profiles")
+}
+
+model AlumniProfile {
+  userId        String   @id @map("user_id") @db.Uuid
+  branch        String   @db.VarChar(100)
+  passingYear   Int      @map("passing_year")
+  currentStatus String?  @map("current_status") @db.VarChar(255)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  user          User     @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("alumni_profiles")
+}
+
+model UserSetting {
+  userId                      String   @id @map("user_id") @db.Uuid
+  emailNotifications          Boolean  @default(true) @map("email_notifications")
+  followRequestNotifications  Boolean  @default(true) @map("follow_request_notifications")
+  messageNotifications        Boolean  @default(true) @map("message_notifications")
+  opportunityAlerts           Boolean  @default(true) @map("opportunity_alerts")
+  clubUpdateNotifications     Boolean  @default(true) @map("club_update_notifications")
+  weeklyDigestEnabled         Boolean  @default(false) @map("weekly_digest_enabled")
+  showEmail                   Boolean  @default(true) @map("show_email")
+  showProjects                Boolean  @default(true) @map("show_projects")
+  allowMessages               Boolean  @default(true) @map("allow_messages")
+  createdAt                   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt                   DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  user                        User     @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("user_settings")
+}
+
+model UserSkill {
+  userSkillId String   @id @default(dbgenerated("gen_random_uuid()")) @map("user_skill_id") @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  name        String   @db.VarChar(100)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  user        User     @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([userId, name], map: "uq_user_skills_user_id_name")
+  @@index([userId], map: "idx_user_skills_user_id")
+  @@map("user_skills")
+}
+
+model UserCertification {
+  certificationId String    @id @default(dbgenerated("gen_random_uuid()")) @map("certification_id") @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  name            String    @db.VarChar(255)
+  issuer          String?   @db.VarChar(255)
+  description     String?   @db.Text
+  credentialUrl   String?   @map("credential_url") @db.Text
+  imageUrl        String?   @map("image_url") @db.Text
+  issuedAt        DateTime? @map("issued_at") @db.Timestamp(6)
+  expiresAt       DateTime? @map("expires_at") @db.Timestamp(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+  user            User      @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId], map: "idx_user_certifications_user_id")
+  @@map("user_certifications")
+}
+
+model UserProject {
+  projectId    String       @id @default(dbgenerated("gen_random_uuid()")) @map("project_id") @db.Uuid
+  userId       String       @map("user_id") @db.Uuid
+  title        String       @db.VarChar(255)
+  description  String       @db.Text
+  sourceUrl    String?      @map("source_url") @db.Text
+  demoUrl      String?      @map("demo_url") @db.Text
+  imageUrl     String?      @map("image_url") @db.Text
+  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamp(6)
+  user         User         @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+  projectTags  ProjectTag[]
+
+  @@index([userId], map: "idx_user_projects_user_id")
+  @@map("user_projects")
+}
+
+model ProjectTag {
+  projectId String      @map("project_id") @db.Uuid
+  tagName   String      @map("tag_name") @db.VarChar(100)
+  project   UserProject @relation(fields: [projectId], references: [projectId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([projectId, tagName])
+  @@index([tagName], map: "idx_project_tags_tag_name")
+  @@map("project_tags")
+}
+
+model UserExperience {
+  experienceId  String    @id @default(dbgenerated("gen_random_uuid()")) @map("experience_id") @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  roleTitle     String    @map("role_title") @db.VarChar(255)
+  organization  String    @db.VarChar(255)
+  description   String?   @db.Text
+  startDate     DateTime  @map("start_date") @db.Timestamp(6)
+  endDate       DateTime? @map("end_date") @db.Timestamp(6)
+  isCurrent     Boolean   @default(false) @map("is_current")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+  user          User      @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId], map: "idx_user_experiences_user_id")
+  @@map("user_experiences")
+}
+
+model UserSociety {
+  userSocietyId String    @id @default(dbgenerated("gen_random_uuid()")) @map("user_society_id") @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  societyName   String    @map("society_name") @db.VarChar(255)
+  roleName      String    @map("role_name") @db.VarChar(255)
+  startDate     DateTime? @map("start_date") @db.Timestamp(6)
+  endDate       DateTime? @map("end_date") @db.Timestamp(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+  user          User      @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId], map: "idx_user_societies_user_id")
+  @@map("user_societies")
+}
+
+model UserAchievement {
+  achievementId    String   @id @default(dbgenerated("gen_random_uuid()")) @map("achievement_id") @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  title            String   @db.VarChar(255)
+  description      String?  @db.Text
+  achievementYear  Int      @map("achievement_year")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  user             User     @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId], map: "idx_user_achievements_user_id")
+  @@map("user_achievements")
+}
+
+model FollowRequest {
+  followRequestId String              @id @default(dbgenerated("gen_random_uuid()")) @map("follow_request_id") @db.Uuid
+  requesterUserId String              @map("requester_user_id") @db.Uuid
+  targetUserId    String              @map("target_user_id") @db.Uuid
+  status          FollowRequestStatus
+  createdAt       DateTime            @default(now()) @map("created_at") @db.Timestamp(6)
+  respondedAt     DateTime?           @map("responded_at") @db.Timestamp(6)
+  cancelledAt     DateTime?           @map("cancelled_at") @db.Timestamp(6)
+  requester       User                @relation("FollowRequestRequester", fields: [requesterUserId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+  target          User                @relation("FollowRequestTarget", fields: [targetUserId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([requesterUserId], map: "idx_follow_requests_requester_user_id")
+  @@index([targetUserId], map: "idx_follow_requests_target_user_id")
+  @@index([status], map: "idx_follow_requests_status")
+  @@map("follow_requests")
+}
+
+model Follow {
+  followerUserId String   @map("follower_user_id") @db.Uuid
+  followedUserId String   @map("followed_user_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  follower       User     @relation("FollowFollower", fields: [followerUserId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+  followed       User     @relation("FollowFollowed", fields: [followedUserId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([followerUserId, followedUserId])
+  @@index([followedUserId], map: "idx_follows_followed_user_id")
+  @@index([followerUserId], map: "idx_follows_follower_user_id")
+  @@map("follows")
+}
+
+model Club {
+  clubId           String           @id @default(dbgenerated("gen_random_uuid()")) @map("club_id") @db.Uuid
+  name             String           @unique @db.VarChar(255)
+  description      String?          @db.Text
+  avatarUrl        String?          @map("avatar_url") @db.Text
+  createdByUserId  String           @map("created_by_user_id") @db.Uuid
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamp(6)
+  createdBy        User             @relation("ClubCreator", fields: [createdByUserId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+  memberships      ClubMembership[]
+  posts            Post[]           @relation("ClubPosts")
+
+  @@index([createdByUserId], map: "idx_clubs_created_by_user_id")
+  @@map("clubs")
+}
+
+model ClubMembership {
+  clubMembershipId String               @id @default(dbgenerated("gen_random_uuid()")) @map("club_membership_id") @db.Uuid
+  clubId           String               @map("club_id") @db.Uuid
+  userId           String               @map("user_id") @db.Uuid
+  role             ClubMembershipRole
+  status           ClubMembershipStatus
+  joinedAt         DateTime?            @map("joined_at") @db.Timestamp(6)
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamp(6)
+  club             Club                 @relation(fields: [clubId], references: [clubId], onDelete: Cascade, onUpdate: NoAction)
+  user             User                 @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([clubId, userId], map: "uq_club_memberships_club_id_user_id")
+  @@index([userId], map: "idx_club_memberships_user_id")
+  @@index([status], map: "idx_club_memberships_status")
+  @@map("club_memberships")
+}
+
+model Post {
+  postId           String          @id @default(dbgenerated("gen_random_uuid()")) @map("post_id") @db.Uuid
+  authorUserId     String          @map("author_user_id") @db.Uuid
+  clubId           String?         @map("club_id") @db.Uuid
+  postType         PostType        @default(GENERAL) @map("post_type")
+  opportunityType  OpportunityType? @map("opportunity_type")
+  title            String?         @db.VarChar(255)
+  contentText      String?         @map("content_text") @db.Text
+  companyName      String?         @map("company_name") @db.VarChar(255)
+  applicationDeadline DateTime?    @map("application_deadline") @db.Timestamp(6)
+  stipend          String?         @db.VarChar(100)
+  duration         String?         @db.VarChar(100)
+  eventDate        DateTime?       @map("event_date") @db.Timestamp(6)
+  location         String?         @db.VarChar(255)
+  externalUrl      String?         @map("external_url") @db.Text
+  visibility       PostVisibility  @default(PUBLIC)
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamp(6)
+  author           User            @relation("PostAuthor", fields: [authorUserId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+  club             Club?           @relation("ClubPosts", fields: [clubId], references: [clubId], onDelete: SetNull, onUpdate: NoAction)
+  media            PostMedia[]
+  likes            PostLike[]
+  comments         PostComment[]
+  saves            PostSave[]
+  hashtags         PostHashtag[]
+
+  @@index([authorUserId], map: "idx_posts_author_user_id")
+  @@index([clubId], map: "idx_posts_club_id")
+  @@index([createdAt], map: "idx_posts_created_at")
+  @@index([postType], map: "idx_posts_post_type")
+  @@map("posts")
+}
+
+model PostMedia {
+  postMediaId String   @id @default(dbgenerated("gen_random_uuid()")) @map("post_media_id") @db.Uuid
+  postId      String   @map("post_id") @db.Uuid
+  mediaUrl    String   @map("media_url") @db.Text
+  mediaType   String   @map("media_type") @db.VarChar(50)
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  post        Post     @relation(fields: [postId], references: [postId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([postId], map: "idx_post_media_post_id")
+  @@map("post_media")
+}
+
+model PostLike {
+  userId    String   @map("user_id") @db.Uuid
+  postId    String   @map("post_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  user      User     @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+  post      Post     @relation(fields: [postId], references: [postId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([userId, postId])
+  @@index([postId], map: "idx_post_likes_post_id")
+  @@map("post_likes")
+}
+
+model PostComment {
+  commentId        String        @id @default(dbgenerated("gen_random_uuid()")) @map("comment_id") @db.Uuid
+  postId           String        @map("post_id") @db.Uuid
+  authorUserId     String        @map("author_user_id") @db.Uuid
+  parentCommentId  String?       @map("parent_comment_id") @db.Uuid
+  content          String        @db.Text
+  createdAt        DateTime      @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt        DateTime      @updatedAt @map("updated_at") @db.Timestamp(6)
+  post             Post          @relation(fields: [postId], references: [postId], onDelete: Cascade, onUpdate: NoAction)
+  author           User          @relation("PostCommentAuthor", fields: [authorUserId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+  parentComment    PostComment?  @relation("PostCommentReplies", fields: [parentCommentId], references: [commentId], onDelete: Cascade, onUpdate: NoAction)
+  replies          PostComment[] @relation("PostCommentReplies")
+  likedBy          PostCommentLike[]
+
+  @@index([postId], map: "idx_post_comments_post_id")
+  @@index([authorUserId], map: "idx_post_comments_author_user_id")
+  @@index([parentCommentId], map: "idx_post_comments_parent_comment_id")
+  @@map("post_comments")
+}
+
+model PostCommentLike {
+  userId    String      @map("user_id") @db.Uuid
+  commentId String      @map("comment_id") @db.Uuid
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamp(6)
+  user      User        @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+  comment   PostComment @relation(fields: [commentId], references: [commentId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([userId, commentId])
+  @@index([commentId], map: "idx_post_comment_likes_comment_id")
+  @@map("post_comment_likes")
+}
+
+model PostSave {
+  userId    String   @map("user_id") @db.Uuid
+  postId    String   @map("post_id") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  user      User     @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+  post      Post     @relation(fields: [postId], references: [postId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([userId, postId])
+  @@index([postId], map: "idx_post_saves_post_id")
+  @@map("post_saves")
+}
+
+model Hashtag {
+  hashtagId    String        @id @default(dbgenerated("gen_random_uuid()")) @map("hashtag_id") @db.Uuid
+  tagName      String        @unique @map("tag_name") @db.VarChar(100)
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamp(6)
+  postHashtags PostHashtag[]
+
+  @@index([tagName], map: "idx_hashtags_tag_name")
+  @@map("hashtags")
+}
+
+model PostHashtag {
+  postId      String  @map("post_id") @db.Uuid
+  hashtagId   String  @map("hashtag_id") @db.Uuid
+  post        Post    @relation(fields: [postId], references: [postId], onDelete: Cascade, onUpdate: NoAction)
+  hashtag     Hashtag @relation(fields: [hashtagId], references: [hashtagId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([postId, hashtagId])
+  @@index([hashtagId], map: "idx_post_hashtags_hashtag_id")
+  @@map("post_hashtags")
+}
+
+model Chat {
+  chatId           String            @id @default(dbgenerated("gen_random_uuid()")) @map("chat_id") @db.Uuid
+  chatType         ChatType          @map("chat_type")
+  name             String?           @db.VarChar(255)
+  avatarUrl        String?           @map("avatar_url") @db.Text
+  isRequest        Boolean           @default(false) @map("is_request")
+  createdByUserId  String?           @map("created_by_user_id") @db.Uuid
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamp(6)
+  createdBy        User?             @relation("ChatCreator", fields: [createdByUserId], references: [userId], onDelete: SetNull, onUpdate: NoAction)
+  participants     ChatParticipant[]
+  messages         Message[]
+
+  @@index([createdByUserId], map: "idx_chats_created_by_user_id")
+  @@map("chats")
+}
+
+model ChatParticipant {
+  chatParticipantId String              @id @default(dbgenerated("gen_random_uuid()")) @map("chat_participant_id") @db.Uuid
+  chatId            String              @map("chat_id") @db.Uuid
+  userId            String              @map("user_id") @db.Uuid
+  role              ChatParticipantRole
+  joinedAt          DateTime            @map("joined_at") @db.Timestamp(6)
+  leftAt            DateTime?           @map("left_at") @db.Timestamp(6)
+  lastReadMessageId String?             @map("last_read_message_id") @db.Uuid
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamp(6)
+  chat              Chat                @relation(fields: [chatId], references: [chatId], onDelete: Cascade, onUpdate: NoAction)
+  user              User                @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+  lastReadMessage   Message?            @relation("ChatParticipantLastReadMessage", fields: [lastReadMessageId], references: [messageId], onDelete: SetNull, onUpdate: NoAction)
+
+  @@unique([chatId, userId], map: "uq_chat_participants_chat_id_user_id")
+  @@index([userId], map: "idx_chat_participants_user_id")
+  @@index([lastReadMessageId], map: "idx_chat_participants_last_read_message_id")
+  @@map("chat_participants")
+}
+
+model Message {
+  messageId               String             @id @default(dbgenerated("gen_random_uuid()")) @map("message_id") @db.Uuid
+  chatId                  String             @map("chat_id") @db.Uuid
+  senderUserId            String             @map("sender_user_id") @db.Uuid
+  messageType             MessageType        @map("message_type")
+  content                 String?            @db.Text
+  reactions               Json               @default("{}") @map("reactions") @db.JsonB
+  replyToMessageId        String?            @map("reply_to_message_id") @db.Uuid
+  createdAt               DateTime           @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt               DateTime           @updatedAt @map("updated_at") @db.Timestamp(6)
+  deletedAt               DateTime?          @map("deleted_at") @db.Timestamp(6)
+  chat                    Chat               @relation(fields: [chatId], references: [chatId], onDelete: Cascade, onUpdate: NoAction)
+  sender                  User               @relation("MessageSender", fields: [senderUserId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+  replyToMessage          Message?           @relation("MessageReplies", fields: [replyToMessageId], references: [messageId], onDelete: SetNull, onUpdate: NoAction)
+  replies                 Message[]          @relation("MessageReplies")
+  attachments             MessageAttachment[]
+  lastReadByParticipants  ChatParticipant[]  @relation("ChatParticipantLastReadMessage")
+
+  @@index([chatId], map: "idx_messages_chat_id")
+  @@index([senderUserId], map: "idx_messages_sender_user_id")
+  @@index([replyToMessageId], map: "idx_messages_reply_to_message_id")
+  @@map("messages")
+}
+
+model MessageAttachment {
+  messageAttachmentId String   @id @default(dbgenerated("gen_random_uuid()")) @map("message_attachment_id") @db.Uuid
+  messageId           String   @map("message_id") @db.Uuid
+  fileUrl             String   @map("file_url") @db.Text
+  fileType            String   @map("file_type") @db.VarChar(50)
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  message             Message  @relation(fields: [messageId], references: [messageId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([messageId], map: "idx_message_attachments_message_id")
+  @@map("message_attachments")
+}
+
+model Notification {
+  notificationId   String    @id @default(dbgenerated("gen_random_uuid()")) @map("notification_id") @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  actorUserId      String?   @map("actor_user_id") @db.Uuid
+  notificationType String    @map("notification_type") @db.VarChar(50)
+  title            String    @db.VarChar(255)
+  message          String    @db.Text
+  entityType       String?   @map("entity_type") @db.VarChar(50)
+  entityId         String?   @map("entity_id") @db.Text
+  isRead           Boolean   @default(false) @map("is_read")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  readAt           DateTime? @map("read_at") @db.Timestamp(6)
+  user             User      @relation("NotificationUser", fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+  actorUser        User?     @relation("NotificationActor", fields: [actorUserId], references: [userId], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([userId], map: "idx_notifications_user_id")
+  @@index([actorUserId], map: "idx_notifications_actor_user_id")
+  @@index([notificationType], map: "idx_notifications_notification_type")
+  @@index([isRead], map: "idx_notifications_is_read")
+  @@map("notifications")
+}
+
+model UserPushSubscription {
+  pushSubscriptionId String    @id @default(dbgenerated("gen_random_uuid()")) @map("push_subscription_id") @db.Uuid
+  userId             String    @map("user_id") @db.Uuid
+  endpoint           String    @unique @db.Text
+  p256dhKey          String    @map("p256dh_key") @db.Text
+  authKey            String    @map("auth_key") @db.Text
+  userAgent          String?   @map("user_agent") @db.Text
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+  revokedAt          DateTime? @map("revoked_at") @db.Timestamp(6)
+  user               User      @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([userId], map: "idx_user_push_subscriptions_user_id")
+  @@index([revokedAt], map: "idx_user_push_subscriptions_revoked_at")
+  @@map("user_push_subscriptions")
+}
