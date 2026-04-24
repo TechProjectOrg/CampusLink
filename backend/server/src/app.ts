@@ -21,18 +21,10 @@ app.use(express.json());
 
 app.get('/health', async (_req: Request, res: Response) => {
   try {
-    // Simple DB check; if this fails, Prisma/PostgreSQL is not reachable
     await prisma.$queryRaw`SELECT 1`;
-    res.status(200).json({ status: 'ok', db: 'up' });
-  } catch (err: any) {
-    console.error('Health check failed:', err);
-    res.status(500).json({ 
-      status: 'error', 
-      db: 'down',
-      errorName: err?.name || 'UnknownError',
-      errorMessage: err?.message || String(err),
-      errorCode: err?.code
-    });
+    res.status(200).json({ server: 'up', db: 'up' });
+  } catch {
+    res.status(500).json({ server: 'up', db: 'down' });
   }
 });
 
