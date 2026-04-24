@@ -11,23 +11,28 @@ import cors from 'cors';
 
 const app: Application = express();
 
-const allowedOrigins = [
-  'http://localhost:3000',
-  'http://localhost:5173',
-  ...(process.env.CORS_ORIGINS ?? '')
-    .split(',')
-    .map((origin) => origin.trim())
-    .filter(Boolean),
-];
+function normalizeOrigin(origin: string): string {
+  return origin.trim().replace(/\/+$/, '').toLowerCase();
+}
+
+const allowedOrigins = new Set(
+  [
+    'http://localhost:3000',
+    'http://localhost:5173',
+    ...(process.env.CORS_ORIGINS ?? '').split(',').map((origin) => origin.trim()),
+  ]
+    .filter(Boolean)
+    .map(normalizeOrigin)
+);
 
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin || allowedOrigins.has(normalizeOrigin(origin))) {
         callback(null, true);
         return;
       }
-      callback(new Error('Not allowed by CORS'));
+      callback(null, false);
     },
   })
 );
