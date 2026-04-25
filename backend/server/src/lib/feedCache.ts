@@ -162,8 +162,12 @@ function feedKey(userId: string): string {
   return `feed:user:${userId}:ids`;
 }
 
+function feedWarmedKey(userId: string): string {
+  return `${feedKey(userId)}:warmed`;
+}
+
 export async function invalidateUserFeedCache(userId: string): Promise<void> {
-  await cacheDelete(feedKey(userId), `${feedKey(userId)}:warmed`);
+  await cacheDelete(feedKey(userId), feedWarmedKey(userId));
 }
 
 function postSnapshotKey(postId: string): string {
@@ -446,15 +450,18 @@ export async function fetchPostIdsByQuery(
   const hashtagPattern = query.hashtag ? query.hashtag.trim().toLowerCase() : null;
 
   if (query.followedFeed && !hashtagPattern) {
-    const cached = await cacheZRevRange(feedKey(viewerUserId), query.offset, query.offset + query.limit - 1);
-    if (cached && cached.length > 0) return cached;
+    const warmed = await cacheGetJson<{ warmedAt: string }>(feedWarmedKey(viewerUserId));
+    if (warmed) {
+      const cached = await cacheZRevRange(feedKey(viewerUserId), query.offset, query.offset + query.limit - 1);
+      if (cached) return cached;
+    }
 
     const warmRows = await fetchFeedIdRowsFromDb(viewerUserId, Math.max(query.limit + query.offset, 100), 0);
     await cacheZAddMany(
       feedKey(viewerUserId),
       warmRows.map((row) => ({ score: row.created_at.getTime(), member: row.post_id })),
     );
-    await cacheSetJson(`${feedKey(viewerUserId)}:warmed`, { warmedAt: new Date().toISOString() }, FEED_IDS_TTL_SECONDS);
+    await cacheSetJson(feedWarmedKey(viewerUserId), { warmedAt: new Date().toISOString() }, FEED_IDS_TTL_SECONDS);
     return warmRows.slice(query.offset, query.offset + query.limit).map((row) => row.post_id);
   }
 

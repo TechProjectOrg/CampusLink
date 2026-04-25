@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Navbar } from './components/Navbar';
 import { AuthPage } from './components/AuthPage';
 import { FeedPage } from './components/FeedPage';
@@ -586,31 +586,52 @@ export default function App() {
   const openedPostCommentsRef = useRef<DiscussionPageState<Comment>>(createInitialDiscussionPageState<Comment>());
   const openedPostRepliesRef = useRef<Record<string, ReplyThreadState>>({});
 
+  const clearSessionScopedState = useCallback(() => {
+    setStudents(auth.currentUser ? [auth.currentUser] : []);
+    setOpportunities([]);
+    setHashtagOpportunities([]);
+    setNotifications([]);
+    setConversations([]);
+    setFollowGraph({
+      followersByUserId: {},
+      followingByUserId: {},
+      incomingRequestsByUserId: {},
+      outgoingRequestsByUserId: {},
+    });
+    setRequestIdMap({});
+    setViewingProfileId(null);
+    setOpenedPost(null);
+    setOpenedPostId(null);
+    setOpenedPostComments(createInitialDiscussionPageState<Comment>());
+    setOpenedPostRepliesByCommentId({});
+    setFocusedCommentId(null);
+    setHashtagPageTag(null);
+    setSelectedHashtag(null);
+  }, [auth.currentUser]);
+
   // Always land on homescreen after a successful login/signup.
-  useEffect(() => {
+  useLayoutEffect(() => {
     const wasAuthenticated = prevAuthenticatedRef.current;
     const isAuthenticated = auth.isAuthenticated;
 
     // Transition: logged in
     if (!wasAuthenticated && isAuthenticated) {
-      setViewingProfileId(null);
+      clearSessionScopedState();
       setSearchQuery('');
-      setSelectedHashtag(null);
       setActiveTab('feed');
       window.history.pushState({ tab: 'feed' }, '', '/feed');
     }
 
     // Transition: logged out (optional, but avoids restoring old tab on next login)
     if (wasAuthenticated && !isAuthenticated) {
-      setViewingProfileId(null);
+      clearSessionScopedState();
       setSearchQuery('');
-      setSelectedHashtag(null);
       setActiveTab('feed');
       window.history.pushState({ tab: 'feed' }, '', '/feed');
     }
 
     prevAuthenticatedRef.current = isAuthenticated;
-  }, [auth.isAuthenticated]);
+  }, [auth.isAuthenticated, clearSessionScopedState]);
   
   useEffect(() => {
     const setTabFromPath = () => {
