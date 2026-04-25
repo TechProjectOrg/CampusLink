@@ -1,7 +1,13 @@
 import { ChatMessageApi } from './chatApi';
 
-export const CHAT_EMOJIS = ['😀', '😂', '😊', '😍', '😎', '🥳', '😢', '😡', '👍', '👏', '🙏', '🔥', '💯', '❤️', '🎉', '🤔', '👀', '🙌', '✨', '✅', '⭐', '💪', '😮', '😅'];
-export const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '👏'];
+export const REACTION_EMOJIS = [
+  { emoji: '\u{2764}\u{FE0F}', name: 'heart' },
+  { emoji: '\u{1F602}', name: 'face with tears of joy' },
+  { emoji: '\u{1F62E}', name: 'surprised face' },
+  { emoji: '\u{1F622}', name: 'crying face' },
+  { emoji: '\u{1F621}', name: 'angry face' },
+  { emoji: '\u{1F44D}', name: 'thumbs up' },
+];
 
 export function mapRealtimeChatMessage(payload: any, currentUserId: string): ChatMessageApi {
   return {

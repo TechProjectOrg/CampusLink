@@ -10,7 +10,8 @@ import { NewChatModal } from './NewChatModal';
 import { GroupInfoPage } from './GroupInfoPage';
 import { apiFetchMessages, apiMarkChatRead, apiReactToMessage, apiSendImageMessage, apiSendMessage, apiStartConversation, ChatMessageApi } from '../lib/chatApi';
 import { getAuthToken } from '../lib/authStorage';
-import { CHAT_EMOJIS, REACTION_EMOJIS, formatSeenTime, mapRealtimeChatMessage, mergeChatMessageList, summarizeReply } from '../lib/chatUi';
+import { REACTION_EMOJIS, formatSeenTime, mapRealtimeChatMessage, mergeChatMessageList, summarizeReply } from '../lib/chatUi';
+import { EmojiPicker } from './chat/EmojiPicker';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import {
   DropdownMenu,
@@ -590,10 +591,10 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                             <AvatarFallback>{selectedConversation.participantName[0]}</AvatarFallback>
                           </Avatar>
                         )}
-                        <div className={`max-w-[75%] md:max-w-md ${msg.isOwn ? 'order-2' : 'order-1'}`}>
-                          <div className="group relative">
+                        <div className={`max-w-[92%] md:max-w-[40rem] ${msg.isOwn ? 'order-2' : 'order-1'}`}>
+                          <div className={`group flex items-start gap-2 ${msg.isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
                             <div
-                              className={`rounded-3xl px-3 py-2 md:px-4 md:py-2.5 ${
+                              className={`min-w-0 max-w-[75vw] rounded-3xl px-3 py-2 md:max-w-md md:px-4 md:py-2.5 ${
                                 msg.isOwn
                                   ? 'bg-gradient-to-br from-primary to-secondary text-white'
                                   : 'bg-gray-100 text-gray-900'
@@ -615,37 +616,54 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                                 <p className="text-sm break-words">{msg.content}</p>
                               )}
                             </div>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button className={`absolute top-1/2 -translate-y-1/2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 ${msg.isOwn ? '-left-8' : '-right-8'}`} aria-label="Message actions">
-                                  <MoreVertical className="w-4 h-4 text-gray-400" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align={msg.isOwn ? 'end' : 'start'} className="w-40">
-                                <DropdownMenuItem onClick={() => setReplyingTo(msg)}>
-                                  <Reply className="w-4 h-4 mr-2" />
-                                  Reply
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                                <div className="grid grid-cols-6 gap-1 p-2">
-                                  {REACTION_EMOJIS.map(emoji => (
-                                    <button
-                                      key={emoji}
-                                      type="button"
-                                      className="rounded-md p-1 text-base hover:bg-gray-100"
-                                      onClick={() => handleReactToMessage(msg.id, emoji)}
-                                    >
-                                      {emoji}
-                                    </button>
-                                  ))}
-                                </div>
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem onClick={() => window.alert('Message reported. Our moderation team will review it soon.')} className="text-destructive focus:text-destructive">
-                                  <Flag className="w-4 h-4 mr-2" />
-                                  Report
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                            <div className={`mt-1 flex shrink-0 items-center gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100 ${msg.isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <button type="button" className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-gray-700 shadow-sm ring-1 ring-gray-200 hover:bg-gray-50" aria-label="React to message">
+                                    <Smile className="h-4 w-4" />
+                                  </button>
+                                </PopoverTrigger>
+                                <PopoverContent align="center" side="top" className="w-auto rounded-full border-gray-200 p-2 shadow-lg">
+                                  <div className="flex items-center gap-1">
+                                    {REACTION_EMOJIS.map(item => (
+                                      <button
+                                        key={item.emoji}
+                                        type="button"
+                                        title={item.name}
+                                        className="flex h-10 w-10 items-center justify-center rounded-full text-2xl hover:bg-gray-100"
+                                        onClick={() => handleReactToMessage(msg.id, item.emoji)}
+                                      >
+                                        {item.emoji}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
+                              <button type="button" onClick={() => setReplyingTo(msg)} className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-gray-700 shadow-sm ring-1 ring-gray-200 hover:bg-gray-50" aria-label="Reply">
+                                <Reply className="h-4 w-4" />
+                              </button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button type="button" className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-gray-700 shadow-sm ring-1 ring-gray-200 hover:bg-gray-50" aria-label="More message actions">
+                                    <MoreVertical className="h-4 w-4" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align={msg.isOwn ? 'end' : 'start'} className="w-44">
+                                  <DropdownMenuItem onClick={() => setReplyingTo(msg)}>
+                                    <Reply className="w-4 h-4 mr-2" />
+                                    Reply
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => navigator.clipboard?.writeText(msg.content ?? '')} disabled={!msg.content}>
+                                    Copy
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem onClick={() => window.alert('Message reported. Our moderation team will review it soon.')} className="text-destructive focus:text-destructive">
+                                    <Flag className="w-4 h-4 mr-2" />
+                                    Report
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
                           </div>
                           {Object.entries(msg.reactions || {}).length > 0 && (
                             <div className={`mt-1 flex flex-wrap gap-1 px-2 ${msg.isOwn ? 'justify-end' : 'justify-start'}`}>
@@ -721,19 +739,8 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                         <Smile className="w-4 h-4 md:w-5 md:h-5 text-gray-500" />
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent align="end" className="w-64 p-2">
-                      <div className="grid grid-cols-6 gap-1">
-                        {CHAT_EMOJIS.map(emoji => (
-                          <button
-                            key={emoji}
-                            type="button"
-                            onClick={() => appendEmoji(emoji)}
-                            className="rounded-md p-2 text-lg hover:bg-gray-100"
-                          >
-                            {emoji}
-                          </button>
-                        ))}
-                      </div>
+                    <PopoverContent align="end" className="w-auto p-3">
+                      <EmojiPicker onSelect={appendEmoji} />
                     </PopoverContent>
                   </Popover>
                 </div>
