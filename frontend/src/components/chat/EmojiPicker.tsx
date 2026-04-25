@@ -22,33 +22,6 @@ export function EmojiPicker({ onSelect, compact = false }: EmojiPickerProps) {
 
   return (
     <div className="chat-emoji-picker">
-      <style>
-        {`
-          .chat-emoji-picker .epr-main {
-            position: relative;
-            padding-bottom: 44px;
-          }
-
-          .chat-emoji-picker .epr-header {
-            padding-bottom: 0;
-          }
-
-          .chat-emoji-picker .epr-category-nav {
-            position: absolute;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            z-index: 5;
-            border-top: 1px solid var(--epr-picker-border-color);
-            background: var(--epr-bg-color);
-            padding: 6px 10px;
-          }
-
-          .chat-emoji-picker .epr-body {
-            overscroll-behavior: contain;
-          }
-        `}
-      </style>
       <ReactEmojiPicker
         className="chat-epr-main"
         width={width}
