@@ -526,7 +526,8 @@ router.put('/conversations/:chatId/messages/:messageId/reaction', async (req: Re
 // Soft-deletes a message if requested by the sender within 24 hours of creation
 router.delete('/conversations/:chatId/messages/:messageId', async (req: AuthedRequest, res: Response) => {
   try {
-    const { chatId, messageId } = req.params;
+    const chatId = String(req.params.chatId);
+    const messageId = String(req.params.messageId);
     const userId = req.auth?.userId;
 
     if (!userId) {

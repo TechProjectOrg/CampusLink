@@ -3,6 +3,7 @@ import { WebSocketServer, type WebSocket } from 'ws';
 import prisma from '../prisma';
 import { verifyAuthToken } from './auth';
 import { emitTypingIndicator, getChatParticipantIds } from './chat';
+import { createRedisPublisher, createRedisSubscriber } from './cache';
 
 // ---------------------------------------------------------------------------
 // Socket registry — exported so lib/chat.ts can emit chat events directly
@@ -17,17 +18,28 @@ export const socketsByUserId = new Map<string, Set<WebSocket>>();
 type RealtimeEnvelopeType =
   | 'notification:new'
   | 'notification:update'
+  | 'feed:post_created'
+  | 'feed:post_updated'
+  | 'feed:post_deleted'
+  | 'feed:post_liked'
+  | 'feed:post_unliked'
+  | 'feed:comment_created'
+  | 'feed:reply_created'
   | 'chat:message'
   | 'chat:typing'
   | 'chat:read'
   | 'chat:status'
   | 'chat:reaction'
+  | 'chat:delete'
   | 'chat:request_accepted';
 
 interface RealtimeEnvelope {
   type: RealtimeEnvelopeType;
   payload: unknown;
 }
+
+const FEED_EVENTS_CHANNEL = 'feed:events';
+const feedEventPublisher = createRedisPublisher();
 
 // ---------------------------------------------------------------------------
 // Inbound message types (sent by clients over the WebSocket)
@@ -194,6 +206,22 @@ export function emitToUser(userId: string, event: RealtimeEnvelope): void {
   }
 }
 
+export function emitFeedEvent(userIds: string[], event: RealtimeEnvelope): void {
+  const uniqueUserIds = Array.from(new Set(userIds));
+  if (feedEventPublisher) {
+    const pubsubPayload = JSON.stringify({ userIds: uniqueUserIds, event });
+
+    feedEventPublisher
+      .publish(FEED_EVENTS_CHANNEL, pubsubPayload)
+      .catch((err) => console.warn('Failed to publish feed realtime event:', err));
+    return;
+  }
+
+  for (const userId of uniqueUserIds) {
+    emitToUser(userId, event);
+  }
+}
+
 /**
  * Legacy shim used by lib/notifications.ts — keeps existing call sites working.
  */
@@ -218,6 +246,23 @@ export function isUserOnline(userId: string): boolean {
 
 export function initializeRealtimeServer(server: HttpServer): void {
   const wss = new WebSocketServer({ server, path: '/ws' });
+  const feedEventSubscriber = createRedisSubscriber();
+
+  feedEventSubscriber
+    ?.subscribe(FEED_EVENTS_CHANNEL)
+    .catch((err) => console.warn('Failed to subscribe to feed realtime events:', err));
+
+  feedEventSubscriber?.on('message', (_channel, raw) => {
+    try {
+      const parsed = JSON.parse(raw) as { userIds?: string[]; event?: RealtimeEnvelope };
+      if (!Array.isArray(parsed.userIds) || !parsed.event) return;
+      for (const userId of parsed.userIds) {
+        emitToUser(userId, parsed.event);
+      }
+    } catch (err) {
+      console.warn('Failed to relay feed realtime event:', err);
+    }
+  });
 
   wss.on('connection', async (socket, req) => {
     const requestUrl = req.url ? new URL(req.url, 'http://localhost') : null;

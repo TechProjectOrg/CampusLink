@@ -26,11 +26,17 @@ export interface PostComment {
   parentCommentId: string | null;
   content: string;
   likeCount: number;
+  replyCount?: number;
   isLikedByMe: boolean;
   canDelete: boolean;
   replies: PostComment[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface CommentsPage {
+  comments: PostComment[];
+  nextCursor: string | null;
 }
 
 export interface UserPost {
@@ -121,6 +127,7 @@ function normalizeComment(raw: any): PostComment {
     parentCommentId: raw?.parentCommentId ? String(raw.parentCommentId) : null,
     content: String(raw?.content ?? ''),
     likeCount: Number.isFinite(Number(raw?.likeCount)) ? Number(raw.likeCount) : 0,
+    replyCount: Number.isFinite(Number(raw?.replyCount)) ? Number(raw.replyCount) : undefined,
     isLikedByMe: Boolean(raw?.isLikedByMe),
     canDelete: Boolean(raw?.canDelete),
     replies: Array.isArray(raw?.replies) ? raw.replies.map((item: any) => normalizeComment(item)) : [],
@@ -170,26 +177,41 @@ function normalizeUserPost(raw: any): UserPost {
   };
 }
 
+const pendingFeedRequests = new Map<string, Promise<UserPost[]>>();
+
 export async function apiFetchFeedPosts(token?: string, hashtag?: string): Promise<UserPost[]> {
   const params = new URLSearchParams();
   if (hashtag?.trim()) {
     params.set('hashtag', hashtag.trim());
   }
 
-  const response = await fetch(`${API_BASE}/posts/feed${params.toString() ? `?${params}` : ''}`, {
-    headers: {
-      ...authHeaders(token),
-    },
-  });
+  const requestKey = `${token ?? 'anonymous'}:${hashtag?.trim() ?? ''}`;
+  const pending = pendingFeedRequests.get(requestKey);
+  if (pending) return pending;
 
-  if (!response.ok) {
-    throw new Error(await parseErrorMessage(response));
+  const request = (async () => {
+    const response = await fetch(`${API_BASE}/posts/feed${params.toString() ? `?${params}` : ''}`, {
+      headers: {
+        ...authHeaders(token),
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(await parseErrorMessage(response));
+    }
+
+    const data = (await response.json().catch(() => [])) as unknown;
+    if (!Array.isArray(data)) return [];
+
+    return data.map((item) => normalizeUserPost(item));
+  })();
+
+  pendingFeedRequests.set(requestKey, request);
+  try {
+    return await request;
+  } finally {
+    pendingFeedRequests.delete(requestKey);
   }
-
-  const data = (await response.json().catch(() => [])) as unknown;
-  if (!Array.isArray(data)) return [];
-
-  return data.map((item) => normalizeUserPost(item));
 }
 
 export async function apiFetchPostById(postId: string, token?: string): Promise<UserPost> {
@@ -390,6 +412,32 @@ export async function apiAddComment(postId: string, content: string, token?: str
   }
 }
 
+export async function apiFetchPostComments(
+  postId: string,
+  token?: string,
+  limit = 50,
+  cursor?: string | null,
+): Promise<CommentsPage> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set('cursor', cursor);
+
+  const response = await fetch(`${API_BASE}/posts/${encodeURIComponent(postId)}/comments?${params}`, {
+    headers: {
+      ...authHeaders(token),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response));
+  }
+
+  const data = (await response.json().catch(() => ({}))) as { comments?: unknown[]; nextCursor?: unknown };
+  return {
+    comments: Array.isArray(data.comments) ? data.comments.map((item) => normalizeComment(item)) : [],
+    nextCursor: data.nextCursor ? String(data.nextCursor) : null,
+  };
+}
+
 export async function apiAddReply(commentId: string, content: string, token?: string): Promise<void> {
   const response = await fetch(`${API_BASE}/posts/comments/${encodeURIComponent(commentId)}/replies`, {
     method: 'POST',
@@ -403,6 +451,32 @@ export async function apiAddReply(commentId: string, content: string, token?: st
   if (!response.ok) {
     throw new Error(await parseErrorMessage(response));
   }
+}
+
+export async function apiFetchCommentReplies(
+  commentId: string,
+  token?: string,
+  limit = 50,
+  cursor?: string | null,
+): Promise<CommentsPage> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (cursor) params.set('cursor', cursor);
+
+  const response = await fetch(`${API_BASE}/posts/comments/${encodeURIComponent(commentId)}/replies?${params}`, {
+    headers: {
+      ...authHeaders(token),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response));
+  }
+
+  const data = (await response.json().catch(() => ({}))) as { comments?: unknown[]; nextCursor?: unknown };
+  return {
+    comments: Array.isArray(data.comments) ? data.comments.map((item) => normalizeComment(item)) : [],
+    nextCursor: data.nextCursor ? String(data.nextCursor) : null,
+  };
 }
 
 export async function apiDeleteComment(commentId: string, token?: string): Promise<void> {

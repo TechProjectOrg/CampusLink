@@ -103,6 +103,7 @@ export interface Comment {
   parentCommentId?: string | null;
   replies?: Comment[];
   likeCount?: number;
+  replyCount?: number;
   isLikedByMe?: boolean;
   canDelete?: boolean;
 }

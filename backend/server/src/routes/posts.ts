@@ -8,6 +8,19 @@ import {
   syncCommentLikeNotification,
   syncPostLikeNotification,
 } from '../lib/notifications';
+import {
+  fetchFeedPosts,
+  getPostFeedRecipientIds,
+  hydratePosts,
+  incrementPostEngagement,
+  invalidateRecentComments,
+  mapCommentRows as mapFlatCommentRows,
+  reconcilePostEngagement,
+  refreshPostCaches,
+  removePostFromCaches,
+  setViewerLikedCache,
+} from '../lib/feedCache';
+import { emitFeedEvent } from '../lib/realtime';
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -55,6 +68,7 @@ interface CommentRow {
   parent_comment_id: string | null;
   content: string;
   like_count: number;
+  reply_count: number;
   is_liked_by_me: boolean;
   created_at: Date;
   updated_at: Date;
@@ -76,6 +90,7 @@ interface PostCommentResponse {
   parentCommentId: string | null;
   content: string;
   likeCount: number;
+  replyCount: number;
   isLikedByMe: boolean;
   canDelete: boolean;
   replies: PostCommentResponse[];
@@ -137,6 +152,12 @@ function normalizeHashtags(rawTags?: string[]): string[] {
   return Array.from(unique);
 }
 
+function parseCommentCursor(rawCursor: unknown): Date | null {
+  if (typeof rawCursor !== 'string' || !rawCursor.trim()) return null;
+  const cursorDate = new Date(rawCursor);
+  return Number.isNaN(cursorDate.getTime()) ? null : cursorDate;
+}
+
 function parseMedia(rawMedia: unknown): PostMediaResponse[] {
   let source: unknown = rawMedia;
   if (typeof rawMedia === 'string') {
@@ -187,6 +208,7 @@ function mapCommentRows(rows: CommentRow[], viewerUserId: string): PostCommentRe
       parentCommentId: row.parent_comment_id,
       content: row.content,
       likeCount: row.like_count,
+      replyCount: row.reply_count,
       isLikedByMe: row.is_liked_by_me,
       canDelete: row.author_user_id === viewerUserId || row.post_author_user_id === viewerUserId,
       replies: [],
@@ -281,6 +303,7 @@ async function fetchCommentsForPost(postId: string, viewerUserId: string): Promi
       c.parent_comment_id,
       c.content,
       (SELECT COUNT(*)::int FROM post_comment_likes pcl WHERE pcl.comment_id = c.comment_id) AS like_count,
+      (SELECT COUNT(*)::int FROM post_comments replies WHERE replies.parent_comment_id = c.comment_id) AS reply_count,
       EXISTS(
         SELECT 1
         FROM post_comment_likes pcl
@@ -525,16 +548,16 @@ router.get('/posts/feed', async (req: Request, res: Response) => {
   const viewerUserId = authed.auth!.userId;
   const hashtag = (req.query.hashtag as string | undefined)?.trim();
   const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 20, 1), 100);
-  const offset = Math.max(parseInt(req.query.offset as string, 10) || 0, 0);
+  const cursorOffset = parseInt(req.query.cursor as string, 10);
+  const offset = Math.max(Number.isFinite(cursorOffset) ? cursorOffset : parseInt(req.query.offset as string, 10) || 0, 0);
 
   try {
-    const rows = await fetchPostRowsByQuery(viewerUserId, {
+    return res.status(200).json(await fetchFeedPosts(viewerUserId, {
       followedFeed: true,
       hashtag,
       limit,
       offset,
-    });
-    return res.status(200).json(await mapFeedRows(rows, viewerUserId));
+    }));
   } catch (err) {
     console.error('Error fetching feed posts:', err);
     return res.status(500).json({ message: 'Internal server error' });
@@ -547,105 +570,20 @@ router.get('/posts/hashtags/:hashtag', async (req: Request<{ hashtag: string }>,
   const rawHashtag = req.params.hashtag ?? '';
   const normalizedHashtag = normalizeHashtag(rawHashtag);
   const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 50, 1), 100);
-  const offset = Math.max(parseInt(req.query.offset as string, 10) || 0, 0);
+  const cursorOffset = parseInt(req.query.cursor as string, 10);
+  const offset = Math.max(Number.isFinite(cursorOffset) ? cursorOffset : parseInt(req.query.offset as string, 10) || 0, 0);
 
   if (!normalizedHashtag) {
     return res.status(400).json({ message: 'Invalid hashtag' });
   }
 
   try {
-    const rows = await prisma.$queryRaw<FeedPostRow[]>`
-      SELECT
-        p.post_id,
-        p.author_user_id,
-        au.username AS author_username,
-        au.profile_photo_url AS author_profile_photo_url,
-        p.club_id,
-        p.post_type,
-        p.opportunity_type,
-        p.title,
-        p.content_text,
-        p.company_name,
-        p.application_deadline,
-        p.stipend,
-        p.duration,
-        p.event_date,
-        p.location,
-        p.external_url,
-        p.visibility,
-        COALESCE(
-          (
-            SELECT ARRAY_AGG(h2.tag_name ORDER BY h2.tag_name)
-            FROM post_hashtags ph2
-            JOIN hashtags h2 ON h2.hashtag_id = ph2.hashtag_id
-            WHERE ph2.post_id = p.post_id
-          ),
-          ARRAY[]::text[]
-        ) AS hashtags,
-        COALESCE(
-          (
-            SELECT JSON_AGG(
-              JSON_BUILD_OBJECT(
-                'postMediaId', pm.post_media_id,
-                'mediaUrl', pm.media_url,
-                'mediaType', pm.media_type,
-                'sortOrder', pm.sort_order
-              )
-              ORDER BY pm.sort_order ASC, pm.created_at ASC
-            )
-            FROM post_media pm
-            WHERE pm.post_id = p.post_id
-          ),
-          '[]'::json
-        ) AS media,
-        (SELECT COUNT(*)::int FROM post_likes pl WHERE pl.post_id = p.post_id) AS like_count,
-        (SELECT COUNT(*)::int FROM post_comments pc WHERE pc.post_id = p.post_id) AS comment_count,
-        (SELECT COUNT(*)::int FROM post_saves ps WHERE ps.post_id = p.post_id) AS save_count,
-        EXISTS(SELECT 1 FROM post_likes plm WHERE plm.post_id = p.post_id AND plm.user_id = ${viewerUserId}) AS is_liked_by_me,
-        EXISTS(SELECT 1 FROM post_saves psm WHERE psm.post_id = p.post_id AND psm.user_id = ${viewerUserId}) AS is_saved_by_me,
-        p.created_at,
-        p.updated_at
-      FROM posts p
-      JOIN users au ON au.user_id = p.author_user_id
-      WHERE EXISTS (
-        SELECT 1
-        FROM post_hashtags ph
-        JOIN hashtags h ON h.hashtag_id = ph.hashtag_id
-        WHERE ph.post_id = p.post_id
-          AND h.tag_name = ${normalizedHashtag}
-      )
-      AND (
-        p.author_user_id = ${viewerUserId}
-        OR (
-          (
-            p.visibility = CAST('public' AS "PostVisibility")
-            OR (
-              p.visibility = CAST('followers' AS "PostVisibility")
-              AND EXISTS (
-                SELECT 1
-                FROM follows f
-                WHERE f.follower_user_id = ${viewerUserId}
-                  AND f.followed_user_id = p.author_user_id
-              )
-            )
-          )
-          AND (
-            NOT au.is_private
-            OR EXISTS (
-              SELECT 1
-              FROM follows f
-              WHERE f.follower_user_id = ${viewerUserId}
-                AND f.followed_user_id = p.author_user_id
-            )
-          )
-        )
-      )
-      ORDER BY p.created_at DESC
-      LIMIT ${limit}
-      OFFSET ${offset}
-    `;
-
-    return res.status(200).json(await mapFeedRows(rows, viewerUserId));
+    return res.status(200).json(await fetchFeedPosts(viewerUserId, {
+      followedFeed: true,
+      hashtag: normalizedHashtag,
+      limit,
+      offset,
+    }));
   } catch (err) {
     console.error('Error fetching hashtag posts:', err);
     return res.status(500).json({ message: 'Internal server error' });
@@ -658,6 +596,16 @@ router.get('/posts/:postId', async (req: Request<{ postId: string }>, res: Respo
   const { postId } = req.params;
 
   try {
+    if (!(await canViewerAccessPost(viewerUserId, postId))) {
+      return res.status(404).json({ message: 'Post not found or not accessible' });
+    }
+
+    const hydrated = await hydratePosts(viewerUserId, [postId]);
+    if (!hydrated[0]) {
+      return res.status(404).json({ message: 'Post not found or not accessible' });
+    }
+    return res.status(200).json(hydrated[0]);
+
     const rows = await prisma.$queryRaw<FeedPostRow[]>`
       SELECT
         p.post_id,
@@ -760,7 +708,8 @@ router.get('/users/:userId/posts', async (req: Request<{ userId: string }>, res:
   const { userId: authorUserId } = req.params;
   const hashtag = (req.query.hashtag as string | undefined)?.trim();
   const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 50, 1), 100);
-  const offset = Math.max(parseInt(req.query.offset as string, 10) || 0, 0);
+  const cursorOffset = parseInt(req.query.cursor as string, 10);
+  const offset = Math.max(Number.isFinite(cursorOffset) ? cursorOffset : parseInt(req.query.offset as string, 10) || 0, 0);
 
   try {
     const canAccess = await canViewerAccessAuthorPosts(viewerUserId, authorUserId);
@@ -768,13 +717,12 @@ router.get('/users/:userId/posts', async (req: Request<{ userId: string }>, res:
       return res.status(403).json({ message: 'You are not allowed to view posts for this profile' });
     }
 
-    const rows = await fetchPostRowsByQuery(viewerUserId, {
+    return res.status(200).json(await fetchFeedPosts(viewerUserId, {
       authorUserId,
       hashtag,
       limit,
       offset,
-    });
-    return res.status(200).json(await mapFeedRows(rows, viewerUserId));
+    }));
   } catch (err) {
     console.error('Error fetching profile posts:', err);
     return res.status(500).json({ message: 'Internal server error' });
@@ -886,6 +834,13 @@ router.patch('/posts/:postId', async (req: Request<{ postId: string }>, res: Res
       }
     });
 
+    await refreshPostCaches(postId, viewerUserId);
+    const recipients = await getPostFeedRecipientIds(postId);
+    emitFeedEvent(recipients, {
+      type: 'feed:post_updated',
+      payload: { postId, updatedAt: new Date().toISOString() },
+    });
+
     return res.status(200).json({ message: 'Post updated successfully' });
   } catch (err) {
     console.error('Error updating post:', err);
@@ -916,11 +871,17 @@ router.delete('/posts/:postId', async (req: Request<{ postId: string }>, res: Re
       FROM post_media
       WHERE post_id = ${postId}
     `;
+    const recipients = await getPostFeedRecipientIds(postId);
 
     await prisma.$queryRaw`
       DELETE FROM posts
       WHERE post_id = ${postId}
     `;
+    await removePostFromCaches(postId, recipients);
+    emitFeedEvent(recipients, {
+      type: 'feed:post_deleted',
+      payload: { postId, deletedAt: new Date().toISOString() },
+    });
 
     await Promise.allSettled(
       mediaRows.map(async (item) => {
@@ -945,11 +906,25 @@ router.post('/posts/:postId/likes', async (req: Request<{ postId: string }>, res
       return res.status(403).json({ message: 'You are not allowed to interact with this post' });
     }
 
-    await prisma.$queryRaw`
-      INSERT INTO post_likes (user_id, post_id)
-      VALUES (${viewerUserId}, ${postId})
-      ON CONFLICT (user_id, post_id) DO NOTHING
+    const insertedRows = await prisma.$queryRaw<{ count: number }[]>`
+      WITH inserted AS (
+        INSERT INTO post_likes (user_id, post_id)
+        VALUES (${viewerUserId}, ${postId})
+        ON CONFLICT (user_id, post_id) DO NOTHING
+        RETURNING 1
+      )
+      SELECT COUNT(*)::int AS count FROM inserted
     `;
+    const changed = (insertedRows[0]?.count ?? 0) > 0;
+    if (changed) {
+      await incrementPostEngagement(postId, 'likeCount', 1);
+      await setViewerLikedCache(postId, viewerUserId, true);
+      const recipients = await getPostFeedRecipientIds(postId);
+      emitFeedEvent(recipients, {
+        type: 'feed:post_liked',
+        payload: { postId, userId: viewerUserId, delta: 1, updatedAt: new Date().toISOString() },
+      });
+    }
 
     await syncPostLikeNotification({ postId, actorUserId: viewerUserId });
     return res.status(204).send();
@@ -965,10 +940,24 @@ router.delete('/posts/:postId/likes', async (req: Request<{ postId: string }>, r
   const { postId } = req.params;
 
   try {
-    await prisma.$queryRaw`
-      DELETE FROM post_likes
-      WHERE user_id = ${viewerUserId} AND post_id = ${postId}
+    const deletedRows = await prisma.$queryRaw<{ count: number }[]>`
+      WITH deleted AS (
+        DELETE FROM post_likes
+        WHERE user_id = ${viewerUserId} AND post_id = ${postId}
+        RETURNING 1
+      )
+      SELECT COUNT(*)::int AS count FROM deleted
     `;
+    const changed = (deletedRows[0]?.count ?? 0) > 0;
+    if (changed) {
+      await incrementPostEngagement(postId, 'likeCount', -1);
+      await setViewerLikedCache(postId, viewerUserId, false);
+      const recipients = await getPostFeedRecipientIds(postId);
+      emitFeedEvent(recipients, {
+        type: 'feed:post_unliked',
+        payload: { postId, userId: viewerUserId, delta: -1, updatedAt: new Date().toISOString() },
+      });
+    }
     await syncPostLikeNotification({ postId, actorUserId: viewerUserId });
     return res.status(204).send();
   } catch (err) {
@@ -987,11 +976,18 @@ router.post('/posts/:postId/saves', async (req: Request<{ postId: string }>, res
       return res.status(403).json({ message: 'You are not allowed to interact with this post' });
     }
 
-    await prisma.$queryRaw`
-      INSERT INTO post_saves (user_id, post_id)
-      VALUES (${viewerUserId}, ${postId})
-      ON CONFLICT (user_id, post_id) DO NOTHING
+    const insertedRows = await prisma.$queryRaw<{ count: number }[]>`
+      WITH inserted AS (
+        INSERT INTO post_saves (user_id, post_id)
+        VALUES (${viewerUserId}, ${postId})
+        ON CONFLICT (user_id, post_id) DO NOTHING
+        RETURNING 1
+      )
+      SELECT COUNT(*)::int AS count FROM inserted
     `;
+    if ((insertedRows[0]?.count ?? 0) > 0) {
+      await incrementPostEngagement(postId, 'saveCount', 1);
+    }
     return res.status(204).send();
   } catch (err) {
     console.error('Error saving post:', err);
@@ -1005,13 +1001,133 @@ router.delete('/posts/:postId/saves', async (req: Request<{ postId: string }>, r
   const { postId } = req.params;
 
   try {
-    await prisma.$queryRaw`
-      DELETE FROM post_saves
-      WHERE user_id = ${viewerUserId} AND post_id = ${postId}
+    const deletedRows = await prisma.$queryRaw<{ count: number }[]>`
+      WITH deleted AS (
+        DELETE FROM post_saves
+        WHERE user_id = ${viewerUserId} AND post_id = ${postId}
+        RETURNING 1
+      )
+      SELECT COUNT(*)::int AS count FROM deleted
     `;
+    if ((deletedRows[0]?.count ?? 0) > 0) {
+      await incrementPostEngagement(postId, 'saveCount', -1);
+    }
     return res.status(204).send();
   } catch (err) {
     console.error('Error unsaving post:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.get('/posts/:postId/comments', async (req: Request<{ postId: string }>, res: Response) => {
+  const authed = req as unknown as AuthedRequest;
+  const viewerUserId = authed.auth!.userId;
+  const { postId } = req.params;
+  const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 50, 1), 100);
+  const cursor = parseCommentCursor(req.query.cursor);
+
+  try {
+    if (!(await canViewerAccessPost(viewerUserId, postId))) {
+      return res.status(403).json({ message: 'You are not allowed to view comments for this post' });
+    }
+
+    const rows = await prisma.$queryRaw<CommentRow[]>`
+      SELECT
+        c.comment_id,
+        c.post_id,
+        c.author_user_id,
+        u.username AS author_username,
+        u.profile_photo_url AS author_profile_photo_url,
+        p.author_user_id AS post_author_user_id,
+        c.parent_comment_id,
+        c.content,
+        (SELECT COUNT(*)::int FROM post_comment_likes pcl WHERE pcl.comment_id = c.comment_id) AS like_count,
+        (SELECT COUNT(*)::int FROM post_comments replies WHERE replies.parent_comment_id = c.comment_id) AS reply_count,
+        EXISTS(
+          SELECT 1
+          FROM post_comment_likes pcl
+          WHERE pcl.comment_id = c.comment_id AND pcl.user_id = ${viewerUserId}
+        ) AS is_liked_by_me,
+        c.created_at,
+        c.updated_at
+      FROM post_comments c
+      JOIN users u ON u.user_id = c.author_user_id
+      JOIN posts p ON p.post_id = c.post_id
+      WHERE c.post_id = ${postId}
+        AND c.parent_comment_id IS NULL
+        AND (${cursor}::timestamp IS NULL OR c.created_at > ${cursor})
+      ORDER BY c.created_at ASC
+      LIMIT ${limit + 1}
+    `;
+
+    const pageRows = rows.slice(0, limit);
+    return res.status(200).json({
+      comments: mapFlatCommentRows(pageRows, viewerUserId, false),
+      nextCursor: rows.length > limit ? pageRows[pageRows.length - 1]?.created_at.toISOString() ?? null : null,
+    });
+  } catch (err) {
+    console.error('Error fetching post comments:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.get('/posts/comments/:commentId/replies', async (req: Request<{ commentId: string }>, res: Response) => {
+  const authed = req as unknown as AuthedRequest;
+  const viewerUserId = authed.auth!.userId;
+  const { commentId } = req.params;
+  const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 50, 1), 100);
+  const cursor = parseCommentCursor(req.query.cursor);
+
+  try {
+    const parentRows = await prisma.$queryRaw<{ post_id: string }[]>`
+      SELECT post_id
+      FROM post_comments
+      WHERE comment_id = ${commentId}
+      LIMIT 1
+    `;
+    const parent = parentRows[0];
+    if (!parent) {
+      return res.status(404).json({ message: 'Parent comment not found' });
+    }
+    if (!(await canViewerAccessPost(viewerUserId, parent.post_id))) {
+      return res.status(403).json({ message: 'You are not allowed to view replies for this comment' });
+    }
+
+    const rows = await prisma.$queryRaw<CommentRow[]>`
+      SELECT
+        c.comment_id,
+        c.post_id,
+        c.author_user_id,
+        u.username AS author_username,
+        u.profile_photo_url AS author_profile_photo_url,
+        p.author_user_id AS post_author_user_id,
+        c.parent_comment_id,
+        c.content,
+        (SELECT COUNT(*)::int FROM post_comment_likes pcl WHERE pcl.comment_id = c.comment_id) AS like_count,
+        (SELECT COUNT(*)::int FROM post_comments replies WHERE replies.parent_comment_id = c.comment_id) AS reply_count,
+        EXISTS(
+          SELECT 1
+          FROM post_comment_likes pcl
+          WHERE pcl.comment_id = c.comment_id AND pcl.user_id = ${viewerUserId}
+        ) AS is_liked_by_me,
+        c.created_at,
+        c.updated_at
+      FROM post_comments c
+      JOIN users u ON u.user_id = c.author_user_id
+      JOIN posts p ON p.post_id = c.post_id
+      WHERE c.parent_comment_id = ${commentId}
+        AND (${cursor}::timestamp IS NULL OR c.created_at > ${cursor})
+      ORDER BY c.created_at ASC
+      LIMIT ${limit + 1}
+    `;
+
+    const pageRows = rows.slice(0, limit);
+    return res.status(200).json({
+      comments: mapFlatCommentRows(pageRows, viewerUserId, false),
+      nextCursor: rows.length > limit ? pageRows[pageRows.length - 1]?.created_at.toISOString() ?? null : null,
+    });
+  } catch (err) {
+    console.error('Error fetching comment replies:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });
@@ -1074,6 +1190,13 @@ router.post('/posts/:postId/comments', async (req: Request<{ postId: string }>, 
       return res.status(500).json({ message: 'Failed to create comment' });
     }
 
+    await incrementPostEngagement(postId, 'commentCount', 1);
+    await invalidateRecentComments(postId);
+    const recipients = await getPostFeedRecipientIds(postId);
+    emitFeedEvent(recipients, {
+      type: 'feed:comment_created',
+      payload: { postId, commentId: createdCommentId, userId: viewerUserId, updatedAt: new Date().toISOString() },
+    });
     await notifyPostComment({ postId, commentId: createdCommentId, actorUserId: viewerUserId });
 
     return res.status(201).json({ commentId: createdCommentId });
@@ -1119,6 +1242,18 @@ router.post('/posts/comments/:commentId/replies', async (req: Request<{ commentI
       return res.status(500).json({ message: 'Failed to create reply' });
     }
 
+    await incrementPostEngagement(parent.post_id, 'commentCount', 1);
+    const recipients = await getPostFeedRecipientIds(parent.post_id);
+    emitFeedEvent(recipients, {
+      type: 'feed:reply_created',
+      payload: {
+        postId: parent.post_id,
+        parentCommentId: commentId,
+        commentId: createdReplyId,
+        userId: viewerUserId,
+        updatedAt: new Date().toISOString(),
+      },
+    });
     await notifyCommentReply({
       parentCommentId: commentId,
       replyCommentId: createdReplyId,
@@ -1137,10 +1272,12 @@ router.delete('/posts/comments/:commentId', async (req: Request<{ commentId: str
   const { commentId } = req.params;
 
   try {
-    const rows = await prisma.$queryRaw<{ author_user_id: string; post_author_user_id: string }[]>`
+    const rows = await prisma.$queryRaw<{ author_user_id: string; post_author_user_id: string; post_id: string; parent_comment_id: string | null }[]>`
       SELECT
         c.author_user_id,
-        p.author_user_id AS post_author_user_id
+        p.author_user_id AS post_author_user_id,
+        c.post_id,
+        c.parent_comment_id
       FROM post_comments c
       JOIN posts p ON p.post_id = c.post_id
       WHERE c.comment_id = ${commentId}
@@ -1160,6 +1297,10 @@ router.delete('/posts/comments/:commentId', async (req: Request<{ commentId: str
       DELETE FROM post_comments
       WHERE comment_id = ${commentId}
     `;
+    await reconcilePostEngagement(row.post_id);
+    if (!row.parent_comment_id) {
+      await invalidateRecentComments(row.post_id);
+    }
     return res.status(204).send();
   } catch (err) {
     console.error('Error deleting comment:', err);

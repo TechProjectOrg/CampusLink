@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import prisma from '../prisma';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
 import { createNotification } from '../lib/notifications';
+import { invalidateUserFeedCache } from '../lib/feedCache';
 
 const router = express.Router();
 
@@ -221,6 +222,7 @@ router.post('/follow', async (req: Request, res: Response) => {
       VALUES (${currentUserId}, ${targetUserId})
       ON CONFLICT DO NOTHING
     `;
+    await invalidateUserFeedCache(currentUserId);
 
     await createNotification({
       recipientUserId: targetUserId,
@@ -252,6 +254,7 @@ router.delete('/follow/:targetUserId', async (req: Request, res: Response) => {
       DELETE FROM follows
       WHERE follower_user_id = ${currentUserId} AND followed_user_id = ${targetUserId}
     `;
+    await invalidateUserFeedCache(currentUserId);
 
     // Also clean up any accepted follow_request rows (per user preference)
     await prisma.$queryRaw`
@@ -275,13 +278,14 @@ router.delete('/follow/:targetUserId', async (req: Request, res: Response) => {
 router.delete('/followers/:followerUserId', async (req: Request, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const currentUserId = authed.auth!.userId;
-  const { followerUserId } = req.params;
+  const followerUserId = String(req.params.followerUserId);
 
   try {
     await prisma.$queryRaw`
       DELETE FROM follows
       WHERE follower_user_id = ${followerUserId} AND followed_user_id = ${currentUserId}
     `;
+    await invalidateUserFeedCache(followerUserId);
 
     // Clean up accepted request row
     await prisma.$queryRaw`
@@ -432,6 +436,7 @@ router.post('/requests/:requestId/accept', async (req: Request, res: Response) =
         ON CONFLICT DO NOTHING
       `;
     });
+    await invalidateUserFeedCache(requesterId);
 
     await createNotification({
       recipientUserId: requesterId,

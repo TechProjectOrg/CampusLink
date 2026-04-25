@@ -11,6 +11,8 @@ import {
   uploadProfilePhotoToStorage,
 } from '../lib/objectStorage';
 import { createPostPublishedNotifications } from '../lib/notifications';
+import { addPostToFeedCaches, getPostFeedRecipientIds, refreshPostCaches } from '../lib/feedCache';
+import { emitFeedEvent } from '../lib/realtime';
 
 const router = express.Router();
 
@@ -1538,6 +1540,18 @@ router.post(
       if (!created) {
         return res.status(404).json({ message: 'Created post could not be loaded' });
       }
+
+      const recipients = await getPostFeedRecipientIds(created.post_id);
+      await refreshPostCaches(created.post_id, userId);
+      await addPostToFeedCaches(created.post_id, created.created_at, recipients);
+      emitFeedEvent(recipients, {
+        type: 'feed:post_created',
+        payload: {
+          postId: created.post_id,
+          authorUserId: userId,
+          createdAt: created.created_at.toISOString(),
+        },
+      });
 
       await createPostPublishedNotifications({
         authorUserId: userId,

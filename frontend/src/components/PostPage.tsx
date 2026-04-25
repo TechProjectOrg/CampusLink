@@ -17,6 +17,7 @@ interface PostPageProps {
   onSave: (id: string) => void;
   onComment: (id: string, comment: string) => void;
   onReply?: (commentId: string, content: string) => void;
+  onLoadReplies?: (commentId: string) => Promise<void>;
   onLikeComment?: (commentId: string, alreadyLiked: boolean) => void;
   onDeleteComment?: (commentId: string) => void;
   onViewProfile?: (authorId: string) => void;
@@ -31,6 +32,7 @@ export function PostPage({
   onSave,
   onComment,
   onReply,
+  onLoadReplies,
   onLikeComment,
   onDeleteComment,
   onViewProfile,
@@ -123,15 +125,19 @@ export function PostPage({
     setOpenReplyByCommentId((prev) => ({ ...prev, [commentId]: false }));
   };
 
-  const toggleReplies = (commentId: string) => {
+  const toggleReplies = (comment: Comment) => {
+    if (!expandedRepliesByCommentId[comment.id] && (comment.replies ?? []).length === 0 && (comment.replyCount ?? 0) > 0) {
+      void onLoadReplies?.(comment.id);
+    }
     setExpandedRepliesByCommentId((prev) => ({
       ...prev,
-      [commentId]: !prev[commentId],
+      [comment.id]: !prev[comment.id],
     }));
   };
 
   const renderComment = (comment: Comment, depth = 0) => {
     const childComments = comment.replies ?? [];
+    const replyCount = comment.replyCount ?? childComments.length;
     const isCommentLiked = comment.isLikedByMe ?? false;
     const commentLikes = comment.likeCount ?? 0;
 
@@ -211,13 +217,13 @@ export function PostPage({
               </div>
             )}
 
-            {childComments.length > 0 && (
+            {replyCount > 0 && (
               <button
                 type="button"
                 className="mt-2 text-xs text-primary hover:underline"
-                onClick={() => toggleReplies(comment.id)}
+                onClick={() => toggleReplies(comment)}
               >
-                {expandedRepliesByCommentId[comment.id] ? 'Hide replies' : `View replies (${childComments.length})`}
+                {expandedRepliesByCommentId[comment.id] ? 'Hide replies' : `View replies (${replyCount})`}
               </button>
             )}
 

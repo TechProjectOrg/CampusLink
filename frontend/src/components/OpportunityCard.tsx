@@ -352,7 +352,7 @@ export function OpportunityCard({
                 className="text-sm text-primary hover:underline"
                 onClick={() => onOpenPost?.(opportunity)}
               >
-                View all comments ({topLevelComments.length})
+                View all comments ({commentCount})
               </button>
             )}
 

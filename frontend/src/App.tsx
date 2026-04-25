@@ -50,8 +50,10 @@ import {
   apiDeletePost,
   apiFetchHashtagPosts,
   apiFetchCommentContext,
+  apiFetchCommentReplies,
   apiFetchFeedPosts,
   apiFetchPostById,
+  apiFetchPostComments,
   apiLikeComment,
   apiLikePost,
   apiSavePost,
@@ -211,6 +213,7 @@ function mapPostCommentToComment(comment: UserPost['comments'][number]): Opportu
     timestamp: comment.createdAt,
     parentCommentId: comment.parentCommentId,
     likeCount: comment.likeCount,
+    replyCount: comment.replyCount,
     isLikedByMe: comment.isLikedByMe,
     canDelete: comment.canDelete,
     replies: comment.replies.map((reply) => mapPostCommentToComment(reply)),
@@ -329,6 +332,27 @@ function restoreCommentLikeState(
     return {
       ...comment,
       replies: restoreCommentLikeState(comment.replies, commentId, likedState, likeCount),
+    };
+  });
+}
+
+function attachRepliesToComment(comments: Comment[], commentId: string, replies: Comment[]): Comment[] {
+  return comments.map((comment) => {
+    if (comment.id === commentId) {
+      return {
+        ...comment,
+        replies,
+        replyCount: replies.length,
+      };
+    }
+
+    if (!comment.replies || comment.replies.length === 0) {
+      return comment;
+    }
+
+    return {
+      ...comment,
+      replies: attachRepliesToComment(comment.replies, commentId, replies),
     };
   });
 }
@@ -638,6 +662,46 @@ export default function App() {
           if (parsed.payload?.type === 'message' || parsed.payload?.notificationType === 'message') return;
           const local = apiNotificationToLocal(parsed.payload);
           setNotifications((prev) => mergeRealtimeNotification(prev, local));
+        } else if (parsed.type.startsWith('feed:')) {
+          const postId = String(parsed.payload?.postId ?? '');
+          if (!postId) return;
+
+          if (parsed.type === 'feed:post_deleted') {
+            setOpportunities((prev) => prev.filter((item) => item.id !== postId));
+            setHashtagOpportunities((prev) => prev.filter((item) => item.id !== postId));
+            setOpenedPost((prev) => (prev?.id === postId ? null : prev));
+            return;
+          }
+
+          if (parsed.type === 'feed:post_created' || parsed.type === 'feed:post_updated') {
+            void refreshFeedPosts();
+            if (hashtagPageTag) void refreshHashtagPosts();
+            return;
+          }
+
+          if (String(parsed.payload?.userId ?? '') === currentUserId) {
+            return;
+          }
+
+          const likeDelta =
+            parsed.type === 'feed:post_liked' ? 1 : parsed.type === 'feed:post_unliked' ? -1 : 0;
+          const commentDelta =
+            parsed.type === 'feed:comment_created' || parsed.type === 'feed:reply_created' ? 1 : 0;
+
+          const applyFeedDelta = (items: Opportunity[]) =>
+            items.map((item) =>
+              item.id !== postId
+                ? item
+                : {
+                    ...item,
+                    likeCount: Math.max((item.likeCount ?? item.likes.length) + likeDelta, 0),
+                    commentCount: Math.max((item.commentCount ?? item.comments.length) + commentDelta, 0),
+                  },
+            );
+
+          setOpportunities(applyFeedDelta);
+          setHashtagOpportunities(applyFeedDelta);
+          setOpenedPost((prev) => (prev ? applyFeedDelta([prev])[0] : prev));
         } else if (parsed.type.startsWith('chat:')) {
           window.dispatchEvent(new CustomEvent('campuslynk:chat', { detail: parsed }));
           
@@ -653,7 +717,7 @@ export default function App() {
     return () => {
       socket.close();
     };
-  }, [authToken, auth.isAuthenticated, apiBase]);
+  }, [authToken, auth.isAuthenticated, apiBase, currentUserId, hashtagPageTag, refreshFeedPosts, refreshHashtagPosts]);
 
   useEffect(() => {
     if (!authToken || !auth.isAuthenticated) return;
@@ -858,6 +922,24 @@ export default function App() {
     })();
   };
 
+  const handleLoadReplies = async (commentId: string): Promise<void> => {
+    if (!authToken) return;
+    try {
+      const page = await apiFetchCommentReplies(commentId, authToken, 100);
+      const replies = page.comments.map((comment) => mapPostCommentToComment(comment));
+      setOpenedPost((prev) =>
+        prev
+          ? {
+              ...prev,
+              comments: attachRepliesToComment(prev.comments ?? [], commentId, replies),
+            }
+          : prev,
+      );
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Unable to load replies');
+    }
+  };
+
   const handleLikeComment = (commentId: string, alreadyLiked: boolean) => {
     const existing =
       findCommentStateById(opportunities, commentId) ??
@@ -988,7 +1070,14 @@ export default function App() {
       opportunities.find((item) => item.id === openedPost.id) ??
       hashtagOpportunities.find((item) => item.id === openedPost.id);
     if (latest) {
-      setOpenedPost(latest);
+      setOpenedPost((prev) =>
+        prev
+          ? {
+              ...latest,
+              comments: prev.comments,
+            }
+          : latest,
+      );
     }
   }, [opportunities, hashtagOpportunities, openedPost]);
 
@@ -1000,8 +1089,9 @@ export default function App() {
     void (async () => {
       try {
         const post = await apiFetchPostById(openedPostId, authToken);
+        const commentsPage = await apiFetchPostComments(openedPostId, authToken, 100);
         if (cancelled) return;
-        const mapped = userPostToOpportunity(post, currentUser);
+        const mapped = userPostToOpportunity({ ...post, comments: commentsPage.comments }, currentUser);
         setOpenedPost(mapped);
         setOpportunities((prev) =>
           prev.map((item) => (item.id === mapped.id ? mapped : item))
@@ -1600,6 +1690,7 @@ export default function App() {
               onSave={handleSave}
               onComment={handleComment}
               onReply={handleReply}
+              onLoadReplies={handleLoadReplies}
               onLikeComment={handleLikeComment}
               onDeleteComment={handleDeleteComment}
               onEditPost={handleEditPost}
