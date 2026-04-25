@@ -590,6 +590,153 @@ router.get('/posts/hashtags/:hashtag', async (req: Request<{ hashtag: string }>,
   }
 });
 
+router.get('/posts/comments/:commentId/replies', async (req: Request<{ commentId: string }>, res: Response) => {
+  const authed = req as unknown as AuthedRequest;
+  const viewerUserId = authed.auth!.userId;
+  const { commentId } = req.params;
+  const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 50, 1), 100);
+  const cursor = parseCommentCursor(req.query.cursor);
+
+  try {
+    const parentRows = await prisma.$queryRaw<{ post_id: string }[]>`
+      SELECT post_id
+      FROM post_comments
+      WHERE comment_id = ${commentId}
+      LIMIT 1
+    `;
+    const parent = parentRows[0];
+    if (!parent) {
+      return res.status(404).json({ message: 'Parent comment not found' });
+    }
+    if (!(await canViewerAccessPost(viewerUserId, parent.post_id))) {
+      return res.status(403).json({ message: 'You are not allowed to view replies for this comment' });
+    }
+
+    const rows = await prisma.$queryRaw<CommentRow[]>`
+      SELECT
+        c.comment_id,
+        c.post_id,
+        c.author_user_id,
+        u.username AS author_username,
+        u.profile_photo_url AS author_profile_photo_url,
+        p.author_user_id AS post_author_user_id,
+        c.parent_comment_id,
+        c.content,
+        (SELECT COUNT(*)::int FROM post_comment_likes pcl WHERE pcl.comment_id = c.comment_id) AS like_count,
+        (SELECT COUNT(*)::int FROM post_comments replies WHERE replies.parent_comment_id = c.comment_id) AS reply_count,
+        EXISTS(
+          SELECT 1
+          FROM post_comment_likes pcl
+          WHERE pcl.comment_id = c.comment_id AND pcl.user_id = ${viewerUserId}
+        ) AS is_liked_by_me,
+        c.created_at,
+        c.updated_at
+      FROM post_comments c
+      JOIN users u ON u.user_id = c.author_user_id
+      JOIN posts p ON p.post_id = c.post_id
+      WHERE c.parent_comment_id = ${commentId}
+        AND (${cursor}::timestamp IS NULL OR c.created_at > ${cursor})
+      ORDER BY c.created_at ASC
+      LIMIT ${limit + 1}
+    `;
+
+    const pageRows = rows.slice(0, limit);
+    return res.status(200).json({
+      comments: mapFlatCommentRows(pageRows, viewerUserId, false),
+      nextCursor: rows.length > limit ? pageRows[pageRows.length - 1]?.created_at.toISOString() ?? null : null,
+    });
+  } catch (err) {
+    console.error('Error fetching comment replies:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.get('/posts/:postId/comments', async (req: Request<{ postId: string }>, res: Response) => {
+  const authed = req as unknown as AuthedRequest;
+  const viewerUserId = authed.auth!.userId;
+  const { postId } = req.params;
+  const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 50, 1), 100);
+  const cursor = parseCommentCursor(req.query.cursor);
+  const includeReplies = String(req.query.includeReplies ?? '').trim().toLowerCase() === 'true';
+
+  try {
+    if (!(await canViewerAccessPost(viewerUserId, postId))) {
+      return res.status(403).json({ message: 'You are not allowed to view comments for this post' });
+    }
+
+    if (includeReplies) {
+      const rows = await prisma.$queryRaw<CommentRow[]>`
+        SELECT
+          c.comment_id,
+          c.post_id,
+          c.author_user_id,
+          u.username AS author_username,
+          u.profile_photo_url AS author_profile_photo_url,
+          p.author_user_id AS post_author_user_id,
+          c.parent_comment_id,
+          c.content,
+          (SELECT COUNT(*)::int FROM post_comment_likes pcl WHERE pcl.comment_id = c.comment_id) AS like_count,
+          (SELECT COUNT(*)::int FROM post_comments replies WHERE replies.parent_comment_id = c.comment_id) AS reply_count,
+          EXISTS(
+            SELECT 1
+            FROM post_comment_likes pcl
+            WHERE pcl.comment_id = c.comment_id AND pcl.user_id = ${viewerUserId}
+          ) AS is_liked_by_me,
+          c.created_at,
+          c.updated_at
+        FROM post_comments c
+        JOIN users u ON u.user_id = c.author_user_id
+        JOIN posts p ON p.post_id = c.post_id
+        WHERE c.post_id = ${postId}
+        ORDER BY c.created_at ASC
+      `;
+
+      return res.status(200).json({
+        comments: mapCommentRows(rows, viewerUserId),
+        nextCursor: null,
+      });
+    }
+
+    const rows = await prisma.$queryRaw<CommentRow[]>`
+      SELECT
+        c.comment_id,
+        c.post_id,
+        c.author_user_id,
+        u.username AS author_username,
+        u.profile_photo_url AS author_profile_photo_url,
+        p.author_user_id AS post_author_user_id,
+        c.parent_comment_id,
+        c.content,
+        (SELECT COUNT(*)::int FROM post_comment_likes pcl WHERE pcl.comment_id = c.comment_id) AS like_count,
+        (SELECT COUNT(*)::int FROM post_comments replies WHERE replies.parent_comment_id = c.comment_id) AS reply_count,
+        EXISTS(
+          SELECT 1
+          FROM post_comment_likes pcl
+          WHERE pcl.comment_id = c.comment_id AND pcl.user_id = ${viewerUserId}
+        ) AS is_liked_by_me,
+        c.created_at,
+        c.updated_at
+      FROM post_comments c
+      JOIN users u ON u.user_id = c.author_user_id
+      JOIN posts p ON p.post_id = c.post_id
+      WHERE c.post_id = ${postId}
+        AND c.parent_comment_id IS NULL
+        AND (${cursor}::timestamp IS NULL OR c.created_at > ${cursor})
+      ORDER BY c.created_at ASC
+      LIMIT ${limit + 1}
+    `;
+
+    const pageRows = rows.slice(0, limit);
+    return res.status(200).json({
+      comments: mapFlatCommentRows(pageRows, viewerUserId, false),
+      nextCursor: rows.length > limit ? pageRows[pageRows.length - 1]?.created_at.toISOString() ?? null : null,
+    });
+  } catch (err) {
+    console.error('Error fetching post comments:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 router.get('/posts/:postId', async (req: Request<{ postId: string }>, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const viewerUserId = authed.auth!.userId;
@@ -1015,119 +1162,6 @@ router.delete('/posts/:postId/saves', async (req: Request<{ postId: string }>, r
     return res.status(204).send();
   } catch (err) {
     console.error('Error unsaving post:', err);
-    return res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-router.get('/posts/:postId/comments', async (req: Request<{ postId: string }>, res: Response) => {
-  const authed = req as unknown as AuthedRequest;
-  const viewerUserId = authed.auth!.userId;
-  const { postId } = req.params;
-  const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 50, 1), 100);
-  const cursor = parseCommentCursor(req.query.cursor);
-
-  try {
-    if (!(await canViewerAccessPost(viewerUserId, postId))) {
-      return res.status(403).json({ message: 'You are not allowed to view comments for this post' });
-    }
-
-    const rows = await prisma.$queryRaw<CommentRow[]>`
-      SELECT
-        c.comment_id,
-        c.post_id,
-        c.author_user_id,
-        u.username AS author_username,
-        u.profile_photo_url AS author_profile_photo_url,
-        p.author_user_id AS post_author_user_id,
-        c.parent_comment_id,
-        c.content,
-        (SELECT COUNT(*)::int FROM post_comment_likes pcl WHERE pcl.comment_id = c.comment_id) AS like_count,
-        (SELECT COUNT(*)::int FROM post_comments replies WHERE replies.parent_comment_id = c.comment_id) AS reply_count,
-        EXISTS(
-          SELECT 1
-          FROM post_comment_likes pcl
-          WHERE pcl.comment_id = c.comment_id AND pcl.user_id = ${viewerUserId}
-        ) AS is_liked_by_me,
-        c.created_at,
-        c.updated_at
-      FROM post_comments c
-      JOIN users u ON u.user_id = c.author_user_id
-      JOIN posts p ON p.post_id = c.post_id
-      WHERE c.post_id = ${postId}
-        AND c.parent_comment_id IS NULL
-        AND (${cursor}::timestamp IS NULL OR c.created_at > ${cursor})
-      ORDER BY c.created_at ASC
-      LIMIT ${limit + 1}
-    `;
-
-    const pageRows = rows.slice(0, limit);
-    return res.status(200).json({
-      comments: mapFlatCommentRows(pageRows, viewerUserId, false),
-      nextCursor: rows.length > limit ? pageRows[pageRows.length - 1]?.created_at.toISOString() ?? null : null,
-    });
-  } catch (err) {
-    console.error('Error fetching post comments:', err);
-    return res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-router.get('/posts/comments/:commentId/replies', async (req: Request<{ commentId: string }>, res: Response) => {
-  const authed = req as unknown as AuthedRequest;
-  const viewerUserId = authed.auth!.userId;
-  const { commentId } = req.params;
-  const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 50, 1), 100);
-  const cursor = parseCommentCursor(req.query.cursor);
-
-  try {
-    const parentRows = await prisma.$queryRaw<{ post_id: string }[]>`
-      SELECT post_id
-      FROM post_comments
-      WHERE comment_id = ${commentId}
-      LIMIT 1
-    `;
-    const parent = parentRows[0];
-    if (!parent) {
-      return res.status(404).json({ message: 'Parent comment not found' });
-    }
-    if (!(await canViewerAccessPost(viewerUserId, parent.post_id))) {
-      return res.status(403).json({ message: 'You are not allowed to view replies for this comment' });
-    }
-
-    const rows = await prisma.$queryRaw<CommentRow[]>`
-      SELECT
-        c.comment_id,
-        c.post_id,
-        c.author_user_id,
-        u.username AS author_username,
-        u.profile_photo_url AS author_profile_photo_url,
-        p.author_user_id AS post_author_user_id,
-        c.parent_comment_id,
-        c.content,
-        (SELECT COUNT(*)::int FROM post_comment_likes pcl WHERE pcl.comment_id = c.comment_id) AS like_count,
-        (SELECT COUNT(*)::int FROM post_comments replies WHERE replies.parent_comment_id = c.comment_id) AS reply_count,
-        EXISTS(
-          SELECT 1
-          FROM post_comment_likes pcl
-          WHERE pcl.comment_id = c.comment_id AND pcl.user_id = ${viewerUserId}
-        ) AS is_liked_by_me,
-        c.created_at,
-        c.updated_at
-      FROM post_comments c
-      JOIN users u ON u.user_id = c.author_user_id
-      JOIN posts p ON p.post_id = c.post_id
-      WHERE c.parent_comment_id = ${commentId}
-        AND (${cursor}::timestamp IS NULL OR c.created_at > ${cursor})
-      ORDER BY c.created_at ASC
-      LIMIT ${limit + 1}
-    `;
-
-    const pageRows = rows.slice(0, limit);
-    return res.status(200).json({
-      comments: mapFlatCommentRows(pageRows, viewerUserId, false),
-      nextCursor: rows.length > limit ? pageRows[pageRows.length - 1]?.created_at.toISOString() ?? null : null,
-    });
-  } catch (err) {
-    console.error('Error fetching comment replies:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });

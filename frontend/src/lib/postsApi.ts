@@ -417,9 +417,11 @@ export async function apiFetchPostComments(
   token?: string,
   limit = 50,
   cursor?: string | null,
+  includeReplies = false,
 ): Promise<CommentsPage> {
   const params = new URLSearchParams({ limit: String(limit) });
   if (cursor) params.set('cursor', cursor);
+  if (includeReplies) params.set('includeReplies', 'true');
 
   const response = await fetch(`${API_BASE}/posts/${encodeURIComponent(postId)}/comments?${params}`, {
     headers: {

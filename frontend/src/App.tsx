@@ -357,6 +357,21 @@ function attachRepliesToComment(comments: Comment[], commentId: string, replies:
   });
 }
 
+function findRepliesForComment(comments: Comment[], commentId: string): Comment[] | null {
+  for (const comment of comments) {
+    if (comment.id === commentId) {
+      return comment.replies ?? [];
+    }
+
+    const nestedReplies = findRepliesForComment(comment.replies ?? [], commentId);
+    if (nestedReplies) {
+      return nestedReplies;
+    }
+  }
+
+  return null;
+}
+
 // ============================================================
 // Merge network users into students list
 // ============================================================
@@ -486,7 +501,7 @@ export default function App() {
     return () => {
         window.removeEventListener('popstate', handlePopState);
     };
-  }, [opportunities]);
+  }, []);
 
   const navigate = (
     tab: string,
@@ -925,8 +940,16 @@ export default function App() {
   const handleLoadReplies = async (commentId: string): Promise<void> => {
     if (!authToken) return;
     try {
-      const page = await apiFetchCommentReplies(commentId, authToken, 100);
-      const replies = page.comments.map((comment) => mapPostCommentToComment(comment));
+      let replies = (await apiFetchCommentReplies(commentId, authToken, 100)).comments.map((comment) =>
+        mapPostCommentToComment(comment),
+      );
+
+      if (replies.length === 0 && openedPostId) {
+        const threadedCommentsPage = await apiFetchPostComments(openedPostId, authToken, 100, null, true);
+        const threadedComments = threadedCommentsPage.comments.map((comment) => mapPostCommentToComment(comment));
+        replies = findRepliesForComment(threadedComments, commentId) ?? [];
+      }
+
       setOpenedPost((prev) =>
         prev
           ? {
@@ -937,6 +960,7 @@ export default function App() {
       );
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Unable to load replies');
+      throw err;
     }
   };
 
@@ -1065,10 +1089,10 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (!openedPost) return;
+    if (!openedPostId) return;
     const latest =
-      opportunities.find((item) => item.id === openedPost.id) ??
-      hashtagOpportunities.find((item) => item.id === openedPost.id);
+      opportunities.find((item) => item.id === openedPostId) ??
+      hashtagOpportunities.find((item) => item.id === openedPostId);
     if (latest) {
       setOpenedPost((prev) =>
         prev
@@ -1079,7 +1103,7 @@ export default function App() {
           : latest,
       );
     }
-  }, [opportunities, hashtagOpportunities, openedPost]);
+  }, [opportunities, hashtagOpportunities, openedPostId]);
 
   useEffect(() => {
     if (activeTab !== 'post' || !openedPostId || !authToken) return;
@@ -1089,7 +1113,7 @@ export default function App() {
     void (async () => {
       try {
         const post = await apiFetchPostById(openedPostId, authToken);
-        const commentsPage = await apiFetchPostComments(openedPostId, authToken, 100);
+        const commentsPage = await apiFetchPostComments(openedPostId, authToken, 100, null, true);
         if (cancelled) return;
         const mapped = userPostToOpportunity({ ...post, comments: commentsPage.comments }, currentUser);
         setOpenedPost(mapped);

@@ -41,6 +41,7 @@ export function PostPage({
   const [replyByCommentId, setReplyByCommentId] = useState<Record<string, string>>({});
   const [openReplyByCommentId, setOpenReplyByCommentId] = useState<Record<string, boolean>>({});
   const [expandedRepliesByCommentId, setExpandedRepliesByCommentId] = useState<Record<string, boolean>>({});
+  const [loadingRepliesByCommentId, setLoadingRepliesByCommentId] = useState<Record<string, boolean>>({});
   const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
 
   const isLiked = post.isLikedByMe ?? post.likes.includes(currentUserId);
@@ -125,19 +126,32 @@ export function PostPage({
     setOpenReplyByCommentId((prev) => ({ ...prev, [commentId]: false }));
   };
 
-  const toggleReplies = (comment: Comment) => {
-    if (!expandedRepliesByCommentId[comment.id] && (comment.replies ?? []).length === 0 && (comment.replyCount ?? 0) > 0) {
-      void onLoadReplies?.(comment.id);
+  const toggleReplies = async (comment: Comment) => {
+    const isExpanded = Boolean(expandedRepliesByCommentId[comment.id]);
+    if (isExpanded) {
+      setExpandedRepliesByCommentId((prev) => ({ ...prev, [comment.id]: false }));
+      return;
     }
-    setExpandedRepliesByCommentId((prev) => ({
-      ...prev,
-      [comment.id]: !prev[comment.id],
-    }));
+
+    const shouldLoadReplies = (comment.replies ?? []).length === 0 && (comment.replyCount ?? 0) > 0;
+    if (shouldLoadReplies && onLoadReplies) {
+      setLoadingRepliesByCommentId((prev) => ({ ...prev, [comment.id]: true }));
+      try {
+        await onLoadReplies(comment.id);
+        setExpandedRepliesByCommentId((prev) => ({ ...prev, [comment.id]: true }));
+      } finally {
+        setLoadingRepliesByCommentId((prev) => ({ ...prev, [comment.id]: false }));
+      }
+      return;
+    }
+
+    setExpandedRepliesByCommentId((prev) => ({ ...prev, [comment.id]: true }));
   };
 
   const renderComment = (comment: Comment, depth = 0) => {
     const childComments = comment.replies ?? [];
     const replyCount = comment.replyCount ?? childComments.length;
+    const isLoadingReplies = Boolean(loadingRepliesByCommentId[comment.id]);
     const isCommentLiked = comment.isLikedByMe ?? false;
     const commentLikes = comment.likeCount ?? 0;
 
@@ -221,10 +235,18 @@ export function PostPage({
               <button
                 type="button"
                 className="mt-2 text-xs text-primary hover:underline"
-                onClick={() => toggleReplies(comment)}
+                onClick={() => void toggleReplies(comment)}
               >
-                {expandedRepliesByCommentId[comment.id] ? 'Hide replies' : `View replies (${replyCount})`}
+                {isLoadingReplies
+                  ? 'Loading replies...'
+                  : expandedRepliesByCommentId[comment.id]
+                    ? 'Hide replies'
+                    : `View replies (${replyCount})`}
               </button>
+            )}
+
+            {expandedRepliesByCommentId[comment.id] && !isLoadingReplies && replyCount > 0 && childComments.length === 0 && (
+              <p className="mt-2 text-xs text-gray-500">No replies loaded yet.</p>
             )}
 
             {expandedRepliesByCommentId[comment.id] && childComments.map((reply) => renderComment(reply, depth + 1))}
