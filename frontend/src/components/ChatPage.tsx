@@ -38,6 +38,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   const [viewingGroupInfo, setViewingGroupInfo] = useState<string | null>(null);
   const [messages, setMessages] = useState<{ [key: string]: ChatMessageApi[] }>({});
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [chatReady, setChatReady] = useState<Record<string, boolean>>({});
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [replyingTo, setReplyingTo] = useState<ChatMessageApi | null>(null);
   const [seenTick, setSeenTick] = useState(0);
@@ -64,6 +65,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     if (!token) return;
 
     isInitialLoadRef.current[selectedChat] = true;
+    setChatReady(prev => ({ ...prev, [selectedChat]: false }));
     setIsLoadingMessages(true);
     apiFetchMessages(selectedChat, token, { limit: PAGE_SIZE })
       .then((response: FetchMessagesResponse) => {
@@ -211,11 +213,12 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
           if (messagesViewportRef.current) {
             messagesViewportRef.current.scrollTop = messagesViewportRef.current.scrollHeight;
           }
+          if (isInitial) {
+            isInitialLoadRef.current[selectedChat] = false;
+            setChatReady(prev => ({ ...prev, [selectedChat]: true }));
+          }
         }, 100);
       });
-      if (isInitial) {
-        isInitialLoadRef.current[selectedChat] = false;
-      }
     }
   }, [selectedChat, chatMessages.length]);
 
@@ -672,8 +675,13 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
             </div>
 
             {/* Scrollable Messages */}
-            <div className="flex-1 relative">
-              <div ref={messagesViewportRef} className="absolute inset-0 overflow-y-auto">
+            <div className="flex-1 relative bg-white">
+              {!chatReady[selectedChat] && (
+                <div className="absolute inset-0 flex items-center justify-center bg-white z-10">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                </div>
+              )}
+              <div ref={messagesViewportRef} className={`absolute inset-0 overflow-y-auto transition-opacity duration-300 ${chatReady[selectedChat] ? 'opacity-100' : 'opacity-0'}`}>
                 <div className="p-4 md:p-6 space-y-3 max-w-3xl mx-auto">
                 {/* Loading older messages spinner */}
                 {isLoadingOlder && (
