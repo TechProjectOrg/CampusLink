@@ -31,7 +31,7 @@ function searchResultToStudent(r: SearchUserResult): Student {
     email: r.email,
     branch: r.branch ?? 'Unknown',
     year: r.year ?? 0,
-    avatar: r.profilePictureUrl ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`,
+    avatar: r.profilePictureUrl || undefined,
     bio: '',
     skills: [],
     interests: [],

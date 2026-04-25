@@ -358,7 +358,7 @@ export function OpportunityCard({
 
             <div className="flex gap-3">
               <Avatar className="w-8 h-8 ring-2 ring-primary/10">
-                <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=You" />
+
                 <AvatarFallback>Y</AvatarFallback>
               </Avatar>
               <div className="flex-1 space-y-2">

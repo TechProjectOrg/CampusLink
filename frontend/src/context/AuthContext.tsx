@@ -44,7 +44,7 @@ function profileToStudent(profile: ApiUserProfile): Student {
     branch: profile.details?.branch ?? 'Unknown',
     year: profile.details?.year ?? profile.details?.passingYear ?? 0,
     avatar:
-      profile.profilePictureUrl ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`,
+      profile.profilePictureUrl || undefined,
     bio: profile.bio ?? '',
     skills: [],
     interests: [],

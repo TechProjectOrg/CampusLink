@@ -15,13 +15,6 @@ import { FloatingChat } from './components/FloatingChat';
 import { LoadingState } from './components/LoadingState';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
-import {
-  mockStudents,
-  mockOpportunities,
-  mockClubs,
-  mockConversations,
-  getCurrentUser,
-} from './lib/mockData';
 import { Student, Opportunity, Club, Notification, Comment } from './types';
 import { ProfileCard } from './components/ProfileCard';
 import { SuggestionsCard } from './components/SuggestionsCard';
@@ -108,7 +101,7 @@ function buildFollowGraph(
 function apiNotificationToLocal(n: ApiNotification): Notification {
   const actorPfp = n.actor?.profilePictureUrl;
   const seed = encodeURIComponent(n.actor?.username ?? n.title ?? 'user');
-  const avatar = actorPfp ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`;
+  const avatar = actorPfp || undefined;
 
   return {
     id: n.id,
@@ -213,9 +206,7 @@ function mapPostCommentToComment(comment: UserPost['comments'][number]): Opportu
     postId: comment.postId,
     authorId: comment.authorUserId,
     authorName: comment.authorUsername,
-    authorAvatar:
-      comment.authorProfilePictureUrl ??
-      `https://api.dicebear.com/7.x/avataaars/svg?seed=${fallbackSeed}`,
+    authorAvatar: comment.authorProfilePictureUrl || undefined,
     content: comment.content,
     timestamp: comment.createdAt,
     parentCommentId: comment.parentCommentId,
@@ -239,7 +230,7 @@ function userPostToOpportunity(post: UserPost, currentUser: Student): Opportunit
     post.authorProfilePictureUrl ??
     (post.authorUserId === currentUser.id
       ? currentUser.avatar
-      : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(authorName)}`);
+      : undefined);
 
   return {
     id: post.id,
@@ -355,7 +346,7 @@ function networkUsersToStudents(users: NetworkUser[]): Student[] {
       email: '',
       branch: u.branch ?? 'Unknown',
       year: u.year ?? 0,
-      avatar: u.profilePictureUrl ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`,
+      avatar: u.profilePictureUrl || undefined,
       bio: '',
       skills: [],
       interests: [],
@@ -373,9 +364,9 @@ export default function App() {
   const auth = useAuth();
 
   const [activeTab, setActiveTab] = useState('feed');
-  const [students, setStudents] = useState<Student[]>(mockStudents);
-  const [opportunities, setOpportunities] = useState<Opportunity[]>(mockOpportunities);
-  const [clubs, setClubs] = useState<Club[]>(mockClubs);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+  const [clubs, setClubs] = useState<Club[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [followGraph, setFollowGraph] = useState<FollowGraph>({
@@ -525,25 +516,10 @@ export default function App() {
   };
   
   const currentUser = useMemo(() => {
-    const mockMe = getCurrentUser();
-    if (!auth.currentUser) return mockMe;
-
-    // Preserve mock-only fields (skills, interests, etc.) but overwrite identity fields from backend.
-    return {
-      ...mockMe,
-      id: auth.currentUser.id,
-      name: auth.currentUser.name,
-      username: auth.currentUser.username,
-      email: auth.currentUser.email,
-      branch: auth.currentUser.branch,
-      year: auth.currentUser.year,
-      avatar: auth.currentUser.avatar,
-      bio: auth.currentUser.bio,
-      accountType: auth.currentUser.accountType,
-    } as Student;
+    return auth.currentUser as Student;
   }, [auth.currentUser]);
 
-  const currentUserId = currentUser.id;
+  const currentUserId = currentUser?.id ?? '';
   const authToken = auth.session?.token;
   const apiBase = resolveApiBaseUrl(import.meta.env.VITE_API_URL as string | undefined);
 
@@ -732,7 +708,7 @@ export default function App() {
 
     setStudents((prev) => {
       const filtered = prev.filter((s) => s.id !== 'current' && s.id !== currentUserId);
-      return [currentUser, ...filtered];
+      return [currentUser, ...filtered].filter(Boolean) as Student[];
     });
   }, [auth.currentUser, currentUser, currentUserId]);
 
@@ -1684,7 +1660,7 @@ function apiProfileToStudent(profile: ApiUserProfile): Student {
     email: profile.email,
     branch: profile.details?.branch ?? 'Unknown',
     year: profile.details?.year ?? profile.details?.passingYear ?? 0,
-    avatar: profile.profilePictureUrl ?? `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`,
+    avatar: profile.profilePictureUrl || undefined,
     bio: profile.bio ?? '',
     skills: [],
     interests: [],

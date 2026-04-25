@@ -44,7 +44,7 @@ export function CreateClubModal({
       id: `club-${Date.now()}`,
       name: formData.name,
       description: formData.description,
-      avatar: formData.avatarUrl || `https://api.dicebear.com/7.x/shapes/svg?seed=${formData.name}`,
+      avatar: formData.avatarUrl || undefined,
       members: [currentUserId],
       admin: currentUserId,
       posts: []

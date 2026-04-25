@@ -207,7 +207,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
       id: newGroupId,
       participantId: newGroupId,
       participantName: name,
-      participantAvatar: `https://api.dicebear.com/7.x/shapes/svg?seed=${name}`,
+      participantAvatar: undefined,
       lastMessage: 'Group created',
       timestamp: new Date().toISOString(),
       unread: 0,

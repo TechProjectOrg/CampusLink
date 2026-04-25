@@ -309,7 +309,7 @@ export function ProfilePage({
         authorName: comment.authorUsername,
         authorAvatar:
           comment.authorProfilePictureUrl ??
-          `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(comment.authorUsername)}`,
+          undefined,
         content: comment.content,
         timestamp: comment.createdAt,
         parentCommentId: comment.parentCommentId,
@@ -323,7 +323,7 @@ export function ProfilePage({
           authorName: reply.authorUsername,
           authorAvatar:
             reply.authorProfilePictureUrl ??
-            `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(reply.authorUsername)}`,
+            undefined,
           content: reply.content,
           timestamp: reply.createdAt,
           parentCommentId: reply.parentCommentId,
@@ -485,7 +485,7 @@ export function ProfilePage({
     if (payload.remove) {
       await apiUpdateUserProfilePicture(authUserId, null, authToken);
       const seed = encodeURIComponent(student.username || student.email || student.id);
-      onEdit?.({ avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}` });
+      onEdit?.({ avatar: undefined });
       await auth.refreshProfile();
       return;
     }
