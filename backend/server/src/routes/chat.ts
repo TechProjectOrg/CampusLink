@@ -13,6 +13,7 @@ import {
   emitChatRead,
   emitChatReaction,
   emitChatRequestAccepted,
+  emitChatDelete,
 } from '../lib/chat';
 import { uploadChatMediaToStorage } from '../lib/objectStorage';
 import { encryptMessage, decryptMessage } from '../lib/encryption';
@@ -520,6 +521,66 @@ router.put('/conversations/:chatId/messages/:messageId/reaction', async (req: Re
 // ============================================================
 // REQUEST FLOW
 // ============================================================
+
+// DELETE /chat/conversations/:chatId/messages/:messageId
+// Soft-deletes a message if requested by the sender within 24 hours of creation
+router.delete('/conversations/:chatId/messages/:messageId', async (req: AuthedRequest, res: Response) => {
+  try {
+    const { chatId, messageId } = req.params;
+    const userId = req.auth?.userId;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // 1. Verify user is a participant
+    if (!(await isChatParticipant(userId, chatId))) {
+      return res.status(403).json({ error: 'Not a participant in this chat' });
+    }
+
+    // 2. Fetch message
+    const message = await prisma.message.findFirst({
+      where: {
+        messageId,
+        chatId,
+        deletedAt: null
+      }
+    });
+
+    if (!message) {
+      return res.status(404).json({ error: 'Message not found' });
+    }
+
+    // 3. Verify sender
+    if (message.senderUserId !== userId) {
+      return res.status(403).json({ error: 'You can only delete your own messages' });
+    }
+
+    // 4. Verify time window (24 hours)
+    const messageTime = new Date(message.createdAt).getTime();
+    const now = new Date().getTime();
+    const hours24 = 24 * 60 * 60 * 1000;
+
+    if (now - messageTime > hours24) {
+      return res.status(403).json({ error: 'Messages can only be deleted within 24 hours of sending' });
+    }
+
+    // 5. Soft Delete
+    await prisma.message.update({
+      where: { messageId },
+      data: { deletedAt: new Date() }
+    });
+
+    // 6. Broadcast deletion
+    const participantIds = await getChatParticipantIds(chatId);
+    emitChatDelete(participantIds, chatId, messageId);
+
+    res.json({ success: true, messageId });
+  } catch (error) {
+    console.error('Error deleting message:', error);
+    res.status(500).json({ error: 'Failed to delete message' });
+  }
+});
 
 router.post('/requests/:chatId/accept', async (req: Request, res: Response) => {
   const authed = req as unknown as AuthedRequest;

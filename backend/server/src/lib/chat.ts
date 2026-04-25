@@ -267,3 +267,10 @@ export function emitTypingIndicator(
     if (uid !== typingUserId) emitToUser(uid, envelope);
   }
 }
+
+export function emitChatDelete(participantIds: string[], chatId: string, messageId: string): void {
+  const envelope = { type: 'chat:delete' as const, payload: { chatId, messageId } };
+  for (const uid of participantIds) {
+    emitToUser(uid, envelope);
+  }
+}

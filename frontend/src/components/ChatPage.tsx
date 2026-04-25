@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Search, MoreVertical, Info, Image, Smile, CircleDot, Plus, Flag, Ban, Eye, Reply, X } from 'lucide-react';
+import { Send, Search, MoreVertical, Info, Image, Smile, CircleDot, Plus, Flag, Ban, Eye, Reply, X, Trash2 } from 'lucide-react';
 import { ChatConversation, Student } from '../types';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
@@ -8,7 +8,7 @@ import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
 import { NewChatModal } from './NewChatModal';
 import { GroupInfoPage } from './GroupInfoPage';
-import { apiFetchMessages, apiMarkChatRead, apiReactToMessage, apiSendImageMessage, apiSendMessage, apiStartConversation, ChatMessageApi, FetchMessagesResponse } from '../lib/chatApi';
+import { apiFetchMessages, apiMarkChatRead, apiReactToMessage, apiSendImageMessage, apiSendMessage, apiStartConversation, apiDeleteMessage, ChatMessageApi, FetchMessagesResponse } from '../lib/chatApi';
 import { getAuthToken } from '../lib/authStorage';
 import { REACTION_EMOJIS, formatSeenTime, mapRealtimeChatMessage, mergeChatMessageList, summarizeReply } from '../lib/chatUi';
 import { EmojiPicker } from './chat/EmojiPicker';
@@ -171,6 +171,18 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
             [payload.chatId]: currentList.map((msg, index) =>
               msg.isOwn && index <= readIndex ? { ...msg, readAt: payload.readAt } : msg
             )
+          };
+        });
+      }
+
+      if (parsed.type === 'chat:delete') {
+        const payload = parsed.payload;
+        if (!payload) return;
+        setMessages(prev => {
+          const currentList = prev[payload.chatId] || [];
+          return {
+            ...prev,
+            [payload.chatId]: currentList.filter(msg => msg.id !== payload.messageId)
           };
         });
       }
@@ -465,6 +477,21 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     setSelectedChat(newGroup.id);
     setMessages({ ...messages, [newGroup.id]: [] });
     setIsNewChatOpen(false);
+  };
+
+  const handleDeleteMessage = async (msg: ChatMessageApi) => {
+    if (!selectedChat) return;
+    const token = getAuthToken();
+    if (!token) return;
+    try {
+      await apiDeleteMessage(selectedChat, msg.id, token);
+      setMessages(prev => ({
+        ...prev,
+        [selectedChat]: (prev[selectedChat] || []).filter(m => m.id !== msg.id)
+      }));
+    } catch (err: any) {
+      window.alert(err.message || 'Failed to delete message');
+    }
   };
 
   // Mock group data for demonstration
@@ -783,10 +810,21 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                                     Copy
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem onClick={() => window.alert('Message reported. Our moderation team will review it soon.')} className="text-destructive focus:text-destructive">
-                                    <Flag className="w-4 h-4 mr-2" />
-                                    Report
-                                  </DropdownMenuItem>
+                                  {msg.isOwn ? (
+                                    <DropdownMenuItem 
+                                      onClick={() => handleDeleteMessage(msg)} 
+                                      className="text-destructive focus:text-destructive"
+                                      disabled={new Date().getTime() - new Date(msg.createdAt).getTime() > 24 * 60 * 60 * 1000}
+                                    >
+                                      <Trash2 className="w-4 h-4 mr-2" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  ) : (
+                                    <DropdownMenuItem onClick={() => window.alert('Message reported. Our moderation team will review it soon.')} className="text-destructive focus:text-destructive">
+                                      <Flag className="w-4 h-4 mr-2" />
+                                      Report
+                                    </DropdownMenuItem>
+                                  )}
                                 </DropdownMenuContent>
                               </DropdownMenu>
                             </div>
