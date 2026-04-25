@@ -4,7 +4,6 @@ import { Opportunity, Comment } from '../types';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
-import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 
@@ -86,8 +85,7 @@ export function PostPage({
   onViewProfile,
 }: PostPageProps) {
   const [commentText, setCommentText] = useState('');
-  const [replyByCommentId, setReplyByCommentId] = useState<Record<string, string>>({});
-  const [openReplyByCommentId, setOpenReplyByCommentId] = useState<Record<string, boolean>>({});
+  const [replyTarget, setReplyTarget] = useState<Comment | null>(null);
   const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
 
   const isLiked = post.isLikedByMe ?? post.likes.includes(currentUserId);
@@ -150,12 +148,19 @@ export function PostPage({
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
-  const submitReply = (commentId: string) => {
-    const next = (replyByCommentId[commentId] ?? '').trim();
-    if (!next || !onReply) return;
-    onReply(commentId, next);
-    setReplyByCommentId((prev) => ({ ...prev, [commentId]: '' }));
-    setOpenReplyByCommentId((prev) => ({ ...prev, [commentId]: false }));
+  const submitComposer = () => {
+    const next = commentText.trim();
+    if (!next) return;
+
+    if (replyTarget && onReply) {
+      onReply(replyTarget.id, next);
+      setReplyTarget(null);
+      setCommentText('');
+      return;
+    }
+
+    onComment(post.id, next);
+    setCommentText('');
   };
 
   const renderComment = (comment: Comment, depth = 0) => {
@@ -218,13 +223,14 @@ export function PostPage({
               {onReply && (
                 <button
                   type="button"
-                  className={`flex items-center gap-1 ${openReplyByCommentId[comment.id] ? 'text-primary' : 'hover:text-gray-700'}`}
-                  onClick={() =>
-                    setOpenReplyByCommentId((prev) => ({
-                      ...prev,
-                      [comment.id]: !prev[comment.id],
-                    }))
-                  }
+                  className={`flex items-center gap-1 ${replyTarget?.id === comment.id ? 'text-primary' : 'hover:text-gray-700'}`}
+                  onClick={() => {
+                    setReplyTarget((prev) => (prev?.id === comment.id ? null : comment));
+                    window.setTimeout(() => {
+                      const composer = document.getElementById('post-comment-composer');
+                      composer?.focus();
+                    }, 0);
+                  }}
                 >
                   <MessageCircle className="w-3 h-3" />
                   Reply
@@ -232,41 +238,18 @@ export function PostPage({
               )}
             </div>
 
-            {onReply && openReplyByCommentId[comment.id] && (
-              <div className="mt-2 flex gap-2">
-                <Input
-                  value={replyByCommentId[comment.id] ?? ''}
-                  onChange={(e) =>
-                    setReplyByCommentId((prev) => ({
-                      ...prev,
-                      [comment.id]: e.target.value,
-                    }))
-                  }
-                  placeholder="Write a reply..."
-                  className="h-8 text-sm"
-                />
-                <Button size="sm" type="button" onClick={() => submitReply(comment.id)}>
-                  Reply
-                </Button>
-              </div>
-            )}
-
             {replyCount > 0 && (
               <button
                 type="button"
                 className="mt-2 text-xs text-primary hover:underline"
                 onClick={() => void onToggleReplies?.(comment.id)}
               >
-                {isLoadingReplies && !hasHydratedReplies
+                {isLoadingReplies
                   ? 'Loading replies...'
                   : isExpanded
                     ? 'Hide replies'
                     : `View replies (${replyCount})`}
               </button>
-            )}
-
-            {isExpanded && isLoadingReplies && (
-              <p className="mt-2 text-xs text-gray-500">Loading replies...</p>
             )}
 
             {isExpanded && !isLoadingReplies && hasHydratedReplies && replyCount > 0 && childComments.length === 0 && (
@@ -283,9 +266,6 @@ export function PostPage({
                     void onLoadMoreReplies?.(comment.id);
                   }}
                 />
-                {isLoadingReplies && hasHydratedReplies && (
-                  <p className="text-xs text-gray-500">Loading more replies...</p>
-                )}
               </div>
             )}
           </div>
@@ -404,24 +384,33 @@ export function PostPage({
                 <AvatarFallback>Y</AvatarFallback>
               </Avatar>
               <div className="flex-1 space-y-2">
+                {replyTarget && (
+                  <div className="flex items-center justify-between rounded-xl bg-primary/5 px-3 py-2 text-sm text-primary">
+                    <span>Replying to {replyTarget.authorName}</span>
+                    <button
+                      type="button"
+                      className="text-xs hover:underline"
+                      onClick={() => setReplyTarget(null)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
                 <Textarea
+                  id="post-comment-composer"
                   value={commentText}
                   onChange={(e) => setCommentText(e.target.value)}
-                  placeholder="Write a comment..."
+                  placeholder={replyTarget ? `Write a reply to ${replyTarget.authorName}...` : 'Write a comment...'}
                   className="resize-none border-primary/20 focus:border-primary rounded-xl"
                   rows={3}
                 />
                 <Button
-                  onClick={() => {
-                    if (!commentText.trim()) return;
-                    onComment(post.id, commentText.trim());
-                    setCommentText('');
-                  }}
+                  onClick={submitComposer}
                   size="sm"
                   disabled={!commentText.trim()}
                   className="gradient-primary"
                 >
-                  Comment
+                  {replyTarget ? 'Reply' : 'Comment'}
                 </Button>
               </div>
             </div>
