@@ -214,7 +214,6 @@ export function emitFeedEvent(userIds: string[], event: RealtimeEnvelope): void 
     feedEventPublisher
       .publish(FEED_EVENTS_CHANNEL, pubsubPayload)
       .catch((err) => console.warn('Failed to publish feed realtime event:', err));
-    return;
   }
 
   for (const userId of uniqueUserIds) {
