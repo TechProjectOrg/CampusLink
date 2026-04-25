@@ -473,9 +473,9 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                           </Avatar>
                         )}
                         <div className={`max-w-[94%] ${msg.isOwn ? 'order-2' : 'order-1'}`}>
-                          <div className={`group flex items-start gap-2 ${msg.isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
+                          <div className="group flex items-start gap-2">
                             <div
-                              className={`min-w-0 max-w-[68vw] rounded-3xl px-4 py-2 md:max-w-[17rem] ${
+                              className={`${msg.isOwn ? 'order-2' : 'order-1'} min-w-0 max-w-[68vw] rounded-3xl px-4 py-2 md:max-w-[17rem] ${
                                 msg.isOwn
                                   ? 'bg-gradient-to-br from-primary to-secondary text-white'
                                   : 'bg-gray-100 text-gray-900'
@@ -493,7 +493,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                                 <p className="text-sm break-words">{msg.content}</p>
                               )}
                             </div>
-                            <div className={`mt-1 flex shrink-0 items-center gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100 ${msg.isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
+                            <div className={`mt-1 flex shrink-0 items-center gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100 ${msg.isOwn ? 'order-1 flex-row-reverse' : 'order-2 flex-row'}`}>
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <button type="button" className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-gray-700 shadow-sm ring-1 ring-gray-200 hover:bg-gray-50" aria-label="React to message">

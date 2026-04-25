@@ -592,9 +592,9 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                           </Avatar>
                         )}
                         <div className={`max-w-[92%] md:max-w-[40rem] ${msg.isOwn ? 'order-2' : 'order-1'}`}>
-                          <div className={`group flex items-start gap-2 ${msg.isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
+                          <div className="group flex items-start gap-2">
                             <div
-                              className={`min-w-0 max-w-[75vw] rounded-3xl px-3 py-2 md:max-w-md md:px-4 md:py-2.5 ${
+                              className={`${msg.isOwn ? 'order-2' : 'order-1'} min-w-0 max-w-[75vw] rounded-3xl px-3 py-2 md:max-w-md md:px-4 md:py-2.5 ${
                                 msg.isOwn
                                   ? 'bg-gradient-to-br from-primary to-secondary text-white'
                                   : 'bg-gray-100 text-gray-900'
@@ -616,7 +616,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                                 <p className="text-sm break-words">{msg.content}</p>
                               )}
                             </div>
-                            <div className={`mt-1 flex shrink-0 items-center gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100 ${msg.isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
+                            <div className={`mt-1 flex shrink-0 items-center gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100 ${msg.isOwn ? 'order-1 flex-row-reverse' : 'order-2 flex-row'}`}>
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <button type="button" className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-gray-700 shadow-sm ring-1 ring-gray-200 hover:bg-gray-50" aria-label="React to message">
