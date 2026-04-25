@@ -4513,6 +4513,17 @@ textarea {
   background: #94a3b8;
 }
 
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 /* Custom breakpoint for 14-inch laptops (1200px+) */
 @media (min-width: 1200px) {
   .show-on-laptop {

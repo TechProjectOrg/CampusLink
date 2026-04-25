@@ -7,7 +7,7 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { X, Calendar, MapPin, Link as LinkIcon, DollarSign } from 'lucide-react';
+import { Loader2, X, Calendar, MapPin, Link as LinkIcon, DollarSign } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { ImageUpload } from './ui/ImageUpload';
 import { Opportunity } from '../types';
@@ -62,6 +62,7 @@ export function CreateUnifiedPostModal({
     imageFile: null as File | null
   });
   const [opportunityTagInput, setOpportunityTagInput] = useState('');
+  const [submittingForm, setSubmittingForm] = useState<'post' | 'event' | 'opportunity' | null>(null);
 
   const getOpportunityTitlePlaceholder = (type: Opportunity['type']): string => {
     switch (type) {
@@ -76,6 +77,28 @@ export function CreateUnifiedPostModal({
       default:
         return 'e.g. Opportunity Title';
     }
+  };
+
+  const isSubmitting = submittingForm !== null;
+
+  const getSubmitLabel = (formType: 'post' | 'event' | 'opportunity'): string => {
+    if (submittingForm !== formType) {
+      if (formType === 'post') return 'Post';
+      if (formType === 'event') return 'Create Event';
+      return 'Post Opportunity';
+    }
+
+    const hasUpload =
+      formType === 'post'
+        ? Boolean(postImageFile)
+        : formType === 'event'
+          ? Boolean(eventFormData.coverImage)
+          : Boolean(opportunityFormData.imageFile);
+
+    if (hasUpload) return 'Uploading...';
+    if (formType === 'post') return 'Posting...';
+    if (formType === 'event') return 'Creating Event...';
+    return 'Posting Opportunity...';
   };
 
   const resetAllForms = () => {
@@ -114,6 +137,7 @@ export function CreateUnifiedPostModal({
   };
 
   const handleClose = () => {
+    if (isSubmitting) return;
     onClose();
     // Do not reset forms on close, to preserve data if user reopens modal.
     // resetAllForms();
@@ -126,6 +150,7 @@ export function CreateUnifiedPostModal({
       toast.error('Post content cannot be empty');
       return;
     }
+    setSubmittingForm('post');
     const newPost = {
       id: Date.now().toString(),
       authorId: currentUser?.id || 'current',
@@ -150,6 +175,8 @@ export function CreateUnifiedPostModal({
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to create post';
       toast.error(message);
+    } finally {
+      setSubmittingForm(null);
     }
   };
   const addPostTag = () => {
@@ -169,6 +196,7 @@ export function CreateUnifiedPostModal({
       toast.error('Please fill in all required fields');
       return;
     }
+    setSubmittingForm('event');
     const newEvent = {
       id: Date.now().toString(),
       authorId: currentUser?.id || 'current',
@@ -195,6 +223,8 @@ export function CreateUnifiedPostModal({
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to create event';
       toast.error(message);
+    } finally {
+      setSubmittingForm(null);
     }
   };
 
@@ -205,6 +235,7 @@ export function CreateUnifiedPostModal({
       toast.error('Please fill in all required fields');
       return;
     }
+    setSubmittingForm('opportunity');
     const newOpportunity: any = {
       id: Date.now().toString(),
       authorId: currentUser?.id || 'current',
@@ -239,6 +270,8 @@ export function CreateUnifiedPostModal({
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unable to post opportunity';
       toast.error(message);
+    } finally {
+      setSubmittingForm(null);
     }
   };
   const addOpportunityTag = () => {
@@ -253,8 +286,15 @@ export function CreateUnifiedPostModal({
 
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto max-w-[95vw]">
+    <Dialog
+      open={isOpen}
+      onOpenChange={(nextOpen) => {
+        if (!nextOpen) {
+          handleClose();
+        }
+      }}
+    >
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto hide-scrollbar max-w-[95vw]">
         <DialogHeader>
           <DialogTitle>What would you like to share?</DialogTitle>
           <DialogDescription>
@@ -264,149 +304,160 @@ export function CreateUnifiedPostModal({
         
         <Tabs defaultValue="post" className="w-full">
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="post">Post</TabsTrigger>
-            <TabsTrigger value="event">Create Event</TabsTrigger>
-            <TabsTrigger value="opportunity">Post Opportunity</TabsTrigger>
+            <TabsTrigger value="post" disabled={isSubmitting}>Post</TabsTrigger>
+            <TabsTrigger value="event" disabled={isSubmitting}>Create Event</TabsTrigger>
+            <TabsTrigger value="opportunity" disabled={isSubmitting}>Post Opportunity</TabsTrigger>
           </TabsList>
           
           {/* Post Tab */}
           <TabsContent value="post">
             <form onSubmit={handlePostSubmit} className="space-y-4 pt-4">
-              <Textarea
-                value={postText}
-                onChange={(e) => setPostText(e.target.value)}
-                placeholder="What's on your mind?"
-                rows={5}
-                className="resize-none"
-              />
-              <ImageUpload onFileChange={setPostImageFile} />
-              <div className="space-y-2">
-                <Label htmlFor="post-tags">Hashtags (optional)</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="post-tags"
-                    value={postTagInput}
-                    onChange={(e) => setPostTagInput(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addPostTag())}
-                    placeholder="Add hashtags (press Enter)"
-                  />
-                  <Button type="button" onClick={addPostTag} variant="outline">
-                    Add
+              <fieldset disabled={isSubmitting} className="space-y-4">
+                <Textarea
+                  value={postText}
+                  onChange={(e) => setPostText(e.target.value)}
+                  placeholder="What's on your mind?"
+                  rows={5}
+                  className="resize-none"
+                />
+                <ImageUpload onFileChange={setPostImageFile} disabled={isSubmitting} />
+                <div className="space-y-2">
+                  <Label htmlFor="post-tags">Hashtags (optional)</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="post-tags"
+                      value={postTagInput}
+                      onChange={(e) => setPostTagInput(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addPostTag())}
+                      placeholder="Add hashtags (press Enter)"
+                    />
+                    <Button type="button" onClick={addPostTag} variant="outline">
+                      Add
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {postTags.map((tag) => (
+                      <Badge key={tag} variant="secondary">
+                        #{tag}
+                        <button
+                          type="button"
+                          onClick={() => removePostTag(tag)}
+                          className="ml-2 hover:text-gray-900"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="ghost" onClick={handleClose} disabled={isSubmitting}>Cancel</Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting && submittingForm === 'post' ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    {getSubmitLabel('post')}
                   </Button>
                 </div>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {postTags.map((tag) => (
-                    <Badge key={tag} variant="secondary">
-                      #{tag}
-                      <button
-                        type="button"
-                        onClick={() => removePostTag(tag)}
-                        className="ml-2 hover:text-gray-900"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="ghost" onClick={handleClose}>Cancel</Button>
-                <Button type="submit">Post</Button>
-              </div>
+              </fieldset>
             </form>
           </TabsContent>
 
           {/* Event Tab */}
           <TabsContent value="event">
             <form onSubmit={handleEventSubmit} className="space-y-4 pt-4">
-              <div className="space-y-2">
-                <Label htmlFor="event-title">Event Title *</Label>
-                <Input
-                  id="event-title"
-                  value={eventFormData.title}
-                  onChange={(e) => setEventFormData({ ...eventFormData, title: e.target.value })}
-                  placeholder="e.g. Workshop on AI"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Mode *</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setEventFormData({ ...eventFormData, mode: 'Online' })}
-                    className={`p-3 rounded-xl border-2 transition-all ${ eventFormData.mode === 'Online'
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    Online
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setEventFormData({ ...eventFormData, mode: 'Offline' })}
-                    className={`p-3 rounded-xl border-2 transition-all ${ eventFormData.mode === 'Offline'
-                        ? 'border-primary bg-primary/10 text-primary'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    Offline
-                  </button>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="datetime">Date & Time *</Label>
-                <Input
-                  id="datetime"
-                  type="datetime-local"
-                  value={eventFormData.dateTime}
-                  onChange={(e) => setEventFormData({ ...eventFormData, dateTime: e.target.value })}
-                  required
-                />
-              </div>
-              {eventFormData.mode === 'Offline' && (
+              <fieldset disabled={isSubmitting} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="location">Location *</Label>
+                  <Label htmlFor="event-title">Event Title *</Label>
                   <Input
-                    id="location"
-                    value={eventFormData.location}
-                    onChange={(e) => setEventFormData({ ...eventFormData, location: e.target.value })}
-                    placeholder="e.g. Main Auditorium"
+                    id="event-title"
+                    value={eventFormData.title}
+                    onChange={(e) => setEventFormData({ ...eventFormData, title: e.target.value })}
+                    placeholder="e.g. Workshop on AI"
                     required
                   />
                 </div>
-              )}
-              <div className="space-y-2">
-                <Label htmlFor="event-description">Description *</Label>
-                <Textarea
-                  id="event-description"
-                  value={eventFormData.description}
-                  onChange={(e) => setEventFormData({ ...eventFormData, description: e.target.value })}
-                  placeholder="Tell us more about the event..."
-                  rows={4}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="registrationLink">Registration Link (optional)</Label>
-                <Input
-                  id="registrationLink"
-                  value={eventFormData.registrationLink}
-                  onChange={(e) => setEventFormData({ ...eventFormData, registrationLink: e.target.value })}
-                  placeholder="https://example.com/register"
-                />
-              </div>
-              <ImageUpload onFileChange={(file) => setEventFormData({ ...eventFormData, coverImage: file })} />
-              <div className="flex justify-end gap-2">
-                <Button type="button" variant="ghost" onClick={handleClose}>Cancel</Button>
-                <Button type="submit">Create Event</Button>
-              </div>
+                <div className="space-y-2">
+                  <Label>Mode *</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setEventFormData({ ...eventFormData, mode: 'Online' })}
+                      className={`p-3 rounded-xl border-2 transition-all ${ eventFormData.mode === 'Online'
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      Online
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEventFormData({ ...eventFormData, mode: 'Offline' })}
+                      className={`p-3 rounded-xl border-2 transition-all ${ eventFormData.mode === 'Offline'
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      Offline
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="datetime">Date & Time *</Label>
+                  <Input
+                    id="datetime"
+                    type="datetime-local"
+                    value={eventFormData.dateTime}
+                    onChange={(e) => setEventFormData({ ...eventFormData, dateTime: e.target.value })}
+                    required
+                  />
+                </div>
+                {eventFormData.mode === 'Offline' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="location">Location *</Label>
+                    <Input
+                      id="location"
+                      value={eventFormData.location}
+                      onChange={(e) => setEventFormData({ ...eventFormData, location: e.target.value })}
+                      placeholder="e.g. Main Auditorium"
+                      required
+                    />
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label htmlFor="event-description">Description *</Label>
+                  <Textarea
+                    id="event-description"
+                    value={eventFormData.description}
+                    onChange={(e) => setEventFormData({ ...eventFormData, description: e.target.value })}
+                    placeholder="Tell us more about the event..."
+                    rows={4}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="registrationLink">Registration Link (optional)</Label>
+                  <Input
+                    id="registrationLink"
+                    value={eventFormData.registrationLink}
+                    onChange={(e) => setEventFormData({ ...eventFormData, registrationLink: e.target.value })}
+                    placeholder="https://example.com/register"
+                  />
+                </div>
+                <ImageUpload onFileChange={(file) => setEventFormData({ ...eventFormData, coverImage: file })} disabled={isSubmitting} />
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="ghost" onClick={handleClose} disabled={isSubmitting}>Cancel</Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting && submittingForm === 'event' ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    {getSubmitLabel('event')}
+                  </Button>
+                </div>
+              </fieldset>
             </form>
           </TabsContent>
 
           {/* Opportunity Tab */}
           <TabsContent value="opportunity">
              <form onSubmit={handleOpportunitySubmit} className="space-y-4 pt-4">
+                <fieldset disabled={isSubmitting} className="space-y-4">
                 <div className="space-y-2">
                     <Label>Opportunity Type *</Label>
                     <div className="grid grid-cols-4 gap-2">
@@ -502,7 +553,7 @@ export function CreateUnifiedPostModal({
                     required
                     />
                 </div>
-                <ImageUpload onFileChange={(file) => setOpportunityFormData({ ...opportunityFormData, imageFile: file })} />
+                <ImageUpload onFileChange={(file) => setOpportunityFormData({ ...opportunityFormData, imageFile: file })} disabled={isSubmitting} />
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                         <Label htmlFor="link">
@@ -592,13 +643,15 @@ export function CreateUnifiedPostModal({
                     </div>
                 </div>
                 <div className="flex gap-3 pt-4">
-                    <Button type="button" onClick={handleClose} variant="outline" className="flex-1">
+                    <Button type="button" onClick={handleClose} variant="outline" className="flex-1" disabled={isSubmitting}>
                     Cancel
                     </Button>
-                    <Button type="submit" className="flex-1 gradient-primary">
-                    Post Opportunity
+                    <Button type="submit" className="flex-1 gradient-primary" disabled={isSubmitting}>
+                      {isSubmitting && submittingForm === 'opportunity' ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                      {getSubmitLabel('opportunity')}
                     </Button>
                 </div>
+                </fieldset>
                 </form>
           </TabsContent>
         </Tabs>

@@ -5,9 +5,10 @@ import { Label } from './label';
 
 interface ImageUploadProps {
   onFileChange: (file: File | null) => void;
+  disabled?: boolean;
 }
 
-export function ImageUpload({ onFileChange }: ImageUploadProps) {
+export function ImageUpload({ onFileChange, disabled = false }: ImageUploadProps) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -41,13 +42,19 @@ export function ImageUpload({ onFileChange }: ImageUploadProps) {
     <div className="space-y-2">
       <Label>Cover Image (optional)</Label>
       <div
-        className="relative flex justify-center items-center w-full h-48 border-2 border-dashed border-gray-300 rounded-xl hover:border-primary transition-all cursor-pointer"
-        onClick={() => fileInputRef.current?.click()}
+        className={`relative flex justify-center items-center w-full h-48 border-2 border-dashed border-gray-300 rounded-xl transition-all ${
+          disabled ? 'cursor-not-allowed opacity-60' : 'hover:border-primary cursor-pointer'
+        }`}
+        onClick={() => {
+          if (disabled) return;
+          fileInputRef.current?.click();
+        }}
       >
         <input
           type="file"
           ref={fileInputRef}
           onChange={handleFileChange}
+          disabled={disabled}
           className="hidden"
           accept="image/*"
         />
@@ -59,6 +66,7 @@ export function ImageUpload({ onFileChange }: ImageUploadProps) {
               variant="destructive"
               size="icon"
               className="absolute top-2 right-2 rounded-full h-8 w-8"
+              disabled={disabled}
               onClick={(e) => {
                 e.stopPropagation();
                 handleRemoveImage();
