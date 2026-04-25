@@ -39,6 +39,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [replyingTo, setReplyingTo] = useState<ChatMessageApi | null>(null);
   const [seenTick, setSeenTick] = useState(0);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const readMessageByChatRef = useRef<Record<string, string>>({});
@@ -262,11 +263,37 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
   const formatDate = (timestamp: string) => {
     const date = new Date(timestamp);
     const now = new Date();
-    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-    
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfMessageDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const diffDays = Math.round((startOfToday.getTime() - startOfMessageDay.getTime()) / (1000 * 60 * 60 * 24));
+
     if (diffDays === 0) return 'Today';
     if (diffDays === 1) return 'Yesterday';
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const isSameCalendarDay = (left: string, right: string) => {
+    const leftDate = new Date(left);
+    const rightDate = new Date(right);
+    return leftDate.toDateString() === rightDate.toDateString();
+  };
+
+  const formatMenuTimestamp = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const dayLabel = formatDate(timestamp);
+    const timeLabel = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    return `${dayLabel} ${timeLabel}`;
+  };
+
+  const jumpToMessage = (messageId: string) => {
+    const target = document.getElementById(`floating-chat-message-${messageId}`);
+    if (!target) return;
+
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightedMessageId(messageId);
+    window.setTimeout(() => {
+      setHighlightedMessageId(prev => (prev === messageId ? null : prev));
+    }, 1500);
   };
 
   const selectedChat = selectedConversation
@@ -453,15 +480,27 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
             <ScrollArea viewportRef={messagesViewportRef} className="flex-1 overflow-hidden px-4 py-3">
               <div className="space-y-3">
                 {chatMessages.map((msg, index) => {
-                  const showDate = index === 0 || 
-                    formatDate(msg.timestamp) !== formatDate(chatMessages[index - 1].timestamp);
+                  const prevMsg = chatMessages[index - 1];
+                  const nextMsg = chatMessages[index + 1];
+                  const startsNewDate = index === 0 || !isSameCalendarDay(msg.timestamp, prevMsg.timestamp);
+                  const startsSenderGroup = startsNewDate || msg.isOwn !== prevMsg.isOwn;
+                  const groupHasMultipleMessages = Boolean(nextMsg && msg.isOwn === nextMsg.isOwn && isSameCalendarDay(msg.timestamp, nextMsg.timestamp));
+                  const showDate = startsNewDate;
+                  const showGroupStartTime = startsSenderGroup && groupHasMultipleMessages;
 
                   return (
-                    <div key={msg.id}>
+                    <div key={msg.id} id={`floating-chat-message-${msg.id}`}>
                       {showDate && (
                         <div className="flex justify-center my-4">
                           <span className="text-xs text-gray-500 px-3 py-1 bg-gray-100 rounded-full">
                             {formatDate(msg.timestamp)}
+                          </span>
+                        </div>
+                      )}
+                      {showGroupStartTime && (
+                        <div className="flex justify-center mb-2">
+                          <span className="text-xs text-gray-500 px-3 py-1 bg-gray-100 rounded-full">
+                            {formatTime(msg.timestamp)}
                           </span>
                         </div>
                       )}
@@ -472,20 +511,27 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                             <AvatarFallback className="text-xs">{selectedChat.participantName[0]}</AvatarFallback>
                           </Avatar>
                         )}
-                        <div className={`max-w-[94%] ${msg.isOwn ? 'order-2' : 'order-1'}`}>
-                          <div className="group flex items-start gap-2">
+                        <div className={`group max-w-[94%] ${msg.isOwn ? 'order-2' : 'order-1'}`}>
+                          <div className="flex items-start gap-2">
                             <div
-                              className={`${msg.isOwn ? 'order-2' : 'order-1'} min-w-0 max-w-[68vw] rounded-3xl px-4 py-2 md:max-w-[17rem] ${
+                              className={`${msg.isOwn ? 'order-2' : 'order-1'} min-w-0 max-w-[68vw] rounded-3xl px-4 py-2 transition-shadow duration-200 md:max-w-[17rem] ${
                                 msg.isOwn
                                   ? 'bg-gradient-to-br from-primary to-secondary text-white'
                                   : 'bg-gray-100 text-gray-900'
-                              }`}
+                              } ${highlightedMessageId === msg.id ? 'ring-2 ring-amber-300 ring-offset-2 ring-offset-white' : ''}`}
                             >
                               {msg.replyTo && (
-                                <div className={`mb-2 rounded-2xl border-l-2 px-3 py-2 text-xs ${msg.isOwn ? 'border-white/70 bg-white/15 text-white/90' : 'border-gray-300 bg-white text-gray-600'}`}>
-                                  <p className="font-medium">{msg.replyTo.senderName}</p>
-                                  <p className="truncate">{msg.replyTo.type === 'image' ? 'Photo' : msg.replyTo.content}</p>
-                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => jumpToMessage(msg.replyTo.id)}
+                                  className={`mb-2 w-full rounded-2xl border border-l-4 px-3 py-2 text-left text-xs ${msg.isOwn ? 'border-white/40 bg-black/20 text-blue-50' : 'border-gray-300 bg-gray-50 text-gray-700'}`}
+                                  title="Go to referenced message"
+                                >
+                                  <p className="truncate">
+                                    <span className="font-medium">{msg.replyTo.senderName}:</span>{' '}
+                                    {msg.replyTo.type === 'image' ? 'Photo' : msg.replyTo.content}
+                                  </p>
+                                </button>
                               )}
                               {msg.type === 'image' && msg.attachments[0]?.fileUrl ? (
                                 <img src={msg.attachments[0].fileUrl} alt="Chat attachment" className="max-h-52 rounded-2xl object-cover" />
@@ -520,6 +566,10 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                                   </button>
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align={msg.isOwn ? 'end' : 'start'} className="w-44">
+                                  <DropdownMenuItem disabled className="text-xs text-gray-500 opacity-100 focus:bg-transparent">
+                                    {formatMenuTimestamp(msg.timestamp)}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
                                   <DropdownMenuItem onClick={() => setReplyingTo(msg)}>
                                     <Reply className="w-4 h-4 mr-2" />
                                     Reply
@@ -545,9 +595,6 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                               ))}
                             </div>
                           )}
-                          <p className={`text-xs text-gray-500 mt-1 px-2 ${msg.isOwn ? 'text-right' : 'text-left'}`}>
-                            {formatTime(msg.timestamp)}
-                          </p>
                           {latestSeenOwnMessage?.id === msg.id && latestSeenLabel && (
                             <p className="text-xs text-gray-400 mt-1 px-2 text-right">
                               {latestSeenLabel}

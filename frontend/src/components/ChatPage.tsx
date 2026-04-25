@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Search, MoreVertical, Info, Image, Smile, CircleDot, Plus, Flag, Ban, Eye, Reply, X, Trash2 } from 'lucide-react';
+import { Send, Search, MoreVertical, Info, Image, Smile, CircleDot, Plus, Flag, Ban, Eye, Reply, X, Trash2, Copy } from 'lucide-react';
 import { ChatConversation, Student } from '../types';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
@@ -42,6 +42,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [replyingTo, setReplyingTo] = useState<ChatMessageApi | null>(null);
   const [seenTick, setSeenTick] = useState(0);
+  const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   // Pagination state per chat: { hasMore, nextCursor }
   const paginationRef = useRef<Record<string, { hasMore: boolean; nextCursor: string | null }>>({});
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -416,11 +417,37 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   const formatDate = (timestamp: string) => {
     const date = new Date(timestamp);
     const now = new Date();
-    const diffDays = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24));
-    
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfMessageDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const diffDays = Math.round((startOfToday.getTime() - startOfMessageDay.getTime()) / (1000 * 60 * 60 * 24));
+
     if (diffDays === 0) return 'Today';
     if (diffDays === 1) return 'Yesterday';
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const isSameCalendarDay = (left: string, right: string) => {
+    const leftDate = new Date(left);
+    const rightDate = new Date(right);
+    return leftDate.toDateString() === rightDate.toDateString();
+  };
+
+  const formatMenuTimestamp = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const dayLabel = formatDate(timestamp);
+    const timeLabel = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    return `${dayLabel} ${timeLabel}`;
+  };
+
+  const jumpToMessage = (messageId: string) => {
+    const target = document.getElementById(`chat-message-${messageId}`);
+    if (!target) return;
+
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightedMessageId(messageId);
+    window.setTimeout(() => {
+      setHighlightedMessageId(prev => (prev === messageId ? null : prev));
+    }, 1500);
   };
 
   const handleStartChat = async (studentId: string) => {
@@ -709,7 +736,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                 </div>
               )}
               <div ref={messagesViewportRef} className={`absolute inset-0 overflow-y-auto transition-opacity duration-300 ${chatReady[selectedChat] ? 'opacity-100' : 'opacity-0'}`}>
-                <div className="p-4 md:p-6 space-y-3 max-w-3xl mx-auto">
+                <div className="p-4 md:p-6 space-y-3">
                 {/* Loading older messages spinner */}
                 {isLoadingOlder && (
                   <div className="flex justify-center py-3">
@@ -725,15 +752,27 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                   </div>
                 )}
                 {chatMessages.map((msg, index) => {
-                  const showDate = index === 0 || 
-                    formatDate(msg.timestamp) !== formatDate(chatMessages[index - 1].timestamp);
+                  const prevMsg = chatMessages[index - 1];
+                  const nextMsg = chatMessages[index + 1];
+                  const startsNewDate = index === 0 || !isSameCalendarDay(msg.timestamp, prevMsg.timestamp);
+                  const startsSenderGroup = startsNewDate || msg.isOwn !== prevMsg.isOwn;
+                  const groupHasMultipleMessages = Boolean(nextMsg && msg.isOwn === nextMsg.isOwn && isSameCalendarDay(msg.timestamp, nextMsg.timestamp));
+                  const showDate = startsNewDate;
+                  const showGroupStartTime = startsSenderGroup && groupHasMultipleMessages;
 
                   return (
-                    <div key={msg.id}>
+                    <div key={msg.id} id={`chat-message-${msg.id}`}>
                       {showDate && (
                         <div className="flex justify-center my-4 md:my-6">
                           <span className="text-xs text-gray-500 px-3 md:px-4 py-1 bg-gray-100 rounded-full">
                             {formatDate(msg.timestamp)}
+                          </span>
+                        </div>
+                      )}
+                      {showGroupStartTime && (
+                        <div className="flex justify-center mb-2">
+                          <span className="text-xs text-gray-500 px-3 py-1 bg-gray-100 rounded-full">
+                            {formatTime(msg.timestamp)}
                           </span>
                         </div>
                       )}
@@ -744,20 +783,27 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                             <AvatarFallback>{selectedConversation.participantName[0]}</AvatarFallback>
                           </Avatar>
                         )}
-                        <div className={`max-w-[92%] md:max-w-[40rem] ${msg.isOwn ? 'order-2' : 'order-1'}`}>
-                          <div className="group flex items-start gap-2">
+                        <div className={`group max-w-[92%] md:max-w-[40rem] ${msg.isOwn ? 'order-2' : 'order-1'}`}>
+                          <div className="flex items-center gap-2">
                             <div
-                              className={`${msg.isOwn ? 'order-2' : 'order-1'} min-w-0 max-w-[75vw] rounded-3xl px-3 py-2 md:max-w-md md:px-4 md:py-2.5 ${
+                              className={`${msg.isOwn ? 'order-2' : 'order-1'} min-w-0 max-w-[75vw] rounded-3xl px-3 py-2 transition-shadow duration-200 md:max-w-md md:px-4 md:py-2.5 ${
                                 msg.isOwn
                                   ? 'bg-gradient-to-br from-primary to-secondary text-white'
                                   : 'bg-gray-100 text-gray-900'
-                              }`}
+                              } ${highlightedMessageId === msg.id ? 'ring-2 ring-amber-300 ring-offset-2 ring-offset-white' : ''}`}
                             >
                               {msg.replyTo && (
-                                <div className={`mb-2 rounded-2xl border-l-2 px-3 py-2 text-xs ${msg.isOwn ? 'border-white/70 bg-white/15 text-white/90' : 'border-gray-300 bg-white text-gray-600'}`}>
-                                  <p className="font-medium">{msg.replyTo.senderName}</p>
-                                  <p className="truncate">{msg.replyTo.type === 'image' ? 'Photo' : msg.replyTo.content}</p>
-                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => jumpToMessage(msg.replyTo.id)}
+                                  className={`mb-2 w-full rounded-2xl border border-l-4 px-3 py-2 text-left text-xs ${msg.isOwn ? 'border-white/40 bg-black/20 text-blue-50' : 'border-gray-300 bg-gray-50 text-gray-700'}`}
+                                  title="Go to referenced message"
+                                >
+                                  <p className="truncate">
+                                    <span className="font-medium">{msg.replyTo.senderName}:</span>{' '}
+                                    {msg.replyTo.type === 'image' ? 'Photo' : msg.replyTo.content}
+                                  </p>
+                                </button>
                               )}
                               {msg.type === 'image' && msg.attachments[0]?.fileUrl ? (
                                 <img
@@ -801,12 +847,17 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                                     <MoreVertical className="h-4 w-4" />
                                   </button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align={msg.isOwn ? 'end' : 'start'} className="w-44">
+                                <DropdownMenuContent align={msg.isOwn ? 'end' : 'start'} className="w-auto min-w-0">
+                                  <DropdownMenuItem disabled className="text-xs text-gray-500 opacity-100 focus:bg-transparent">
+                                    {formatMenuTimestamp(msg.timestamp)}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
                                   <DropdownMenuItem onClick={() => setReplyingTo(msg)}>
                                     <Reply className="w-4 h-4 mr-2" />
                                     Reply
                                   </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => navigator.clipboard?.writeText(msg.content ?? '')} disabled={!msg.content}>
+                                    <Copy className="w-4 h-4 mr-2" />
                                     Copy
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
@@ -843,9 +894,6 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                               ))}
                             </div>
                           )}
-                          <p className={`text-xs text-gray-500 mt-1 px-2 ${msg.isOwn ? 'text-right' : 'text-left'}`}>
-                            {formatTime(msg.timestamp)}
-                          </p>
                           {latestSeenOwnMessage?.id === msg.id && latestSeenLabel && (
                             <p className="text-xs text-gray-400 mt-1 px-2 text-right">
                               {latestSeenLabel}
