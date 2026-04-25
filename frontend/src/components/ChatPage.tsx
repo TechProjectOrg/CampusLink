@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Send, Search, MoreVertical, Info, Image, Smile, CircleDot, Plus, Flag, Ban, Eye, Reply, X } from 'lucide-react';
 import { ChatConversation, Student } from '../types';
 import { Input } from './ui/input';
@@ -8,7 +8,7 @@ import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
 import { NewChatModal } from './NewChatModal';
 import { GroupInfoPage } from './GroupInfoPage';
-import { apiFetchMessages, apiMarkChatRead, apiReactToMessage, apiSendImageMessage, apiSendMessage, apiStartConversation, ChatMessageApi } from '../lib/chatApi';
+import { apiFetchMessages, apiMarkChatRead, apiReactToMessage, apiSendImageMessage, apiSendMessage, apiStartConversation, ChatMessageApi, FetchMessagesResponse } from '../lib/chatApi';
 import { getAuthToken } from '../lib/authStorage';
 import { REACTION_EMOJIS, formatSeenTime, mapRealtimeChatMessage, mergeChatMessageList, summarizeReply } from '../lib/chatUi';
 import { EmojiPicker } from './chat/EmojiPicker';
@@ -38,16 +38,23 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   const [viewingGroupInfo, setViewingGroupInfo] = useState<string | null>(null);
   const [messages, setMessages] = useState<{ [key: string]: ChatMessageApi[] }>({});
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [replyingTo, setReplyingTo] = useState<ChatMessageApi | null>(null);
   const [seenTick, setSeenTick] = useState(0);
+  // Pagination state per chat: { hasMore, nextCursor }
+  const paginationRef = useRef<Record<string, { hasMore: boolean; nextCursor: string | null }>>({});
   const inputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const readMessageByChatRef = useRef<Record<string, string>>({});
+  // Flag to differentiate initial load (scroll to bottom) vs loading older messages (preserve scroll)
+  const isInitialLoadRef = useRef<Record<string, boolean>>({});
 
   const selectedConversation = conversations.find(c => c.id === selectedChat);
   const chatMessages = selectedChat ? messages[selectedChat] || [] : [];
 
-  // Load messages for the selected chat
+  const PAGE_SIZE = 50;
+
+  // Load messages for the selected chat (initial load - newest messages)
   useEffect(() => {
     if (!selectedChat) return;
     if (messages[selectedChat]) return; // Already loaded
@@ -56,11 +63,16 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     const token = getAuthToken();
     if (!token) return;
 
+    isInitialLoadRef.current[selectedChat] = true;
     setIsLoadingMessages(true);
-    apiFetchMessages(selectedChat, token)
-      .then(fetchedMessages => {
+    apiFetchMessages(selectedChat, token, { limit: PAGE_SIZE })
+      .then((response: FetchMessagesResponse) => {
         if (!cancelled) {
-          setMessages(prev => ({ ...prev, [selectedChat]: fetchedMessages }));
+          setMessages(prev => ({ ...prev, [selectedChat]: response.messages }));
+          paginationRef.current[selectedChat] = {
+            hasMore: response.hasMore,
+            nextCursor: response.nextCursor
+          };
         }
       })
       .catch(err => console.error('Failed to fetch messages', err))
@@ -70,6 +82,51 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
 
     return () => { cancelled = true; };
   }, [selectedChat, messages]);
+
+  // Load older messages (triggered by scrolling near top)
+  const loadOlderMessages = useCallback(async () => {
+    if (!selectedChat) return;
+    const pagination = paginationRef.current[selectedChat];
+    if (!pagination?.hasMore || !pagination.nextCursor) return;
+    if (isLoadingOlder) return;
+
+    const token = getAuthToken();
+    if (!token) return;
+
+    setIsLoadingOlder(true);
+    try {
+      const response = await apiFetchMessages(selectedChat, token, {
+        limit: PAGE_SIZE,
+        before: pagination.nextCursor
+      });
+
+      // Save scroll position before prepending
+      const viewport = messagesViewportRef.current;
+      const prevScrollHeight = viewport?.scrollHeight ?? 0;
+      const prevScrollTop = viewport?.scrollTop ?? 0;
+
+      setMessages(prev => ({
+        ...prev,
+        [selectedChat]: [...response.messages, ...(prev[selectedChat] || [])]
+      }));
+      paginationRef.current[selectedChat] = {
+        hasMore: response.hasMore,
+        nextCursor: response.nextCursor
+      };
+
+      // Restore scroll position after prepend (run after DOM update)
+      requestAnimationFrame(() => {
+        if (viewport) {
+          const newScrollHeight = viewport.scrollHeight;
+          viewport.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
+        }
+      });
+    } catch (err) {
+      console.error('Failed to load older messages', err);
+    } finally {
+      setIsLoadingOlder(false);
+    }
+  }, [selectedChat, isLoadingOlder]);
 
   // Listen to real-time chat events from App.tsx
   useEffect(() => {
@@ -123,16 +180,60 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
 
   const messagesViewportRef = useRef<HTMLDivElement | null>(null);
 
+  // Scroll to bottom on initial load or when sending a new message
+  // Also auto-scroll on incoming messages if user is already near the bottom
+  const wasNearBottomRef = useRef(true);
+
+  // Track whether user is near bottom (updated on every scroll)
   useEffect(() => {
-    // Scroll to the bottom (latest message) whenever a chat is selected or messages change
-    if (messagesViewportRef.current) {
-      try {
-        messagesViewportRef.current.scrollTop = messagesViewportRef.current.scrollHeight;
-      } catch (e) {
-        // ignore
+    const viewport = messagesViewportRef.current;
+    if (!viewport) return;
+
+    const updateNearBottom = () => {
+      const threshold = 150;
+      wasNearBottomRef.current =
+        viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < threshold;
+    };
+
+    viewport.addEventListener('scroll', updateNearBottom, { passive: true });
+    return () => viewport.removeEventListener('scroll', updateNearBottom);
+  }, [selectedChat]);
+
+  useEffect(() => {
+    if (!selectedChat) return;
+    const isInitial = isInitialLoadRef.current[selectedChat];
+    const lastMsg = chatMessages[chatMessages.length - 1];
+    const shouldScroll = isInitial || lastMsg?.isOwn || wasNearBottomRef.current;
+
+    if (shouldScroll && messagesViewportRef.current) {
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          if (messagesViewportRef.current) {
+            messagesViewportRef.current.scrollTop = messagesViewportRef.current.scrollHeight;
+          }
+        }, 100);
+      });
+      if (isInitial) {
+        isInitialLoadRef.current[selectedChat] = false;
       }
     }
   }, [selectedChat, chatMessages.length]);
+
+  // Infinite scroll: detect when user scrolls near the top
+  useEffect(() => {
+    const viewport = messagesViewportRef.current;
+    if (!viewport) return;
+
+    const handleScroll = () => {
+      // Trigger load when within 200px of the top
+      if (viewport.scrollTop < 200) {
+        loadOlderMessages();
+      }
+    };
+
+    viewport.addEventListener('scroll', handleScroll, { passive: true });
+    return () => viewport.removeEventListener('scroll', handleScroll);
+  }, [loadOlderMessages]);
 
   useEffect(() => {
     const interval = window.setInterval(() => setSeenTick(tick => tick + 1), 60000);
@@ -389,12 +490,12 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   }
 
   return (
-    <div className="flex flex-col flex-1 pb-20 md:pb-0 bg-white">
-      <div className="flex-1 w-full flex border-x border-gray-200">
-        {/* Conversations List - Instagram Style */}
-        <div className={`${selectedChat ? 'hidden md:flex' : 'flex'} w-full md:w-96 flex-shrink-0 overflow-hidden border-r border-gray-200 flex-col bg-white`}>
-          {/* Header */}
-          <div className="p-4 md:p-6 border-b border-gray-200">
+    <div className="flex flex-col w-full max-w-7xl mx-auto bg-white overflow-hidden pb-16 md:pb-0" style={{ height: 'calc(100vh - 4rem)' }}>
+      <div className="flex flex-1 min-h-0 border-x border-gray-200">
+        {/* LEFT: Conversations List */}
+        <div className={`${selectedChat ? 'hidden md:flex' : 'flex'} w-full md:w-96 flex-shrink-0 border-r border-gray-200 flex-col min-h-0 bg-white`}>
+          {/* Fixed Header — never scrolls */}
+          <div className="p-4 md:p-6 border-b border-gray-200 flex-shrink-0">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-gray-900 mb-4">Messages</h2>
               <Button
@@ -416,9 +517,10 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
             </div>
           </div>
 
-          {/* Conversation List */}
-          <ScrollArea className="flex-1 overflow-hidden">
-            <div className="p-2 w-full">
+          {/* Scrollable Conversation List */}
+          <div className="flex-1 relative">
+            <div className="absolute inset-0 overflow-y-auto">
+              <div className="p-2 w-full">
               {conversations.map(conversation => (
                 <button
                   key={conversation.id}
@@ -467,15 +569,16 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                   </div>
                 </button>
               ))}
+              </div>
             </div>
-          </ScrollArea>
+          </div>
         </div>
 
         {/* Chat Area - Instagram Style */}
         {selectedConversation ? (
-          <div className={`${selectedChat ? 'flex' : 'hidden md:flex'} flex-1 flex-col bg-white min-w-0`}>
-            {/* Chat Header */}
-            <div className="px-4 md:px-6 py-3 border-b border-gray-200 flex items-center justify-between">
+          <div className={`${selectedChat ? 'flex' : 'hidden md:flex'} flex-1 flex-col min-w-0 min-h-0 bg-white`}>
+            {/* Fixed Chat Header */}
+            <div className="px-4 md:px-6 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-3">
                 <button 
                   onClick={() => setSelectedChat(null)}
@@ -568,9 +671,24 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
               </div>
             </div>
 
-            {/* Messages */}
-            <ScrollArea viewportRef={messagesViewportRef} className="flex-1 overflow-hidden min-w-0">
-              <div className="p-4 md:p-6 space-y-3 max-w-3xl mx-auto">
+            {/* Scrollable Messages */}
+            <div className="flex-1 relative">
+              <div ref={messagesViewportRef} className="absolute inset-0 overflow-y-auto">
+                <div className="p-4 md:p-6 space-y-3 max-w-3xl mx-auto">
+                {/* Loading older messages spinner */}
+                {isLoadingOlder && (
+                  <div className="flex justify-center py-3">
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-primary" />
+                  </div>
+                )}
+                {/* "Beginning of conversation" marker */}
+                {selectedChat && paginationRef.current[selectedChat] && !paginationRef.current[selectedChat].hasMore && chatMessages.length > 0 && (
+                  <div className="flex justify-center py-4">
+                    <span className="text-xs text-gray-400 px-3 py-1 bg-gray-50 rounded-full">
+                      Beginning of conversation
+                    </span>
+                  </div>
+                )}
                 {chatMessages.map((msg, index) => {
                   const showDate = index === 0 || 
                     formatDate(msg.timestamp) !== formatDate(chatMessages[index - 1].timestamp);
@@ -692,11 +810,12 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                     </div>
                   );
                 })}
+                </div>
               </div>
-            </ScrollArea>
+            </div>
 
-            {/* Message Input - Instagram Style */}
-            <div className="px-4 md:px-6 py-3 md:py-4 border-t border-gray-200">
+            {/* Fixed Input Footer */}
+            <div className="px-4 md:px-6 py-3 md:py-4 border-t border-gray-200 flex-shrink-0">
               {replyingTo && (
                 <div className="mb-3 flex items-center justify-between rounded-xl bg-gray-50 px-3 py-2">
                   <div className="min-w-0">

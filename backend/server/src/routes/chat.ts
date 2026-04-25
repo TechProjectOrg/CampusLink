@@ -177,38 +177,104 @@ router.get('/conversations/:chatId/messages', async (req: Request, res: Response
     return res.status(400).json({ message: 'Invalid chat ID format' });
   }
 
+  // Pagination params
+  const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 50, 1), 100);
+  const before = req.query.before as string | undefined; // cursor: message_id
+
+  if (before && !isValidUUID(before)) {
+    return res.status(400).json({ message: 'Invalid cursor format' });
+  }
+
   try {
     const isParticipant = await isChatParticipant(userId, chatId);
     if (!isParticipant) return res.status(403).json({ message: 'Not a participant' });
 
-    const messages = await prisma.$queryRaw<any[]>`
-      SELECT 
-        m.message_id, m.sender_user_id, m.message_type, m.content, m.reactions, m.created_at,
-        m.reply_to_message_id,
-        u.username as sender_username, u.profile_photo_url as sender_avatar,
-        reply.sender_user_id as reply_sender_user_id,
-        reply.message_type as reply_message_type,
-        reply.content as reply_content,
-        reply_user.username as reply_sender_username,
-        (
-          SELECT ma.file_url
-          FROM message_attachments ma
-          WHERE ma.message_id = reply.message_id
-          ORDER BY ma.created_at ASC
-          LIMIT 1
-        ) as reply_attachment_url,
-        (
-          SELECT json_agg(json_build_object('fileUrl', ma.file_url, 'fileType', ma.file_type))
-          FROM message_attachments ma WHERE ma.message_id = m.message_id
-        ) as attachments
-      FROM messages m
-      JOIN users u ON u.user_id = m.sender_user_id
-      LEFT JOIN messages reply ON reply.message_id = m.reply_to_message_id
-      LEFT JOIN users reply_user ON reply_user.user_id = reply.sender_user_id
-      WHERE m.chat_id = ${chatId}
-        AND m.deleted_at IS NULL
-      ORDER BY m.created_at ASC
-    `;
+    // Fetch limit+1 to determine hasMore. We fetch in DESC order, then reverse.
+    const fetchLimit = limit + 1;
+
+    let messages: any[];
+    if (before) {
+      // Get the created_at of the cursor message
+      const cursorRows = await prisma.$queryRaw<any[]>`
+        SELECT created_at FROM messages
+        WHERE message_id = ${before} AND chat_id = ${chatId} AND deleted_at IS NULL
+        LIMIT 1
+      `;
+      if (!cursorRows[0]) {
+        return res.status(400).json({ message: 'Invalid cursor: message not found' });
+      }
+      const cursorCreatedAt = cursorRows[0].created_at;
+
+      messages = await prisma.$queryRaw<any[]>`
+        SELECT 
+          m.message_id, m.sender_user_id, m.message_type, m.content, m.reactions, m.created_at,
+          m.reply_to_message_id,
+          u.username as sender_username, u.profile_photo_url as sender_avatar,
+          reply.sender_user_id as reply_sender_user_id,
+          reply.message_type as reply_message_type,
+          reply.content as reply_content,
+          reply_user.username as reply_sender_username,
+          (
+            SELECT ma.file_url
+            FROM message_attachments ma
+            WHERE ma.message_id = reply.message_id
+            ORDER BY ma.created_at ASC
+            LIMIT 1
+          ) as reply_attachment_url,
+          (
+            SELECT json_agg(json_build_object('fileUrl', ma.file_url, 'fileType', ma.file_type))
+            FROM message_attachments ma WHERE ma.message_id = m.message_id
+          ) as attachments
+        FROM messages m
+        JOIN users u ON u.user_id = m.sender_user_id
+        LEFT JOIN messages reply ON reply.message_id = m.reply_to_message_id
+        LEFT JOIN users reply_user ON reply_user.user_id = reply.sender_user_id
+        WHERE m.chat_id = ${chatId}
+          AND m.deleted_at IS NULL
+          AND m.created_at < ${cursorCreatedAt}
+        ORDER BY m.created_at DESC
+        LIMIT ${fetchLimit}
+      `;
+    } else {
+      // Initial load: fetch the newest messages
+      messages = await prisma.$queryRaw<any[]>`
+        SELECT 
+          m.message_id, m.sender_user_id, m.message_type, m.content, m.reactions, m.created_at,
+          m.reply_to_message_id,
+          u.username as sender_username, u.profile_photo_url as sender_avatar,
+          reply.sender_user_id as reply_sender_user_id,
+          reply.message_type as reply_message_type,
+          reply.content as reply_content,
+          reply_user.username as reply_sender_username,
+          (
+            SELECT ma.file_url
+            FROM message_attachments ma
+            WHERE ma.message_id = reply.message_id
+            ORDER BY ma.created_at ASC
+            LIMIT 1
+          ) as reply_attachment_url,
+          (
+            SELECT json_agg(json_build_object('fileUrl', ma.file_url, 'fileType', ma.file_type))
+            FROM message_attachments ma WHERE ma.message_id = m.message_id
+          ) as attachments
+        FROM messages m
+        JOIN users u ON u.user_id = m.sender_user_id
+        LEFT JOIN messages reply ON reply.message_id = m.reply_to_message_id
+        LEFT JOIN users reply_user ON reply_user.user_id = reply.sender_user_id
+        WHERE m.chat_id = ${chatId}
+          AND m.deleted_at IS NULL
+        ORDER BY m.created_at DESC
+        LIMIT ${fetchLimit}
+      `;
+    }
+
+    const hasMore = messages.length > limit;
+    if (hasMore) messages = messages.slice(0, limit);
+
+    // Reverse to chronological order (oldest → newest)
+    messages.reverse();
+
+    const nextCursor = messages.length > 0 ? messages[0].message_id : null;
 
     const formattedMessages = messages.map(m => ({
       id: m.message_id,
@@ -232,7 +298,7 @@ router.get('/conversations/:chatId/messages', async (req: Request, res: Response
       isOwn: m.sender_user_id === userId
     }));
 
-    return res.status(200).json(formattedMessages);
+    return res.status(200).json({ messages: formattedMessages, hasMore, nextCursor });
   } catch (err) {
     console.error('Error fetching messages:', err);
     return res.status(500).json({ message: 'Internal server error' });

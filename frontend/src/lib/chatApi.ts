@@ -71,8 +71,23 @@ export async function apiStartConversation(targetUserId: string, token: string):
   return response.json();
 }
 
-export async function apiFetchMessages(chatId: string, token: string): Promise<ChatMessageApi[]> {
-  const response = await fetch(`${API_BASE_URL}/chat/conversations/${chatId}/messages`, {
+export interface FetchMessagesResponse {
+  messages: ChatMessageApi[];
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
+export async function apiFetchMessages(
+  chatId: string,
+  token: string,
+  options?: { limit?: number; before?: string }
+): Promise<FetchMessagesResponse> {
+  const params = new URLSearchParams();
+  if (options?.limit) params.set('limit', String(options.limit));
+  if (options?.before) params.set('before', options.before);
+  const qs = params.toString();
+
+  const response = await fetch(`${API_BASE_URL}/chat/conversations/${chatId}/messages${qs ? `?${qs}` : ''}`, {
     headers: {
       Authorization: `Bearer ${token}`
     }

@@ -54,9 +54,9 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
 
     setIsLoadingMessages(true);
     apiFetchMessages(selectedConversation, token)
-      .then(fetchedMessages => {
+      .then(response => {
         if (!cancelled) {
-          setMessages(prev => ({ ...prev, [selectedConversation]: fetchedMessages }));
+          setMessages(prev => ({ ...prev, [selectedConversation]: response.messages }));
         }
       })
       .catch(err => console.error('Failed to fetch messages', err))
