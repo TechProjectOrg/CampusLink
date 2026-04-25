@@ -66,6 +66,9 @@ import {
 } from './lib/postsApi';
 import type { ApiUserProfile } from './types';
 
+const POST_COMMENTS_PAGE_SIZE = 20;
+const COMMENT_REPLIES_PAGE_SIZE = 10;
+
 // ============================================================
 // FollowGraph adapter: backend shape → frontend FollowGraph shape
 // ============================================================
@@ -265,6 +268,155 @@ function userPostToOpportunity(post: UserPost, currentUser: Student): Opportunit
   };
 }
 
+interface DiscussionPageState<T> {
+  items: T[];
+  nextCursor: string | null;
+  isLoading: boolean;
+  hasMore: boolean;
+  hasHydrated: boolean;
+}
+
+interface ReplyThreadState extends DiscussionPageState<Comment> {
+  isExpanded: boolean;
+}
+
+function createInitialDiscussionPageState<T>(): DiscussionPageState<T> {
+  return {
+    items: [],
+    nextCursor: null,
+    isLoading: false,
+    hasMore: true,
+    hasHydrated: false,
+  };
+}
+
+function mergeUniqueComments(existing: Comment[], incoming: Comment[]): Comment[] {
+  const merged = [...existing];
+  const seen = new Set(existing.map((comment) => comment.id));
+  for (const comment of incoming) {
+    if (seen.has(comment.id)) continue;
+    merged.push(comment);
+    seen.add(comment.id);
+  }
+  return merged;
+}
+
+function findCommentInTree(comments: Comment[], commentId: string): Comment | null {
+  for (const comment of comments) {
+    if (comment.id === commentId) {
+      return comment;
+    }
+    const nested = findCommentInTree(comment.replies ?? [], commentId);
+    if (nested) {
+      return nested;
+    }
+  }
+  return null;
+}
+
+function updateCommentInTree(
+  comments: Comment[],
+  commentId: string,
+  updater: (comment: Comment) => Comment,
+): Comment[] {
+  return comments.map((comment) => {
+    if (comment.id === commentId) {
+      return updater(comment);
+    }
+
+    if (!comment.replies || comment.replies.length === 0) {
+      return comment;
+    }
+
+    return {
+      ...comment,
+      replies: updateCommentInTree(comment.replies, commentId, updater),
+    };
+  });
+}
+
+function removeCommentFromTree(comments: Comment[], commentId: string): { comments: Comment[]; removed: Comment | null } {
+  let removed: Comment | null = null;
+  const nextComments = comments
+    .filter((comment) => {
+      if (comment.id === commentId) {
+        removed = comment;
+        return false;
+      }
+      return true;
+    })
+    .map((comment) => {
+      if (removed || !comment.replies || comment.replies.length === 0) {
+        return comment;
+      }
+      const nested = removeCommentFromTree(comment.replies, commentId);
+      if (nested.removed) {
+        removed = nested.removed;
+        return {
+          ...comment,
+          replies: nested.comments,
+        };
+      }
+      return comment;
+    });
+
+  return { comments: nextComments, removed };
+}
+
+function mergeReplyThreadsIntoComments(
+  comments: Comment[],
+  repliesByCommentId: Record<string, ReplyThreadState>,
+): Comment[] {
+  return comments.map((comment) => {
+    const thread = repliesByCommentId[comment.id];
+    const mergedReplies = mergeReplyThreadsIntoComments(thread?.items ?? comment.replies ?? [], repliesByCommentId);
+    return {
+      ...comment,
+      replies: mergedReplies,
+      replyCount: comment.replyCount ?? mergedReplies.length,
+    };
+  });
+}
+
+function updateReplyThreads(
+  threads: Record<string, ReplyThreadState>,
+  updater: (thread: ReplyThreadState) => ReplyThreadState,
+): Record<string, ReplyThreadState> {
+  const nextEntries = Object.entries(threads).map(([commentId, thread]) => [commentId, updater(thread)] as const);
+  return Object.fromEntries(nextEntries);
+}
+
+function removeCommentFromReplyThreads(
+  threads: Record<string, ReplyThreadState>,
+  commentId: string,
+): { threads: Record<string, ReplyThreadState>; removed: Comment | null } {
+  let removed: Comment | null = null;
+  const nextEntries = Object.entries(threads).map(([threadCommentId, thread]) => {
+    if (removed) {
+      return [threadCommentId, thread] as const;
+    }
+
+    const nextItems = removeCommentFromTree(thread.items, commentId);
+    if (nextItems.removed) {
+      removed = nextItems.removed;
+      return [
+        threadCommentId,
+        {
+          ...thread,
+          items: nextItems.comments,
+        },
+      ] as const;
+    }
+
+    return [threadCommentId, thread] as const;
+  });
+
+  return {
+    threads: Object.fromEntries(nextEntries),
+    removed,
+  };
+}
+
 function findCommentStateById(
   opportunities: Opportunity[],
   commentId: string,
@@ -421,12 +573,18 @@ export default function App() {
   const [postsRefreshToken, setPostsRefreshToken] = useState(0);
   const [openedPost, setOpenedPost] = useState<Opportunity | null>(null);
   const [openedPostId, setOpenedPostId] = useState<string | null>(null);
+  const [openedPostComments, setOpenedPostComments] = useState<DiscussionPageState<Comment>>(
+    createInitialDiscussionPageState<Comment>(),
+  );
+  const [openedPostRepliesByCommentId, setOpenedPostRepliesByCommentId] = useState<Record<string, ReplyThreadState>>({});
   const [focusedCommentId, setFocusedCommentId] = useState<string | null>(null);
   const [hashtagPageTag, setHashtagPageTag] = useState<string | null>(null);
   const [hashtagOpportunities, setHashtagOpportunities] = useState<Opportunity[]>([]);
   const [isHashtagPostsLoading, setIsHashtagPostsLoading] = useState(false);
 
   const prevAuthenticatedRef = useRef<boolean>(auth.isAuthenticated);
+  const openedPostCommentsRef = useRef<DiscussionPageState<Comment>>(createInitialDiscussionPageState<Comment>());
+  const openedPostRepliesRef = useRef<Record<string, ReplyThreadState>>({});
 
   // Always land on homescreen after a successful login/signup.
   useEffect(() => {
@@ -465,12 +623,16 @@ export default function App() {
             setViewingProfileId(pathParts[1]);
             setOpenedPostId(null);
             setOpenedPost(null);
+            setOpenedPostComments(createInitialDiscussionPageState<Comment>());
+            setOpenedPostRepliesByCommentId({});
             setFocusedCommentId(null);
             setHashtagPageTag(null);
         } else if (mainPath === 'post' && pathParts[1]) {
             setOpenedPostId(pathParts[1]);
             const matched = opportunities.find((item) => item.id === pathParts[1]) ?? null;
             setOpenedPost(matched);
+            setOpenedPostComments(createInitialDiscussionPageState<Comment>());
+            setOpenedPostRepliesByCommentId({});
             setViewingProfileId(null);
             setFocusedCommentId(searchParams.get('commentId')?.trim() || null);
             setHashtagPageTag(null);
@@ -480,11 +642,15 @@ export default function App() {
             setViewingProfileId(null);
             setOpenedPostId(null);
             setOpenedPost(null);
+            setOpenedPostComments(createInitialDiscussionPageState<Comment>());
+            setOpenedPostRepliesByCommentId({});
             setFocusedCommentId(null);
         } else {
             setViewingProfileId(null);
             setOpenedPostId(null);
             setOpenedPost(null);
+            setOpenedPostComments(createInitialDiscussionPageState<Comment>());
+            setOpenedPostRepliesByCommentId({});
             setFocusedCommentId(null);
             setHashtagPageTag(null);
         }
@@ -517,6 +683,8 @@ export default function App() {
         setViewingProfileId(profileId);
         setOpenedPost(null);
         setOpenedPostId(null);
+        setOpenedPostComments(createInitialDiscussionPageState<Comment>());
+        setOpenedPostRepliesByCommentId({});
         setFocusedCommentId(null);
         setHashtagPageTag(null);
     } else if (tab === 'post' && postId) {
@@ -528,6 +696,8 @@ export default function App() {
         state.postId = postId;
         setViewingProfileId(null);
         setOpenedPostId(postId);
+        setOpenedPostComments(createInitialDiscussionPageState<Comment>());
+        setOpenedPostRepliesByCommentId({});
         setFocusedCommentId(options?.commentId?.trim() || null);
         setHashtagPageTag(null);
     } else if (tab === 'hashtag' && options?.hashtag) {
@@ -538,12 +708,16 @@ export default function App() {
         setViewingProfileId(null);
         setOpenedPostId(null);
         setOpenedPost(null);
+        setOpenedPostComments(createInitialDiscussionPageState<Comment>());
+        setOpenedPostRepliesByCommentId({});
         setFocusedCommentId(null);
     } else if (tab !== 'profile') {
         setViewingProfileId(null);
         if (tab !== 'post') {
           setOpenedPost(null);
           setOpenedPostId(null);
+          setOpenedPostComments(createInitialDiscussionPageState<Comment>());
+          setOpenedPostRepliesByCommentId({});
           setFocusedCommentId(null);
         }
         if (tab !== 'hashtag') {
@@ -561,6 +735,14 @@ export default function App() {
   const currentUserId = currentUser?.id ?? '';
   const authToken = auth.session?.token;
   const apiBase = resolveApiBaseUrl(import.meta.env.VITE_API_URL as string | undefined);
+
+  useEffect(() => {
+    openedPostCommentsRef.current = openedPostComments;
+  }, [openedPostComments]);
+
+  useEffect(() => {
+    openedPostRepliesRef.current = openedPostRepliesByCommentId;
+  }, [openedPostRepliesByCommentId]);
 
   // ============================================================
   // Fetch follow graph + notifications from backend on login
@@ -907,10 +1089,238 @@ export default function App() {
     })();
   };
 
+  const loadInitialPostComments = useCallback(async (postId: string) => {
+    if (!authToken) return;
+
+    setOpenedPostComments((prev) =>
+      prev.isLoading
+        ? prev
+        : {
+            ...prev,
+            isLoading: true,
+          },
+    );
+
+    try {
+      const page = await apiFetchPostComments(postId, authToken, POST_COMMENTS_PAGE_SIZE);
+      const comments = page.comments.map((comment) => mapPostCommentToComment(comment));
+      setOpenedPostComments({
+        items: comments,
+        nextCursor: page.nextCursor,
+        isLoading: false,
+        hasMore: Boolean(page.nextCursor),
+        hasHydrated: true,
+      });
+      setOpenedPostRepliesByCommentId({});
+    } catch (err) {
+      setOpenedPostComments((prev) => ({
+        ...prev,
+        isLoading: false,
+        hasHydrated: true,
+      }));
+      throw err;
+    }
+  }, [authToken]);
+
+  const loadMorePostComments = useCallback(async () => {
+    if (!authToken || !openedPostId) return;
+
+    const currentState = openedPostCommentsRef.current;
+    if (currentState.isLoading || !currentState.hasMore || !currentState.nextCursor) return;
+
+    setOpenedPostComments((prev) => ({
+      ...prev,
+      isLoading: true,
+    }));
+
+    try {
+      const page = await apiFetchPostComments(
+        openedPostId,
+        authToken,
+        POST_COMMENTS_PAGE_SIZE,
+        currentState.nextCursor,
+      );
+      const comments = page.comments.map((comment) => mapPostCommentToComment(comment));
+      setOpenedPostComments((prev) => ({
+        items: mergeUniqueComments(prev.items, comments),
+        nextCursor: page.nextCursor,
+        isLoading: false,
+        hasMore: Boolean(page.nextCursor),
+        hasHydrated: true,
+      }));
+    } catch (err) {
+      setOpenedPostComments((prev) => ({
+        ...prev,
+        isLoading: false,
+        hasHydrated: true,
+      }));
+      toast.error(err instanceof Error ? err.message : 'Unable to load more comments');
+    }
+  }, [authToken, openedPostId]);
+
+  const loadInitialReplies = useCallback(async (commentId: string) => {
+    if (!authToken) return;
+
+    setOpenedPostRepliesByCommentId((prev) => {
+      const existing = prev[commentId];
+      if (existing?.isLoading) return prev;
+      return {
+        ...prev,
+        [commentId]: {
+          items: existing?.items ?? [],
+          nextCursor: existing?.nextCursor ?? null,
+          isLoading: true,
+          hasMore: existing?.hasMore ?? true,
+          hasHydrated: existing?.hasHydrated ?? false,
+          isExpanded: true,
+        },
+      };
+    });
+
+    try {
+      const page = await apiFetchCommentReplies(commentId, authToken, COMMENT_REPLIES_PAGE_SIZE);
+      const replies = page.comments.map((comment) => mapPostCommentToComment(comment));
+      setOpenedPostRepliesByCommentId((prev) => ({
+        ...prev,
+        [commentId]: {
+          items: replies,
+          nextCursor: page.nextCursor,
+          isLoading: false,
+          hasMore: Boolean(page.nextCursor),
+          hasHydrated: true,
+          isExpanded: true,
+        },
+      }));
+    } catch (err) {
+      setOpenedPostRepliesByCommentId((prev) => ({
+        ...prev,
+        [commentId]: {
+          items: prev[commentId]?.items ?? [],
+          nextCursor: prev[commentId]?.nextCursor ?? null,
+          isLoading: false,
+          hasMore: prev[commentId]?.hasMore ?? true,
+          hasHydrated: true,
+          isExpanded: true,
+        },
+      }));
+      toast.error(err instanceof Error ? err.message : 'Unable to load replies');
+      throw err;
+    }
+  }, [authToken]);
+
+  const loadMoreReplies = useCallback(async (commentId: string) => {
+    if (!authToken) return;
+
+    const currentThread = openedPostRepliesRef.current[commentId];
+    if (!currentThread || currentThread.isLoading || !currentThread.hasMore || !currentThread.nextCursor) return;
+
+    setOpenedPostRepliesByCommentId((prev) => ({
+      ...prev,
+      [commentId]: {
+        ...prev[commentId],
+        isLoading: true,
+      },
+    }));
+
+    try {
+      const page = await apiFetchCommentReplies(
+        commentId,
+        authToken,
+        COMMENT_REPLIES_PAGE_SIZE,
+        currentThread.nextCursor,
+      );
+      const replies = page.comments.map((comment) => mapPostCommentToComment(comment));
+      setOpenedPostRepliesByCommentId((prev) => ({
+        ...prev,
+        [commentId]: {
+          ...prev[commentId],
+          items: mergeUniqueComments(prev[commentId]?.items ?? [], replies),
+          nextCursor: page.nextCursor,
+          isLoading: false,
+          hasMore: Boolean(page.nextCursor),
+          hasHydrated: true,
+          isExpanded: true,
+        },
+      }));
+    } catch (err) {
+      setOpenedPostRepliesByCommentId((prev) => ({
+        ...prev,
+        [commentId]: {
+          ...prev[commentId],
+          isLoading: false,
+          hasHydrated: true,
+          isExpanded: true,
+        },
+      }));
+      toast.error(err instanceof Error ? err.message : 'Unable to load more replies');
+    }
+  }, [authToken]);
+
+  const handleToggleReplies = useCallback(async (commentId: string) => {
+    const existing = openedPostRepliesRef.current[commentId];
+    if (existing?.isExpanded) {
+      setOpenedPostRepliesByCommentId((prev) => ({
+        ...prev,
+        [commentId]: {
+          ...prev[commentId],
+          isExpanded: false,
+        },
+      }));
+      return;
+    }
+
+    if (existing?.hasHydrated) {
+      setOpenedPostRepliesByCommentId((prev) => ({
+        ...prev,
+        [commentId]: {
+          ...prev[commentId],
+          isExpanded: true,
+        },
+      }));
+      return;
+    }
+
+    await loadInitialReplies(commentId);
+  }, [loadInitialReplies]);
+
   const handleComment = (opportunityId: string, commentText: string) => {
     void (async () => {
       try {
-        await apiAddComment(opportunityId, commentText, authToken);
+        const createdAt = new Date().toISOString();
+        const createdCommentId = await apiAddComment(opportunityId, commentText, authToken);
+
+        if (openedPostId === opportunityId) {
+          const optimisticComment: Comment = {
+            id: createdCommentId || `temp-comment-${createdAt}`,
+            postId: opportunityId,
+            authorId: currentUserId,
+            authorName: currentUser.name,
+            authorAvatar: currentUser.avatar,
+            content: commentText,
+            timestamp: createdAt,
+            parentCommentId: null,
+            replies: [],
+            likeCount: 0,
+            replyCount: 0,
+            isLikedByMe: false,
+            canDelete: true,
+          };
+
+          setOpenedPostComments((prev) => ({
+            ...prev,
+            items: [...prev.items, optimisticComment],
+            hasHydrated: true,
+          }));
+          setOpenedPost((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  commentCount: Math.max((prev.commentCount ?? prev.comments.length) + 1, 0),
+                }
+              : prev,
+          );
+        }
+
         await refreshFeedPosts();
         if (hashtagPageTag) {
           await refreshHashtagPosts();
@@ -925,7 +1335,66 @@ export default function App() {
   const handleReply = (commentId: string, content: string) => {
     void (async () => {
       try {
-        await apiAddReply(commentId, content, authToken);
+        const createdAt = new Date().toISOString();
+        const createdReplyId = await apiAddReply(commentId, content, authToken);
+
+        if (openedPostId) {
+          const optimisticReply: Comment = {
+            id: createdReplyId || `temp-reply-${createdAt}`,
+            postId: openedPostId,
+            authorId: currentUserId,
+            authorName: currentUser.name,
+            authorAvatar: currentUser.avatar,
+            content,
+            timestamp: createdAt,
+            parentCommentId: commentId,
+            replies: [],
+            likeCount: 0,
+            replyCount: 0,
+            isLikedByMe: false,
+            canDelete: true,
+          };
+
+          setOpenedPostComments((prev) =>
+            ({
+              ...prev,
+              items: updateCommentInTree(prev.items, commentId, (comment) => ({
+                ...comment,
+                replyCount: (comment.replyCount ?? 0) + 1,
+              })),
+            }),
+          );
+          setOpenedPostRepliesByCommentId((prev) => {
+            const next = updateReplyThreads(prev, (thread) => ({
+              ...thread,
+              items: updateCommentInTree(thread.items, commentId, (comment) => ({
+                ...comment,
+                replyCount: (comment.replyCount ?? 0) + 1,
+              })),
+            }));
+            const thread = next[commentId];
+            if (!thread?.isExpanded) {
+              return next;
+            }
+            return {
+              ...next,
+              [commentId]: {
+                ...thread,
+                items: mergeUniqueComments(thread.items, [optimisticReply]),
+                hasHydrated: true,
+              },
+            };
+          });
+          setOpenedPost((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  commentCount: Math.max((prev.commentCount ?? prev.comments.length) + 1, 0),
+                }
+              : prev,
+          );
+        }
+
         await refreshFeedPosts();
         if (hashtagPageTag) {
           await refreshHashtagPosts();
@@ -937,37 +1406,20 @@ export default function App() {
     })();
   };
 
-  const handleLoadReplies = async (commentId: string): Promise<void> => {
-    if (!authToken) return;
-    try {
-      let replies = (await apiFetchCommentReplies(commentId, authToken, 100)).comments.map((comment) =>
-        mapPostCommentToComment(comment),
-      );
-
-      if (replies.length === 0 && openedPostId) {
-        const threadedCommentsPage = await apiFetchPostComments(openedPostId, authToken, 100, null, true);
-        const threadedComments = threadedCommentsPage.comments.map((comment) => mapPostCommentToComment(comment));
-        replies = findRepliesForComment(threadedComments, commentId) ?? [];
-      }
-
-      setOpenedPost((prev) =>
-        prev
-          ? {
-              ...prev,
-              comments: attachRepliesToComment(prev.comments ?? [], commentId, replies),
-            }
-          : prev,
-      );
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Unable to load replies');
-      throw err;
-    }
-  };
-
   const handleLikeComment = (commentId: string, alreadyLiked: boolean) => {
+    const openedPostComment = findCommentInTree(
+      mergeReplyThreadsIntoComments(openedPostCommentsRef.current.items, openedPostRepliesRef.current),
+      commentId,
+    );
     const existing =
       findCommentStateById(opportunities, commentId) ??
-      findCommentStateById(hashtagOpportunities, commentId);
+      findCommentStateById(hashtagOpportunities, commentId) ??
+      (openedPostComment
+        ? {
+            isLiked: Boolean(openedPostComment.isLikedByMe),
+            likeCount: Math.max(openedPostComment.likeCount ?? 0, 0),
+          }
+        : null);
     if (!existing) return;
     const nextLiked = !alreadyLiked;
     const previousLiked = existing.isLiked;
@@ -983,6 +1435,16 @@ export default function App() {
       prev.map((opp) => ({
         ...opp,
         comments: updateCommentLikeState(opp.comments ?? [], commentId, nextLiked),
+      })),
+    );
+    setOpenedPostComments((prev) => ({
+      ...prev,
+      items: updateCommentLikeState(prev.items, commentId, nextLiked),
+    }));
+    setOpenedPostRepliesByCommentId((prev) =>
+      updateReplyThreads(prev, (thread) => ({
+        ...thread,
+        items: updateCommentLikeState(thread.items, commentId, nextLiked),
       })),
     );
 
@@ -1017,6 +1479,16 @@ export default function App() {
             ),
           })),
         );
+        setOpenedPostComments((prev) => ({
+          ...prev,
+          items: restoreCommentLikeState(prev.items, commentId, previousLiked, previousLikeCount),
+        }));
+        setOpenedPostRepliesByCommentId((prev) =>
+          updateReplyThreads(prev, (thread) => ({
+            ...thread,
+            items: restoreCommentLikeState(thread.items, commentId, previousLiked, previousLikeCount),
+          })),
+        );
       }
     })();
   };
@@ -1025,6 +1497,53 @@ export default function App() {
     void (async () => {
       try {
         await apiDeleteComment(commentId, authToken);
+        const removedTopLevel = removeCommentFromTree(openedPostCommentsRef.current.items, commentId);
+        const removedReplies = removedTopLevel.removed
+          ? { threads: openedPostRepliesRef.current, removed: removedTopLevel.removed }
+          : removeCommentFromReplyThreads(openedPostRepliesRef.current, commentId);
+        const removedComment = removedTopLevel.removed ?? removedReplies.removed;
+
+        if (removedComment && openedPostId) {
+          setOpenedPostComments((prev) => ({
+            ...prev,
+            items:
+              removedComment.parentCommentId
+                ? updateCommentInTree(removedTopLevel.comments, removedComment.parentCommentId, (comment) => ({
+                    ...comment,
+                    replyCount: Math.max((comment.replyCount ?? 0) - 1, 0),
+                  }))
+                : removedTopLevel.comments,
+          }));
+          setOpenedPostRepliesByCommentId((prev) => {
+            let next = { ...(removedTopLevel.removed ? prev : removedReplies.threads) };
+            delete next[commentId];
+            next = updateReplyThreads(next, (thread) => ({
+              ...thread,
+              items:
+                removedComment.parentCommentId
+                  ? updateCommentInTree(thread.items, removedComment.parentCommentId, (comment) => ({
+                      ...comment,
+                      replyCount: Math.max((comment.replyCount ?? 0) - 1, 0),
+                    }))
+                  : thread.items,
+            }));
+            if (removedComment.parentCommentId && next[removedComment.parentCommentId]) {
+              next[removedComment.parentCommentId] = {
+                ...next[removedComment.parentCommentId],
+                items: next[removedComment.parentCommentId].items.filter((item) => item.id !== commentId),
+              };
+            }
+            return next;
+          });
+          setOpenedPost((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  commentCount: Math.max((prev.commentCount ?? prev.comments.length) - 1, 0),
+                }
+              : prev,
+          );
+        }
         await refreshFeedPosts();
         if (hashtagPageTag) {
           await refreshHashtagPosts();
@@ -1085,6 +1604,8 @@ export default function App() {
   const handleOpenPost = (post: Opportunity) => {
     setOpenedPost(post);
     setOpenedPostId(post.id);
+    setOpenedPostComments(createInitialDiscussionPageState<Comment>());
+    setOpenedPostRepliesByCommentId({});
     navigate('post', undefined, post.id, { commentId: undefined });
   };
 
@@ -1113,10 +1634,11 @@ export default function App() {
     void (async () => {
       try {
         const post = await apiFetchPostById(openedPostId, authToken);
-        const commentsPage = await apiFetchPostComments(openedPostId, authToken, 100, null, true);
         if (cancelled) return;
-        const mapped = userPostToOpportunity({ ...post, comments: commentsPage.comments }, currentUser);
+        const mapped = userPostToOpportunity({ ...post, comments: [] }, currentUser);
         setOpenedPost(mapped);
+        await loadInitialPostComments(openedPostId);
+        if (cancelled) return;
         setOpportunities((prev) =>
           prev.map((item) => (item.id === mapped.id ? mapped : item))
         );
@@ -1133,7 +1655,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, openedPostId, authToken, currentUser]);
+  }, [activeTab, openedPostId, authToken, currentUser, loadInitialPostComments]);
 
   const persistCreatedPost = async (draft: any) => {
     if (!authToken) {
@@ -1547,6 +2069,14 @@ export default function App() {
 
   const currentFollowerCount = (followGraph.followersByUserId[currentUserId] ?? []).length;
   const currentFollowingCount = (followGraph.followingByUserId[currentUserId] ?? []).length;
+  const openedPostRenderedComments = useMemo(
+    () => mergeReplyThreadsIntoComments(openedPostComments.items, openedPostRepliesByCommentId),
+    [openedPostComments.items, openedPostRepliesByCommentId],
+  );
+  const openedPostForDisplay = useMemo(
+    () => (openedPost ? { ...openedPost, comments: openedPostRenderedComments } : null),
+    [openedPost, openedPostRenderedComments],
+  );
 
   if (auth.isLoading) {
     return <LoadingState type="page" />;
@@ -1714,7 +2244,6 @@ export default function App() {
               onSave={handleSave}
               onComment={handleComment}
               onReply={handleReply}
-              onLoadReplies={handleLoadReplies}
               onLikeComment={handleLikeComment}
               onDeleteComment={handleDeleteComment}
               onEditPost={handleEditPost}
@@ -1726,16 +2255,21 @@ export default function App() {
             <LoadingState type="profile" />
           )
         ) : activeTab === 'post' ? (
-          openedPost ? (
+          openedPostForDisplay ? (
             <PostPage
-              post={openedPost}
+              post={openedPostForDisplay}
               currentUserId={currentUserId}
               focusCommentId={focusedCommentId}
+              commentsState={openedPostComments}
+              repliesByCommentId={openedPostRepliesByCommentId}
               onBack={() => window.history.back()}
               onLike={handleLike}
               onSave={handleSave}
               onComment={handleComment}
               onReply={handleReply}
+              onLoadMoreComments={loadMorePostComments}
+              onToggleReplies={handleToggleReplies}
+              onLoadMoreReplies={loadMoreReplies}
               onLikeComment={handleLikeComment}
               onDeleteComment={handleDeleteComment}
               onViewProfile={handleViewProfile}

@@ -178,6 +178,8 @@ function normalizeUserPost(raw: any): UserPost {
 }
 
 const pendingFeedRequests = new Map<string, Promise<UserPost[]>>();
+const pendingPostCommentsRequests = new Map<string, Promise<CommentsPage>>();
+const pendingCommentRepliesRequests = new Map<string, Promise<CommentsPage>>();
 
 export async function apiFetchFeedPosts(token?: string, hashtag?: string): Promise<UserPost[]> {
   const params = new URLSearchParams();
@@ -397,7 +399,7 @@ export async function apiDeletePost(postId: string, token?: string): Promise<voi
   }
 }
 
-export async function apiAddComment(postId: string, content: string, token?: string): Promise<void> {
+export async function apiAddComment(postId: string, content: string, token?: string): Promise<string> {
   const response = await fetch(`${API_BASE}/posts/${encodeURIComponent(postId)}/comments`, {
     method: 'POST',
     headers: {
@@ -410,6 +412,9 @@ export async function apiAddComment(postId: string, content: string, token?: str
   if (!response.ok) {
     throw new Error(await parseErrorMessage(response));
   }
+
+  const data = (await response.json().catch(() => ({}))) as { commentId?: unknown };
+  return String(data.commentId ?? '');
 }
 
 export async function apiFetchPostComments(
@@ -419,28 +424,41 @@ export async function apiFetchPostComments(
   cursor?: string | null,
   includeReplies = false,
 ): Promise<CommentsPage> {
+  const requestKey = `${token ?? 'anonymous'}:${postId}:${limit}:${cursor ?? ''}:${includeReplies ? 'with-replies' : 'flat'}`;
+  const pending = pendingPostCommentsRequests.get(requestKey);
+  if (pending) return pending;
+
   const params = new URLSearchParams({ limit: String(limit) });
   if (cursor) params.set('cursor', cursor);
   if (includeReplies) params.set('includeReplies', 'true');
 
-  const response = await fetch(`${API_BASE}/posts/${encodeURIComponent(postId)}/comments?${params}`, {
-    headers: {
-      ...authHeaders(token),
-    },
-  });
+  const request = (async () => {
+    const response = await fetch(`${API_BASE}/posts/${encodeURIComponent(postId)}/comments?${params}`, {
+      headers: {
+        ...authHeaders(token),
+      },
+    });
 
-  if (!response.ok) {
-    throw new Error(await parseErrorMessage(response));
+    if (!response.ok) {
+      throw new Error(await parseErrorMessage(response));
+    }
+
+    const data = (await response.json().catch(() => ({}))) as { comments?: unknown[]; nextCursor?: unknown };
+    return {
+      comments: Array.isArray(data.comments) ? data.comments.map((item) => normalizeComment(item)) : [],
+      nextCursor: data.nextCursor ? String(data.nextCursor) : null,
+    };
+  })();
+
+  pendingPostCommentsRequests.set(requestKey, request);
+  try {
+    return await request;
+  } finally {
+    pendingPostCommentsRequests.delete(requestKey);
   }
-
-  const data = (await response.json().catch(() => ({}))) as { comments?: unknown[]; nextCursor?: unknown };
-  return {
-    comments: Array.isArray(data.comments) ? data.comments.map((item) => normalizeComment(item)) : [],
-    nextCursor: data.nextCursor ? String(data.nextCursor) : null,
-  };
 }
 
-export async function apiAddReply(commentId: string, content: string, token?: string): Promise<void> {
+export async function apiAddReply(commentId: string, content: string, token?: string): Promise<string> {
   const response = await fetch(`${API_BASE}/posts/comments/${encodeURIComponent(commentId)}/replies`, {
     method: 'POST',
     headers: {
@@ -453,6 +471,9 @@ export async function apiAddReply(commentId: string, content: string, token?: st
   if (!response.ok) {
     throw new Error(await parseErrorMessage(response));
   }
+
+  const data = (await response.json().catch(() => ({}))) as { commentId?: unknown };
+  return String(data.commentId ?? '');
 }
 
 export async function apiFetchCommentReplies(
@@ -461,24 +482,37 @@ export async function apiFetchCommentReplies(
   limit = 50,
   cursor?: string | null,
 ): Promise<CommentsPage> {
+  const requestKey = `${token ?? 'anonymous'}:${commentId}:${limit}:${cursor ?? ''}`;
+  const pending = pendingCommentRepliesRequests.get(requestKey);
+  if (pending) return pending;
+
   const params = new URLSearchParams({ limit: String(limit) });
   if (cursor) params.set('cursor', cursor);
 
-  const response = await fetch(`${API_BASE}/posts/comments/${encodeURIComponent(commentId)}/replies?${params}`, {
-    headers: {
-      ...authHeaders(token),
-    },
-  });
+  const request = (async () => {
+    const response = await fetch(`${API_BASE}/posts/comments/${encodeURIComponent(commentId)}/replies?${params}`, {
+      headers: {
+        ...authHeaders(token),
+      },
+    });
 
-  if (!response.ok) {
-    throw new Error(await parseErrorMessage(response));
+    if (!response.ok) {
+      throw new Error(await parseErrorMessage(response));
+    }
+
+    const data = (await response.json().catch(() => ({}))) as { comments?: unknown[]; nextCursor?: unknown };
+    return {
+      comments: Array.isArray(data.comments) ? data.comments.map((item) => normalizeComment(item)) : [],
+      nextCursor: data.nextCursor ? String(data.nextCursor) : null,
+    };
+  })();
+
+  pendingCommentRepliesRequests.set(requestKey, request);
+  try {
+    return await request;
+  } finally {
+    pendingCommentRepliesRequests.delete(requestKey);
   }
-
-  const data = (await response.json().catch(() => ({}))) as { comments?: unknown[]; nextCursor?: unknown };
-  return {
-    comments: Array.isArray(data.comments) ? data.comments.map((item) => normalizeComment(item)) : [],
-    nextCursor: data.nextCursor ? String(data.nextCursor) : null,
-  };
 }
 
 export async function apiDeleteComment(commentId: string, token?: string): Promise<void> {

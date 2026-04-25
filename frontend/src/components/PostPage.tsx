@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Bookmark, Calendar, Heart, MapPin, MessageCircle, Trash2 } from 'lucide-react';
 import { Opportunity, Comment } from '../types';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -8,16 +8,60 @@ import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 
+interface DiscussionListState {
+  isLoading: boolean;
+  hasMore: boolean;
+  hasHydrated: boolean;
+}
+
+interface ReplyThreadViewState extends DiscussionListState {
+  isExpanded: boolean;
+}
+
+interface AutoLoadTriggerProps {
+  enabled: boolean;
+  onVisible?: () => void;
+}
+
+function AutoLoadTrigger({ enabled, onVisible }: AutoLoadTriggerProps) {
+  const triggerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const element = triggerRef.current;
+    if (!enabled || !element || !onVisible) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          onVisible();
+        }
+      },
+      {
+        rootMargin: '160px 0px',
+      },
+    );
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [enabled, onVisible]);
+
+  return <div ref={triggerRef} className="h-1 w-full" aria-hidden="true" />;
+}
+
 interface PostPageProps {
   post: Opportunity;
   currentUserId: string;
   focusCommentId?: string | null;
+  commentsState: DiscussionListState;
+  repliesByCommentId: Record<string, ReplyThreadViewState>;
   onBack: () => void;
   onLike: (id: string) => void;
   onSave: (id: string) => void;
   onComment: (id: string, comment: string) => void;
   onReply?: (commentId: string, content: string) => void;
-  onLoadReplies?: (commentId: string) => Promise<void>;
+  onLoadMoreComments?: () => Promise<void> | void;
+  onToggleReplies?: (commentId: string) => Promise<void> | void;
+  onLoadMoreReplies?: (commentId: string) => Promise<void> | void;
   onLikeComment?: (commentId: string, alreadyLiked: boolean) => void;
   onDeleteComment?: (commentId: string) => void;
   onViewProfile?: (authorId: string) => void;
@@ -27,12 +71,16 @@ export function PostPage({
   post,
   currentUserId,
   focusCommentId,
+  commentsState,
+  repliesByCommentId,
   onBack,
   onLike,
   onSave,
   onComment,
   onReply,
-  onLoadReplies,
+  onLoadMoreComments,
+  onToggleReplies,
+  onLoadMoreReplies,
   onLikeComment,
   onDeleteComment,
   onViewProfile,
@@ -40,8 +88,6 @@ export function PostPage({
   const [commentText, setCommentText] = useState('');
   const [replyByCommentId, setReplyByCommentId] = useState<Record<string, string>>({});
   const [openReplyByCommentId, setOpenReplyByCommentId] = useState<Record<string, boolean>>({});
-  const [expandedRepliesByCommentId, setExpandedRepliesByCommentId] = useState<Record<string, boolean>>({});
-  const [loadingRepliesByCommentId, setLoadingRepliesByCommentId] = useState<Record<string, boolean>>({});
   const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
 
   const isLiked = post.isLikedByMe ?? post.likes.includes(currentUserId);
@@ -84,20 +130,6 @@ export function PostPage({
     if (!focusCommentId) return;
     if (!parentCommentById.has(focusCommentId)) return;
 
-    const toExpand: Record<string, boolean> = {};
-    let cursor: string | null = focusCommentId;
-
-    while (cursor) {
-      const parentId = parentCommentById.get(cursor) ?? null;
-      if (!parentId) break;
-      toExpand[parentId] = true;
-      cursor = parentId;
-    }
-
-    if (Object.keys(toExpand).length > 0) {
-      setExpandedRepliesByCommentId((prev) => ({ ...prev, ...toExpand }));
-    }
-
     setHighlightedCommentId(focusCommentId);
     const scrollTimeout = window.setTimeout(() => {
       const target = document.getElementById(`comment-${focusCommentId}`);
@@ -126,32 +158,14 @@ export function PostPage({
     setOpenReplyByCommentId((prev) => ({ ...prev, [commentId]: false }));
   };
 
-  const toggleReplies = async (comment: Comment) => {
-    const isExpanded = Boolean(expandedRepliesByCommentId[comment.id]);
-    if (isExpanded) {
-      setExpandedRepliesByCommentId((prev) => ({ ...prev, [comment.id]: false }));
-      return;
-    }
-
-    const shouldLoadReplies = (comment.replies ?? []).length === 0 && (comment.replyCount ?? 0) > 0;
-    if (shouldLoadReplies && onLoadReplies) {
-      setLoadingRepliesByCommentId((prev) => ({ ...prev, [comment.id]: true }));
-      try {
-        await onLoadReplies(comment.id);
-        setExpandedRepliesByCommentId((prev) => ({ ...prev, [comment.id]: true }));
-      } finally {
-        setLoadingRepliesByCommentId((prev) => ({ ...prev, [comment.id]: false }));
-      }
-      return;
-    }
-
-    setExpandedRepliesByCommentId((prev) => ({ ...prev, [comment.id]: true }));
-  };
-
   const renderComment = (comment: Comment, depth = 0) => {
     const childComments = comment.replies ?? [];
     const replyCount = comment.replyCount ?? childComments.length;
-    const isLoadingReplies = Boolean(loadingRepliesByCommentId[comment.id]);
+    const threadState = repliesByCommentId[comment.id];
+    const isExpanded = Boolean(threadState?.isExpanded);
+    const isLoadingReplies = Boolean(threadState?.isLoading);
+    const hasHydratedReplies = Boolean(threadState?.hasHydrated);
+    const hasMoreReplies = Boolean(threadState?.hasMore);
     const isCommentLiked = comment.isLikedByMe ?? false;
     const commentLikes = comment.likeCount ?? 0;
 
@@ -171,7 +185,13 @@ export function PostPage({
           <div className="flex-1">
             <div className="bg-gray-50 rounded-xl p-3">
               <div className="flex items-start justify-between gap-2">
-                <p className="text-sm text-gray-900">{comment.authorName}</p>
+                <button
+                  type="button"
+                  className="text-sm text-gray-900 text-left hover:text-primary"
+                  onClick={() => onViewProfile?.(comment.authorId)}
+                >
+                  {comment.authorName}
+                </button>
                 {comment.canDelete && onDeleteComment && (
                   <button
                     type="button"
@@ -235,21 +255,39 @@ export function PostPage({
               <button
                 type="button"
                 className="mt-2 text-xs text-primary hover:underline"
-                onClick={() => void toggleReplies(comment)}
+                onClick={() => void onToggleReplies?.(comment.id)}
               >
-                {isLoadingReplies
+                {isLoadingReplies && !hasHydratedReplies
                   ? 'Loading replies...'
-                  : expandedRepliesByCommentId[comment.id]
+                  : isExpanded
                     ? 'Hide replies'
                     : `View replies (${replyCount})`}
               </button>
             )}
 
-            {expandedRepliesByCommentId[comment.id] && !isLoadingReplies && replyCount > 0 && childComments.length === 0 && (
-              <p className="mt-2 text-xs text-gray-500">No replies loaded yet.</p>
+            {isExpanded && isLoadingReplies && (
+              <p className="mt-2 text-xs text-gray-500">Loading replies...</p>
             )}
 
-            {expandedRepliesByCommentId[comment.id] && childComments.map((reply) => renderComment(reply, depth + 1))}
+            {isExpanded && !isLoadingReplies && hasHydratedReplies && replyCount > 0 && childComments.length === 0 && (
+              <p className="mt-2 text-xs text-gray-500">No replies found.</p>
+            )}
+
+            {isExpanded && childComments.map((reply) => renderComment(reply, depth + 1))}
+
+            {isExpanded && hasMoreReplies && (
+              <div className="mt-2">
+                <AutoLoadTrigger
+                  enabled={!isLoadingReplies}
+                  onVisible={() => {
+                    void onLoadMoreReplies?.(comment.id);
+                  }}
+                />
+                {isLoadingReplies && hasHydratedReplies && (
+                  <p className="text-xs text-gray-500">Loading more replies...</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -338,9 +376,31 @@ export function PostPage({
 
           <div className="space-y-4 border-t border-primary/10 pt-4">
             {topLevelComments.map((comment) => renderComment(comment))}
+
+            {commentsState.isLoading && topLevelComments.length === 0 && (
+              <p className="text-sm text-gray-500">Loading comments...</p>
+            )}
+
+            {!commentsState.isLoading && commentsState.hasHydrated && topLevelComments.length === 0 && (
+              <p className="text-sm text-gray-500">No comments yet.</p>
+            )}
+
+            {commentsState.hasMore && (
+              <div>
+                <AutoLoadTrigger
+                  enabled={!commentsState.isLoading}
+                  onVisible={() => {
+                    void onLoadMoreComments?.();
+                  }}
+                />
+                {commentsState.isLoading && topLevelComments.length > 0 && (
+                  <p className="text-xs text-gray-500">Loading more comments...</p>
+                )}
+              </div>
+            )}
+
             <div className="flex gap-3">
               <Avatar className="w-8 h-8 ring-2 ring-primary/10">
-
                 <AvatarFallback>Y</AvatarFallback>
               </Avatar>
               <div className="flex-1 space-y-2">
