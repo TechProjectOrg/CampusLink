@@ -134,6 +134,9 @@ export interface ChatConversation {
   lastMessage: string;
   timestamp: string;
   unread: number;
+  isOnline?: boolean;
+  lastSeenAt?: string | null;
+  isRequest?: boolean;
   isGroup?: boolean;
   groupMembers?: string[];
 }

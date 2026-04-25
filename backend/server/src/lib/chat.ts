@@ -15,8 +15,18 @@ export interface ChatMessagePayload {
   content: string | null;
   reactions: Record<string, string[]>;
   replyToMessageId: string | null;
+  replyTo: ChatReplyPreview | null;
   attachments: { fileUrl: string; fileType: string }[];
   createdAt: string;
+}
+
+export interface ChatReplyPreview {
+  id: string;
+  senderId: string;
+  senderName: string;
+  type: string;
+  content: string | null;
+  attachmentUrl: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -227,11 +237,12 @@ export function emitChatRead(
   participantIds: string[],
   chatId: string,
   userId: string,
-  lastReadMessageId: string
+  lastReadMessageId: string,
+  readAt: string
 ): void {
   const envelope = {
     type: 'chat:read' as const,
-    payload: { chatId, userId, lastReadMessageId },
+    payload: { chatId, userId, lastReadMessageId, readAt },
   };
   for (const uid of participantIds) {
     if (uid !== userId) emitToUser(uid, envelope);

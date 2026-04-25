@@ -1,30 +1,32 @@
 import { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Minus, Send, Search, MoreVertical, Smile, Image as ImageIcon } from 'lucide-react';
+import { MessageCircle, X, Minus, Search, MoreVertical, Smile, Image as ImageIcon, Reply, Flag } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
 import { ChatConversation } from '../types';
-import { apiFetchMessages, apiSendMessage, ChatMessageApi } from '../lib/chatApi';
+import { apiFetchMessages, apiMarkChatRead, apiReactToMessage, apiSendImageMessage, apiSendMessage, ChatMessageApi } from '../lib/chatApi';
 import { getAuthToken } from '../lib/authStorage';
-
-interface Message {
-  id: string;
-  senderId: string;
-  content: string;
-  timestamp: string;
-  isOwn: boolean;
-}
+import { CHAT_EMOJIS, REACTION_EMOJIS, formatSeenTime, mapRealtimeChatMessage, mergeChatMessageList, summarizeReply } from '../lib/chatUi';
+import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
 
 interface FloatingChatProps {
   conversations: ChatConversation[];
   currentUserId: string;
   onOpenFullChat: () => void;
   onChatClick?: (conversationId: string) => void;
+  onChatRead?: (conversationId: string) => void;
 }
 
-export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onChatClick }: FloatingChatProps) {
+export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onChatClick, onChatRead }: FloatingChatProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
@@ -34,6 +36,11 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
   // Real messages for each conversation
   const [messages, setMessages] = useState<{ [key: string]: ChatMessageApi[] }>({});
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<ChatMessageApi | null>(null);
+  const [seenTick, setSeenTick] = useState(0);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const readMessageByChatRef = useRef<Record<string, string>>({});
 
   // Load messages for the selected chat
   useEffect(() => {
@@ -68,25 +75,39 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
       if (parsed.type === 'chat:message') {
         const payload = parsed.payload;
         if (!payload) return;
-        
         const chatId = payload.chatId;
-        const mappedMessage: ChatMessageApi = {
-          id: payload.messageId,
-          senderId: payload.senderUserId,
-          senderName: payload.senderUsername,
-          senderAvatar: payload.senderProfilePhotoUrl,
-          type: payload.messageType,
-          content: payload.content,
-          reactions: payload.reactions,
-          timestamp: payload.createdAt,
-          attachments: payload.attachments || [],
-          isOwn: payload.senderUserId === currentUserId
-        };
+        const mappedMessage = mapRealtimeChatMessage(payload, currentUserId);
         
         setMessages(prev => {
           const currentList = prev[chatId] || [];
-          if (currentList.some(m => m.id === mappedMessage.id)) return prev;
-          return { ...prev, [chatId]: [...currentList, mappedMessage] };
+          return { ...prev, [chatId]: mergeChatMessageList(currentList, mappedMessage) };
+        });
+      }
+
+      if (parsed.type === 'chat:reaction') {
+        const payload = parsed.payload;
+        if (!payload) return;
+        setMessages(prev => ({
+          ...prev,
+          [payload.chatId]: (prev[payload.chatId] || []).map(msg =>
+            msg.id === payload.messageId ? { ...msg, reactions: payload.reactions || {} } : msg
+          )
+        }));
+      }
+
+      if (parsed.type === 'chat:read') {
+        const payload = parsed.payload;
+        if (!payload || payload.userId === currentUserId) return;
+        setMessages(prev => {
+          const currentList = prev[payload.chatId] || [];
+          const readIndex = currentList.findIndex(msg => msg.id === payload.lastReadMessageId);
+          if (readIndex === -1) return prev;
+          return {
+            ...prev,
+            [payload.chatId]: currentList.map((msg, index) =>
+              msg.isOwn && index <= readIndex ? { ...msg, readAt: payload.readAt } : msg
+            )
+          };
         });
       }
     };
@@ -105,7 +126,9 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
     e?.preventDefault();
     if (messageInput.trim() && selectedConversation) {
       const content = messageInput.trim();
+      const replyTarget = replyingTo;
       setMessageInput('');
+      setReplyingTo(null);
 
       const optimisticMessage: ChatMessageApi = {
         id: `temp-${Date.now()}`,
@@ -117,6 +140,15 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
         reactions: {},
         timestamp: new Date().toISOString(),
         attachments: [],
+        replyToMessageId: replyTarget?.id ?? null,
+        replyTo: replyTarget ? {
+          id: replyTarget.id,
+          senderId: replyTarget.senderId,
+          senderName: replyTarget.isOwn ? 'You' : replyTarget.senderName,
+          type: replyTarget.type,
+          content: replyTarget.content,
+          attachmentUrl: replyTarget.attachments[0]?.fileUrl ?? null
+        } : null,
         isOwn: true
       };
 
@@ -128,7 +160,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
       try {
         const token = getAuthToken();
         if (!token) return;
-        await apiSendMessage(selectedConversation, content, token);
+        await apiSendMessage(selectedConversation, content, token, replyTarget?.id);
       } catch (err) {
         console.error('Failed to send message:', err);
         // Remove optimistic message on failure
@@ -138,6 +170,87 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
         }));
       }
     }
+  };
+
+  const handleSendImage = async (file: File | undefined) => {
+    if (!file || !selectedConversation) return;
+    if (!file.type.startsWith('image/')) {
+      window.alert('Please choose an image file.');
+      return;
+    }
+    const token = getAuthToken();
+    if (!token) return;
+
+    const replyTarget = replyingTo;
+    setReplyingTo(null);
+    const previewUrl = URL.createObjectURL(file);
+    const optimisticMessage: ChatMessageApi = {
+      id: `temp-${Date.now()}`,
+      senderId: currentUserId,
+      senderName: 'You',
+      senderAvatar: null,
+      type: 'image',
+      content: null,
+      reactions: {},
+      timestamp: new Date().toISOString(),
+      attachments: [{ fileUrl: previewUrl, fileType: file.type }],
+      replyToMessageId: replyTarget?.id ?? null,
+      replyTo: replyTarget ? {
+        id: replyTarget.id,
+        senderId: replyTarget.senderId,
+        senderName: replyTarget.isOwn ? 'You' : replyTarget.senderName,
+        type: replyTarget.type,
+        content: replyTarget.content,
+        attachmentUrl: replyTarget.attachments[0]?.fileUrl ?? null
+      } : null,
+      isOwn: true
+    };
+
+    setMessages(prev => ({
+      ...prev,
+      [selectedConversation]: [...(prev[selectedConversation] || []), optimisticMessage]
+    }));
+
+    try {
+      await apiSendImageMessage(selectedConversation, file, token, replyTarget?.id);
+    } catch (err) {
+      console.error('Failed to send image:', err);
+      setMessages(prev => ({
+        ...prev,
+        [selectedConversation]: (prev[selectedConversation] || []).filter(m => m.id !== optimisticMessage.id)
+      }));
+      window.alert(err instanceof Error ? err.message : 'Failed to send image');
+    } finally {
+      URL.revokeObjectURL(previewUrl);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleReactToMessage = async (messageId: string, emoji: string) => {
+    if (!selectedConversation || messageId.startsWith('temp-')) return;
+    const token = getAuthToken();
+    if (!token) return;
+    try {
+      await apiReactToMessage(selectedConversation, messageId, emoji, token);
+    } catch (err) {
+      console.error('Failed to react to message:', err);
+    }
+  };
+
+  const appendEmoji = (emoji: string) => {
+    const input = inputRef.current;
+    if (!input) {
+      setMessageInput(prev => `${prev}${emoji}`);
+      return;
+    }
+    const start = input.selectionStart ?? messageInput.length;
+    const end = input.selectionEnd ?? messageInput.length;
+    const next = `${messageInput.slice(0, start)}${emoji}${messageInput.slice(end)}`;
+    setMessageInput(next);
+    window.requestAnimationFrame(() => {
+      input.focus();
+      input.setSelectionRange(start + emoji.length, start + emoji.length);
+    });
   };
 
   const formatTime = (timestamp: string) => {
@@ -203,6 +316,32 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
       }
     }
   }, [selectedConversation, chatMessages.length]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setSeenTick(tick => tick + 1), 60000);
+    return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedConversation || !isOpen || isMinimized) return;
+    const latestIncoming = [...chatMessages].reverse().find(msg => !msg.isOwn && !msg.id.startsWith('temp-'));
+    if (!latestIncoming) return;
+    if (readMessageByChatRef.current[selectedConversation] === latestIncoming.id) return;
+
+    const token = getAuthToken();
+    if (!token) return;
+    readMessageByChatRef.current[selectedConversation] = latestIncoming.id;
+    apiMarkChatRead(selectedConversation, latestIncoming.id, token)
+      .then(() => onChatRead?.(selectedConversation))
+      .catch(err => {
+        console.error('Failed to mark chat as read', err);
+        delete readMessageByChatRef.current[selectedConversation];
+      });
+  }, [selectedConversation, chatMessages, isOpen, isMinimized, onChatRead]);
+
+  const latestSeenOwnMessage = [...chatMessages].reverse().find(msg => msg.isOwn && msg.readAt);
+  const latestSeenLabel = latestSeenOwnMessage?.readAt ? formatSeenTime(latestSeenOwnMessage.readAt) : null;
+  void seenTick;
 
   if (!isOpen) {
     return (
@@ -295,8 +434,16 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
               <div className="flex-1">
                 <p className="font-semibold text-gray-900 text-sm">{selectedChat.participantName}</p>
                 <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 bg-success rounded-full"></div>
-                  <p className="text-xs text-gray-500">Active now</p>
+                  {selectedChat.isOnline ? (
+                    <>
+                      <div className="w-2 h-2 bg-success rounded-full"></div>
+                      <p className="text-xs text-gray-500">Active now</p>
+                    </>
+                  ) : (
+                    <p className="text-xs text-gray-500">
+                      {selectedChat.lastSeenAt ? formatSeenTime(selectedChat.lastSeenAt).replace('Seen', 'Active') : 'Offline'}
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -333,12 +480,62 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                                   : 'bg-gray-100 text-gray-900'
                               }`}
                             >
-                              <p className="text-sm break-words">{msg.content}</p>
+                              {msg.replyTo && (
+                                <div className={`mb-2 rounded-2xl border-l-2 px-3 py-2 text-xs ${msg.isOwn ? 'border-white/70 bg-white/15 text-white/90' : 'border-gray-300 bg-white text-gray-600'}`}>
+                                  <p className="font-medium">{msg.replyTo.senderName}</p>
+                                  <p className="truncate">{msg.replyTo.type === 'image' ? 'Photo' : msg.replyTo.content}</p>
+                                </div>
+                              )}
+                              {msg.type === 'image' && msg.attachments[0]?.fileUrl ? (
+                                <img src={msg.attachments[0].fileUrl} alt="Chat attachment" className="max-h-52 rounded-2xl object-cover" />
+                              ) : (
+                                <p className="text-sm break-words">{msg.content}</p>
+                              )}
                             </div>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className={`absolute top-1/2 -translate-y-1/2 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity ${msg.isOwn ? '-left-7' : '-right-7'}`} aria-label="Message actions">
+                                  <MoreVertical className="w-4 h-4 text-gray-400" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align={msg.isOwn ? 'end' : 'start'} className="w-40">
+                                <DropdownMenuItem onClick={() => setReplyingTo(msg)}>
+                                  <Reply className="w-4 h-4 mr-2" />
+                                  Reply
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <div className="grid grid-cols-6 gap-1 p-2">
+                                  {REACTION_EMOJIS.map(emoji => (
+                                    <button key={emoji} type="button" className="rounded-md p-1 text-base hover:bg-gray-100" onClick={() => handleReactToMessage(msg.id, emoji)}>
+                                      {emoji}
+                                    </button>
+                                  ))}
+                                </div>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={() => window.alert('Message reported. Our moderation team will review it soon.')} className="text-destructive focus:text-destructive">
+                                  <Flag className="w-4 h-4 mr-2" />
+                                  Report
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </div>
+                          {Object.entries(msg.reactions || {}).length > 0 && (
+                            <div className={`mt-1 flex flex-wrap gap-1 px-2 ${msg.isOwn ? 'justify-end' : 'justify-start'}`}>
+                              {Object.entries(msg.reactions).map(([emoji, userIds]) => (
+                                <button key={emoji} type="button" onClick={() => handleReactToMessage(msg.id, emoji)} className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-xs shadow-sm">
+                                  {emoji} {userIds.length}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                           <p className={`text-xs text-gray-500 mt-1 px-2 ${msg.isOwn ? 'text-right' : 'text-left'}`}>
                             {formatTime(msg.timestamp)}
                           </p>
+                          {latestSeenOwnMessage?.id === msg.id && latestSeenLabel && (
+                            <p className="text-xs text-gray-400 mt-1 px-2 text-right">
+                              {latestSeenLabel}
+                            </p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -349,8 +546,27 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
 
             {/* Message Input */}
             <div className="px-4 py-3 border-t">
+              {replyingTo && (
+                <div className="mb-3 flex items-center justify-between rounded-xl bg-gray-50 px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-gray-700">Replying to {replyingTo.isOwn ? 'yourself' : replyingTo.senderName}</p>
+                    <p className="truncate text-xs text-gray-500">{summarizeReply(replyingTo)}</p>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={() => setReplyingTo(null)} className="h-8 w-8 rounded-full p-0">
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
               <div className="flex items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(event) => handleSendImage(event.target.files?.[0])}
+                />
                 <Button 
+                  onClick={() => fileInputRef.current?.click()}
                   variant="ghost" 
                   size="sm" 
                   className="hover:bg-gray-100 rounded-full w-8 h-8 p-0 flex-shrink-0"
@@ -360,18 +576,32 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                 <div className="flex-1 relative">
                   <Input
                     value={messageInput}
+                    ref={inputRef}
                     onChange={(e) => setMessageInput(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
                     placeholder="Message..."
                     className="w-full pr-10 bg-gray-100 border-gray-100 rounded-full focus:bg-gray-50 text-sm"
                   />
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    className="absolute right-1 top-1/2 -translate-y-1/2 hover:bg-transparent rounded-full w-7 h-7 p-0"
-                  >
-                    <Smile className="w-4 h-4 text-gray-500" />
-                  </Button>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="absolute right-1 top-1/2 -translate-y-1/2 hover:bg-transparent rounded-full w-7 h-7 p-0"
+                      >
+                        <Smile className="w-4 h-4 text-gray-500" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="w-64 p-2">
+                      <div className="grid grid-cols-6 gap-1">
+                        {CHAT_EMOJIS.map(emoji => (
+                          <button key={emoji} type="button" onClick={() => appendEmoji(emoji)} className="rounded-md p-2 text-lg hover:bg-gray-100">
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
                 </div>
                 {messageInput.trim() ? (
                   <Button 

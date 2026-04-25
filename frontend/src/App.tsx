@@ -559,7 +559,7 @@ export default function App() {
     if (!authToken) return;
     try {
       const data = await apiFetchNotifications(authToken);
-      setNotifications(data.map(apiNotificationToLocal));
+      setNotifications(data.map(apiNotificationToLocal).filter((notification) => notification.type !== 'message'));
     } catch (err) {
       console.error('Failed to fetch notifications:', err);
     }
@@ -635,12 +635,13 @@ export default function App() {
         if (!parsed?.type || !parsed.payload) return;
 
         if (parsed.type.startsWith('notification:')) {
+          if (parsed.payload?.type === 'message' || parsed.payload?.notificationType === 'message') return;
           const local = apiNotificationToLocal(parsed.payload);
           setNotifications((prev) => mergeRealtimeNotification(prev, local));
         } else if (parsed.type.startsWith('chat:')) {
           window.dispatchEvent(new CustomEvent('campuslynk:chat', { detail: parsed }));
           
-          if (parsed.type === 'chat:message' || parsed.type === 'chat:status') {
+          if (parsed.type === 'chat:message' || parsed.type === 'chat:status' || parsed.type === 'chat:read') {
             void refreshConversations();
           }
         }
@@ -1249,6 +1250,14 @@ export default function App() {
     setConversations(prev => [conversation, ...prev]);
   };
 
+  const handleChatRead = (conversationId: string) => {
+    setConversations(prevConversations =>
+      prevConversations.map((conversation) =>
+        conversation.id === conversationId ? { ...conversation, unread: 0 } : conversation
+      )
+    );
+  };
+
   const handleViewProfile = (studentId: string) => {
     if (!studentId || typeof studentId !== 'string') {
       return;
@@ -1563,6 +1572,7 @@ export default function App() {
             onViewProfile={handleViewProfile}
             onChatClick={handleChatClick}
             onCreateChat={handleCreateChat}
+            onChatRead={handleChatRead}
           />
         ) : activeTab === 'clubs' ? (
           <ClubsPage
@@ -1643,6 +1653,7 @@ export default function App() {
           currentUserId={currentUserId}
           onOpenFullChat={() => handleTabChange('chat')}
           onChatClick={handleChatClick}
+          onChatRead={handleChatRead}
         />
       )}
       <Toaster />
