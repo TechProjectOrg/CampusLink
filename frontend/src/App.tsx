@@ -48,7 +48,7 @@ import {
   apiSavePushSubscription,
   type ApiNotification,
 } from './lib/notificationsApi';
-import { apiFetchConversations } from './lib/chatApi';
+import { apiFetchConversations, apiStartConversation } from './lib/chatApi';
 import {
   apiAddComment,
   apiAddReply,
@@ -1235,8 +1235,21 @@ export default function App() {
     }
   };
 
-  const handleMessage = (studentId: string) => {
-    navigate('chat');
+  const handleMessage = async (studentId: string) => {
+    if (!authToken || !currentUserId) {
+      navigate('chat');
+      return;
+    }
+    try {
+      // Start the conversation on the backend using the real student UUID
+      await apiStartConversation(studentId, authToken);
+      // Refresh conversations so it appears in the list
+      await refreshConversations();
+      // Navigate to chat
+      navigate('chat');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to start conversation');
+    }
   };
 
   const handleChatClick = (conversationId: string) => {

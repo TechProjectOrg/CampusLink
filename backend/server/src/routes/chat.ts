@@ -20,6 +20,12 @@ import { encryptMessage, decryptMessage } from '../lib/encryption';
 const router = express.Router();
 router.use(authenticateToken);
 
+function isValidUUID(uuid: string | undefined | null) {
+  if (!uuid) return false;
+  const regex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return regex.test(uuid);
+}
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
@@ -92,6 +98,7 @@ router.post('/conversations', async (req: Request, res: Response) => {
   const { targetUserId } = req.body;
 
   if (!targetUserId) return res.status(400).json({ message: 'targetUserId is required' });
+  if (!isValidUUID(targetUserId)) return res.status(400).json({ message: 'Invalid target user ID format' });
   if (targetUserId === currentUserId) return res.status(400).json({ message: 'Cannot chat with yourself' });
 
   try {
@@ -113,6 +120,10 @@ router.get('/conversations/:chatId/messages', async (req: Request, res: Response
   const authed = req as unknown as AuthedRequest;
   const userId = authed.auth!.userId;
   const chatId = req.params.chatId as string;
+
+  if (!isValidUUID(chatId)) {
+    return res.status(400).json({ message: 'Invalid chat ID format' });
+  }
 
   try {
     const isParticipant = await isChatParticipant(userId, chatId);
@@ -159,6 +170,9 @@ router.post('/conversations/:chatId/messages', chatMessageRateLimiter, async (re
   const chatId = req.params.chatId as string;
   const content = req.body.content as string;
 
+  if (!isValidUUID(chatId)) {
+    return res.status(400).json({ message: 'Invalid chat ID format' });
+  }
   if (!content || !content.trim()) return res.status(400).json({ message: 'Message content required' });
 
   try {
@@ -207,6 +221,9 @@ router.post('/conversations/:chatId/messages/image', chatMessageRateLimiter, upl
   const chatId = req.params.chatId as string;
   const file = req.file;
 
+  if (!isValidUUID(chatId)) {
+    return res.status(400).json({ message: 'Invalid chat ID format' });
+  }
   if (!file) return res.status(400).json({ message: 'Image file required' });
 
   try {
@@ -253,7 +270,9 @@ router.patch('/conversations/:chatId/read', async (req: Request, res: Response) 
   const chatId = req.params.chatId as string;
   const messageId = req.body.messageId as string;
 
-  if (!messageId) return res.status(400).json({ message: 'messageId is required' });
+  if (!isValidUUID(chatId) || !isValidUUID(messageId)) {
+    return res.status(400).json({ message: 'Invalid ID format' });
+  }
 
   try {
     await prisma.$queryRaw`
@@ -280,6 +299,10 @@ router.post('/requests/:chatId/accept', async (req: Request, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const userId = authed.auth!.userId;
   const chatId = req.params.chatId as string;
+
+  if (!isValidUUID(chatId)) {
+    return res.status(400).json({ message: 'Invalid chat ID format' });
+  }
 
   try {
     const isParticipant = await isChatParticipant(userId, chatId);
