@@ -17,6 +17,7 @@ type ConversationScrollState = {
   firstRenderedMessageId: string | null;
   renderedMessageCount: number;
   wasNearBottom: boolean;
+  lastBottomAnchorKey: string | number | boolean | null;
 };
 
 type ScrollBehaviorMode = Extract<ScrollBehavior, 'auto' | 'smooth'>;
@@ -29,6 +30,7 @@ interface UseBottomAnchoredChatScrollOptions<TMessage extends MessageLike> {
   hasMore: boolean;
   nextCursor: string | null;
   onLoadOlder: () => Promise<void> | void;
+  bottomAnchorKey?: string | number | boolean | null;
   topThreshold?: number;
   bottomThreshold?: number;
 }
@@ -45,6 +47,7 @@ const createConversationScrollState = (): ConversationScrollState => ({
   firstRenderedMessageId: null,
   renderedMessageCount: 0,
   wasNearBottom: true,
+  lastBottomAnchorKey: null,
 });
 
 export function useBottomAnchoredChatScroll<TMessage extends MessageLike>({
@@ -55,6 +58,7 @@ export function useBottomAnchoredChatScroll<TMessage extends MessageLike>({
   hasMore,
   nextCursor,
   onLoadOlder,
+  bottomAnchorKey = null,
   topThreshold = 200,
   bottomThreshold = 150,
 }: UseBottomAnchoredChatScrollOptions<TMessage>) {
@@ -107,10 +111,11 @@ export function useBottomAnchoredChatScroll<TMessage extends MessageLike>({
         scrollState.lastRenderedMessageId = latestMessageId;
         scrollState.firstRenderedMessageId = firstMessageId;
         scrollState.renderedMessageCount = messages.length;
+        scrollState.lastBottomAnchorKey = bottomAnchorKey;
       }
       setShowNewMessageBanner(false);
     },
-    [conversationId, ensureConversationState, firstMessageId, latestMessageId, messages.length],
+    [bottomAnchorKey, conversationId, ensureConversationState, firstMessageId, latestMessageId, messages.length],
   );
 
   const loadOlderMessages = useCallback(async () => {
@@ -279,9 +284,11 @@ export function useBottomAnchoredChatScroll<TMessage extends MessageLike>({
       scrollState.lastRenderedMessageId = latestMessageId;
       scrollState.firstRenderedMessageId = firstMessageId;
       scrollState.renderedMessageCount = messages.length;
+      scrollState.lastBottomAnchorKey = bottomAnchorKey;
       markConversationReady(conversationId);
     }
   }, [
+    bottomAnchorKey,
     conversationId,
     ensureConversationState,
     firstMessageId,
@@ -291,6 +298,28 @@ export function useBottomAnchoredChatScroll<TMessage extends MessageLike>({
     markConversationReady,
     messages.length,
   ]);
+
+  useEffect(() => {
+    if (!conversationId) return;
+
+    const scrollState = ensureConversationState(conversationId);
+    const previousBottomAnchorKey = scrollState.lastBottomAnchorKey;
+    scrollState.lastBottomAnchorKey = bottomAnchorKey;
+
+    if (
+      previousBottomAnchorKey === bottomAnchorKey ||
+      scrollState.needsInitialAnchor ||
+      !scrollState.hasAnchoredInitial ||
+      scrollState.pendingPrependRestore ||
+      !scrollState.wasNearBottom
+    ) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      scrollToLatest('auto');
+    });
+  }, [bottomAnchorKey, conversationId, ensureConversationState, scrollToLatest]);
 
   useEffect(() => {
     if (!conversationId) return;

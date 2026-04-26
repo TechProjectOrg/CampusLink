@@ -51,11 +51,27 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   const selectedChatState = useAppDataSelector((state) =>
     selectedChat ? state.chat.messagesByConversationId[selectedChat] ?? null : null,
   );
+  const typingUserIds = useAppDataSelector((state) =>
+    selectedChat ? state.chat.typingByConversationId[selectedChat] ?? [] : [],
+  );
+  const usersById = useAppDataSelector((state) => state.usersById);
   const chatMessages = selectedChatState?.messages ?? [];
   const isLoadingMessages = Boolean(selectedChat && selectedChatState?.isLoadingInitial);
   const isLoadingOlder = Boolean(selectedChat && selectedChatState?.isLoadingOlder);
   const hasMoreMessages = Boolean(selectedChatState?.hasMore);
   const nextCursor = selectedChatState?.nextCursor ?? null;
+  const typingUsers = typingUserIds
+    .filter((userId) => userId !== currentUserId)
+    .map((userId) => usersById[userId]?.name ?? (selectedConversation?.participantId === userId ? selectedConversation.participantName : 'Someone'));
+
+  const typingStatusLabel =
+    typingUsers.length === 0
+      ? null
+      : typingUsers.length === 1
+        ? `${typingUsers[0]} is typing`
+        : typingUsers.length === 2
+          ? `${typingUsers[0]} and ${typingUsers[1]} are typing`
+          : `${typingUsers.length} people are typing`;
 
   const handleLoadOlderMessages = useCallback(() => {
     if (!selectedChat) return Promise.resolve();
@@ -77,6 +93,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     hasMore: hasMoreMessages,
     nextCursor,
     onLoadOlder: handleLoadOlderMessages,
+    bottomAnchorKey: Boolean(typingStatusLabel),
   });
 
   useEffect(() => {
@@ -94,6 +111,10 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     const interval = window.setInterval(() => setSeenTick(tick => tick + 1), 60000);
     return () => window.clearInterval(interval);
   }, []);
+
+  useEffect(() => () => {
+    appData.clearLocalTyping(selectedChat);
+  }, [appData, selectedChat]);
 
   useEffect(() => {
     if (!selectedChat) return;
@@ -113,13 +134,22 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   const appendEmoji = (emoji: string) => {
     const input = inputRef.current;
     if (!input) {
-      setMessage(prev => `${prev}${emoji}`);
+      setMessage(prev => {
+        const next = `${prev}${emoji}`;
+        if (selectedChat && next.trim()) {
+          appData.notifyTypingActivity(selectedChat);
+        }
+        return next;
+      });
       return;
     }
     const start = input.selectionStart ?? message.length;
     const end = input.selectionEnd ?? message.length;
     const next = `${message.slice(0, start)}${emoji}${message.slice(end)}`;
     setMessage(next);
+    if (selectedChat && next.trim()) {
+      appData.notifyTypingActivity(selectedChat);
+    }
     window.requestAnimationFrame(() => {
       input.focus();
       input.setSelectionRange(start + emoji.length, start + emoji.length);
@@ -416,14 +446,25 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                   }}
                   className="flex items-center gap-3 hover:opacity-80 transition-opacity"
                 >
-                  <Avatar className="w-10 h-10">
+                    <Avatar className="w-10 h-10">
                     <AvatarImage src={selectedConversation.participantAvatar} />
                     <AvatarFallback>{selectedConversation.participantName[0]}</AvatarFallback>
                   </Avatar>
                   <div className="text-left">
                     <p className="text-sm text-gray-900">{selectedConversation.participantName}</p>
                     <div className="flex items-center gap-1">
-                      {selectedConversation.isGroup ? (
+                      {typingStatusLabel ? (
+                        <>
+                          <div className="flex items-center gap-1 text-xs text-primary">
+                            <span>{typingStatusLabel}</span>
+                            <span className="inline-flex items-end gap-0.5" aria-hidden="true">
+                              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.3s]" />
+                              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.15s]" />
+                              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary" />
+                            </span>
+                          </div>
+                        </>
+                      ) : selectedConversation.isGroup ? (
                         <p className="text-xs text-gray-500">
                           {selectedConversation.groupMembers?.length || 0} members
                         </p>
@@ -689,6 +730,24 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                     </div>
                   );
                 })}
+                {typingStatusLabel && (
+                  <div className="flex items-end gap-2 justify-start">
+                    <Avatar className="w-6 h-6 md:w-7 md:h-7 flex-shrink-0 mb-1">
+                      <AvatarImage src={selectedConversation.participantAvatar} />
+                      <AvatarFallback>{selectedConversation.participantName[0]}</AvatarFallback>
+                    </Avatar>
+                    <div className="rounded-3xl bg-gray-100 px-4 py-3 text-gray-500 shadow-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-medium text-gray-500">{typingStatusLabel}</span>
+                        <span className="inline-flex items-center gap-1" aria-label="Typing indicator">
+                          <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.3s]" />
+                          <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.15s]" />
+                          <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400" />
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
                 </div>
                 </div>
               </div>
@@ -724,7 +783,16 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                     placeholder="Message..."
                     value={message}
                     ref={inputRef}
-                    onChange={(e) => setMessage(e.target.value)}
+                    onChange={(e) => {
+                      const nextValue = e.target.value;
+                      setMessage(nextValue);
+                      if (!selectedChat) return;
+                      if (nextValue.trim()) {
+                        appData.notifyTypingActivity(selectedChat);
+                        return;
+                      }
+                      appData.clearLocalTyping(selectedChat);
+                    }}
                     onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
                     className="w-full pr-10 bg-gray-100 border-gray-100 rounded-full focus:bg-gray-50 transition-all duration-300 text-sm md:text-base"
                   />

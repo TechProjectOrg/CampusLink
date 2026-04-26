@@ -957,6 +957,10 @@ export default function App() {
 
     const wsBase = apiBase.replace(/^http/i, 'ws').replace(/\/+$/, '');
     const socket = new WebSocket(`${wsBase}/ws?token=${encodeURIComponent(authToken)}`);
+    appData.setRealtimeSender((payload) => {
+      if (socket.readyState !== WebSocket.OPEN) return;
+      socket.send(JSON.stringify(payload));
+    });
 
     socket.onmessage = (event) => {
       try {
@@ -1022,6 +1026,7 @@ export default function App() {
     };
 
     return () => {
+      appData.setRealtimeSender(null);
       socket.close();
     };
   }, [appData, authToken, auth.isAuthenticated, apiBase, currentUserId, refreshConversations]);

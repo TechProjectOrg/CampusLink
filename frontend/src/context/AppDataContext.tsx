@@ -42,6 +42,9 @@ const CHAT_LIST_FRESHNESS_MS = 10_000;
 const CHAT_MESSAGES_FRESHNESS_MS = 10_000;
 const USER_FRESHNESS_MS = 30_000;
 const DEFAULT_MESSAGES_PAGE_SIZE = 12;
+const CHAT_TYPING_IDLE_MS = 2_500;
+const CHAT_TYPING_HEARTBEAT_MS = 4_000;
+const CHAT_TYPING_REMOTE_TTL_MS = 7_000;
 
 type TimelineKey = string;
 
@@ -104,6 +107,11 @@ interface AppDataStore {
   subscribe: (listener: () => void) => () => void;
   setSession: (token: string | undefined, currentUser: Student | null) => void;
   resetForSession: (currentUser: Student | null) => void;
+  setRealtimeSender: (
+    sender:
+      | ((event: { type: 'chat:typing'; chatId: string; isTyping: boolean }) => void)
+      | null,
+  ) => void;
   mergeUsers: (users: Student[]) => void;
   upsertUserProfile: (profile: ApiUserProfile) => Student;
   updateUser: (userId: string, updater: (current: Student) => Student) => void;
@@ -118,6 +126,8 @@ interface AppDataStore {
   selectConversation: (chatId: string | null) => void;
   ensureConversationMessages: (chatId: string, options?: { force?: boolean }) => Promise<void>;
   loadOlderMessages: (chatId: string) => Promise<void>;
+  notifyTypingActivity: (chatId: string) => void;
+  clearLocalTyping: (chatId?: string | null) => void;
   sendMessage: (chatId: string, input: SendMessageInput) => Promise<void>;
   sendImageMessage: (chatId: string, input: SendImageInput) => Promise<void>;
   markConversationRead: (chatId: string, messageId: string) => Promise<void>;
@@ -359,12 +369,24 @@ function createStore(): AppDataStore {
   const listeners = new Set<() => void>();
   let authToken: string | undefined;
   let authUser: Student | null = null;
+  let realtimeSender:
+    | ((event: { type: 'chat:typing'; chatId: string; isTyping: boolean }) => void)
+    | null = null;
 
   const pendingUsers = new Map<string, Promise<Student | null>>();
   const pendingTimelines = new Map<string, Promise<void>>();
   const pendingPosts = new Map<string, Promise<void>>();
   const pendingMessages = new Map<string, Promise<void>>();
   const pendingOlderMessages = new Map<string, Promise<void>>();
+  const localTypingStateByConversationId = new Map<
+    string,
+    {
+      isTyping: boolean;
+      stopTimerId: number | null;
+      lastSignalAt: number;
+    }
+  >();
+  const remoteTypingTimerIds = new Map<string, Map<string, number>>();
 
   const emit = () => {
     listeners.forEach((listener) => listener());
@@ -373,6 +395,133 @@ function createStore(): AppDataStore {
   const setState = (updater: AppDataState | ((current: AppDataState) => AppDataState)) => {
     state = typeof updater === 'function' ? updater(state) : updater;
     emit();
+  };
+
+  const updateTypingUsersForConversation = (
+    chatId: string,
+    updater: (current: string[]) => string[],
+  ) => {
+    setState((current) => {
+      const existing = current.chat.typingByConversationId[chatId] ?? [];
+      const nextTyping = updater(existing);
+      if (
+        existing.length === nextTyping.length &&
+        existing.every((userId, index) => userId === nextTyping[index])
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        chat: {
+          ...current.chat,
+          typingByConversationId: {
+            ...current.chat.typingByConversationId,
+            [chatId]: nextTyping,
+          },
+        },
+      };
+    });
+  };
+
+  const clearRemoteTypingTimer = (chatId: string, userId: string) => {
+    const conversationTimers = remoteTypingTimerIds.get(chatId);
+    const timerId = conversationTimers?.get(userId);
+    if (timerId !== undefined) {
+      window.clearTimeout(timerId);
+      conversationTimers?.delete(userId);
+      if (conversationTimers && conversationTimers.size === 0) {
+        remoteTypingTimerIds.delete(chatId);
+      }
+    }
+  };
+
+  const removeRemoteTypingUser = (chatId: string, userId: string) => {
+    clearRemoteTypingTimer(chatId, userId);
+    updateTypingUsersForConversation(chatId, (existing) =>
+      existing.filter((existingUserId) => existingUserId !== userId),
+    );
+  };
+
+  const scheduleRemoteTypingExpiry = (chatId: string, userId: string) => {
+    clearRemoteTypingTimer(chatId, userId);
+    const timerId = window.setTimeout(() => {
+      removeRemoteTypingUser(chatId, userId);
+    }, CHAT_TYPING_REMOTE_TTL_MS);
+    const conversationTimers = remoteTypingTimerIds.get(chatId) ?? new Map<string, number>();
+    conversationTimers.set(userId, timerId);
+    remoteTypingTimerIds.set(chatId, conversationTimers);
+  };
+
+  const clearAllRemoteTyping = () => {
+    for (const [chatId, conversationTimers] of remoteTypingTimerIds.entries()) {
+      for (const timerId of conversationTimers.values()) {
+        window.clearTimeout(timerId);
+      }
+      remoteTypingTimerIds.delete(chatId);
+    }
+  };
+
+  const emitTypingSignal = (chatId: string, isTyping: boolean) => {
+    if (!chatId || !realtimeSender) return;
+    realtimeSender({ type: 'chat:typing', chatId, isTyping });
+  };
+
+  const clearLocalTyping = (chatId?: string | null) => {
+    if (!chatId) return;
+    const typingState = localTypingStateByConversationId.get(chatId);
+    if (!typingState) return;
+
+    if (typingState.stopTimerId !== null) {
+      window.clearTimeout(typingState.stopTimerId);
+    }
+
+    localTypingStateByConversationId.delete(chatId);
+    if (typingState.isTyping) {
+      emitTypingSignal(chatId, false);
+    }
+  };
+
+  const scheduleLocalTypingStop = (chatId: string) => {
+    const typingState = localTypingStateByConversationId.get(chatId);
+    if (!typingState) return;
+
+    if (typingState.stopTimerId !== null) {
+      window.clearTimeout(typingState.stopTimerId);
+    }
+
+    typingState.stopTimerId = window.setTimeout(() => {
+      const latestState = localTypingStateByConversationId.get(chatId);
+      if (!latestState) return;
+      latestState.stopTimerId = null;
+      if (!latestState.isTyping) return;
+      latestState.isTyping = false;
+      emitTypingSignal(chatId, false);
+      localTypingStateByConversationId.delete(chatId);
+    }, CHAT_TYPING_IDLE_MS);
+  };
+
+  const notifyTypingActivity = (chatId: string) => {
+    if (!chatId) return;
+
+    const now = Date.now();
+    const typingState = localTypingStateByConversationId.get(chatId) ?? {
+      isTyping: false,
+      stopTimerId: null,
+      lastSignalAt: 0,
+    };
+
+    const shouldSendKeepalive =
+      typingState.isTyping && now - typingState.lastSignalAt >= CHAT_TYPING_HEARTBEAT_MS;
+
+    if (!typingState.isTyping || shouldSendKeepalive) {
+      emitTypingSignal(chatId, true);
+      typingState.lastSignalAt = now;
+    }
+
+    typingState.isTyping = true;
+    localTypingStateByConversationId.set(chatId, typingState);
+    scheduleLocalTypingStop(chatId);
   };
 
   const mergeUsers = (users: Student[]) => {
@@ -578,15 +727,36 @@ function createStore(): AppDataStore {
         listeners.delete(listener);
       };
     },
+    setRealtimeSender: (sender) => {
+      realtimeSender = sender;
+      if (!sender) return;
+
+      const now = Date.now();
+      for (const [chatId, typingState] of localTypingStateByConversationId.entries()) {
+        if (!typingState.isTyping) continue;
+        sender({ type: 'chat:typing', chatId, isTyping: true });
+        typingState.lastSignalAt = now;
+      }
+    },
     setSession: (token, currentUser) => {
       authToken = token;
       authUser = currentUser;
+      if (!token) {
+        for (const chatId of Array.from(localTypingStateByConversationId.keys())) {
+          clearLocalTyping(chatId);
+        }
+      }
       if (currentUser) {
         mergeUsers([currentUser]);
       }
     },
     resetForSession: (currentUser) => {
       authUser = currentUser;
+      realtimeSender = null;
+      for (const chatId of Array.from(localTypingStateByConversationId.keys())) {
+        clearLocalTyping(chatId);
+      }
+      clearAllRemoteTyping();
       pendingUsers.clear();
       pendingTimelines.clear();
       pendingPosts.clear();
@@ -768,6 +938,9 @@ function createStore(): AppDataStore {
       return request;
     },
     selectConversation: (chatId) => {
+      if (state.chat.selectedConversationId && state.chat.selectedConversationId !== chatId) {
+        clearLocalTyping(state.chat.selectedConversationId);
+      }
       setState((current) => ({
         ...current,
         chat: {
@@ -893,8 +1066,11 @@ function createStore(): AppDataStore {
       pendingOlderMessages.set(key, request);
       return request;
     },
+    notifyTypingActivity,
+    clearLocalTyping,
     sendMessage: async (chatId, input) => {
       if (!authToken || !authUser || !chatId || !input.content.trim()) return;
+      clearLocalTyping(chatId);
       const optimisticMessage: ChatMessageApi = {
         id: `temp-${Date.now()}`,
         senderId: authUser.id,
@@ -937,6 +1113,7 @@ function createStore(): AppDataStore {
     },
     sendImageMessage: async (chatId, input) => {
       if (!authToken || !authUser || !chatId) return;
+      clearLocalTyping(chatId);
       const previewUrl = URL.createObjectURL(input.file);
       const optimisticMessage: ChatMessageApi = {
         id: `temp-${Date.now()}`,
@@ -1035,6 +1212,7 @@ function createStore(): AppDataStore {
       if (event.type === 'chat:message') {
         const payload = event.payload;
         const mappedMessage = mapRealtimeChatMessage(payload, currentUserId);
+        removeRemoteTypingUser(payload.chatId, payload.senderUserId);
 
         setMessagesState(payload.chatId, (current) => ({
           ...current,
@@ -1102,24 +1280,17 @@ function createStore(): AppDataStore {
 
       if (event.type === 'chat:typing') {
         const payload = event.payload;
-        setState((current) => {
-          const existing = current.chat.typingByConversationId[payload.chatId] ?? [];
-          const nextTyping = payload.isTyping
-            ? existing.includes(payload.userId)
-              ? existing
-              : [...existing, payload.userId]
-            : existing.filter((userId) => userId !== payload.userId);
-          return {
-            ...current,
-            chat: {
-              ...current.chat,
-              typingByConversationId: {
-                ...current.chat.typingByConversationId,
-                [payload.chatId]: nextTyping,
-              },
-            },
-          };
-        });
+        if (!payload?.chatId || !payload?.userId || payload.userId === currentUserId) return;
+
+        if (payload.isTyping) {
+          scheduleRemoteTypingExpiry(payload.chatId, payload.userId);
+          updateTypingUsersForConversation(payload.chatId, (existing) =>
+            existing.includes(payload.userId) ? existing : [...existing, payload.userId],
+          );
+          return;
+        }
+
+        removeRemoteTypingUser(payload.chatId, payload.userId);
       }
     },
   };

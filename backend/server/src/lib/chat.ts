@@ -1,5 +1,5 @@
 import prisma from '../prisma';
-import { emitChatEvent, emitToUser } from './realtime';
+import { emitChatEvent } from './realtime';
 import { getUserSummaryById } from './userCache';
 
 // ---------------------------------------------------------------------------
@@ -242,13 +242,13 @@ export function emitTypingIndicator(
   typingUserId: string,
   isTyping: boolean
 ): void {
-  const envelope = {
+  emitChatEvent(
+    participantIds.filter((uid) => uid !== typingUserId),
+    {
     type: 'chat:typing' as const,
     payload: { chatId, userId: typingUserId, isTyping },
-  };
-  for (const uid of participantIds) {
-    if (uid !== typingUserId) emitToUser(uid, envelope);
-  }
+    },
+  );
 }
 
 export function emitChatDelete(participantIds: string[], chatId: string, messageId: string): void {

@@ -12,6 +12,8 @@ import { patchUserSummary } from './userCache';
 // ---------------------------------------------------------------------------
 
 export const socketsByUserId = new Map<string, Set<WebSocket>>();
+const typingChatsBySocket = new WeakMap<WebSocket, Set<string>>();
+const typingSocketCountByUserId = new Map<string, Map<string, number>>();
 
 // ---------------------------------------------------------------------------
 // Outbound envelope types
@@ -119,6 +121,52 @@ async function setUserOnline(userId: string): Promise<void> {
   }
 }
 
+function markSocketTyping(userId: string, socket: WebSocket, chatId: string): number {
+  const socketTypingChats = typingChatsBySocket.get(socket) ?? new Set<string>();
+  if (!socketTypingChats.has(chatId)) {
+    socketTypingChats.add(chatId);
+    typingChatsBySocket.set(socket, socketTypingChats);
+  }
+
+  const countsByChatId = typingSocketCountByUserId.get(userId) ?? new Map<string, number>();
+  const nextCount = (countsByChatId.get(chatId) ?? 0) + 1;
+  countsByChatId.set(chatId, nextCount);
+  typingSocketCountByUserId.set(userId, countsByChatId);
+  return nextCount;
+}
+
+function unmarkSocketTyping(userId: string, socket: WebSocket, chatId: string): number | null {
+  const socketTypingChats = typingChatsBySocket.get(socket);
+  if (!socketTypingChats?.has(chatId)) {
+    return null;
+  }
+
+  socketTypingChats.delete(chatId);
+  if (socketTypingChats.size === 0) {
+    typingChatsBySocket.delete(socket);
+  }
+
+  const countsByChatId = typingSocketCountByUserId.get(userId);
+  if (!countsByChatId) {
+    return 0;
+  }
+
+  const nextCount = Math.max((countsByChatId.get(chatId) ?? 1) - 1, 0);
+  if (nextCount === 0) {
+    countsByChatId.delete(chatId);
+  } else {
+    countsByChatId.set(chatId, nextCount);
+  }
+
+  if (countsByChatId.size === 0) {
+    typingSocketCountByUserId.delete(userId);
+  } else {
+    typingSocketCountByUserId.set(userId, countsByChatId);
+  }
+
+  return nextCount;
+}
+
 async function setUserOffline(userId: string): Promise<void> {
   try {
     const lastSeenAt = new Date().toISOString();
@@ -179,7 +227,7 @@ async function notifyChatPartnersOfStatus(userId: string, isOnline: boolean): Pr
 // Inbound message handler
 // ---------------------------------------------------------------------------
 
-async function handleClientMessage(userId: string, raw: string): Promise<void> {
+async function handleClientMessage(userId: string, socket: WebSocket, raw: string): Promise<void> {
   let event: InboundEvent;
   try {
     event = JSON.parse(raw) as InboundEvent;
@@ -191,13 +239,49 @@ async function handleClientMessage(userId: string, raw: string): Promise<void> {
     try {
       const participantIds = await getChatParticipantIds(event.chatId);
       // Only relay if the sender is actually a participant
-      if (participantIds.includes(userId)) {
-        emitTypingIndicator(participantIds, event.chatId, userId, event.isTyping ?? false);
+      if (!participantIds.includes(userId)) {
+        return;
+      }
+
+      if (event.isTyping) {
+        const socketTypingChats = typingChatsBySocket.get(socket);
+        if (socketTypingChats?.has(event.chatId)) {
+          emitTypingIndicator(participantIds, event.chatId, userId, true);
+          return;
+        }
+
+        const nextCount = markSocketTyping(userId, socket, event.chatId);
+        if (nextCount === 1) {
+          emitTypingIndicator(participantIds, event.chatId, userId, true);
+        }
+        return;
+      }
+
+      const nextCount = unmarkSocketTyping(userId, socket, event.chatId);
+      if (nextCount === 0) {
+        emitTypingIndicator(participantIds, event.chatId, userId, false);
       }
     } catch (err) {
       console.error('Failed to relay typing indicator:', err);
     }
   }
+}
+
+async function clearSocketTypingState(userId: string, socket: WebSocket): Promise<void> {
+  const activeChatIds = Array.from(typingChatsBySocket.get(socket) ?? []);
+  if (activeChatIds.length === 0) return;
+
+  await Promise.all(
+    activeChatIds.map(async (chatId) => {
+      const nextCount = unmarkSocketTyping(userId, socket, chatId);
+      if (nextCount !== 0) return;
+
+      const participantIds = await getChatParticipantIds(chatId);
+      if (participantIds.includes(userId)) {
+        emitTypingIndicator(participantIds, chatId, userId, false);
+      }
+    }),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -338,10 +422,13 @@ export function initializeRealtimeServer(server: HttpServer): void {
     setUserOnline(userId);
 
     socket.on('message', (data) => {
-      handleClientMessage(userId, data.toString());
+      handleClientMessage(userId, socket, data.toString());
     });
 
     socket.on('close', () => {
+      clearSocketTypingState(userId, socket).catch((err) => {
+        console.error('Failed to clear typing state on disconnect:', err);
+      });
       unregisterSocket(userId, socket);
       // Only mark offline if no remaining sockets for this user
       if (!socketsByUserId.has(userId)) {
