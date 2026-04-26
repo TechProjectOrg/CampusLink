@@ -8,9 +8,11 @@ import { EmptyState } from './EmptyState';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { CreateUnifiedPostModal } from './CreateUnifiedPostModal';
+import { LoadingState } from './LoadingState';
 
 interface FeedPageProps {
   opportunities: Opportunity[];
+  isLoading?: boolean;
   currentUserId: string;
   selectedHashtag?: string | null;
   onClearHashtagFilter?: () => void;
@@ -35,6 +37,7 @@ interface FeedPageProps {
 
 export function FeedPage({ 
   opportunities, 
+  isLoading = false,
   currentUserId,
   selectedHashtag,
   onClearHashtagFilter,
@@ -145,6 +148,7 @@ export function FeedPage({
 
             {/* Opportunities List */}
             <div className="space-y-4">
+              {isLoading && filteredOpportunities.length === 0 ? <LoadingState type="feed" /> : null}
               {filteredOpportunities.map((opportunity, index) => (
                 <div 
                   key={opportunity.id}
@@ -169,7 +173,7 @@ export function FeedPage({
                   />
                 </div>
               ))}
-              {filteredOpportunities.length === 0 && (
+              {!isLoading && filteredOpportunities.length === 0 && (
                 <div className="glass-morphism rounded-2xl border border-white/50 p-12 text-center shadow-lg animate-fade-in">
                   <div className="w-16 h-16 gradient-primary rounded-2xl mx-auto mb-4 flex items-center justify-center">
                     <Filter className="w-8 h-8 text-white" />

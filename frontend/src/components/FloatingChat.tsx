@@ -6,9 +6,8 @@ import { Input } from './ui/input';
 import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
 import { ChatConversation } from '../types';
-import { apiFetchMessages, apiMarkChatRead, apiReactToMessage, apiSendImageMessage, apiSendMessage, ChatMessageApi } from '../lib/chatApi';
-import { getAuthToken } from '../lib/authStorage';
-import { REACTION_EMOJIS, formatSeenTime, mapRealtimeChatMessage, mergeChatMessageList, summarizeReply } from '../lib/chatUi';
+import { ChatMessageApi } from '../lib/chatApi';
+import { REACTION_EMOJIS, formatSeenTime, summarizeReply } from '../lib/chatUi';
 import { EmojiPicker } from './chat/EmojiPicker';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import {
@@ -18,6 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
+import { useAppDataSelector, useAppDataStore } from '../context/AppDataContext';
 
 interface FloatingChatProps {
   conversations: ChatConversation[];
@@ -28,15 +28,12 @@ interface FloatingChatProps {
 }
 
 export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onChatClick, onChatRead }: FloatingChatProps) {
+  const appData = useAppDataStore();
+  const selectedConversation = useAppDataSelector((state) => state.chat.selectedConversationId);
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
-  const [selectedConversation, setSelectedConversation] = useState<string | null>(null);
   const [messageInput, setMessageInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // Real messages for each conversation
-  const [messages, setMessages] = useState<{ [key: string]: ChatMessageApi[] }>({});
-  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [replyingTo, setReplyingTo] = useState<ChatMessageApi | null>(null);
   const [seenTick, setSeenTick] = useState(0);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
@@ -44,90 +41,10 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const readMessageByChatRef = useRef<Record<string, string>>({});
 
-  // Load messages for the selected chat
   useEffect(() => {
     if (!selectedConversation) return;
-    if (messages[selectedConversation]) return;
-
-    let cancelled = false;
-    const token = getAuthToken();
-    if (!token) return;
-
-    setIsLoadingMessages(true);
-    apiFetchMessages(selectedConversation, token)
-      .then(response => {
-        if (!cancelled) {
-          setMessages(prev => ({ ...prev, [selectedConversation]: response.messages }));
-        }
-      })
-      .catch(err => console.error('Failed to fetch messages', err))
-      .finally(() => {
-        if (!cancelled) setIsLoadingMessages(false);
-      });
-
-    return () => { cancelled = true; };
-  }, [selectedConversation, messages]);
-
-  // Listen to real-time chat events
-  useEffect(() => {
-    const handleChatEvent = (e: Event) => {
-      const customEvent = e as CustomEvent;
-      const parsed = customEvent.detail;
-      
-      if (parsed.type === 'chat:message') {
-        const payload = parsed.payload;
-        if (!payload) return;
-        const chatId = payload.chatId;
-        const mappedMessage = mapRealtimeChatMessage(payload, currentUserId);
-        
-        setMessages(prev => {
-          const currentList = prev[chatId] || [];
-          return { ...prev, [chatId]: mergeChatMessageList(currentList, mappedMessage) };
-        });
-      }
-
-      if (parsed.type === 'chat:reaction') {
-        const payload = parsed.payload;
-        if (!payload) return;
-        setMessages(prev => ({
-          ...prev,
-          [payload.chatId]: (prev[payload.chatId] || []).map(msg =>
-            msg.id === payload.messageId ? { ...msg, reactions: payload.reactions || {} } : msg
-          )
-        }));
-      }
-
-      if (parsed.type === 'chat:read') {
-        const payload = parsed.payload;
-        if (!payload || payload.userId === currentUserId) return;
-        setMessages(prev => {
-          const currentList = prev[payload.chatId] || [];
-          const readIndex = currentList.findIndex(msg => msg.id === payload.lastReadMessageId);
-          if (readIndex === -1) return prev;
-          return {
-            ...prev,
-            [payload.chatId]: currentList.map((msg, index) =>
-              msg.isOwn && index <= readIndex ? { ...msg, readAt: payload.readAt } : msg
-            )
-          };
-        });
-      }
-
-      if (parsed.type === 'chat:delete') {
-        const payload = parsed.payload;
-        if (!payload) return;
-        setMessages((prev) => ({
-          ...prev,
-          [payload.chatId]: (prev[payload.chatId] || []).filter(
-            (message) => message.id !== payload.messageId,
-          ),
-        }));
-      }
-    };
-
-    window.addEventListener('campuslynk:chat', handleChatEvent);
-    return () => window.removeEventListener('campuslynk:chat', handleChatEvent);
-  }, [currentUserId]);
+    void appData.ensureConversationMessages(selectedConversation);
+  }, [appData, selectedConversation]);
 
   const totalUnread = conversations.reduce((sum, conv) => sum + conv.unread, 0);
 
@@ -143,44 +60,10 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
       setMessageInput('');
       setReplyingTo(null);
 
-      const optimisticMessage: ChatMessageApi = {
-        id: `temp-${Date.now()}`,
-        senderId: currentUserId,
-        senderName: 'You',
-        senderAvatar: null,
-        type: 'text',
-        content: content,
-        reactions: {},
-        timestamp: new Date().toISOString(),
-        attachments: [],
-        replyToMessageId: replyTarget?.id ?? null,
-        replyTo: replyTarget ? {
-          id: replyTarget.id,
-          senderId: replyTarget.senderId,
-          senderName: replyTarget.isOwn ? 'You' : replyTarget.senderName,
-          type: replyTarget.type,
-          content: replyTarget.content,
-          attachmentUrl: replyTarget.attachments[0]?.fileUrl ?? null
-        } : null,
-        isOwn: true
-      };
-
-      setMessages(prev => ({
-        ...prev,
-        [selectedConversation]: [...(prev[selectedConversation] || []), optimisticMessage]
-      }));
-
       try {
-        const token = getAuthToken();
-        if (!token) return;
-        await apiSendMessage(selectedConversation, content, token, replyTarget?.id);
+        await appData.sendMessage(selectedConversation, { content, replyTo: replyTarget });
       } catch (err) {
         console.error('Failed to send message:', err);
-        // Remove optimistic message on failure
-        setMessages(prev => ({
-          ...prev,
-          [selectedConversation]: (prev[selectedConversation] || []).filter(m => m.id !== optimisticMessage.id)
-        }));
       }
     }
   };
@@ -191,60 +74,24 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
       window.alert('Please choose an image file.');
       return;
     }
-    const token = getAuthToken();
-    if (!token) return;
 
     const replyTarget = replyingTo;
     setReplyingTo(null);
-    const previewUrl = URL.createObjectURL(file);
-    const optimisticMessage: ChatMessageApi = {
-      id: `temp-${Date.now()}`,
-      senderId: currentUserId,
-      senderName: 'You',
-      senderAvatar: null,
-      type: 'image',
-      content: null,
-      reactions: {},
-      timestamp: new Date().toISOString(),
-      attachments: [{ fileUrl: previewUrl, fileType: file.type }],
-      replyToMessageId: replyTarget?.id ?? null,
-      replyTo: replyTarget ? {
-        id: replyTarget.id,
-        senderId: replyTarget.senderId,
-        senderName: replyTarget.isOwn ? 'You' : replyTarget.senderName,
-        type: replyTarget.type,
-        content: replyTarget.content,
-        attachmentUrl: replyTarget.attachments[0]?.fileUrl ?? null
-      } : null,
-      isOwn: true
-    };
-
-    setMessages(prev => ({
-      ...prev,
-      [selectedConversation]: [...(prev[selectedConversation] || []), optimisticMessage]
-    }));
 
     try {
-      await apiSendImageMessage(selectedConversation, file, token, replyTarget?.id);
+      await appData.sendImageMessage(selectedConversation, { file, replyTo: replyTarget });
     } catch (err) {
       console.error('Failed to send image:', err);
-      setMessages(prev => ({
-        ...prev,
-        [selectedConversation]: (prev[selectedConversation] || []).filter(m => m.id !== optimisticMessage.id)
-      }));
       window.alert(err instanceof Error ? err.message : 'Failed to send image');
     } finally {
-      URL.revokeObjectURL(previewUrl);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
   const handleReactToMessage = async (messageId: string, emoji: string) => {
     if (!selectedConversation || messageId.startsWith('temp-')) return;
-    const token = getAuthToken();
-    if (!token) return;
     try {
-      await apiReactToMessage(selectedConversation, messageId, emoji, token);
+      await appData.reactToMessage(selectedConversation, messageId, emoji);
     } catch (err) {
       console.error('Failed to react to message:', err);
     }
@@ -310,8 +157,11 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
   const selectedChat = selectedConversation
     ? conversations.find(c => c.id === selectedConversation)
     : null;
-
-  const chatMessages = selectedConversation ? messages[selectedConversation] || [] : [];
+  const selectedChatState = useAppDataSelector((state) =>
+    selectedConversation ? state.chat.messagesByConversationId[selectedConversation] ?? null : null,
+  );
+  const chatMessages = selectedChatState?.messages ?? [];
+  const isLoadingMessages = Boolean(selectedConversation && selectedChatState?.isLoadingInitial);
 
   const messagesViewportRef = useRef<HTMLDivElement | null>(null);
   const conversationsViewportRef = useRef<HTMLDivElement | null>(null);
@@ -367,16 +217,14 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
     if (!latestIncoming) return;
     if (readMessageByChatRef.current[selectedConversation] === latestIncoming.id) return;
 
-    const token = getAuthToken();
-    if (!token) return;
     readMessageByChatRef.current[selectedConversation] = latestIncoming.id;
-    apiMarkChatRead(selectedConversation, latestIncoming.id, token)
+    appData.markConversationRead(selectedConversation, latestIncoming.id)
       .then(() => onChatRead?.(selectedConversation))
       .catch(err => {
         console.error('Failed to mark chat as read', err);
         delete readMessageByChatRef.current[selectedConversation];
       });
-  }, [selectedConversation, chatMessages, isOpen, isMinimized, onChatRead]);
+  }, [appData, selectedConversation, chatMessages, isOpen, isMinimized, onChatRead]);
 
   const latestSeenOwnMessage = [...chatMessages].reverse().find(msg => msg.isOwn && msg.readAt);
   const latestSeenLabel = latestSeenOwnMessage?.readAt ? formatSeenTime(latestSeenOwnMessage.readAt) : null;
@@ -461,7 +309,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
             {/* Chat Header */}
             <div className="px-4 py-3 border-b flex items-center gap-3">
               <button
-                onClick={() => setSelectedConversation(null)}
+                onClick={() => appData.selectConversation(null)}
                 className="text-gray-600 hover:text-gray-900 text-lg"
               >
                 ←
@@ -489,6 +337,11 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
 
             {/* Messages */}
             <ScrollArea viewportRef={messagesViewportRef} className="flex-1 overflow-hidden px-4 py-3">
+              {isLoadingMessages && chatMessages.length === 0 ? (
+                <div className="flex h-full items-center justify-center text-sm text-gray-500">
+                  Loading messages...
+                </div>
+              ) : (
               <div className="space-y-3">
                 {chatMessages.map((msg, index) => {
                   const prevMsg = chatMessages[index - 1];
@@ -617,6 +470,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                   );
                 })}
               </div>
+              )}
             </ScrollArea>
 
             {/* Message Input */}
@@ -716,12 +570,12 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                   filteredConversations.map((conv) => (
                     <button
                       key={conv.id}
-                          onClick={() => {
-                            if (onChatClick) {
-                              onChatClick(conv.id);
-                            }
-                            setSelectedConversation(conv.id);
-                          }}
+                      onClick={() => {
+                        if (onChatClick) {
+                          onChatClick(conv.id);
+                        }
+                        appData.selectConversation(conv.id);
+                      }}
                       className="w-full p-3 hover:bg-gray-50 transition-colors flex items-center gap-3 rounded-xl mb-1"
                     >
                       <div className="relative flex-shrink-0">

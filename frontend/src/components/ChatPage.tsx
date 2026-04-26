@@ -8,9 +8,8 @@ import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
 import { NewChatModal } from './NewChatModal';
 import { GroupInfoPage } from './GroupInfoPage';
-import { apiFetchMessages, apiMarkChatRead, apiReactToMessage, apiSendImageMessage, apiSendMessage, apiStartConversation, apiDeleteMessage, ChatMessageApi, FetchMessagesResponse } from '../lib/chatApi';
-import { getAuthToken } from '../lib/authStorage';
-import { REACTION_EMOJIS, formatSeenTime, mapRealtimeChatMessage, mergeChatMessageList, summarizeReply } from '../lib/chatUi';
+import { apiStartConversation, ChatMessageApi } from '../lib/chatApi';
+import { REACTION_EMOJIS, formatSeenTime, summarizeReply } from '../lib/chatUi';
 import { EmojiPicker } from './chat/EmojiPicker';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
 import {
@@ -20,6 +19,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
+import { useAppDataSelector, useAppDataStore } from '../context/AppDataContext';
 
 interface ChatPageProps {
   conversations: ChatConversation[];
@@ -32,19 +32,16 @@ interface ChatPageProps {
 }
 
 export function ChatPage({ conversations, students, currentUserId, onViewProfile, onChatClick, onCreateChat, onChatRead }: ChatPageProps) {
-  const [selectedChat, setSelectedChat] = useState<string | null>(conversations[0]?.id || null);
+  const appData = useAppDataStore();
+  const selectedConversationId = useAppDataSelector((state) => state.chat.selectedConversationId);
+  const selectedChat = selectedConversationId ?? conversations[0]?.id ?? null;
   const [message, setMessage] = useState('');
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
   const [viewingGroupInfo, setViewingGroupInfo] = useState<string | null>(null);
-  const [messages, setMessages] = useState<{ [key: string]: ChatMessageApi[] }>({});
-  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [chatReady, setChatReady] = useState<Record<string, boolean>>({});
-  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [replyingTo, setReplyingTo] = useState<ChatMessageApi | null>(null);
   const [seenTick, setSeenTick] = useState(0);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
-  // Pagination state per chat: { hasMore, nextCursor }
-  const paginationRef = useRef<Record<string, { hasMore: boolean; nextCursor: string | null }>>({});
   const inputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const readMessageByChatRef = useRef<Record<string, string>>({});
@@ -52,70 +49,40 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   const isInitialLoadRef = useRef<Record<string, boolean>>({});
 
   const selectedConversation = conversations.find(c => c.id === selectedChat);
-  const chatMessages = selectedChat ? messages[selectedChat] || [] : [];
+  const selectedChatState = useAppDataSelector((state) =>
+    selectedChat ? state.chat.messagesByConversationId[selectedChat] ?? null : null,
+  );
+  const chatMessages = selectedChatState?.messages ?? [];
+  const isLoadingMessages = Boolean(selectedChat && selectedChatState?.isLoadingInitial);
+  const isLoadingOlder = Boolean(selectedChat && selectedChatState?.isLoadingOlder);
 
-  const PAGE_SIZE = 50;
+  useEffect(() => {
+    if (!selectedConversationId && conversations[0]?.id) {
+      appData.selectConversation(conversations[0].id);
+    }
+  }, [appData, selectedConversationId, conversations]);
 
-  // Load messages for the selected chat (initial load - newest messages)
   useEffect(() => {
     if (!selectedChat) return;
-    if (messages[selectedChat]) return; // Already loaded
-
-    let cancelled = false;
-    const token = getAuthToken();
-    if (!token) return;
-
-    isInitialLoadRef.current[selectedChat] = true;
-    setChatReady(prev => ({ ...prev, [selectedChat]: false }));
-    setIsLoadingMessages(true);
-    apiFetchMessages(selectedChat, token, { limit: PAGE_SIZE })
-      .then((response: FetchMessagesResponse) => {
-        if (!cancelled) {
-          setMessages(prev => ({ ...prev, [selectedChat]: response.messages }));
-          paginationRef.current[selectedChat] = {
-            hasMore: response.hasMore,
-            nextCursor: response.nextCursor
-          };
-        }
-      })
-      .catch(err => console.error('Failed to fetch messages', err))
-      .finally(() => {
-        if (!cancelled) setIsLoadingMessages(false);
-      });
-
-    return () => { cancelled = true; };
-  }, [selectedChat, messages]);
+    if (!selectedChatState?.isHydrated) {
+      isInitialLoadRef.current[selectedChat] = true;
+      setChatReady((prev) => ({ ...prev, [selectedChat]: false }));
+    }
+    void appData.ensureConversationMessages(selectedChat);
+  }, [appData, selectedChat, selectedChatState?.isHydrated]);
 
   // Load older messages (triggered by scrolling near top)
   const loadOlderMessages = useCallback(async () => {
     if (!selectedChat) return;
-    const pagination = paginationRef.current[selectedChat];
-    if (!pagination?.hasMore || !pagination.nextCursor) return;
-    if (isLoadingOlder) return;
+    if (!selectedChatState?.hasMore || !selectedChatState.nextCursor || isLoadingOlder) return;
 
-    const token = getAuthToken();
-    if (!token) return;
-
-    setIsLoadingOlder(true);
     try {
-      const response = await apiFetchMessages(selectedChat, token, {
-        limit: PAGE_SIZE,
-        before: pagination.nextCursor
-      });
-
       // Save scroll position before prepending
       const viewport = messagesViewportRef.current;
       const prevScrollHeight = viewport?.scrollHeight ?? 0;
       const prevScrollTop = viewport?.scrollTop ?? 0;
 
-      setMessages(prev => ({
-        ...prev,
-        [selectedChat]: [...response.messages, ...(prev[selectedChat] || [])]
-      }));
-      paginationRef.current[selectedChat] = {
-        hasMore: response.hasMore,
-        nextCursor: response.nextCursor
-      };
+      await appData.loadOlderMessages(selectedChat);
 
       // Restore scroll position after prepend (run after DOM update)
       requestAnimationFrame(() => {
@@ -126,72 +93,8 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
       });
     } catch (err) {
       console.error('Failed to load older messages', err);
-    } finally {
-      setIsLoadingOlder(false);
     }
-  }, [selectedChat, isLoadingOlder]);
-
-  // Listen to real-time chat events from App.tsx
-  useEffect(() => {
-    const handleChatEvent = (e: Event) => {
-      const customEvent = e as CustomEvent;
-      const parsed = customEvent.detail;
-      
-      if (parsed.type === 'chat:message') {
-        const payload = parsed.payload;
-        if (!payload) return;
-        const chatId = payload.chatId;
-        const mappedMessage = mapRealtimeChatMessage(payload, currentUserId);
-        
-        setMessages(prev => {
-          const currentList = prev[chatId] || [];
-          return { ...prev, [chatId]: mergeChatMessageList(currentList, mappedMessage) };
-        });
-      }
-
-      if (parsed.type === 'chat:reaction') {
-        const payload = parsed.payload;
-        if (!payload) return;
-        setMessages(prev => ({
-          ...prev,
-          [payload.chatId]: (prev[payload.chatId] || []).map(msg =>
-            msg.id === payload.messageId ? { ...msg, reactions: payload.reactions || {} } : msg
-          )
-        }));
-      }
-
-      if (parsed.type === 'chat:read') {
-        const payload = parsed.payload;
-        if (!payload || payload.userId === currentUserId) return;
-        setMessages(prev => {
-          const currentList = prev[payload.chatId] || [];
-          const readIndex = currentList.findIndex(msg => msg.id === payload.lastReadMessageId);
-          if (readIndex === -1) return prev;
-          return {
-            ...prev,
-            [payload.chatId]: currentList.map((msg, index) =>
-              msg.isOwn && index <= readIndex ? { ...msg, readAt: payload.readAt } : msg
-            )
-          };
-        });
-      }
-
-      if (parsed.type === 'chat:delete') {
-        const payload = parsed.payload;
-        if (!payload) return;
-        setMessages(prev => {
-          const currentList = prev[payload.chatId] || [];
-          return {
-            ...prev,
-            [payload.chatId]: currentList.filter(msg => msg.id !== payload.messageId)
-          };
-        });
-      }
-    };
-
-    window.addEventListener('campuslynk:chat', handleChatEvent);
-    return () => window.removeEventListener('campuslynk:chat', handleChatEvent);
-  }, [currentUserId]);
+  }, [appData, selectedChat, selectedChatState?.hasMore, selectedChatState?.nextCursor, isLoadingOlder]);
 
   const messagesViewportRef = useRef<HTMLDivElement | null>(null);
 
@@ -262,16 +165,14 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     if (!latestIncoming) return;
     if (readMessageByChatRef.current[selectedChat] === latestIncoming.id) return;
 
-    const token = getAuthToken();
-    if (!token) return;
     readMessageByChatRef.current[selectedChat] = latestIncoming.id;
-    apiMarkChatRead(selectedChat, latestIncoming.id, token)
+    appData.markConversationRead(selectedChat, latestIncoming.id)
       .then(() => onChatRead?.(selectedChat))
       .catch(err => {
         console.error('Failed to mark chat as read', err);
         delete readMessageByChatRef.current[selectedChat];
       });
-  }, [selectedChat, chatMessages, onChatRead]);
+  }, [appData, selectedChat, chatMessages, onChatRead]);
 
   const appendEmoji = (emoji: string) => {
     const input = inputRef.current;
@@ -300,46 +201,11 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     const replyTarget = replyingTo;
     setMessage('');
     setReplyingTo(null);
-    
-    // Optimistic UI update
-    const optimisticMessage: ChatMessageApi = {
-      id: `temp-${Date.now()}`,
-      senderId: currentUserId,
-      senderName: 'You',
-      senderAvatar: null,
-      type: 'text',
-      content: content,
-      reactions: {},
-      timestamp: new Date().toISOString(),
-      attachments: [],
-      replyToMessageId: replyTarget?.id ?? null,
-      replyTo: replyTarget ? {
-        id: replyTarget.id,
-        senderId: replyTarget.senderId,
-        senderName: replyTarget.isOwn ? 'You' : replyTarget.senderName,
-        type: replyTarget.type,
-        content: replyTarget.content,
-        attachmentUrl: replyTarget.attachments[0]?.fileUrl ?? null
-      } : null,
-      isOwn: true
-    };
-    
-    setMessages(prev => ({
-      ...prev,
-      [selectedChat]: [...(prev[selectedChat] || []), optimisticMessage]
-    }));
 
     try {
-      const token = getAuthToken();
-      if (!token) return;
-      await apiSendMessage(selectedChat, content, token, replyTarget?.id);
+      await appData.sendMessage(selectedChat, { content, replyTo: replyTarget });
     } catch (err) {
       console.error('Failed to send message:', err);
-      // Remove optimistic message on failure
-      setMessages(prev => ({
-        ...prev,
-        [selectedChat]: (prev[selectedChat] || []).filter(m => m.id !== optimisticMessage.id)
-      }));
     }
   };
 
@@ -350,60 +216,23 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
       return;
     }
 
-    const token = getAuthToken();
-    if (!token) return;
-
     const replyTarget = replyingTo;
     setReplyingTo(null);
-    const previewUrl = URL.createObjectURL(file);
-    const optimisticMessage: ChatMessageApi = {
-      id: `temp-${Date.now()}`,
-      senderId: currentUserId,
-      senderName: 'You',
-      senderAvatar: null,
-      type: 'image',
-      content: null,
-      reactions: {},
-      timestamp: new Date().toISOString(),
-      attachments: [{ fileUrl: previewUrl, fileType: file.type }],
-      replyToMessageId: replyTarget?.id ?? null,
-      replyTo: replyTarget ? {
-        id: replyTarget.id,
-        senderId: replyTarget.senderId,
-        senderName: replyTarget.isOwn ? 'You' : replyTarget.senderName,
-        type: replyTarget.type,
-        content: replyTarget.content,
-        attachmentUrl: replyTarget.attachments[0]?.fileUrl ?? null
-      } : null,
-      isOwn: true
-    };
-
-    setMessages(prev => ({
-      ...prev,
-      [selectedChat]: [...(prev[selectedChat] || []), optimisticMessage]
-    }));
 
     try {
-      await apiSendImageMessage(selectedChat, file, token, replyTarget?.id);
+      await appData.sendImageMessage(selectedChat, { file, replyTo: replyTarget });
     } catch (err) {
       console.error('Failed to send image:', err);
-      setMessages(prev => ({
-        ...prev,
-        [selectedChat]: (prev[selectedChat] || []).filter(m => m.id !== optimisticMessage.id)
-      }));
       window.alert(err instanceof Error ? err.message : 'Failed to send image');
     } finally {
-      URL.revokeObjectURL(previewUrl);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
   const handleReactToMessage = async (messageId: string, emoji: string) => {
     if (!selectedChat || messageId.startsWith('temp-')) return;
-    const token = getAuthToken();
-    if (!token) return;
     try {
-      await apiReactToMessage(selectedChat, messageId, emoji, token);
+      await appData.reactToMessage(selectedChat, messageId, emoji);
     } catch (err) {
       console.error('Failed to react to message:', err);
     }
@@ -454,19 +283,19 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     // Check if conversation already exists
     const existingConvo = conversations.find(c => c.participantId === studentId);
     if (existingConvo) {
-      setSelectedChat(existingConvo.id);
+      appData.selectConversation(existingConvo.id);
       setIsNewChatOpen(false);
       return;
     }
 
     try {
-      const token = getAuthToken();
+      const token = auth.session?.token;
       if (!token) return;
       const { chatId } = await apiStartConversation(studentId, token);
 
       const student = students.find(s => s.id === studentId);
-      if (student && onCreateChat) {
-        onCreateChat({
+      if (student) {
+        const conversation: ChatConversation = {
           id: chatId,
           participantId: studentId,
           participantName: student.name,
@@ -475,10 +304,11 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
           timestamp: new Date().toISOString(),
           unread: 0,
           isOnline: true
-        });
+        };
+        appData.upsertConversation(conversation);
+        onCreateChat?.(conversation);
       }
-      setSelectedChat(chatId);
-      setMessages(prev => ({ ...prev, [chatId]: [] }));
+      appData.selectConversation(chatId);
       setIsNewChatOpen(false);
     } catch (err) {
       console.error('Failed to start conversation:', err);
@@ -501,21 +331,15 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     };
 
     // For now, we're not adding to `conversations` here, as `App.tsx` owns that state.
-    setSelectedChat(newGroup.id);
-    setMessages({ ...messages, [newGroup.id]: [] });
+    appData.upsertConversation(newGroup);
+    appData.selectConversation(newGroup.id);
     setIsNewChatOpen(false);
   };
 
   const handleDeleteMessage = async (msg: ChatMessageApi) => {
     if (!selectedChat) return;
-    const token = getAuthToken();
-    if (!token) return;
     try {
-      await apiDeleteMessage(selectedChat, msg.id, token);
-      setMessages(prev => ({
-        ...prev,
-        [selectedChat]: (prev[selectedChat] || []).filter(m => m.id !== msg.id)
-      }));
+      await appData.deleteMessage(selectedChat, msg.id);
     } catch (err: any) {
       window.alert(err.message || 'Failed to delete message');
     }
@@ -585,7 +409,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                     if (onChatClick) {
                       onChatClick(conversation.id);
                     }
-                    setSelectedChat(conversation.id);
+                    appData.selectConversation(conversation.id);
                   }}
                   className={`w-full p-3 text-left rounded-xl transition-all duration-300 mb-1 ${
                     selectedChat === conversation.id 
@@ -638,7 +462,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
             <div className="px-4 md:px-6 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-3">
                 <button 
-                  onClick={() => setSelectedChat(null)}
+                  onClick={() => appData.selectConversation(null)}
                   className="md:hidden text-gray-600 hover:text-gray-900 mr-2"
                   aria-label="Back to conversations"
                 >
@@ -730,12 +554,17 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
 
             {/* Scrollable Messages */}
             <div className="flex-1 relative bg-white">
-              {!chatReady[selectedChat] && (
+              {selectedChat && !chatReady[selectedChat] && isLoadingMessages && (
                 <div className="absolute inset-0 flex items-center justify-center bg-white z-10">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                 </div>
               )}
-              <div ref={messagesViewportRef} className={`absolute inset-0 overflow-y-auto transition-opacity duration-300 ${chatReady[selectedChat] ? 'opacity-100' : 'opacity-0'}`}>
+              <div
+                ref={messagesViewportRef}
+                className={`absolute inset-0 overflow-y-auto transition-opacity duration-300 ${
+                  !selectedChat || chatReady[selectedChat] || !isLoadingMessages ? 'opacity-100' : 'opacity-0'
+                }`}
+              >
                 <div className="p-4 md:p-6 space-y-3">
                 {/* Loading older messages spinner */}
                 {isLoadingOlder && (
@@ -744,7 +573,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                   </div>
                 )}
                 {/* "Beginning of conversation" marker */}
-                {selectedChat && paginationRef.current[selectedChat] && !paginationRef.current[selectedChat].hasMore && chatMessages.length > 0 && (
+                {selectedChat && selectedChatState && !selectedChatState.hasMore && chatMessages.length > 0 && (
                   <div className="flex justify-center py-4">
                     <span className="text-xs text-gray-400 px-3 py-1 bg-gray-50 rounded-full">
                       Beginning of conversation
@@ -865,7 +694,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                                     <DropdownMenuItem 
                                       onClick={() => handleDeleteMessage(msg)} 
                                       className="text-destructive focus:text-destructive"
-                                      disabled={new Date().getTime() - new Date(msg.createdAt).getTime() > 24 * 60 * 60 * 1000}
+                                      disabled={Date.now() - new Date(msg.timestamp).getTime() > 24 * 60 * 60 * 1000}
                                     >
                                       <Trash2 className="w-4 h-4 mr-2" />
                                       Delete

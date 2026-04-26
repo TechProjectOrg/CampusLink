@@ -19,8 +19,15 @@ import { Student, Opportunity, Club, Notification, Comment, ChatConversation } f
 import { ProfileCard } from './components/ProfileCard';
 import { SuggestionsCard } from './components/SuggestionsCard';
 import { useAuth } from './context/AuthContext';
-import { apiFetchUserProfile } from './lib/authApi';
 import { resolveApiBaseUrl } from './lib/apiBase';
+import {
+  apiProfileToStudent,
+  getFeedTimelineKey,
+  getHashtagTimelineKey,
+  useAppDataSelector,
+  useAppDataStore,
+  useTimelineOpportunities,
+} from './context/AppDataContext';
 import {
   apiGetFollowGraph,
   apiFollow,
@@ -41,18 +48,15 @@ import {
   apiSavePushSubscription,
   type ApiNotification,
 } from './lib/notificationsApi';
-import { apiFetchConversations, apiStartConversation } from './lib/chatApi';
+import { apiStartConversation } from './lib/chatApi';
 import {
   apiAddComment,
   apiAddReply,
   apiCreateUserPost,
   apiDeleteComment,
   apiDeletePost,
-  apiFetchHashtagPosts,
   apiFetchCommentContext,
   apiFetchCommentReplies,
-  apiFetchFeedPosts,
-  apiFetchPostById,
   apiFetchPostComments,
   apiLikeComment,
   apiLikePost,
@@ -64,13 +68,6 @@ import {
   type CreateUserPostPayload,
   type UserPost,
 } from './lib/postsApi';
-import {
-  mergeConversationPreviewOnMessage,
-  mergeConversationPresenceUpdate,
-  mergeConversationReadUpdate,
-  sortConversationsByTimestamp,
-} from './lib/chatUi';
-import type { ApiUserProfile } from './types';
 
 const POST_COMMENTS_PAGE_SIZE = 20;
 const COMMENT_REPLIES_PAGE_SIZE = 10;
@@ -229,7 +226,11 @@ function mapPostCommentToComment(comment: UserPost['comments'][number]): Opportu
   };
 }
 
-function userPostToOpportunity(post: UserPost, currentUser: Student): Opportunity {
+function userPostToOpportunity(
+  post: UserPost,
+  usersById: Record<string, Student>,
+  currentUser: Student,
+): Opportunity {
   let type: Opportunity['type'] = 'general';
   if (post.postType === 'event') {
     type = 'event';
@@ -237,8 +238,10 @@ function userPostToOpportunity(post: UserPost, currentUser: Student): Opportunit
     type = (post.opportunityType ?? 'event') as Opportunity['type'];
   }
 
-  const authorName = post.authorUsername ?? currentUser.name;
+  const author = usersById[post.authorUserId];
+  const authorName = author?.name ?? post.authorUsername ?? currentUser.name;
   const authorAvatar =
+    author?.avatar ??
     post.authorProfilePictureUrl ??
     (post.authorUserId === currentUser.id
       ? currentUser.avatar
@@ -446,6 +449,23 @@ function findCommentStateById(
   return null;
 }
 
+function findOpportunityIdByCommentId(
+  opportunities: Opportunity[],
+  commentId: string,
+): string | null {
+  for (const opportunity of opportunities) {
+    const stack = [...(opportunity.comments ?? [])];
+    while (stack.length > 0) {
+      const current = stack.pop()!;
+      if (current.id === commentId) {
+        return opportunity.id;
+      }
+      stack.push(...(current.replies ?? []));
+    }
+  }
+  return null;
+}
+
 function updateCommentLikeState(comments: Comment[], commentId: string, nextLiked: boolean): Comment[] {
   return comments.map((comment) => {
     if (comment.id === commentId) {
@@ -557,15 +577,57 @@ function networkUsersToStudents(users: NetworkUser[]): Student[] {
   });
 }
 
+function areStringArraysEqual(left?: string[], right?: string[]): boolean {
+  if (left === right) return true;
+  if (!left || !right) return false;
+  if (left.length !== right.length) return false;
+
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function isSameOpportunitySummary(left: Opportunity, right: Opportunity): boolean {
+  return (
+    left.id === right.id &&
+    left.authorId === right.authorId &&
+    left.authorName === right.authorName &&
+    left.authorAvatar === right.authorAvatar &&
+    left.type === right.type &&
+    left.title === right.title &&
+    left.description === right.description &&
+    left.date === right.date &&
+    left.company === right.company &&
+    left.deadline === right.deadline &&
+    left.stipend === right.stipend &&
+    left.duration === right.duration &&
+    left.location === right.location &&
+    left.link === right.link &&
+    left.image === right.image &&
+    areStringArraysEqual(left.tags, right.tags) &&
+    areStringArraysEqual(left.likes, right.likes) &&
+    areStringArraysEqual(left.saved, right.saved) &&
+    left.likeCount === right.likeCount &&
+    left.saveCount === right.saveCount &&
+    left.commentCount === right.commentCount &&
+    left.isLikedByMe === right.isLikedByMe &&
+    left.isSavedByMe === right.isSavedByMe &&
+    left.canEdit === right.canEdit &&
+    left.canDelete === right.canDelete
+  );
+}
+
 export default function App() {
   const auth = useAuth();
+  const appData = useAppDataStore();
 
   const [activeTab, setActiveTab] = useState('feed');
-  const [students, setStudents] = useState<Student[]>([]);
-  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [clubs, setClubs] = useState<Club[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [followGraph, setFollowGraph] = useState<FollowGraph>({
     followersByUserId: {},
     followingByUserId: {},
@@ -585,19 +647,13 @@ export default function App() {
   const [openedPostRepliesByCommentId, setOpenedPostRepliesByCommentId] = useState<Record<string, ReplyThreadState>>({});
   const [focusedCommentId, setFocusedCommentId] = useState<string | null>(null);
   const [hashtagPageTag, setHashtagPageTag] = useState<string | null>(null);
-  const [hashtagOpportunities, setHashtagOpportunities] = useState<Opportunity[]>([]);
-  const [isHashtagPostsLoading, setIsHashtagPostsLoading] = useState(false);
 
   const prevAuthenticatedRef = useRef<boolean>(auth.isAuthenticated);
   const openedPostCommentsRef = useRef<DiscussionPageState<Comment>>(createInitialDiscussionPageState<Comment>());
   const openedPostRepliesRef = useRef<Record<string, ReplyThreadState>>({});
 
   const clearSessionScopedState = useCallback(() => {
-    setStudents(auth.currentUser ? [auth.currentUser] : []);
-    setOpportunities([]);
-    setHashtagOpportunities([]);
     setNotifications([]);
-    setConversations([]);
     setFollowGraph({
       followersByUserId: {},
       followingByUserId: {},
@@ -613,7 +669,7 @@ export default function App() {
     setFocusedCommentId(null);
     setHashtagPageTag(null);
     setSelectedHashtag(null);
-  }, [auth.currentUser]);
+  }, []);
 
   // Always land on homescreen after a successful login/signup.
   useLayoutEffect(() => {
@@ -759,6 +815,23 @@ export default function App() {
     return auth.currentUser as Student;
   }, [auth.currentUser]);
 
+  const students = useAppDataSelector((state) => Object.values(state.usersById));
+  const feedTimeline = useAppDataSelector((state) => state.timelines[getFeedTimelineKey()]);
+  const opportunities = useTimelineOpportunities(getFeedTimelineKey(), currentUser);
+  const hashtagTimelineKey = hashtagPageTag ? getHashtagTimelineKey(hashtagPageTag) : null;
+  const hashtagTimeline = useAppDataSelector((state) =>
+    hashtagTimelineKey ? state.timelines[hashtagTimelineKey] : null,
+  );
+  const hashtagOpportunities = useTimelineOpportunities(hashtagTimelineKey ?? '__missing__', currentUser);
+  const isHashtagPostsLoading = Boolean(
+    hashtagPageTag && (!hashtagTimeline?.isHydrated || hashtagTimeline?.isRefreshing),
+  );
+  const conversations = useAppDataSelector((state) =>
+    state.chat.conversationOrder
+      .map((id) => state.chat.conversationsById[id])
+      .filter((conversation): conversation is ChatConversation => Boolean(conversation)),
+  );
+
   const currentUserId = currentUser?.id ?? '';
   const authToken = auth.session?.token;
   const apiBase = resolveApiBaseUrl(import.meta.env.VITE_API_URL as string | undefined);
@@ -793,15 +866,11 @@ export default function App() {
       const uniqueUsersMap = new Map<string, NetworkUser>();
       allNetworkUsers.forEach(u => uniqueUsersMap.set(u.userId, u));
       const newStudents = networkUsersToStudents(Array.from(uniqueUsersMap.values()));
-      setStudents((prev) => {
-        const existingIds = new Set(prev.map((s) => s.id));
-        const toAdd = newStudents.filter((s) => !existingIds.has(s.id));
-        return [...prev, ...toAdd];
-      });
+      appData.mergeUsers(newStudents);
     } catch (err) {
       console.error('Failed to fetch follow graph:', err);
     }
-  }, [authToken, currentUserId]);
+  }, [appData, authToken, currentUserId]);
 
   const refreshNotifications = useCallback(async () => {
     if (!authToken) return;
@@ -814,43 +883,30 @@ export default function App() {
   }, [authToken]);
 
   const refreshFeedPosts = useCallback(async () => {
-    if (!authToken || !currentUserId) return;
-
     try {
-      const posts = await apiFetchFeedPosts(authToken, selectedHashtag ?? undefined);
-      const mapped = posts.map((post) => userPostToOpportunity(post, currentUser));
-      setOpportunities(mapped);
+      await appData.ensureFeed({ force: true });
     } catch (err) {
       console.error('Failed to fetch feed posts:', err);
     }
-  }, [authToken, currentUserId, currentUser, selectedHashtag]);
+  }, [appData]);
 
   const refreshHashtagPosts = useCallback(async () => {
     const tag = hashtagPageTag?.trim();
-    if (!authToken || !currentUserId || !tag) return;
-
-    setIsHashtagPostsLoading(true);
+    if (!tag) return;
     try {
-      const posts = await apiFetchHashtagPosts(tag, authToken, 100, 0);
-      setHashtagOpportunities(posts.map((post) => userPostToOpportunity(post, currentUser)));
+      await appData.ensureHashtagFeed(tag, { force: true });
     } catch (err) {
       console.error('Failed to fetch hashtag posts:', err);
-      setHashtagOpportunities([]);
-    } finally {
-      setIsHashtagPostsLoading(false);
     }
-  }, [authToken, currentUserId, hashtagPageTag, currentUser]);
+  }, [appData, hashtagPageTag]);
 
   const refreshConversations = useCallback(async () => {
-    if (!authToken) return;
     try {
-      const convos = await apiFetchConversations(authToken, 'active');
-      const sortedConvos = sortConversationsByTimestamp(convos as any);
-      setConversations(sortedConvos);
+      await appData.ensureConversations({ force: true });
     } catch (err) {
       console.error('Failed to fetch conversations:', err);
     }
-  }, [authToken]);
+  }, [appData]);
 
   useEffect(() => {
     if (auth.isAuthenticated && authToken) {
@@ -892,15 +948,13 @@ export default function App() {
           if (!postId) return;
 
           if (parsed.type === 'feed:post_deleted') {
-            setOpportunities((prev) => prev.filter((item) => item.id !== postId));
-            setHashtagOpportunities((prev) => prev.filter((item) => item.id !== postId));
+            appData.removePost(postId);
             setOpenedPost((prev) => (prev?.id === postId ? null : prev));
             return;
           }
 
           if (parsed.type === 'feed:post_created' || parsed.type === 'feed:post_updated') {
-            void refreshFeedPosts();
-            if (hashtagPageTag) void refreshHashtagPosts();
+            void appData.refreshPost(postId, { insertToTop: parsed.type === 'feed:post_created' });
             return;
           }
 
@@ -913,40 +967,22 @@ export default function App() {
           const commentDelta =
             parsed.type === 'feed:comment_created' || parsed.type === 'feed:reply_created' ? 1 : 0;
 
-          const applyFeedDelta = (items: Opportunity[]) =>
-            items.map((item) =>
-              item.id !== postId
-                ? item
-                : {
-                    ...item,
-                    likeCount: Math.max((item.likeCount ?? item.likes.length) + likeDelta, 0),
-                    commentCount: Math.max((item.commentCount ?? item.comments.length) + commentDelta, 0),
-                  },
-            );
-
-          setOpportunities(applyFeedDelta);
-          setHashtagOpportunities(applyFeedDelta);
-          setOpenedPost((prev) => (prev ? applyFeedDelta([prev])[0] : prev));
+          appData.updatePost(postId, (post) => ({
+            ...post,
+            likeCount: Math.max(post.likeCount + likeDelta, 0),
+            commentCount: Math.max(post.commentCount + commentDelta, 0),
+          }));
+          setOpenedPost((prev) =>
+            prev?.id === postId
+              ? {
+                  ...prev,
+                  likeCount: Math.max((prev.likeCount ?? prev.likes.length) + likeDelta, 0),
+                  commentCount: Math.max((prev.commentCount ?? prev.comments.length) + commentDelta, 0),
+                }
+              : prev,
+          );
         } else if (parsed.type.startsWith('chat:')) {
-          window.dispatchEvent(new CustomEvent('campuslynk:chat', { detail: parsed }));
-
-          if (parsed.type === 'chat:message') {
-            setConversations((prev) =>
-              mergeConversationPreviewOnMessage(prev, parsed.payload, currentUserId),
-            );
-            return;
-          }
-
-          if (parsed.type === 'chat:status') {
-            setConversations((prev) =>
-              mergeConversationPresenceUpdate(prev, parsed.payload),
-            );
-            return;
-          }
-
-          if (parsed.type === 'chat:read') {
-            return;
-          }
+          appData.applyRealtimeEvent(parsed, currentUserId);
 
           if (parsed.type === 'chat:delete' || parsed.type === 'chat:request_accepted') {
             void refreshConversations();
@@ -960,7 +996,7 @@ export default function App() {
     return () => {
       socket.close();
     };
-  }, [authToken, auth.isAuthenticated, apiBase, currentUserId, hashtagPageTag, refreshFeedPosts, refreshHashtagPosts]);
+  }, [appData, authToken, auth.isAuthenticated, apiBase, currentUserId, refreshConversations]);
 
   useEffect(() => {
     if (!authToken || !auth.isAuthenticated) return;
@@ -1013,12 +1049,8 @@ export default function App() {
   // Ensure the authenticated user is present in the in-memory students list.
   useEffect(() => {
     if (!auth.currentUser) return;
-
-    setStudents((prev) => {
-      const filtered = prev.filter((s) => s.id !== 'current' && s.id !== currentUserId);
-      return [currentUser, ...filtered].filter(Boolean) as Student[];
-    });
-  }, [auth.currentUser, currentUser, currentUserId]);
+    appData.mergeUsers([currentUser]);
+  }, [appData, auth.currentUser, currentUser]);
 
   // Opportunity handlers
   const handleLike = (opportunityId: string) => {
@@ -1030,28 +1062,11 @@ export default function App() {
     const previousLiked = Boolean(target.isLikedByMe ?? target.likes.includes(currentUserId));
     const previousLikeCount = Math.max(target.likeCount ?? target.likes.length, 0);
 
-    setOpportunities((prev) =>
-      prev.map((opp) =>
-        opp.id !== opportunityId
-          ? opp
-          : {
-              ...opp,
-              isLikedByMe: nextLiked,
-              likeCount: Math.max((opp.likeCount ?? opp.likes.length) + (nextLiked ? 1 : -1), 0),
-            },
-      ),
-    );
-    setHashtagOpportunities((prev) =>
-      prev.map((opp) =>
-        opp.id !== opportunityId
-          ? opp
-          : {
-              ...opp,
-              isLikedByMe: nextLiked,
-              likeCount: Math.max((opp.likeCount ?? opp.likes.length) + (nextLiked ? 1 : -1), 0),
-            },
-      ),
-    );
+    appData.updatePost(opportunityId, (post) => ({
+      ...post,
+      isLikedByMe: nextLiked,
+      likeCount: Math.max(post.likeCount + (nextLiked ? 1 : -1), 0),
+    }));
 
     void (async () => {
       try {
@@ -1062,28 +1077,11 @@ export default function App() {
         }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Unable to update like');
-        setOpportunities((prev) =>
-          prev.map((opp) =>
-            opp.id !== opportunityId
-              ? opp
-              : {
-                  ...opp,
-                  isLikedByMe: previousLiked,
-                  likeCount: previousLikeCount,
-                },
-          ),
-        );
-        setHashtagOpportunities((prev) =>
-          prev.map((opp) =>
-            opp.id !== opportunityId
-              ? opp
-              : {
-                  ...opp,
-                  isLikedByMe: previousLiked,
-                  likeCount: previousLikeCount,
-                },
-          ),
-        );
+        appData.updatePost(opportunityId, (post) => ({
+          ...post,
+          isLikedByMe: previousLiked,
+          likeCount: previousLikeCount,
+        }));
       }
     })();
   };
@@ -1094,29 +1092,14 @@ export default function App() {
       hashtagOpportunities.find((opp) => opp.id === opportunityId);
     if (!target) return;
     const nextSaved = !(target.isSavedByMe ?? target.saved.includes(currentUserId));
+    const previousSaved = Boolean(target.isSavedByMe ?? target.saved.includes(currentUserId));
+    const previousSaveCount = Math.max(target.saveCount ?? target.saved.length, 0);
 
-    setOpportunities((prev) =>
-      prev.map((opp) =>
-        opp.id !== opportunityId
-          ? opp
-          : {
-              ...opp,
-              isSavedByMe: nextSaved,
-              saveCount: Math.max((opp.saveCount ?? opp.saved.length) + (nextSaved ? 1 : -1), 0),
-            },
-      ),
-    );
-    setHashtagOpportunities((prev) =>
-      prev.map((opp) =>
-        opp.id !== opportunityId
-          ? opp
-          : {
-              ...opp,
-              isSavedByMe: nextSaved,
-              saveCount: Math.max((opp.saveCount ?? opp.saved.length) + (nextSaved ? 1 : -1), 0),
-            },
-      ),
-    );
+    appData.updatePost(opportunityId, (post) => ({
+      ...post,
+      isSavedByMe: nextSaved,
+      saveCount: Math.max(post.saveCount + (nextSaved ? 1 : -1), 0),
+    }));
 
     void (async () => {
       try {
@@ -1127,10 +1110,11 @@ export default function App() {
         }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Unable to update save');
-        await refreshFeedPosts();
-        if (hashtagPageTag) {
-          await refreshHashtagPosts();
-        }
+        appData.updatePost(opportunityId, (post) => ({
+          ...post,
+          isSavedByMe: previousSaved,
+          saveCount: previousSaveCount,
+        }));
       }
     })();
   };
@@ -1367,10 +1351,11 @@ export default function App() {
           );
         }
 
-        await refreshFeedPosts();
-        if (hashtagPageTag) {
-          await refreshHashtagPosts();
-        }
+        appData.updatePost(opportunityId, (post) => ({
+          ...post,
+          commentCount: Math.max(post.commentCount + 1, 0),
+        }));
+        await appData.refreshPost(opportunityId);
         setPostsRefreshToken((prev) => prev + 1);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Unable to add comment');
@@ -1441,9 +1426,12 @@ export default function App() {
           );
         }
 
-        await refreshFeedPosts();
-        if (hashtagPageTag) {
-          await refreshHashtagPosts();
+        if (openedPostId) {
+          appData.updatePost(openedPostId, (post) => ({
+            ...post,
+            commentCount: Math.max(post.commentCount + 1, 0),
+          }));
+          await appData.refreshPost(openedPostId);
         }
         setPostsRefreshToken((prev) => prev + 1);
       } catch (err) {
@@ -1453,6 +1441,10 @@ export default function App() {
   };
 
   const handleLikeComment = (commentId: string, alreadyLiked: boolean) => {
+    const containerPostId =
+      openedPostId ??
+      findOpportunityIdByCommentId(opportunities, commentId) ??
+      findOpportunityIdByCommentId(hashtagOpportunities, commentId);
     const openedPostComment = findCommentInTree(
       mergeReplyThreadsIntoComments(openedPostCommentsRef.current.items, openedPostRepliesRef.current),
       commentId,
@@ -1471,18 +1463,6 @@ export default function App() {
     const previousLiked = existing.isLiked;
     const previousLikeCount = existing.likeCount;
 
-    setOpportunities((prev) =>
-      prev.map((opp) => ({
-        ...opp,
-        comments: updateCommentLikeState(opp.comments ?? [], commentId, nextLiked),
-      })),
-    );
-    setHashtagOpportunities((prev) =>
-      prev.map((opp) => ({
-        ...opp,
-        comments: updateCommentLikeState(opp.comments ?? [], commentId, nextLiked),
-      })),
-    );
     setOpenedPostComments((prev) => ({
       ...prev,
       items: updateCommentLikeState(prev.items, commentId, nextLiked),
@@ -1501,30 +1481,11 @@ export default function App() {
         } else {
           await apiLikeComment(commentId, authToken);
         }
+        if (containerPostId) {
+          void appData.refreshPost(containerPostId);
+        }
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Unable to update comment like');
-        setOpportunities((prev) =>
-          prev.map((opp) => ({
-            ...opp,
-            comments: restoreCommentLikeState(
-              opp.comments ?? [],
-              commentId,
-              previousLiked,
-              previousLikeCount,
-            ),
-          })),
-        );
-        setHashtagOpportunities((prev) =>
-          prev.map((opp) => ({
-            ...opp,
-            comments: restoreCommentLikeState(
-              opp.comments ?? [],
-              commentId,
-              previousLiked,
-              previousLikeCount,
-            ),
-          })),
-        );
         setOpenedPostComments((prev) => ({
           ...prev,
           items: restoreCommentLikeState(prev.items, commentId, previousLiked, previousLikeCount),
@@ -1590,9 +1551,12 @@ export default function App() {
               : prev,
           );
         }
-        await refreshFeedPosts();
-        if (hashtagPageTag) {
-          await refreshHashtagPosts();
+        if (openedPostId) {
+          appData.updatePost(openedPostId, (post) => ({
+            ...post,
+            commentCount: Math.max(post.commentCount - 1, 0),
+          }));
+          await appData.refreshPost(openedPostId);
         }
         setPostsRefreshToken((prev) => prev + 1);
       } catch (err) {
@@ -1604,6 +1568,18 @@ export default function App() {
   const handleEditPost = (postId: string, updates: Partial<Opportunity>) => {
     void (async () => {
       try {
+        appData.updatePost(postId, (post) => ({
+          ...post,
+          title: updates.title ?? post.title,
+          contentText: updates.description ?? post.contentText,
+          company: updates.company ?? post.company,
+          deadline: updates.deadline ?? post.deadline,
+          stipend: updates.stipend ?? post.stipend,
+          duration: updates.duration ?? post.duration,
+          location: updates.location ?? post.location,
+          externalUrl: updates.link ?? post.externalUrl,
+          hashtags: updates.tags ?? post.hashtags,
+        }));
         await apiUpdatePost(
           postId,
           {
@@ -1620,13 +1596,11 @@ export default function App() {
           authToken,
         );
         toast.success('Post updated successfully');
-        await refreshFeedPosts();
-        if (hashtagPageTag) {
-          await refreshHashtagPosts();
-        }
+        await appData.refreshPost(postId);
         setPostsRefreshToken((prev) => prev + 1);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Unable to edit post');
+        void appData.refreshPost(postId);
       }
     })();
   };
@@ -1635,11 +1609,9 @@ export default function App() {
     void (async () => {
       try {
         await apiDeletePost(postId, authToken);
+        appData.removePost(postId);
         toast.success('Post deleted successfully');
-        await refreshFeedPosts();
-        if (hashtagPageTag) {
-          await refreshHashtagPosts();
-        }
+        setOpenedPost((prev) => (prev?.id === postId ? null : prev));
         setPostsRefreshToken((prev) => prev + 1);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : 'Unable to delete post');
@@ -1662,12 +1634,14 @@ export default function App() {
       hashtagOpportunities.find((item) => item.id === openedPostId);
     if (latest) {
       setOpenedPost((prev) =>
-        prev
-          ? {
-              ...latest,
-              comments: prev.comments,
-            }
-          : latest,
+        prev && prev.id === latest.id && isSameOpportunitySummary(prev, latest)
+          ? prev
+          : prev
+            ? {
+                ...latest,
+                comments: prev.comments,
+              }
+            : latest,
       );
     }
   }, [opportunities, hashtagOpportunities, openedPostId]);
@@ -1679,18 +1653,23 @@ export default function App() {
 
     void (async () => {
       try {
-        const post = await apiFetchPostById(openedPostId, authToken);
+        const existingPost = appData.getSnapshot().postsById[openedPostId];
+        if (existingPost) {
+          setOpenedPost(userPostToOpportunity({ ...existingPost, comments: [] }, appData.getSnapshot().usersById, currentUser));
+        }
+        await appData.refreshPost(openedPostId);
         if (cancelled) return;
-        const mapped = userPostToOpportunity({ ...post, comments: [] }, currentUser);
+        const refreshedPost = appData.getSnapshot().postsById[openedPostId];
+        if (!refreshedPost) {
+          throw new Error('Unable to open post');
+        }
+        const mapped = userPostToOpportunity(
+          { ...refreshedPost, comments: [] },
+          appData.getSnapshot().usersById,
+          currentUser,
+        );
         setOpenedPost(mapped);
         await loadInitialPostComments(openedPostId);
-        if (cancelled) return;
-        setOpportunities((prev) =>
-          prev.map((item) => (item.id === mapped.id ? mapped : item))
-        );
-        setHashtagOpportunities((prev) =>
-          prev.map((item) => (item.id === mapped.id ? mapped : item))
-        );
       } catch (err) {
         if (cancelled) return;
         toast.error(err instanceof Error ? err.message : 'Unable to open post');
@@ -1701,7 +1680,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, openedPostId, authToken, currentUser, loadInitialPostComments]);
+  }, [activeTab, appData, openedPostId, authToken, currentUser, loadInitialPostComments]);
 
   const persistCreatedPost = async (draft: any) => {
     if (!authToken) {
@@ -1710,8 +1689,8 @@ export default function App() {
 
     const payload = buildCreatePostPayloadFromDraft(draft);
     const mediaFiles = draft?.imageFile instanceof File ? [draft.imageFile] : [];
-    await apiCreateUserPost(currentUserId, payload, authToken, mediaFiles);
-    await refreshFeedPosts();
+    const createdPost = await apiCreateUserPost(currentUserId, payload, authToken, mediaFiles);
+    appData.prependPostToFeed(createdPost);
     setPostsRefreshToken((prev) => prev + 1);
   };
 
@@ -1917,15 +1896,21 @@ export default function App() {
   };
 
   const handleCreateChat = (conversation: ChatConversation) => {
-    setConversations(prev => sortConversationsByTimestamp([conversation, ...prev]));
+    appData.upsertConversation(conversation);
   };
 
   const handleChatRead = (conversationId: string) => {
-    setConversations((prevConversations) =>
-      sortConversationsByTimestamp(
-        mergeConversationReadUpdate(prevConversations, conversationId),
-      ),
-    );
+    const latestIncoming = appData
+      .getSnapshot()
+      .chat.messagesByConversationId[conversationId]?.messages
+      ?.slice()
+      .reverse()
+      .find((message) => !message.isOwn && !message.id.startsWith('temp-'));
+    if (latestIncoming) {
+      void appData.markConversationRead(conversationId, latestIncoming.id).catch(() => {
+        // Keep UI optimistic.
+      });
+    }
   };
 
   const handleViewProfile = (studentId: string) => {
@@ -1940,19 +1925,16 @@ export default function App() {
     if (activeTab !== 'profile') return;
     if (!viewingProfileId || viewingProfileId === currentUserId) return;
 
-    const alreadyLoaded = students.some((s) => s.id === viewingProfileId);
+    const alreadyLoaded = Boolean(appData.getSnapshot().usersById[viewingProfileId]);
     if (alreadyLoaded) return;
 
     let cancelled = false;
 
     const loadViewedProfile = async () => {
       try {
-        const profile = await apiFetchUserProfile(viewingProfileId, authToken);
-        if (cancelled) return;
-
-        const nextStudent = apiProfileToStudent(profile);
-        setStudents((prev) => (prev.some((s) => s.id === nextStudent.id) ? prev : [...prev, nextStudent]));
+        await appData.ensureUser(viewingProfileId);
       } catch (err) {
+        if (cancelled) return;
         console.error('Failed to fetch viewed profile:', err);
       }
     };
@@ -1962,7 +1944,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, viewingProfileId, currentUserId, students, authToken]);
+  }, [activeTab, appData, viewingProfileId, currentUserId, authToken]);
 
   // Club handlers
   const handleJoinClub = (clubId: string) => {
@@ -1991,12 +1973,7 @@ export default function App() {
 
   // Profile handlers
   const handleEditProfile = (updates: Partial<Student>) => {
-    setStudents(students.map(student => {
-      if (student.id === currentUserId) {
-        return { ...student, ...updates };
-      }
-      return student;
-    }));
+    appData.updateUser(currentUserId, (student) => ({ ...student, ...updates }));
   };
 
   // Notification handlers (API-backed)
@@ -2164,6 +2141,7 @@ export default function App() {
             <div className="px-1 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)] w-full lg:w-3/4 xl:w-1/2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               <FeedPage
                 opportunities={opportunities}
+                isLoading={!feedTimeline?.isHydrated || Boolean(feedTimeline?.isRefreshing && opportunities.length === 0)}
                 currentUserId={currentUserId}
                 selectedHashtag={selectedHashtag}
                 onClearHashtagFilter={() => setSelectedHashtag(null)}
@@ -2344,27 +2322,4 @@ export default function App() {
       <Toaster />
     </div>
   );
-}
-
-function apiProfileToStudent(profile: ApiUserProfile): Student {
-  const seed = encodeURIComponent(profile.username || profile.email || profile.userId);
-
-  return {
-    id: profile.userId,
-    name: profile.username,
-    username: profile.username,
-    email: profile.email,
-    branch: profile.details?.branch ?? 'Unknown',
-    year: profile.details?.year ?? profile.details?.passingYear ?? 0,
-    avatar: profile.profilePictureUrl || undefined,
-    bio: profile.bio ?? '',
-    skills: [],
-    interests: [],
-    certifications: [],
-    experience: [],
-    societies: [],
-    achievements: [],
-    projects: [],
-    accountType: profile.isPublic ? 'public' : 'private',
-  };
 }
