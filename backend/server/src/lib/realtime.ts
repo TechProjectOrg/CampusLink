@@ -2,8 +2,10 @@ import type { Server as HttpServer } from 'http';
 import { WebSocketServer, type WebSocket } from 'ws';
 import prisma from '../prisma';
 import { verifyAuthToken } from './auth';
+import { setUserPresence } from './chatCache';
 import { emitTypingIndicator, getChatParticipantIds } from './chat';
 import { createRedisPublisher, createRedisSubscriber } from './cache';
+import { patchUserSummary } from './userCache';
 
 // ---------------------------------------------------------------------------
 // Socket registry — exported so lib/chat.ts can emit chat events directly
@@ -39,7 +41,10 @@ interface RealtimeEnvelope {
 }
 
 const FEED_EVENTS_CHANNEL = 'feed:events';
+const CHAT_EVENTS_CHANNEL = 'chat:events';
 const feedEventPublisher = createRedisPublisher();
+const chatEventPublisher = createRedisPublisher();
+const REALTIME_INSTANCE_ID = `${process.pid}:${Math.random().toString(36).slice(2)}`;
 
 // ---------------------------------------------------------------------------
 // Inbound message types (sent by clients over the WebSocket)
@@ -104,6 +109,10 @@ async function setUserOnline(userId: string): Promise<void> {
     await prisma.$queryRaw`
       UPDATE users SET is_online = TRUE WHERE user_id = ${userId}
     `;
+    await Promise.all([
+      setUserPresence(userId, { isOnline: true, lastSeenAt: null }),
+      patchUserSummary(userId, (current) => ({ ...current, isOnline: true, lastSeenAt: null })),
+    ]);
     await notifyChatPartnersOfStatus(userId, true);
   } catch (err) {
     console.error('Failed to mark user online:', err);
@@ -112,9 +121,18 @@ async function setUserOnline(userId: string): Promise<void> {
 
 async function setUserOffline(userId: string): Promise<void> {
   try {
+    const lastSeenAt = new Date().toISOString();
     await prisma.$queryRaw`
       UPDATE users SET is_online = FALSE, last_seen_at = NOW() WHERE user_id = ${userId}
     `;
+    await Promise.all([
+      setUserPresence(userId, { isOnline: false, lastSeenAt }),
+      patchUserSummary(userId, (current) => ({
+        ...current,
+        isOnline: false,
+        lastSeenAt,
+      })),
+    ]);
     await notifyChatPartnersOfStatus(userId, false);
   } catch (err) {
     console.error('Failed to mark user offline:', err);
@@ -148,15 +166,10 @@ async function notifyChatPartnersOfStatus(userId: string, isOnline: boolean): Pr
       type: 'chat:status',
       payload: { userId, isOnline, lastSeenAt },
     };
-    const serialized = JSON.stringify(envelope);
-
-    for (const { user_id } of partnerRows) {
-      const sockets = socketsByUserId.get(user_id);
-      if (!sockets) continue;
-      for (const socket of sockets) {
-        if (socket.readyState === socket.OPEN) socket.send(serialized);
-      }
-    }
+    emitChatEvent(
+      partnerRows.map((row) => row.user_id),
+      envelope,
+    );
   } catch (err) {
     console.error('Failed to notify chat partners of status:', err);
   }
@@ -206,19 +219,36 @@ export function emitToUser(userId: string, event: RealtimeEnvelope): void {
   }
 }
 
-export function emitFeedEvent(userIds: string[], event: RealtimeEnvelope): void {
+function emitEventToUsers(
+  userIds: string[],
+  event: RealtimeEnvelope,
+  publisher: ReturnType<typeof createRedisPublisher> | null,
+  channel: string,
+): void {
   const uniqueUserIds = Array.from(new Set(userIds));
-  if (feedEventPublisher) {
-    const pubsubPayload = JSON.stringify({ userIds: uniqueUserIds, event });
+  if (publisher) {
+    const pubsubPayload = JSON.stringify({
+      origin: REALTIME_INSTANCE_ID,
+      userIds: uniqueUserIds,
+      event,
+    });
 
-    feedEventPublisher
-      .publish(FEED_EVENTS_CHANNEL, pubsubPayload)
-      .catch((err) => console.warn('Failed to publish feed realtime event:', err));
+    publisher
+      .publish(channel, pubsubPayload)
+      .catch((err) => console.warn(`Failed to publish ${channel} realtime event:`, err));
   }
 
   for (const userId of uniqueUserIds) {
     emitToUser(userId, event);
   }
+}
+
+export function emitFeedEvent(userIds: string[], event: RealtimeEnvelope): void {
+  emitEventToUsers(userIds, event, feedEventPublisher, FEED_EVENTS_CHANNEL);
+}
+
+export function emitChatEvent(userIds: string[], event: RealtimeEnvelope): void {
+  emitEventToUsers(userIds, event, chatEventPublisher, CHAT_EVENTS_CHANNEL);
 }
 
 /**
@@ -246,6 +276,7 @@ export function isUserOnline(userId: string): boolean {
 export function initializeRealtimeServer(server: HttpServer): void {
   const wss = new WebSocketServer({ server, path: '/ws' });
   const feedEventSubscriber = createRedisSubscriber();
+  const chatEventSubscriber = createRedisSubscriber();
 
   feedEventSubscriber
     ?.subscribe(FEED_EVENTS_CHANNEL)
@@ -253,13 +284,39 @@ export function initializeRealtimeServer(server: HttpServer): void {
 
   feedEventSubscriber?.on('message', (_channel, raw) => {
     try {
-      const parsed = JSON.parse(raw) as { userIds?: string[]; event?: RealtimeEnvelope };
+      const parsed = JSON.parse(raw) as {
+        origin?: string;
+        userIds?: string[];
+        event?: RealtimeEnvelope;
+      };
+      if (parsed.origin === REALTIME_INSTANCE_ID) return;
       if (!Array.isArray(parsed.userIds) || !parsed.event) return;
       for (const userId of parsed.userIds) {
         emitToUser(userId, parsed.event);
       }
     } catch (err) {
       console.warn('Failed to relay feed realtime event:', err);
+    }
+  });
+
+  chatEventSubscriber
+    ?.subscribe(CHAT_EVENTS_CHANNEL)
+    .catch((err) => console.warn('Failed to subscribe to chat realtime events:', err));
+
+  chatEventSubscriber?.on('message', (_channel, raw) => {
+    try {
+      const parsed = JSON.parse(raw) as {
+        origin?: string;
+        userIds?: string[];
+        event?: RealtimeEnvelope;
+      };
+      if (parsed.origin === REALTIME_INSTANCE_ID) return;
+      if (!Array.isArray(parsed.userIds) || !parsed.event) return;
+      for (const userId of parsed.userIds) {
+        emitToUser(userId, parsed.event);
+      }
+    } catch (err) {
+      console.warn('Failed to relay chat realtime event:', err);
     }
   });
 

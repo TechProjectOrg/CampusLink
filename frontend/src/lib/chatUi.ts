@@ -1,4 +1,5 @@
 import { ChatMessageApi } from './chatApi';
+import { ChatConversation } from '../types';
 
 export const REACTION_EMOJIS = [
   { emoji: '\u{2764}\u{FE0F}', name: 'heart' },
@@ -47,6 +48,71 @@ export function mergeChatMessageList(list: ChatMessageApi[], incoming: ChatMessa
   }
 
   return [...list, incoming];
+}
+
+export function sortConversationsByTimestamp(
+  conversations: ChatConversation[],
+): ChatConversation[] {
+  return [...conversations].sort((left, right) => {
+    const leftTime = new Date(left.timestamp).getTime();
+    const rightTime = new Date(right.timestamp).getTime();
+    return rightTime - leftTime;
+  });
+}
+
+export function mergeConversationPreviewOnMessage(
+  conversations: ChatConversation[],
+  payload: any,
+  currentUserId: string,
+): ChatConversation[] {
+  if (!payload?.chatId) return conversations;
+
+  const preview =
+    payload.messageType === 'image'
+      ? 'Photo'
+      : payload.messageType === 'file'
+        ? 'File'
+        : (payload.content?.trim() || 'No messages yet');
+
+  const updated = conversations.map((conversation) => {
+    if (conversation.id !== payload.chatId) return conversation;
+    return {
+      ...conversation,
+      lastMessage: preview,
+      timestamp: payload.createdAt,
+      unread:
+        payload.senderUserId === currentUserId
+          ? conversation.unread
+          : conversation.unread + 1,
+    };
+  });
+
+  return sortConversationsByTimestamp(updated);
+}
+
+export function mergeConversationPresenceUpdate(
+  conversations: ChatConversation[],
+  payload: any,
+): ChatConversation[] {
+  if (!payload?.userId) return conversations;
+  return conversations.map((conversation) =>
+    conversation.participantId === payload.userId
+      ? {
+          ...conversation,
+          isOnline: Boolean(payload.isOnline),
+          lastSeenAt: payload.lastSeenAt ?? null,
+        }
+      : conversation,
+  );
+}
+
+export function mergeConversationReadUpdate(
+  conversations: ChatConversation[],
+  chatId: string,
+): ChatConversation[] {
+  return conversations.map((conversation) =>
+    conversation.id === chatId ? { ...conversation, unread: 0 } : conversation,
+  );
 }
 
 export function summarizeReply(message: ChatMessageApi): string {

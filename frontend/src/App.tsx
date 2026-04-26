@@ -64,6 +64,12 @@ import {
   type CreateUserPostPayload,
   type UserPost,
 } from './lib/postsApi';
+import {
+  mergeConversationPreviewOnMessage,
+  mergeConversationPresenceUpdate,
+  mergeConversationReadUpdate,
+  sortConversationsByTimestamp,
+} from './lib/chatUi';
 import type { ApiUserProfile } from './types';
 
 const POST_COMMENTS_PAGE_SIZE = 20;
@@ -835,15 +841,6 @@ export default function App() {
     }
   }, [authToken, currentUserId, hashtagPageTag, currentUser]);
 
-  // Sort conversations by latest interaction (most recent first)
-  const sortConversationsByTimestamp = (convos: ChatConversation[]): ChatConversation[] => {
-    return [...convos].sort((a, b) => {
-      const timeA = new Date(a.timestamp).getTime();
-      const timeB = new Date(b.timestamp).getTime();
-      return timeB - timeA; // Latest first
-    });
-  };
-
   const refreshConversations = useCallback(async () => {
     if (!authToken) return;
     try {
@@ -932,8 +929,26 @@ export default function App() {
           setOpenedPost((prev) => (prev ? applyFeedDelta([prev])[0] : prev));
         } else if (parsed.type.startsWith('chat:')) {
           window.dispatchEvent(new CustomEvent('campuslynk:chat', { detail: parsed }));
-          
-          if (parsed.type === 'chat:message' || parsed.type === 'chat:status' || parsed.type === 'chat:read') {
+
+          if (parsed.type === 'chat:message') {
+            setConversations((prev) =>
+              mergeConversationPreviewOnMessage(prev, parsed.payload, currentUserId),
+            );
+            return;
+          }
+
+          if (parsed.type === 'chat:status') {
+            setConversations((prev) =>
+              mergeConversationPresenceUpdate(prev, parsed.payload),
+            );
+            return;
+          }
+
+          if (parsed.type === 'chat:read') {
+            return;
+          }
+
+          if (parsed.type === 'chat:delete' || parsed.type === 'chat:request_accepted') {
             void refreshConversations();
           }
         }
@@ -1906,13 +1921,11 @@ export default function App() {
   };
 
   const handleChatRead = (conversationId: string) => {
-    setConversations(prevConversations => {
-      const updated = prevConversations.map((conversation) =>
-        conversation.id === conversationId ? { ...conversation, unread: 0 } : conversation
-      );
-      // Maintain chronological order after updating read status
-      return sortConversationsByTimestamp(updated);
-    });
+    setConversations((prevConversations) =>
+      sortConversationsByTimestamp(
+        mergeConversationReadUpdate(prevConversations, conversationId),
+      ),
+    );
   };
 
   const handleViewProfile = (studentId: string) => {

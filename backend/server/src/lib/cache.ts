@@ -12,11 +12,19 @@ type RedisSubscriber = {
   on(event: 'message', handler: (channel: string, payload: string) => void): void;
 };
 
+type RedisCommandValue = string | number | boolean;
+
+const STREAM_POLL_INTERVAL_MS = 1000;
+
 function getUpstashConfig(): { url: string; token: string } | null {
   const url = process.env.UPSTASH_REDIS_REST_URL?.trim().replace(/\/+$/, '');
   const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
   if (!url || !token) return null;
   return { url, token };
+}
+
+export function isRedisConfigured(): boolean {
+  return getUpstashConfig() !== null;
 }
 
 async function runCommand<T>(command: Array<string | number>): Promise<T | null> {
@@ -165,6 +173,11 @@ export async function cacheHashSet(
   }
 }
 
+export async function cacheHashDelete(key: string, ...fields: string[]): Promise<void> {
+  if (fields.length === 0) return;
+  await runCommand(['HDEL', key, ...fields]);
+}
+
 export async function cacheHGetAll(key: string): Promise<Record<string, string> | null> {
   const result = await runCommand<string[]>(['HGETALL', key]);
   if (!Array.isArray(result) || result.length === 0) return null;
@@ -176,15 +189,136 @@ export async function cacheHGetAll(key: string): Promise<Record<string, string> 
   return mapped;
 }
 
+export async function cacheHashGet(key: string, field: string): Promise<string | null> {
+  const result = await runCommand<string>(['HGET', key, field]);
+  return typeof result === 'string' ? result : null;
+}
+
+export async function cacheHashMultiGet(
+  key: string,
+  fields: string[],
+): Promise<Array<string | null>> {
+  if (fields.length === 0) return [];
+  const result = await runCommand<Array<string | null>>(['HMGET', key, ...fields]);
+  if (!Array.isArray(result)) {
+    return fields.map(() => null);
+  }
+
+  return result.map((value) => (typeof value === 'string' ? value : null));
+}
+
+export async function cacheHashIncrementBy(
+  key: string,
+  field: string,
+  amount: number,
+  ttlSeconds?: number,
+): Promise<number | null> {
+  const result = await runCommand<number>(['HINCRBY', key, field, amount]);
+  if (ttlSeconds && ttlSeconds > 0) {
+    await cacheExpire(key, ttlSeconds);
+  }
+  return typeof result === 'number' ? result : null;
+}
+
+async function appendStreamMessage(channel: string, payload: string): Promise<void> {
+  await runCommand(['XADD', channel, '*', 'payload', payload]);
+}
+
+class PollingRedisSubscriber implements RedisSubscriber {
+  private readonly channels = new Set<string>();
+  private readonly handlers = new Set<(channel: string, payload: string) => void>();
+  private readonly cursors = new Map<string, string>();
+  private polling = false;
+  private disposed = false;
+
+  async subscribe(channel: string): Promise<void> {
+    if (!channel.trim()) return;
+    this.channels.add(channel);
+    if (!this.cursors.has(channel)) {
+      this.cursors.set(channel, '$');
+    }
+    this.start();
+  }
+
+  on(_event: 'message', handler: (channel: string, payload: string) => void): void {
+    this.handlers.add(handler);
+  }
+
+  private start(): void {
+    if (this.polling || this.disposed || this.channels.size === 0) return;
+    this.polling = true;
+    void this.pollLoop();
+  }
+
+  private async pollLoop(): Promise<void> {
+    while (!this.disposed && this.channels.size > 0) {
+      try {
+        await Promise.all(Array.from(this.channels).map((channel) => this.pollChannel(channel)));
+      } catch (err) {
+        console.warn('Redis subscriber poll failed:', err);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, STREAM_POLL_INTERVAL_MS));
+    }
+
+    this.polling = false;
+  }
+
+  private async pollChannel(channel: string): Promise<void> {
+    const cursor = this.cursors.get(channel) ?? '$';
+    const result = await runCommand<Array<[string, Array<Record<string, string>>]>>([
+      'XRANGE',
+      channel,
+      cursor === '$' ? '-' : `(${cursor}`,
+      '+',
+      'COUNT',
+      100,
+    ]);
+
+    if (!Array.isArray(result) || result.length === 0) {
+      if (cursor === '$') {
+        const latest = await runCommand<Array<[string, Array<Record<string, string>>]>>([
+          'XREVRANGE',
+          channel,
+          '+',
+          '-',
+          'COUNT',
+          1,
+        ]);
+        const latestEntry = Array.isArray(latest) ? latest[0] : null;
+        if (latestEntry?.[0]) {
+          this.cursors.set(channel, String(latestEntry[0]));
+        }
+      }
+      return;
+    }
+
+    for (const entry of result) {
+      const entryId = String(entry[0] ?? '');
+      const fields = Array.isArray(entry[1]) ? entry[1] : [];
+      const payloadField = fields.find((field) => typeof field?.payload === 'string');
+      if (payloadField?.payload) {
+        for (const handler of this.handlers) {
+          handler(channel, payloadField.payload);
+        }
+      }
+      if (entryId) {
+        this.cursors.set(channel, entryId);
+      }
+    }
+  }
+}
+
 export function createRedisSubscriber(): RedisSubscriber | null {
-  return null;
+  if (!getUpstashConfig()) return null;
+  return new PollingRedisSubscriber();
 }
 
 export function createRedisPublisher(): RedisPublisher | null {
   if (!getUpstashConfig()) return null;
   return {
     async publish(channel: string, payload: string): Promise<void> {
-      await runCommand(['PUBLISH', channel, payload]);
+      await appendStreamMessage(channel, payload);
     },
   };
 }

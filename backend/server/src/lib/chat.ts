@@ -1,5 +1,5 @@
 import prisma from '../prisma';
-import { emitToUser } from './realtime';
+import { emitChatEvent, emitToUser } from './realtime';
 import { getUserSummaryById } from './userCache';
 
 // ---------------------------------------------------------------------------
@@ -198,10 +198,7 @@ export async function getChatParticipantIds(chatId: string): Promise<string[]> {
 // ---------------------------------------------------------------------------
 
 export function emitChatMessage(participantIds: string[], payload: ChatMessagePayload): void {
-  const envelope = { type: 'chat:message' as const, payload };
-  for (const uid of participantIds) {
-    emitToUser(uid, envelope);
-  }
+  emitChatEvent(participantIds, { type: 'chat:message' as const, payload });
 }
 
 export function emitChatReaction(
@@ -210,13 +207,10 @@ export function emitChatReaction(
   messageId: string,
   reactions: Record<string, string[]>
 ): void {
-  const envelope = {
+  emitChatEvent(participantIds, {
     type: 'chat:reaction' as const,
     payload: { chatId, messageId, reactions },
-  };
-  for (const uid of participantIds) {
-    emitToUser(uid, envelope);
-  }
+  });
 }
 
 export function emitChatRead(
@@ -226,17 +220,20 @@ export function emitChatRead(
   lastReadMessageId: string,
   readAt: string
 ): void {
-  const envelope = {
-    type: 'chat:read' as const,
-    payload: { chatId, userId, lastReadMessageId, readAt },
-  };
-  for (const uid of participantIds) {
-    if (uid !== userId) emitToUser(uid, envelope);
-  }
+  emitChatEvent(
+    participantIds.filter((uid) => uid !== userId),
+    {
+      type: 'chat:read' as const,
+      payload: { chatId, userId, lastReadMessageId, readAt },
+    },
+  );
 }
 
 export function emitChatRequestAccepted(userId: string, chatId: string): void {
-  emitToUser(userId, { type: 'chat:request_accepted' as const, payload: { chatId } });
+  emitChatEvent([userId], {
+    type: 'chat:request_accepted' as const,
+    payload: { chatId },
+  });
 }
 
 export function emitTypingIndicator(
@@ -255,8 +252,8 @@ export function emitTypingIndicator(
 }
 
 export function emitChatDelete(participantIds: string[], chatId: string, messageId: string): void {
-  const envelope = { type: 'chat:delete' as const, payload: { chatId, messageId } };
-  for (const uid of participantIds) {
-    emitToUser(uid, envelope);
-  }
+  emitChatEvent(participantIds, {
+    type: 'chat:delete' as const,
+    payload: { chatId, messageId },
+  });
 }

@@ -1,34 +1,109 @@
+import { Prisma } from '@prisma/client';
 import express, { Request, Response } from 'express';
 import multer from 'multer';
 import prisma from '../prisma';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
 import { chatMessageRateLimiter } from '../middleware/rateLimiter';
 import {
-  ChatReplyPreview,
+  type ChatMessagePayload,
+  type ChatReplyPreview,
+  emitChatDelete,
+  emitChatMessage,
+  emitChatReaction,
+  emitChatRead,
+  emitChatRequestAccepted,
+  getChatParticipantIds,
   getOrCreateDirectChat,
   isChatParticipant,
-  getChatParticipantIds,
   markChatAccepted,
-  emitChatMessage,
-  emitChatRead,
-  emitChatReaction,
-  emitChatRequestAccepted,
-  emitChatDelete,
 } from '../lib/chat';
-import { uploadChatMediaToStorage } from '../lib/objectStorage';
-import { encryptMessage, decryptMessage } from '../lib/encryption';
 import {
-  CachedConversationEntry,
-  getCachedConversationList,
-  getUserSummariesByIds,
-  getUserSummaryById,
+  appendRecentMessage,
+  ChatCachedAttachment,
+  type ChatCachedMessage,
+  type ChatConversationListEntry,
+  type ChatConversationListType,
+  ChatConversationMetaCache,
+  fetchLatestMessagesForConversations,
+  formatMessagePreview,
+  getCachedRecentMessages,
+  getChatRecentWindowSize,
+  getConversationList,
+  getConversationMeta,
+  getReadState,
+  getUnreadCounts,
+  getUserPresenceMap,
+  incrementUnreadCount,
   invalidateConversationLists,
-  patchCachedConversationList,
-  setCachedConversationList,
-} from '../lib/userCache';
+  noteConversationActivity,
+  patchConversationList,
+  patchConversationMeta,
+  patchRecentMessage,
+  primeConversationUnreadState,
+  reconcileConversationMeta,
+  reconcileUnreadState,
+  refreshConversationMetaFromRecentCache,
+  removeRecentMessage,
+  setCachedRecentMessages,
+  setConversationList,
+  setConversationMeta,
+  setReadState,
+  setUnreadCount,
+} from '../lib/chatCache';
+import { decryptMessage, encryptMessage } from '../lib/encryption';
+import { uploadChatMediaToStorage } from '../lib/objectStorage';
+import { getUserSummariesByIds, getUserSummaryById } from '../lib/userCache';
 
 const router = express.Router();
 router.use(authenticateToken);
+
+const CHAT_PAGE_DEFAULT_LIMIT = 50;
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
+
+interface ConversationBaseRow {
+  chat_id: string;
+  is_request: boolean;
+  updated_at: Date;
+  other_user_id: string;
+}
+
+interface ConversationUnreadRow {
+  chat_id: string;
+  unread_count: number;
+}
+
+interface MessageRow {
+  message_id: string;
+  sender_user_id: string;
+  message_type: string;
+  content: string | null;
+  reactions: unknown;
+  created_at: Date;
+  reply_to_message_id: string | null;
+}
+
+interface AttachmentRow {
+  message_id: string;
+  file_url: string;
+  file_type: string;
+}
+
+interface ReplyRow {
+  message_id: string;
+  sender_user_id: string;
+  message_type: string;
+  content: string | null;
+  attachment_url: string | null;
+}
+
+interface MessagePageResult {
+  messages: ChatCachedMessage[];
+  hasMore: boolean;
+}
 
 function isValidUUID(uuid: string | undefined | null) {
   if (!uuid) return false;
@@ -36,144 +111,202 @@ function isValidUUID(uuid: string | undefined | null) {
   return regex.test(uuid);
 }
 
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
-});
-
 function normalizeReactions(value: unknown): Record<string, string[]> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
 
   const reactions: Record<string, string[]> = {};
   for (const [emoji, userIds] of Object.entries(value as Record<string, unknown>)) {
-    if (typeof emoji !== 'string' || !Array.isArray(userIds)) continue;
+    if (!Array.isArray(userIds)) continue;
     const safeIds = userIds.filter((id): id is string => typeof id === 'string');
-    if (safeIds.length > 0) reactions[emoji] = Array.from(new Set(safeIds));
+    if (safeIds.length > 0) {
+      reactions[emoji] = Array.from(new Set(safeIds));
+    }
   }
 
   return reactions;
 }
 
-interface ConversationRow {
-  chat_id: string;
-  is_request: boolean;
-  updated_at: Date;
-  other_user_id: string;
-  last_message: string | null;
-  unread_count: number;
-}
-
-async function fetchConversationsFromDb(
+async function fetchConversationBaseRows(
   userId: string,
   isRequest: boolean,
-): Promise<CachedConversationEntry[]> {
-  const rows = await prisma.$queryRaw<ConversationRow[]>`
+): Promise<ConversationBaseRow[]> {
+  return prisma.$queryRaw<ConversationBaseRow[]>`
     SELECT
       c.chat_id,
       c.is_request,
       c.updated_at,
-      cp_other.user_id AS other_user_id,
-      (
-        SELECT m.content
-        FROM messages m
-        WHERE m.chat_id = c.chat_id
-          AND m.deleted_at IS NULL
-        ORDER BY m.created_at DESC
-        LIMIT 1
-      ) AS last_message,
-      (
-        SELECT COUNT(*)
-        FROM messages m
-        LEFT JOIN messages last_read ON last_read.message_id = cp_me.last_read_message_id
-        WHERE m.chat_id = c.chat_id
-          AND m.deleted_at IS NULL
-          AND m.sender_user_id != ${userId}
-          AND (cp_me.last_read_message_id IS NULL OR last_read.created_at IS NULL OR m.created_at > last_read.created_at)
-      )::int AS unread_count
+      cp_other.user_id AS other_user_id
     FROM chats c
-    JOIN chat_participants cp_me ON cp_me.chat_id = c.chat_id AND cp_me.user_id = ${userId}
-    JOIN chat_participants cp_other ON cp_other.chat_id = c.chat_id AND cp_other.user_id != ${userId}
+    JOIN chat_participants cp_me
+      ON cp_me.chat_id = c.chat_id
+     AND cp_me.user_id = ${userId}
+     AND cp_me.left_at IS NULL
+    JOIN chat_participants cp_other
+      ON cp_other.chat_id = c.chat_id
+     AND cp_other.user_id != ${userId}
+     AND cp_other.left_at IS NULL
     WHERE c.is_request = ${isRequest}
-      AND cp_me.left_at IS NULL
-      AND cp_other.left_at IS NULL
     ORDER BY c.updated_at DESC
   `;
+}
 
+async function fetchConversationUnreadRows(
+  userId: string,
+  conversationIds: string[],
+): Promise<Map<string, number>> {
+  const result = new Map<string, number>();
+  if (conversationIds.length === 0) return result;
+
+  const rows = await prisma.$queryRaw<ConversationUnreadRow[]>`
+    SELECT
+      cp.chat_id,
+      COUNT(m.message_id)::int AS unread_count
+    FROM chat_participants cp
+    LEFT JOIN messages last_read
+      ON last_read.message_id = cp.last_read_message_id
+    LEFT JOIN messages m
+      ON m.chat_id = cp.chat_id
+     AND m.deleted_at IS NULL
+     AND m.sender_user_id != ${userId}
+     AND (
+       cp.last_read_message_id IS NULL
+       OR last_read.created_at IS NULL
+       OR m.created_at > last_read.created_at
+     )
+    WHERE cp.user_id = ${userId}
+      AND cp.chat_id IN (${Prisma.join(conversationIds)})
+      AND cp.left_at IS NULL
+    GROUP BY cp.chat_id
+  `;
+
+  for (const row of rows) {
+    result.set(row.chat_id, row.unread_count);
+  }
+
+  return result;
+}
+
+async function buildConversationListEntries(
+  userId: string,
+  type: ChatConversationListType,
+): Promise<ChatConversationListEntry[]> {
+  const isRequest = type === 'requests';
+  const rows = await fetchConversationBaseRows(userId, isRequest);
+  const conversationIds = rows.map((row) => row.chat_id);
+  const latestMessages = await fetchLatestMessagesForConversations(conversationIds);
   const summaries = await getUserSummariesByIds(rows.map((row) => row.other_user_id));
+  const unreadCounts = await fetchConversationUnreadRows(userId, conversationIds);
+
+  await Promise.all(
+    rows.map(async (row) => {
+      const latestMessage = latestMessages.get(row.chat_id);
+      const meta: ChatConversationMetaCache = {
+        conversationId: row.chat_id,
+        lastMessageId: latestMessage?.id ?? null,
+        lastMessagePreview: latestMessage
+          ? formatMessagePreview(latestMessage.type, latestMessage.content)
+          : 'No messages yet',
+        lastMessageAt: latestMessage?.timestamp ?? row.updated_at.toISOString(),
+        isRequest: row.is_request,
+        participantIds: [userId, row.other_user_id].sort(),
+        lastNonDeletedMessageId: latestMessage?.id ?? null,
+      };
+      await setConversationMeta(row.chat_id, meta);
+    }),
+  );
+
+  await primeConversationUnreadState(
+    userId,
+    rows.map((row) => ({
+      conversationId: row.chat_id,
+      unreadCount: unreadCounts.get(row.chat_id) ?? 0,
+    })),
+  );
+
   return rows
     .map((row) => {
       const participant = summaries.get(row.other_user_id);
       if (!participant) return null;
 
+      const latestMessage = latestMessages.get(row.chat_id);
       return {
         id: row.chat_id,
         participantId: row.other_user_id,
         participantName: participant.username,
         participantAvatar: participant.profilePictureUrl,
-        lastMessage: row.last_message ? decryptMessage(row.last_message) : 'No messages yet',
-        timestamp: row.updated_at.toISOString(),
-        unread: row.unread_count,
-        isOnline: participant.isOnline,
-        lastSeenAt: participant.lastSeenAt,
+        lastMessage: latestMessage
+          ? formatMessagePreview(latestMessage.type, latestMessage.content)
+          : 'No messages yet',
+        timestamp: latestMessage?.timestamp ?? row.updated_at.toISOString(),
         isRequest: row.is_request,
       };
     })
-    .filter((entry): entry is CachedConversationEntry => entry !== null);
+    .filter((entry): entry is ChatConversationListEntry => entry !== null);
 }
 
-async function updateConversationActivityCache(
-  participantIds: string[],
+async function hydrateConversationListResponse(
+  userId: string,
+  entries: ChatConversationListEntry[],
+): Promise<
+  Array<
+    ChatConversationListEntry & {
+      unread: number;
+      isOnline: boolean;
+      lastSeenAt: string | null;
+    }
+  >
+> {
+  const unreadMap = await getUnreadCounts(
+    userId,
+    entries.map((entry) => entry.id),
+  );
+  const missingUnreadIds = entries
+    .map((entry) => entry.id)
+    .filter((conversationId) => !unreadMap.has(conversationId));
+
+  if (missingUnreadIds.length > 0) {
+    await Promise.all(
+      missingUnreadIds.map(async (conversationId) => {
+        const unread = await reconcileUnreadState(conversationId, userId);
+        unreadMap.set(conversationId, unread);
+      }),
+    );
+  }
+
+  const participantIds = entries.map((entry) => entry.participantId);
+  const presenceMap = await getUserPresenceMap(participantIds);
+  const summaries = await getUserSummariesByIds(participantIds);
+
+  return entries
+    .map((entry) => {
+      const summary = summaries.get(entry.participantId);
+      const presence = presenceMap.get(entry.participantId);
+
+      return {
+        ...entry,
+        unread: unreadMap.get(entry.id) ?? 0,
+        isOnline: presence?.isOnline ?? summary?.isOnline ?? false,
+        lastSeenAt: presence?.lastSeenAt ?? summary?.lastSeenAt ?? null,
+      };
+    })
+    .sort(
+      (left, right) =>
+        new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime(),
+    );
+}
+
+async function fetchReplyPreview(
   chatId: string,
-  senderUserId: string,
-  lastMessage: string,
-  timestamp: string,
-): Promise<void> {
-  await Promise.all(
-    participantIds.flatMap((viewerId) =>
-      (['active', 'requests'] as const).map((type) =>
-        patchCachedConversationList(viewerId, type, (conversations) => {
-          const next = conversations.map((conversation) =>
-            conversation.id === chatId
-              ? {
-                  ...conversation,
-                  lastMessage,
-                  timestamp,
-                  unread:
-                    viewerId === senderUserId ? conversation.unread : conversation.unread + 1,
-                }
-              : conversation,
-          );
-
-          next.sort((left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime());
-          return next;
-        }),
-      ),
-    ),
-  );
-}
-
-async function markConversationReadInCache(userId: string, chatId: string): Promise<void> {
-  await Promise.all(
-    (['active', 'requests'] as const).map((type) =>
-      patchCachedConversationList(userId, type, (conversations) =>
-        conversations.map((conversation) =>
-          conversation.id === chatId ? { ...conversation, unread: 0 } : conversation,
-        ),
-      ),
-    ),
-  );
-}
-
-async function loadReplyPreview(chatId: string, messageId: string | null | undefined): Promise<ChatReplyPreview | null> {
+  messageId: string | null | undefined,
+): Promise<ChatReplyPreview | null> {
   if (!messageId) return null;
 
-  const rows = await prisma.$queryRaw<any[]>`
+  const rows = await prisma.$queryRaw<ReplyRow[]>`
     SELECT
       m.message_id,
       m.sender_user_id,
       m.message_type,
       m.content,
-      u.username AS sender_username,
       (
         SELECT ma.file_url
         FROM message_attachments ma
@@ -182,46 +315,462 @@ async function loadReplyPreview(chatId: string, messageId: string | null | undef
         LIMIT 1
       ) AS attachment_url
     FROM messages m
-    JOIN users u ON u.user_id = m.sender_user_id
     WHERE m.chat_id = ${chatId}
       AND m.message_id = ${messageId}
       AND m.deleted_at IS NULL
     LIMIT 1
   `;
 
-  const reply = rows[0];
-  if (!reply) return null;
+  const row = rows[0];
+  if (!row) return null;
 
+  const sender = await getUserSummaryById(row.sender_user_id);
   return {
-    id: reply.message_id,
-    senderId: reply.sender_user_id,
-    senderName: reply.sender_username,
-    type: reply.message_type,
-    content: reply.content ? decryptMessage(reply.content) : null,
-    attachmentUrl: reply.attachment_url ?? null,
+    id: row.message_id,
+    senderId: row.sender_user_id,
+    senderName: sender?.username ?? 'Unknown user',
+    type: row.message_type,
+    content: row.content ? decryptMessage(row.content) : null,
+    attachmentUrl: row.attachment_url ?? null,
   };
 }
 
-// ============================================================
-// CONVERSATIONS
-// ============================================================
+async function fetchMessageRows(
+  chatId: string,
+  limit: number,
+  before?: string,
+): Promise<MessagePageResult> {
+  const fetchLimit = limit + 1;
+  let rows: MessageRow[];
+
+  if (before) {
+    const cursorRows = await prisma.$queryRaw<Array<{ created_at: Date }>>`
+      SELECT created_at
+      FROM messages
+      WHERE message_id = ${before}
+        AND chat_id = ${chatId}
+        AND deleted_at IS NULL
+      LIMIT 1
+    `;
+
+    if (!cursorRows[0]) {
+      throw new Error('INVALID_CURSOR');
+    }
+
+    const cursorCreatedAt = cursorRows[0].created_at;
+    rows = await prisma.$queryRaw<MessageRow[]>`
+      SELECT
+        m.message_id,
+        m.sender_user_id,
+        m.message_type,
+        m.content,
+        m.reactions,
+        m.created_at,
+        m.reply_to_message_id
+      FROM messages m
+      WHERE m.chat_id = ${chatId}
+        AND m.deleted_at IS NULL
+        AND m.created_at < ${cursorCreatedAt}
+      ORDER BY m.created_at DESC, m.message_id DESC
+      LIMIT ${fetchLimit}
+    `;
+  } else {
+    const warmLimit = Math.max(fetchLimit, getChatRecentWindowSize() + 1);
+    rows = await prisma.$queryRaw<MessageRow[]>`
+      SELECT
+        m.message_id,
+        m.sender_user_id,
+        m.message_type,
+        m.content,
+        m.reactions,
+        m.created_at,
+        m.reply_to_message_id
+      FROM messages m
+      WHERE m.chat_id = ${chatId}
+        AND m.deleted_at IS NULL
+      ORDER BY m.created_at DESC, m.message_id DESC
+      LIMIT ${warmLimit}
+    `;
+  }
+
+  const hasMore = rows.length > limit;
+  const limitedRows = hasMore ? rows.slice(0, limit) : rows;
+  limitedRows.reverse();
+
+  const messageIds = limitedRows.map((row) => row.message_id);
+  const replyIds = Array.from(
+    new Set(
+      limitedRows
+        .map((row) => row.reply_to_message_id)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+
+  const attachmentRows =
+    messageIds.length > 0
+      ? await prisma.$queryRaw<AttachmentRow[]>`
+          SELECT message_id, file_url, file_type
+          FROM message_attachments
+          WHERE message_id IN (${Prisma.join(messageIds)})
+          ORDER BY created_at ASC
+        `
+      : [];
+
+  const attachmentsByMessageId = new Map<string, ChatCachedAttachment[]>();
+  for (const attachment of attachmentRows) {
+    const bucket = attachmentsByMessageId.get(attachment.message_id) ?? [];
+    bucket.push({ fileUrl: attachment.file_url, fileType: attachment.file_type });
+    attachmentsByMessageId.set(attachment.message_id, bucket);
+  }
+
+  const replyRows =
+    replyIds.length > 0
+      ? await prisma.$queryRaw<ReplyRow[]>`
+          SELECT
+            m.message_id,
+            m.sender_user_id,
+            m.message_type,
+            m.content,
+            (
+              SELECT ma.file_url
+              FROM message_attachments ma
+              WHERE ma.message_id = m.message_id
+              ORDER BY ma.created_at ASC
+              LIMIT 1
+            ) AS attachment_url
+          FROM messages m
+          WHERE m.chat_id = ${chatId}
+            AND m.message_id IN (${Prisma.join(replyIds)})
+            AND m.deleted_at IS NULL
+        `
+      : [];
+
+  const replyRowsById = new Map<string, ReplyRow>();
+  replyRows.forEach((row) => replyRowsById.set(row.message_id, row));
+
+  const messages = limitedRows.map<ChatCachedMessage>((row) => {
+    const reply = row.reply_to_message_id
+      ? replyRowsById.get(row.reply_to_message_id)
+      : null;
+
+    return {
+      id: row.message_id,
+      chatId,
+      senderId: row.sender_user_id,
+      type: row.message_type,
+      content: row.content ? decryptMessage(row.content) : null,
+      reactions: normalizeReactions(row.reactions),
+      timestamp: row.created_at.toISOString(),
+      attachments: attachmentsByMessageId.get(row.message_id) ?? [],
+      replyToMessageId: row.reply_to_message_id,
+      replyTo: reply
+        ? {
+            id: reply.message_id,
+            senderId: reply.sender_user_id,
+            type: reply.message_type,
+            content: reply.content ? decryptMessage(reply.content) : null,
+            attachmentUrl: reply.attachment_url ?? null,
+          }
+        : null,
+    };
+  });
+
+  return { messages, hasMore };
+}
+
+async function hasOlderMessagesThan(
+  chatId: string,
+  oldestMessageId: string,
+): Promise<boolean> {
+  const cursorRows = await prisma.$queryRaw<Array<{ created_at: Date }>>`
+    SELECT created_at
+    FROM messages
+    WHERE message_id = ${oldestMessageId}
+      AND chat_id = ${chatId}
+      AND deleted_at IS NULL
+    LIMIT 1
+  `;
+
+  const cursorCreatedAt = cursorRows[0]?.created_at;
+  if (!cursorCreatedAt) return false;
+
+  const olderRows = await prisma.$queryRaw<Array<{ message_id: string }>>`
+    SELECT message_id
+    FROM messages
+    WHERE chat_id = ${chatId}
+      AND deleted_at IS NULL
+      AND created_at < ${cursorCreatedAt}
+    LIMIT 1
+  `;
+
+  return Boolean(olderRows[0]);
+}
+
+async function formatMessagesForResponse(
+  messages: ChatCachedMessage[],
+  viewerUserId: string,
+) {
+  const senderIds = new Set<string>();
+  for (const message of messages) {
+    senderIds.add(message.senderId);
+    if (message.replyTo?.senderId) {
+      senderIds.add(message.replyTo.senderId);
+    }
+  }
+
+  const summaries = await getUserSummariesByIds(Array.from(senderIds));
+  return messages.map((message) => ({
+    id: message.id,
+    senderId: message.senderId,
+    senderName: summaries.get(message.senderId)?.username ?? 'Unknown user',
+    senderAvatar: summaries.get(message.senderId)?.profilePictureUrl ?? null,
+    type: message.type,
+    content: message.content,
+    reactions: message.reactions,
+    timestamp: message.timestamp,
+    attachments: message.attachments,
+    replyToMessageId: message.replyToMessageId,
+    replyTo: message.replyTo
+      ? {
+          ...message.replyTo,
+          senderName:
+            summaries.get(message.replyTo.senderId)?.username ?? 'Unknown user',
+        }
+      : null,
+    isOwn: message.senderId === viewerUserId,
+  }));
+}
+
+async function fetchMessagesForRequest(
+  chatId: string,
+  limit: number,
+  before?: string,
+): Promise<MessagePageResult> {
+  if (before) {
+    return fetchMessageRows(chatId, limit, before);
+  }
+
+  const cached = await getCachedRecentMessages(chatId);
+  if (cached && cached.length > 0) {
+    const selected = cached.slice(-limit);
+    let hasMore = cached.length > limit;
+    if (
+      !hasMore &&
+      cached.length === getChatRecentWindowSize() &&
+      selected.length > 0
+    ) {
+      hasMore = await hasOlderMessagesThan(chatId, selected[0].id);
+    }
+
+    return { messages: selected, hasMore };
+  }
+
+  const fresh = await fetchMessageRows(chatId, limit);
+  if (fresh.messages.length > 0) {
+    await setCachedRecentMessages(chatId, fresh.messages);
+  }
+  noteConversationActivity(chatId);
+  return fresh;
+}
+
+async function updateConversationListsForMessage(
+  participantIds: string[],
+  chatId: string,
+  senderUserId: string,
+  meta: ChatConversationMetaCache,
+): Promise<void> {
+  const type: ChatConversationListType = meta.isRequest ? 'requests' : 'active';
+
+  await Promise.all(
+    participantIds.map(async (viewerId) => {
+      await patchConversationList(viewerId, type, (entries) => {
+        const next = entries.map((entry) =>
+          entry.id === chatId
+            ? {
+                ...entry,
+                lastMessage: meta.lastMessagePreview,
+                timestamp: meta.lastMessageAt,
+              }
+            : entry,
+        );
+
+        return next.sort(
+          (left, right) =>
+            new Date(right.timestamp).getTime() -
+            new Date(left.timestamp).getTime(),
+        );
+      });
+
+      if (viewerId !== senderUserId) {
+        await incrementUnreadCount(viewerId, chatId, 1);
+      }
+    }),
+  );
+}
+
+async function updateConversationListsForMeta(
+  participantIds: string[],
+  chatId: string,
+  meta: ChatConversationMetaCache,
+): Promise<void> {
+  const type: ChatConversationListType = meta.isRequest ? 'requests' : 'active';
+  await Promise.all(
+    participantIds.map((viewerId) =>
+      patchConversationList(viewerId, type, (entries) => {
+        const next = entries.map((entry) =>
+          entry.id === chatId
+            ? {
+                ...entry,
+                lastMessage: meta.lastMessagePreview,
+                timestamp: meta.lastMessageAt,
+              }
+            : entry,
+        );
+
+        return next.sort(
+          (left, right) =>
+            new Date(right.timestamp).getTime() -
+            new Date(left.timestamp).getTime(),
+        );
+      }),
+    ),
+  );
+}
+
+async function persistMessage(
+  chatId: string,
+  userId: string,
+  messageType: 'text' | 'image',
+  content: string | null,
+  replyToMessageId: string | null,
+  attachments: ChatCachedAttachment[],
+): Promise<{ messageId: string; createdAt: Date }> {
+  const encryptedContent = content ? encryptMessage(content) : null;
+  return prisma.$transaction(async (tx) => {
+    const inserted = await tx.$queryRaw<Array<{ message_id: string; created_at: Date }>>`
+      INSERT INTO messages (chat_id, sender_user_id, message_type, content, reply_to_message_id)
+      VALUES (${chatId}, ${userId}, ${messageType}, ${encryptedContent}, ${replyToMessageId})
+      RETURNING message_id, created_at
+    `;
+
+    const messageId = inserted[0]?.message_id;
+    const createdAt = inserted[0]?.created_at;
+    if (!messageId || !createdAt) {
+      throw new Error('Failed to persist message');
+    }
+
+    if (attachments.length > 0) {
+      for (const attachment of attachments) {
+        await tx.$queryRaw`
+          INSERT INTO message_attachments (message_id, file_url, file_type)
+          VALUES (${messageId}, ${attachment.fileUrl}, ${attachment.fileType})
+        `;
+      }
+    }
+
+    await tx.$queryRaw`
+      UPDATE chats
+      SET updated_at = ${createdAt}
+      WHERE chat_id = ${chatId}
+    `;
+
+    return { messageId, createdAt };
+  });
+}
+
+async function cacheAndEmitMessage(
+  authed: AuthedRequest,
+  chatId: string,
+  payload: {
+    messageId: string;
+    createdAt: Date;
+    senderUserId: string;
+    messageType: 'text' | 'image';
+    content: string | null;
+    replyToMessageId: string | null;
+    replyTo: ChatReplyPreview | null;
+    attachments: ChatCachedAttachment[];
+  },
+): Promise<void> {
+  const meta = (await getConversationMeta(chatId)) ?? (await reconcileConversationMeta(chatId));
+  const participantIds = meta?.participantIds?.length
+    ? meta.participantIds
+    : await getChatParticipantIds(chatId);
+
+  const recentMessage: ChatCachedMessage = {
+    id: payload.messageId,
+    chatId,
+    senderId: payload.senderUserId,
+    type: payload.messageType,
+    content: payload.content,
+    reactions: {},
+    timestamp: payload.createdAt.toISOString(),
+    attachments: payload.attachments,
+    replyToMessageId: payload.replyToMessageId,
+    replyTo: payload.replyTo
+      ? {
+          id: payload.replyTo.id,
+          senderId: payload.replyTo.senderId,
+          type: payload.replyTo.type,
+          content: payload.replyTo.content,
+          attachmentUrl: payload.replyTo.attachmentUrl,
+        }
+      : null,
+  };
+
+  try {
+    await appendRecentMessage(chatId, recentMessage);
+    const nextMeta: ChatConversationMetaCache = {
+      conversationId: chatId,
+      lastMessageId: payload.messageId,
+      lastMessagePreview: formatMessagePreview(payload.messageType, payload.content),
+      lastMessageAt: payload.createdAt.toISOString(),
+      isRequest: meta?.isRequest ?? false,
+      participantIds,
+      lastNonDeletedMessageId: payload.messageId,
+    };
+    await setConversationMeta(chatId, nextMeta);
+    await updateConversationListsForMessage(
+      participantIds,
+      chatId,
+      payload.senderUserId,
+      nextMeta,
+    );
+  } catch (err) {
+    console.warn('Failed to update chat cache after message send:', err);
+  }
+
+  noteConversationActivity(chatId);
+  const sender = await getUserSummaryById(payload.senderUserId);
+  emitChatMessage(participantIds, {
+    messageId: payload.messageId,
+    chatId,
+    senderUserId: payload.senderUserId,
+    senderUsername: sender?.username ?? authed.auth?.username ?? 'Unknown user',
+    senderProfilePhotoUrl: sender?.profilePictureUrl ?? null,
+    messageType: payload.messageType,
+    content: payload.content,
+    reactions: {},
+    replyToMessageId: payload.replyToMessageId,
+    replyTo: payload.replyTo,
+    attachments: payload.attachments,
+    createdAt: payload.createdAt.toISOString(),
+  });
+}
 
 router.get('/conversations', async (req: Request, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const userId = authed.auth!.userId;
-  const type = req.query.type as string; // 'active' or 'requests'
-  const isRequest = type === 'requests';
-  const conversationType = isRequest ? 'requests' : 'active';
+  const type = req.query.type === 'requests' ? 'requests' : 'active';
 
   try {
-    const cached = await getCachedConversationList(userId, conversationType);
-    if (cached) {
-      return res.status(200).json(cached);
+    let entries = await getConversationList(userId, type);
+    if (!entries) {
+      entries = await buildConversationListEntries(userId, type);
+      await setConversationList(userId, type, entries);
     }
 
-    const conversations = await fetchConversationsFromDb(userId, isRequest);
-    await setCachedConversationList(userId, conversationType, conversations);
-
+    const conversations = await hydrateConversationListResponse(userId, entries);
     return res.status(200).json(conversations);
   } catch (err) {
     console.error('Error fetching conversations:', err);
@@ -234,28 +783,40 @@ router.post('/conversations', async (req: Request, res: Response) => {
   const currentUserId = authed.auth!.userId;
   const { targetUserId } = req.body;
 
-  if (!targetUserId) return res.status(400).json({ message: 'targetUserId is required' });
-  if (!isValidUUID(targetUserId)) return res.status(400).json({ message: 'Invalid target user ID format' });
-  if (targetUserId === currentUserId) return res.status(400).json({ message: 'Cannot chat with yourself' });
+  if (!targetUserId) {
+    return res.status(400).json({ message: 'targetUserId is required' });
+  }
+  if (!isValidUUID(targetUserId)) {
+    return res.status(400).json({ message: 'Invalid target user ID format' });
+  }
+  if (targetUserId === currentUserId) {
+    return res.status(400).json({ message: 'Cannot chat with yourself' });
+  }
 
   try {
     const result = await getOrCreateDirectChat(currentUserId, targetUserId);
-    if (!result) return res.status(403).json({ message: 'You cannot message this user' });
-
-    if (result.isNew) {
-      await invalidateConversationLists([currentUserId, targetUserId]);
+    if (!result) {
+      return res.status(403).json({ message: 'You cannot message this user' });
     }
 
-    return res.status(200).json({ chatId: result.chatId, isRequest: result.isRequest, isNew: result.isNew });
+    if (result.isNew) {
+      await invalidateConversationLists(
+        [currentUserId, targetUserId],
+        result.isRequest ? ['requests'] : ['active'],
+      );
+      await reconcileConversationMeta(result.chatId);
+    }
+
+    return res.status(200).json({
+      chatId: result.chatId,
+      isRequest: result.isRequest,
+      isNew: result.isNew,
+    });
   } catch (err) {
     console.error('Error creating/getting conversation:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });
-
-// ============================================================
-// MESSAGES
-// ============================================================
 
 router.get('/conversations/:chatId/messages', async (req: Request, res: Response) => {
   const authed = req as unknown as AuthedRequest;
@@ -266,271 +827,169 @@ router.get('/conversations/:chatId/messages', async (req: Request, res: Response
     return res.status(400).json({ message: 'Invalid chat ID format' });
   }
 
-  // Pagination params
-  const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 50, 1), 100);
-  const before = req.query.before as string | undefined; // cursor: message_id
+  const limit = Math.min(
+    Math.max(parseInt(req.query.limit as string, 10) || CHAT_PAGE_DEFAULT_LIMIT, 1),
+    100,
+  );
+  const before = req.query.before as string | undefined;
 
   if (before && !isValidUUID(before)) {
     return res.status(400).json({ message: 'Invalid cursor format' });
   }
 
   try {
-    const isParticipant = await isChatParticipant(userId, chatId);
-    if (!isParticipant) return res.status(403).json({ message: 'Not a participant' });
-
-    // Fetch limit+1 to determine hasMore. We fetch in DESC order, then reverse.
-    const fetchLimit = limit + 1;
-
-    let messages: any[];
-    if (before) {
-      // Get the created_at of the cursor message
-      const cursorRows = await prisma.$queryRaw<any[]>`
-        SELECT created_at FROM messages
-        WHERE message_id = ${before} AND chat_id = ${chatId} AND deleted_at IS NULL
-        LIMIT 1
-      `;
-      if (!cursorRows[0]) {
-        return res.status(400).json({ message: 'Invalid cursor: message not found' });
-      }
-      const cursorCreatedAt = cursorRows[0].created_at;
-
-      messages = await prisma.$queryRaw<any[]>`
-        SELECT 
-          m.message_id, m.sender_user_id, m.message_type, m.content, m.reactions, m.created_at,
-          m.reply_to_message_id,
-          u.username as sender_username, u.profile_photo_url as sender_avatar,
-          reply.sender_user_id as reply_sender_user_id,
-          reply.message_type as reply_message_type,
-          reply.content as reply_content,
-          reply_user.username as reply_sender_username,
-          (
-            SELECT ma.file_url
-            FROM message_attachments ma
-            WHERE ma.message_id = reply.message_id
-            ORDER BY ma.created_at ASC
-            LIMIT 1
-          ) as reply_attachment_url,
-          (
-            SELECT json_agg(json_build_object('fileUrl', ma.file_url, 'fileType', ma.file_type))
-            FROM message_attachments ma WHERE ma.message_id = m.message_id
-          ) as attachments
-        FROM messages m
-        JOIN users u ON u.user_id = m.sender_user_id
-        LEFT JOIN messages reply ON reply.message_id = m.reply_to_message_id
-        LEFT JOIN users reply_user ON reply_user.user_id = reply.sender_user_id
-        WHERE m.chat_id = ${chatId}
-          AND m.deleted_at IS NULL
-          AND m.created_at < ${cursorCreatedAt}
-        ORDER BY m.created_at DESC
-        LIMIT ${fetchLimit}
-      `;
-    } else {
-      // Initial load: fetch the newest messages
-      messages = await prisma.$queryRaw<any[]>`
-        SELECT 
-          m.message_id, m.sender_user_id, m.message_type, m.content, m.reactions, m.created_at,
-          m.reply_to_message_id,
-          u.username as sender_username, u.profile_photo_url as sender_avatar,
-          reply.sender_user_id as reply_sender_user_id,
-          reply.message_type as reply_message_type,
-          reply.content as reply_content,
-          reply_user.username as reply_sender_username,
-          (
-            SELECT ma.file_url
-            FROM message_attachments ma
-            WHERE ma.message_id = reply.message_id
-            ORDER BY ma.created_at ASC
-            LIMIT 1
-          ) as reply_attachment_url,
-          (
-            SELECT json_agg(json_build_object('fileUrl', ma.file_url, 'fileType', ma.file_type))
-            FROM message_attachments ma WHERE ma.message_id = m.message_id
-          ) as attachments
-        FROM messages m
-        JOIN users u ON u.user_id = m.sender_user_id
-        LEFT JOIN messages reply ON reply.message_id = m.reply_to_message_id
-        LEFT JOIN users reply_user ON reply_user.user_id = reply.sender_user_id
-        WHERE m.chat_id = ${chatId}
-          AND m.deleted_at IS NULL
-        ORDER BY m.created_at DESC
-        LIMIT ${fetchLimit}
-      `;
+    if (!(await isChatParticipant(userId, chatId))) {
+      return res.status(403).json({ message: 'Not a participant' });
     }
 
-    const hasMore = messages.length > limit;
-    if (hasMore) messages = messages.slice(0, limit);
+    const result = await fetchMessagesForRequest(chatId, limit, before);
+    const nextCursor = result.messages.length > 0 ? result.messages[0].id : null;
+    const formatted = await formatMessagesForResponse(result.messages, userId);
 
-    // Reverse to chronological order (oldest → newest)
-    messages.reverse();
-
-    const nextCursor = messages.length > 0 ? messages[0].message_id : null;
-
-    const formattedMessages = messages.map(m => ({
-      id: m.message_id,
-      senderId: m.sender_user_id,
-      senderName: m.sender_username,
-      senderAvatar: m.sender_avatar,
-      type: m.message_type,
-      content: decryptMessage(m.content),
-      reactions: normalizeReactions(m.reactions),
-      timestamp: m.created_at,
-      attachments: m.attachments || [],
-      replyToMessageId: m.reply_to_message_id,
-      replyTo: m.reply_to_message_id ? {
-        id: m.reply_to_message_id,
-        senderId: m.reply_sender_user_id,
-        senderName: m.reply_sender_username,
-        type: m.reply_message_type,
-        content: m.reply_content ? decryptMessage(m.reply_content) : null,
-        attachmentUrl: m.reply_attachment_url ?? null
-      } : null,
-      isOwn: m.sender_user_id === userId
-    }));
-
-    return res.status(200).json({ messages: formattedMessages, hasMore, nextCursor });
+    return res.status(200).json({
+      messages: formatted,
+      hasMore: result.hasMore,
+      nextCursor,
+    });
   } catch (err) {
+    if (err instanceof Error && err.message === 'INVALID_CURSOR') {
+      return res.status(400).json({ message: 'Invalid cursor: message not found' });
+    }
+
     console.error('Error fetching messages:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });
 
-router.post('/conversations/:chatId/messages', chatMessageRateLimiter, async (req: Request, res: Response) => {
-  const authed = req as unknown as AuthedRequest;
-  const userId = authed.auth!.userId;
-  const chatId = req.params.chatId as string;
-  const content = req.body.content as string;
-  const replyToMessageId = req.body.replyToMessageId as string | undefined;
+router.post(
+  '/conversations/:chatId/messages',
+  chatMessageRateLimiter,
+  async (req: Request, res: Response) => {
+    const authed = req as unknown as AuthedRequest;
+    const userId = authed.auth!.userId;
+    const chatId = req.params.chatId as string;
+    const content = typeof req.body.content === 'string' ? req.body.content.trim() : '';
+    const replyToMessageId = req.body.replyToMessageId as string | undefined;
 
-  if (!isValidUUID(chatId)) {
-    return res.status(400).json({ message: 'Invalid chat ID format' });
-  }
-  if (!content || !content.trim()) return res.status(400).json({ message: 'Message content required' });
-  if (replyToMessageId && !isValidUUID(replyToMessageId)) {
-    return res.status(400).json({ message: 'Invalid reply message ID format' });
-  }
-
-  try {
-    const isParticipant = await isChatParticipant(userId, chatId);
-    if (!isParticipant) return res.status(403).json({ message: 'Not a participant' });
-
-    const replyTo = await loadReplyPreview(chatId, replyToMessageId);
-    if (replyToMessageId && !replyTo) {
-      return res.status(400).json({ message: 'Reply message must belong to this chat' });
+    if (!isValidUUID(chatId)) {
+      return res.status(400).json({ message: 'Invalid chat ID format' });
+    }
+    if (!content) {
+      return res.status(400).json({ message: 'Message content required' });
+    }
+    if (replyToMessageId && !isValidUUID(replyToMessageId)) {
+      return res.status(400).json({ message: 'Invalid reply message ID format' });
     }
 
-    const encryptedContent = encryptMessage(content);
-    const rows = await prisma.$queryRaw<any[]>`
-      INSERT INTO messages (chat_id, sender_user_id, message_type, content, reply_to_message_id)
-      VALUES (${chatId}, ${userId}, 'text', ${encryptedContent}, ${replyToMessageId ?? null})
-      RETURNING message_id, created_at
-    `;
-    const messageId = rows[0].message_id;
-    const createdAt = rows[0].created_at as Date;
+    try {
+      if (!(await isChatParticipant(userId, chatId))) {
+        return res.status(403).json({ message: 'Not a participant' });
+      }
 
-    // Update chat updated_at
-    await prisma.$queryRaw`UPDATE chats SET updated_at = NOW() WHERE chat_id = ${chatId}`;
+      const replyTo = await fetchReplyPreview(chatId, replyToMessageId);
+      if (replyToMessageId && !replyTo) {
+        return res
+          .status(400)
+          .json({ message: 'Reply message must belong to this chat' });
+      }
 
-    const participantIds = await getChatParticipantIds(chatId);
-    const sender = await getUserSummaryById(userId);
-    const createdAtIso = createdAt.toISOString();
-    await updateConversationActivityCache(participantIds, chatId, userId, content.trim(), createdAtIso);
-    
-    // Emit websocket
-    emitChatMessage(participantIds, {
-      messageId,
-      chatId,
-      senderUserId: userId,
-      senderUsername: sender?.username ?? authed.auth!.username,
-      senderProfilePhotoUrl: sender?.profilePictureUrl ?? null,
-      messageType: 'text',
-      content,
-      reactions: {},
-      replyToMessageId: replyToMessageId ?? null,
-      replyTo,
-      attachments: [],
-      createdAt: createdAtIso,
-    });
+      const persisted = await persistMessage(
+        chatId,
+        userId,
+        'text',
+        content,
+        replyToMessageId ?? null,
+        [],
+      );
 
-    return res.status(201).json({ messageId });
-  } catch (err) {
-    console.error('Error sending message:', err);
-    return res.status(500).json({ message: 'Internal server error' });
-  }
-});
+      await cacheAndEmitMessage(authed, chatId, {
+        messageId: persisted.messageId,
+        createdAt: persisted.createdAt,
+        senderUserId: userId,
+        messageType: 'text',
+        content,
+        replyToMessageId: replyToMessageId ?? null,
+        replyTo,
+        attachments: [],
+      });
 
-router.post('/conversations/:chatId/messages/image', chatMessageRateLimiter, upload.single('image'), async (req: Request, res: Response) => {
-  const authed = req as unknown as AuthedRequest;
-  const userId = authed.auth!.userId;
-  const chatId = req.params.chatId as string;
-  const file = req.file;
-  const replyToMessageId = req.body.replyToMessageId as string | undefined;
+      return res.status(201).json({ messageId: persisted.messageId });
+    } catch (err) {
+      console.error('Error sending message:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  },
+);
 
-  if (!isValidUUID(chatId)) {
-    return res.status(400).json({ message: 'Invalid chat ID format' });
-  }
-  if (!file) return res.status(400).json({ message: 'Image file required' });
-  if (!file.mimetype.toLowerCase().startsWith('image/')) {
-    return res.status(400).json({ message: 'Only image uploads are allowed' });
-  }
-  if (replyToMessageId && !isValidUUID(replyToMessageId)) {
-    return res.status(400).json({ message: 'Invalid reply message ID format' });
-  }
+router.post(
+  '/conversations/:chatId/messages/image',
+  chatMessageRateLimiter,
+  upload.single('image'),
+  async (req: Request, res: Response) => {
+    const authed = req as unknown as AuthedRequest;
+    const userId = authed.auth!.userId;
+    const chatId = req.params.chatId as string;
+    const file = req.file;
+    const replyToMessageId = req.body.replyToMessageId as string | undefined;
 
-  try {
-    const isParticipant = await isChatParticipant(userId, chatId);
-    if (!isParticipant) return res.status(403).json({ message: 'Not a participant' });
-
-    const replyTo = await loadReplyPreview(chatId, replyToMessageId);
-    if (replyToMessageId && !replyTo) {
-      return res.status(400).json({ message: 'Reply message must belong to this chat' });
+    if (!isValidUUID(chatId)) {
+      return res.status(400).json({ message: 'Invalid chat ID format' });
+    }
+    if (!file) {
+      return res.status(400).json({ message: 'Image file required' });
+    }
+    if (!file.mimetype.toLowerCase().startsWith('image/')) {
+      return res.status(400).json({ message: 'Only image uploads are allowed' });
+    }
+    if (replyToMessageId && !isValidUUID(replyToMessageId)) {
+      return res.status(400).json({ message: 'Invalid reply message ID format' });
     }
 
-    const fileUrl = await uploadChatMediaToStorage({ userId, fileBuffer: file.buffer, mimeType: file.mimetype });
+    try {
+      if (!(await isChatParticipant(userId, chatId))) {
+        return res.status(403).json({ message: 'Not a participant' });
+      }
 
-    const rows = await prisma.$queryRaw<any[]>`
-      INSERT INTO messages (chat_id, sender_user_id, message_type, reply_to_message_id)
-      VALUES (${chatId}, ${userId}, 'image', ${replyToMessageId ?? null})
-      RETURNING message_id, created_at
-    `;
-    const messageId = rows[0].message_id;
-    const createdAt = rows[0].created_at as Date;
+      const replyTo = await fetchReplyPreview(chatId, replyToMessageId);
+      if (replyToMessageId && !replyTo) {
+        return res
+          .status(400)
+          .json({ message: 'Reply message must belong to this chat' });
+      }
 
-    await prisma.$queryRaw`
-      INSERT INTO message_attachments (message_id, file_url, file_type)
-      VALUES (${messageId}, ${fileUrl}, ${file.mimetype})
-    `;
+      const fileUrl = await uploadChatMediaToStorage({
+        userId,
+        fileBuffer: file.buffer,
+        mimeType: file.mimetype,
+      });
+      const attachments = [{ fileUrl, fileType: file.mimetype }];
+      const persisted = await persistMessage(
+        chatId,
+        userId,
+        'image',
+        null,
+        replyToMessageId ?? null,
+        attachments,
+      );
 
-    await prisma.$queryRaw`UPDATE chats SET updated_at = NOW() WHERE chat_id = ${chatId}`;
+      await cacheAndEmitMessage(authed, chatId, {
+        messageId: persisted.messageId,
+        createdAt: persisted.createdAt,
+        senderUserId: userId,
+        messageType: 'image',
+        content: null,
+        replyToMessageId: replyToMessageId ?? null,
+        replyTo,
+        attachments,
+      });
 
-    const participantIds = await getChatParticipantIds(chatId);
-    const sender = await getUserSummaryById(userId);
-    const createdAtIso = createdAt.toISOString();
-    await updateConversationActivityCache(participantIds, chatId, userId, 'Photo', createdAtIso);
-    emitChatMessage(participantIds, {
-      messageId,
-      chatId,
-      senderUserId: userId,
-      senderUsername: sender?.username ?? authed.auth!.username,
-      senderProfilePhotoUrl: sender?.profilePictureUrl ?? null,
-      messageType: 'image',
-      content: null,
-      reactions: {},
-      replyToMessageId: replyToMessageId ?? null,
-      replyTo,
-      attachments: [{ fileUrl, fileType: file.mimetype }],
-      createdAt: createdAtIso,
-    });
-
-    return res.status(201).json({ messageId, fileUrl });
-  } catch (err) {
-    console.error('Error sending image:', err);
-    return res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-// ============================================================
-// INTERACTIONS
-// ============================================================
+      return res.status(201).json({ messageId: persisted.messageId, fileUrl });
+    } catch (err) {
+      console.error('Error sending image:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  },
+);
 
 router.patch('/conversations/:chatId/read', async (req: Request, res: Response) => {
   const authed = req as unknown as AuthedRequest;
@@ -543,27 +1002,40 @@ router.patch('/conversations/:chatId/read', async (req: Request, res: Response) 
   }
 
   try {
-    const isParticipant = await isChatParticipant(userId, chatId);
-    if (!isParticipant) return res.status(403).json({ message: 'Not a participant' });
+    if (!(await isChatParticipant(userId, chatId))) {
+      return res.status(403).json({ message: 'Not a participant' });
+    }
 
-    const messageRows = await prisma.$queryRaw<{ message_id: string }[]>`
-      SELECT message_id FROM messages
+    const messageRows = await prisma.$queryRaw<Array<{ message_id: string }>>`
+      SELECT message_id
+      FROM messages
       WHERE chat_id = ${chatId}
         AND message_id = ${messageId}
         AND deleted_at IS NULL
       LIMIT 1
     `;
+
     if (!messageRows[0]) {
       return res.status(400).json({ message: 'Message must belong to this chat' });
     }
 
     await prisma.$queryRaw`
-      UPDATE chat_participants 
+      UPDATE chat_participants
       SET last_read_message_id = ${messageId}
-      WHERE chat_id = ${chatId} AND user_id = ${userId}
+      WHERE chat_id = ${chatId}
+        AND user_id = ${userId}
     `;
-    await markConversationReadInCache(userId, chatId);
 
+    try {
+      await Promise.all([
+        setReadState(chatId, userId, messageId),
+        setUnreadCount(userId, chatId, 0),
+      ]);
+    } catch (err) {
+      console.warn('Failed to update read-state cache:', err);
+    }
+
+    noteConversationActivity(chatId);
     const participantIds = await getChatParticipantIds(chatId);
     emitChatRead(participantIds, chatId, userId, messageId, new Date().toISOString());
 
@@ -574,128 +1046,157 @@ router.patch('/conversations/:chatId/read', async (req: Request, res: Response) 
   }
 });
 
-router.put('/conversations/:chatId/messages/:messageId/reaction', async (req: Request, res: Response) => {
-  const authed = req as unknown as AuthedRequest;
-  const userId = authed.auth!.userId;
-  const chatId = req.params.chatId as string;
-  const messageId = req.params.messageId as string;
-  const emoji = typeof req.body.emoji === 'string' ? req.body.emoji.trim() : '';
+router.put(
+  '/conversations/:chatId/messages/:messageId/reaction',
+  async (req: Request, res: Response) => {
+    const authed = req as unknown as AuthedRequest;
+    const userId = authed.auth!.userId;
+    const chatId = req.params.chatId as string;
+    const messageId = req.params.messageId as string;
+    const emoji = typeof req.body.emoji === 'string' ? req.body.emoji.trim() : '';
 
-  if (!isValidUUID(chatId) || !isValidUUID(messageId)) {
-    return res.status(400).json({ message: 'Invalid ID format' });
-  }
-  if (!emoji || emoji.length > 16) {
-    return res.status(400).json({ message: 'emoji is required' });
-  }
-
-  try {
-    const isParticipant = await isChatParticipant(userId, chatId);
-    if (!isParticipant) return res.status(403).json({ message: 'Not a participant' });
-
-    const rows = await prisma.$queryRaw<{ reactions: unknown }[]>`
-      SELECT reactions
-      FROM messages
-      WHERE chat_id = ${chatId}
-        AND message_id = ${messageId}
-        AND deleted_at IS NULL
-      LIMIT 1
-    `;
-    if (!rows[0]) return res.status(404).json({ message: 'Message not found' });
-
-    const reactions = normalizeReactions(rows[0].reactions);
-    const currentUsers = new Set(reactions[emoji] ?? []);
-    if (currentUsers.has(userId)) {
-      currentUsers.delete(userId);
-    } else {
-      currentUsers.add(userId);
+    if (!isValidUUID(chatId) || !isValidUUID(messageId)) {
+      return res.status(400).json({ message: 'Invalid ID format' });
+    }
+    if (!emoji || emoji.length > 16) {
+      return res.status(400).json({ message: 'emoji is required' });
     }
 
-    if (currentUsers.size === 0) {
-      delete reactions[emoji];
-    } else {
-      reactions[emoji] = Array.from(currentUsers);
-    }
-
-    await prisma.$queryRaw`
-      UPDATE messages
-      SET reactions = ${JSON.stringify(reactions)}::jsonb
-      WHERE message_id = ${messageId}
-    `;
-
-    const participantIds = await getChatParticipantIds(chatId);
-    emitChatReaction(participantIds, chatId, messageId, reactions);
-
-    return res.status(200).json({ reactions });
-  } catch (err) {
-    console.error('Error updating reaction:', err);
-    return res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-// ============================================================
-// REQUEST FLOW
-// ============================================================
-
-// DELETE /chat/conversations/:chatId/messages/:messageId
-// Soft-deletes a message if requested by the sender within 24 hours of creation
-router.delete('/conversations/:chatId/messages/:messageId', async (req: AuthedRequest, res: Response) => {
-  try {
-    const chatId = String(req.params.chatId);
-    const messageId = String(req.params.messageId);
-    const userId = req.auth?.userId;
-
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized' });
-    }
-
-    // 1. Verify user is a participant
-    if (!(await isChatParticipant(userId, chatId))) {
-      return res.status(403).json({ error: 'Not a participant in this chat' });
-    }
-
-    // 2. Fetch message
-    const message = await prisma.message.findFirst({
-      where: {
-        messageId,
-        chatId,
-        deletedAt: null
+    try {
+      if (!(await isChatParticipant(userId, chatId))) {
+        return res.status(403).json({ message: 'Not a participant' });
       }
-    });
 
-    if (!message) {
-      return res.status(404).json({ error: 'Message not found' });
+      const rows = await prisma.$queryRaw<Array<{ reactions: unknown }>>`
+        SELECT reactions
+        FROM messages
+        WHERE chat_id = ${chatId}
+          AND message_id = ${messageId}
+          AND deleted_at IS NULL
+        LIMIT 1
+      `;
+
+      if (!rows[0]) {
+        return res.status(404).json({ message: 'Message not found' });
+      }
+
+      const reactions = normalizeReactions(rows[0].reactions);
+      const currentUsers = new Set(reactions[emoji] ?? []);
+      if (currentUsers.has(userId)) {
+        currentUsers.delete(userId);
+      } else {
+        currentUsers.add(userId);
+      }
+
+      if (currentUsers.size === 0) {
+        delete reactions[emoji];
+      } else {
+        reactions[emoji] = Array.from(currentUsers);
+      }
+
+      await prisma.$queryRaw`
+        UPDATE messages
+        SET reactions = ${JSON.stringify(reactions)}::jsonb
+        WHERE message_id = ${messageId}
+      `;
+
+      try {
+        await patchRecentMessage(chatId, messageId, (message) => ({
+          ...message,
+          reactions,
+        }));
+      } catch (err) {
+        console.warn('Failed to update cached message reaction:', err);
+      }
+
+      noteConversationActivity(chatId);
+      const participantIds = await getChatParticipantIds(chatId);
+      emitChatReaction(participantIds, chatId, messageId, reactions);
+
+      return res.status(200).json({ reactions });
+    } catch (err) {
+      console.error('Error updating reaction:', err);
+      return res.status(500).json({ message: 'Internal server error' });
     }
+  },
+);
 
-    // 3. Verify sender
-    if (message.senderUserId !== userId) {
-      return res.status(403).json({ error: 'You can only delete your own messages' });
+router.delete(
+  '/conversations/:chatId/messages/:messageId',
+  async (req: AuthedRequest, res: Response) => {
+    try {
+      const chatId = String(req.params.chatId);
+      const messageId = String(req.params.messageId);
+      const userId = req.auth?.userId;
+
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      if (!isValidUUID(chatId) || !isValidUUID(messageId)) {
+        return res.status(400).json({ error: 'Invalid ID format' });
+      }
+      if (!(await isChatParticipant(userId, chatId))) {
+        return res.status(403).json({ error: 'Not a participant in this chat' });
+      }
+
+      const message = await prisma.message.findFirst({
+        where: {
+          messageId,
+          chatId,
+          deletedAt: null,
+        },
+      });
+
+      if (!message) {
+        return res.status(404).json({ error: 'Message not found' });
+      }
+      if (message.senderUserId !== userId) {
+        return res
+          .status(403)
+          .json({ error: 'You can only delete your own messages' });
+      }
+
+      const messageTime = new Date(message.createdAt).getTime();
+      const now = Date.now();
+      if (now - messageTime > 24 * 60 * 60 * 1000) {
+        return res.status(403).json({
+          error: 'Messages can only be deleted within 24 hours of sending',
+        });
+      }
+
+      await prisma.message.update({
+        where: { messageId },
+        data: { deletedAt: new Date() },
+      });
+
+      const cachedMeta = await getConversationMeta(chatId);
+      try {
+        await removeRecentMessage(chatId, messageId);
+        let nextMeta = cachedMeta;
+        if (cachedMeta?.lastMessageId === messageId) {
+          nextMeta = await refreshConversationMetaFromRecentCache(chatId);
+        }
+        if (nextMeta) {
+          await updateConversationListsForMeta(nextMeta.participantIds, chatId, nextMeta);
+        }
+      } catch (err) {
+        console.warn('Failed to update cache after message delete:', err);
+      }
+
+      noteConversationActivity(chatId);
+      const participantIds =
+        cachedMeta?.participantIds?.length
+          ? cachedMeta.participantIds
+          : await getChatParticipantIds(chatId);
+      emitChatDelete(participantIds, chatId, messageId);
+
+      return res.json({ success: true, messageId });
+    } catch (error) {
+      console.error('Error deleting message:', error);
+      return res.status(500).json({ error: 'Failed to delete message' });
     }
-
-    // 4. Verify time window (24 hours)
-    const messageTime = new Date(message.createdAt).getTime();
-    const now = new Date().getTime();
-    const hours24 = 24 * 60 * 60 * 1000;
-
-    if (now - messageTime > hours24) {
-      return res.status(403).json({ error: 'Messages can only be deleted within 24 hours of sending' });
-    }
-
-    // 5. Soft Delete
-    await prisma.message.update({
-      where: { messageId },
-      data: { deletedAt: new Date() }
-    });
-
-    // 6. Broadcast deletion
-    const participantIds = await getChatParticipantIds(chatId);
-    emitChatDelete(participantIds, chatId, messageId);
-
-    res.json({ success: true, messageId });
-  } catch (error) {
-    console.error('Error deleting message:', error);
-    res.status(500).json({ error: 'Failed to delete message' });
-  }
-});
+  },
+);
 
 router.post('/requests/:chatId/accept', async (req: Request, res: Response) => {
   const authed = req as unknown as AuthedRequest;
@@ -707,14 +1208,24 @@ router.post('/requests/:chatId/accept', async (req: Request, res: Response) => {
   }
 
   try {
-    const isParticipant = await isChatParticipant(userId, chatId);
-    if (!isParticipant) return res.status(403).json({ message: 'Not a participant' });
+    if (!(await isChatParticipant(userId, chatId))) {
+      return res.status(403).json({ message: 'Not a participant' });
+    }
 
     await markChatAccepted(chatId);
-
     const participantIds = await getChatParticipantIds(chatId);
-    await invalidateConversationLists(participantIds);
-    const otherParticipant = participantIds.find(id => id !== userId);
+
+    try {
+      await patchConversationMeta(chatId, (meta) => ({
+        ...meta,
+        isRequest: false,
+      }));
+    } catch (err) {
+      console.warn('Failed to patch cached request meta:', err);
+    }
+
+    await invalidateConversationLists(participantIds, ['active', 'requests']);
+    const otherParticipant = participantIds.find((id) => id !== userId);
     if (otherParticipant) {
       emitChatRequestAccepted(otherParticipant, chatId);
     }

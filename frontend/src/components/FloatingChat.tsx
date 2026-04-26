@@ -112,6 +112,17 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
           };
         });
       }
+
+      if (parsed.type === 'chat:delete') {
+        const payload = parsed.payload;
+        if (!payload) return;
+        setMessages((prev) => ({
+          ...prev,
+          [payload.chatId]: (prev[payload.chatId] || []).filter(
+            (message) => message.id !== payload.messageId,
+          ),
+        }));
+      }
     };
 
     window.addEventListener('campuslynk:chat', handleChatEvent);
