@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Filter, FileText, CalendarPlus, BriefcaseBusiness } from 'lucide-react';
+import { Filter, FileText, CalendarPlus, BriefcaseBusiness, Loader2 } from 'lucide-react';
 import { Opportunity, Student } from '../types';
 import { OpportunityCard } from './OpportunityCard';
 import { ProfileCard } from './ProfileCard';
@@ -13,6 +13,7 @@ import { LoadingState } from './LoadingState';
 interface FeedPageProps {
   opportunities: Opportunity[];
   isLoading?: boolean;
+  isLoadingMore?: boolean;
   currentUserId: string;
   selectedHashtag?: string | null;
   onClearHashtagFilter?: () => void;
@@ -38,6 +39,7 @@ interface FeedPageProps {
 export function FeedPage({ 
   opportunities, 
   isLoading = false,
+  isLoadingMore = false,
   currentUserId,
   selectedHashtag,
   onClearHashtagFilter,
@@ -173,6 +175,12 @@ export function FeedPage({
                   />
                 </div>
               ))}
+              {isLoadingMore && filteredOpportunities.length > 0 ? (
+                <div className="flex items-center justify-center gap-2 py-4 text-sm text-gray-500">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Loading more posts...</span>
+                </div>
+              ) : null}
               {!isLoading && filteredOpportunities.length === 0 && (
                 <div className="glass-morphism rounded-2xl border border-white/50 p-12 text-center shadow-lg animate-fade-in">
                   <div className="w-16 h-16 gradient-primary rounded-2xl mx-auto mb-4 flex items-center justify-center">

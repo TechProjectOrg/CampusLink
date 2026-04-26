@@ -2174,6 +2174,7 @@ export default function App() {
               <FeedPage
                 opportunities={opportunities}
                 isLoading={!feedTimeline?.isHydrated || Boolean(feedTimeline?.isRefreshing && opportunities.length === 0)}
+                isLoadingMore={Boolean(feedTimeline?.isRefreshing && opportunities.length > 0)}
                 currentUserId={currentUserId}
                 selectedHashtag={selectedHashtag}
                 onClearHashtagFilter={() => setSelectedHashtag(null)}
