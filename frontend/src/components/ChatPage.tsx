@@ -32,6 +32,28 @@ interface ChatPageProps {
   onChatRead?: (conversationId: string) => void;
 }
 
+function TypingAnimatedText({
+  text,
+  className = '',
+}: {
+  text: string;
+  className?: string;
+}) {
+  return (
+    <span className={`inline-flex ${className}`} aria-label={text}>
+      {Array.from(text).map((character, index) => (
+        <span
+          key={`${character}-${index}`}
+          className="inline-block animate-pulse"
+          style={{ animationDelay: `${index * 90}ms`, animationDuration: '1.1s' }}
+        >
+          {character === ' ' ? '\u00A0' : character}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 export function ChatPage({ conversations, students, currentUserId, onViewProfile, onChatClick, onCreateChat, onChatRead }: ChatPageProps) {
   const appData = useAppDataStore();
   const auth = useAuth();
@@ -67,11 +89,13 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   const typingStatusLabel =
     typingUsers.length === 0
       ? null
-      : typingUsers.length === 1
-        ? `${typingUsers[0]} is typing`
-        : typingUsers.length === 2
-          ? `${typingUsers[0]} and ${typingUsers[1]} are typing`
-          : `${typingUsers.length} people are typing`;
+      : selectedConversation?.isGroup
+        ? typingUsers.length === 1
+          ? `${typingUsers[0]} is typing`
+          : typingUsers.length === 2
+            ? `${typingUsers[0]} and ${typingUsers[1]} are typing`
+            : `${typingUsers.length} people are typing`
+        : 'typing'
 
   const handleLoadOlderMessages = useCallback(() => {
     if (!selectedChat) return Promise.resolve();
@@ -456,12 +480,13 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                       {typingStatusLabel ? (
                         <>
                           <div className="flex items-center gap-1 text-xs text-primary">
-                            <span>{typingStatusLabel}</span>
-                            <span className="inline-flex items-end gap-0.5" aria-hidden="true">
-                              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.3s]" />
-                              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary [animation-delay:-0.15s]" />
-                              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-primary" />
-                            </span>
+                            <TypingAnimatedText
+                              text={
+                                selectedConversation?.isGroup
+                                  ? typingStatusLabel
+                                  : 'typing...'
+                              }
+                            />
                           </div>
                         </>
                       ) : selectedConversation.isGroup ? (
@@ -738,11 +763,14 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                     </Avatar>
                     <div className="rounded-3xl bg-gray-100 px-4 py-3 text-gray-500 shadow-sm">
                       <div className="flex items-center gap-2">
-                        <span className="text-xs font-medium text-gray-500">{typingStatusLabel}</span>
-                        <span className="inline-flex items-center gap-1" aria-label="Typing indicator">
-                          <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.3s]" />
-                          <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400 [animation-delay:-0.15s]" />
-                          <span className="h-2 w-2 animate-bounce rounded-full bg-gray-400" />
+                        <span className="text-xs font-medium text-gray-500">
+                          <TypingAnimatedText
+                            text={
+                              selectedConversation?.isGroup
+                                ? typingStatusLabel
+                                : 'typing...'
+                            }
+                          />
                         </span>
                       </div>
                     </div>
