@@ -2134,8 +2134,9 @@ export default function App() {
         unreadNotifications={unreadNotifications}
         onSearch={setSearchQuery}
       />
-      <div className="flex justify-center flex-1">
-        {activeTab === 'feed' ? (
+      <div className="flex flex-1 min-w-0">
+        <div className="w-full min-w-0">
+          {activeTab === 'feed' ? (
           <div className="flex w-full xl:max-w-7xl">
             {/* Profile Section (Left) - Visible on XL screens and up */}
              <div className="w-[280px] min-w-[280px] px-2 overflow-y-auto h-[calc(100vh-4rem)] hidden xl:block flex-shrink-0">
@@ -2184,7 +2185,7 @@ export default function App() {
               />
             </div>
           </div>
-        ) : activeTab === 'search' ? (
+          ) : activeTab === 'search' ? (
           <SearchPage
             students={students}
             currentUserId={currentUserId}
@@ -2198,7 +2199,7 @@ export default function App() {
             }}
             initialSearchQuery={searchQuery}
           />
-        ) : activeTab === 'hashtag' ? (
+          ) : activeTab === 'hashtag' ? (
           <HashtagPostsPage
             hashtag={hashtagPageTag ?? ''}
             posts={hashtagOpportunities}
@@ -2216,7 +2217,7 @@ export default function App() {
             onOpenPost={handleOpenPost}
             onViewProfile={handleViewProfile}
           />
-        ) : activeTab === 'network' ? (
+          ) : activeTab === 'network' ? (
           <NetworkPage
             students={students}
             currentUserId={currentUserId}
@@ -2229,7 +2230,7 @@ export default function App() {
             onRejectRequest={handleRejectFollowRequest}
             onViewProfile={handleViewProfile}
           />
-        ) : activeTab === 'chat' ? (
+          ) : activeTab === 'chat' ? (
           <ChatPage
             conversations={conversations}
             students={students}
@@ -2239,7 +2240,7 @@ export default function App() {
             onCreateChat={handleCreateChat}
             onChatRead={handleChatRead}
           />
-        ) : activeTab === 'clubs' ? (
+          ) : activeTab === 'clubs' ? (
           <ClubsPage
             clubs={clubs}
             students={students}
@@ -2249,7 +2250,7 @@ export default function App() {
             onCreateClub={handleCreateClub}
             onViewProfile={handleViewProfile}
           />
-        ) : activeTab === 'profile' ? (
+          ) : activeTab === 'profile' ? (
           displayedStudent ? (
             <ProfilePage
               student={displayedStudent}
@@ -2275,7 +2276,7 @@ export default function App() {
           ) : (
             <LoadingState type="profile" />
           )
-        ) : activeTab === 'post' ? (
+          ) : activeTab === 'post' ? (
           openedPostForDisplay ? (
             <PostPage
               post={openedPostForDisplay}
@@ -2298,7 +2299,7 @@ export default function App() {
           ) : (
             <LoadingState type="feed" />
           )
-        ) : activeTab === 'notifications' ? (
+          ) : activeTab === 'notifications' ? (
           <NotificationsPage
             notifications={notifications}
             pendingIncomingRequestIds={pendingIncomingRequestIds}
@@ -2308,13 +2309,14 @@ export default function App() {
             onAcceptFollowRequest={handleAcceptFollowRequest}
             onRejectFollowRequest={handleRejectFollowRequest}
           />
-        ) : activeTab === 'settings' ? (
+          ) : activeTab === 'settings' ? (
           <SettingsPage
             student={currentUser}
             onEdit={handleEditProfile}
             onUpdateSettings={handleUpdateSettings}
           />
-        ) : null}
+          ) : null}
+        </div>
       </div>
 
       {activeTab !== 'chat' && (
