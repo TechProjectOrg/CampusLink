@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -19,6 +19,7 @@ interface CreateUnifiedPostModalProps {
   onCreateEvent: (event: any) => Promise<void> | void;
   onCreateOpportunity: (opportunity: any) => Promise<void> | void;
   currentUser: any;
+  initialTab?: 'post' | 'event' | 'opportunity';
 }
 
 export function CreateUnifiedPostModal({
@@ -27,7 +28,8 @@ export function CreateUnifiedPostModal({
   onCreatePost,
   onCreateEvent,
   onCreateOpportunity,
-  currentUser
+  currentUser,
+  initialTab = 'post'
 }: CreateUnifiedPostModalProps) {
 
   // State for Post Form
@@ -63,6 +65,13 @@ export function CreateUnifiedPostModal({
   });
   const [opportunityTagInput, setOpportunityTagInput] = useState('');
   const [submittingForm, setSubmittingForm] = useState<'post' | 'event' | 'opportunity' | null>(null);
+  const [activeTab, setActiveTab] = useState<'post' | 'event' | 'opportunity'>(initialTab);
+
+  useEffect(() => {
+    if (isOpen) {
+      setActiveTab(initialTab);
+    }
+  }, [isOpen, initialTab]);
 
   const getOpportunityTitlePlaceholder = (type: Opportunity['type']): string => {
     switch (type) {
@@ -302,7 +311,7 @@ export function CreateUnifiedPostModal({
           </DialogDescription>
         </DialogHeader>
         
-        <Tabs defaultValue="post" className="w-full">
+        <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'post' | 'event' | 'opportunity')} className="w-full">
           <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="post" disabled={isSubmitting}>Post</TabsTrigger>
             <TabsTrigger value="event" disabled={isSubmitting}>Create Event</TabsTrigger>

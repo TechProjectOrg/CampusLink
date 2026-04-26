@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Plus, Filter } from 'lucide-react';
+import { Filter, FileText, CalendarPlus, BriefcaseBusiness } from 'lucide-react';
 import { Opportunity, Student } from '../types';
 import { OpportunityCard } from './OpportunityCard';
 import { ProfileCard } from './ProfileCard';
 import { SuggestionsCard } from './SuggestionsCard';
 import { EmptyState } from './EmptyState';
 import { Button } from './ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { CreateUnifiedPostModal } from './CreateUnifiedPostModal';
 
 interface FeedPageProps {
@@ -55,6 +56,7 @@ export function FeedPage({
   onViewStudentProfile
 }: FeedPageProps) {
   const [isCreateUnifiedModalOpen, setIsCreateUnifiedModalOpen] = useState(false);
+  const [createTab, setCreateTab] = useState<'post' | 'event' | 'opportunity'>('post');
 
   const filteredOpportunities = opportunities;
 
@@ -65,18 +67,63 @@ export function FeedPage({
           {/* Main Feed */}
           <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between animate-slide-in-down">
-              <div>
-                <h1 className="text-gray-900 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                  Opportunities Feed
-                </h1>
-                <p className="text-gray-600">Discover internships, events, and more</p>
-              </div>
-              <div className="flex gap-2">
-                <Button className="flex items-center gap-2 gradient-primary shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105" onClick={() => setIsCreateUnifiedModalOpen(true)}>
-                  <Plus className="w-4 h-4" />
-                  <span className="hidden sm:inline">Post</span>
-                </Button>
+            <div className="animate-slide-in-down">
+              <div className="rounded-3xl border border-slate-200/80 bg-white shadow-lg hover-lift overflow-hidden transition-all duration-300 hover:shadow-xl">
+                <div className="flex items-start gap-4 p-4 md:p-5">
+                  <Avatar className="w-14 h-14 md:w-16 md:h-16 flex-shrink-0 ring-2 ring-primary/10">
+                    <AvatarImage src={currentUser?.avatar} alt={currentUser?.name} />
+                    <AvatarFallback className="bg-slate-100 text-slate-700 text-base font-medium">
+                      {currentUser?.name?.[0] ?? 'U'}
+                    </AvatarFallback>
+                  </Avatar>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCreateTab('post');
+                      setIsCreateUnifiedModalOpen(true);
+                    }}
+                    className="flex-1 min-h-14 cursor-pointer rounded-full border border-slate-300 bg-white py-3 pl-8 pr-5 text-left text-slate-500 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-slate-50 hover:shadow-xl md:text-base"
+                  >
+                    Start a post
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 border-t border-slate-100 p-3 sm:gap-3">
+                  <Button
+                    variant="ghost"
+                    className="flex h-12 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:bg-slate-50 hover:text-slate-700 hover:shadow-xl"
+                    onClick={() => {
+                      setCreateTab('post');
+                      setIsCreateUnifiedModalOpen(true);
+                    }}
+                  >
+                    <FileText className="w-4 h-4" />
+                    Post
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="flex h-12 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:bg-slate-50 hover:text-slate-700 hover:shadow-xl"
+                    onClick={() => {
+                      setCreateTab('event');
+                      setIsCreateUnifiedModalOpen(true);
+                    }}
+                  >
+                    <CalendarPlus className="w-4 h-4" />
+                    Create Event
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="flex h-12 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:bg-slate-50 hover:text-slate-700 hover:shadow-xl"
+                    onClick={() => {
+                      setCreateTab('opportunity');
+                      setIsCreateUnifiedModalOpen(true);
+                    }}
+                  >
+                    <BriefcaseBusiness className="w-4 h-4" />
+                    Post Opportunity
+                  </Button>
+                </div>
               </div>
             </div>
 
@@ -141,6 +188,7 @@ export function FeedPage({
         onCreateEvent={(event) => onCreateEvent?.(event)}
         onCreateOpportunity={(opp) => onCreateOpportunity?.(opp)}
         currentUser={currentUser}
+        initialTab={createTab}
       />
     </div>
   );
