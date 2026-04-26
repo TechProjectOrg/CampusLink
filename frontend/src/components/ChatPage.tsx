@@ -564,10 +564,10 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                             <AvatarFallback>{selectedConversation.participantName[0]}</AvatarFallback>
                           </Avatar>
                         )}
-                        <div className={`group max-w-[92%] md:max-w-[40rem] ${msg.isOwn ? 'order-2' : 'order-1'}`}>
+                        <div className={`group min-w-0 w-fit max-w-[78%] md:max-w-[70%] xl:max-w-[40rem] ${msg.isOwn ? 'order-2' : 'order-1'}`}>
                           <div className="flex items-center gap-2">
                             <div
-                              className={`${msg.isOwn ? 'order-2' : 'order-1'} min-w-0 max-w-[75vw] rounded-3xl px-3 py-2 transition-shadow duration-200 md:max-w-md md:px-4 md:py-2.5 ${
+                              className={`${msg.isOwn ? 'order-2' : 'order-1'} min-w-0 w-fit max-w-full rounded-3xl px-3 py-2 transition-shadow duration-200 md:px-4 md:py-2.5 ${
                                 msg.isOwn
                                   ? 'bg-gradient-to-br from-primary to-secondary text-white'
                                   : 'bg-gray-100 text-gray-900'
@@ -577,13 +577,17 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                                 <button
                                   type="button"
                                   onClick={() => jumpToMessage(msg.replyTo.id)}
-                                  className={`mb-2 w-full rounded-2xl border border-l-4 px-3 py-2 text-left text-xs ${msg.isOwn ? 'border-white/40 bg-black/20 text-blue-50' : 'border-gray-300 bg-gray-50 text-gray-700'}`}
+                                  className={`mb-2 block w-full max-w-full overflow-hidden rounded-2xl border border-l-4 px-3 py-2 text-left text-xs ${msg.isOwn ? 'border-white/40 bg-black/20 text-blue-50' : 'border-gray-300 bg-gray-50 text-gray-700'}`}
                                   title="Go to referenced message"
                                 >
-                                  <p className="truncate">
-                                    <span className="font-medium">{msg.replyTo.senderName}:</span>{' '}
-                                    {msg.replyTo.type === 'image' ? 'Photo' : msg.replyTo.content}
-                                  </p>
+                                  <div className="flex min-w-0 items-center gap-1">
+                                    <span className="shrink-0 font-medium">{msg.replyTo.senderName}:</span>
+                                    <span className="block min-w-0 flex-1 truncate">
+                                      {msg.replyTo.type === 'image'
+                                        ? 'Photo'
+                                        : (msg.replyTo.content?.trim() || 'Message')}
+                                    </span>
+                                  </div>
                                 </button>
                               )}
                               {msg.type === 'image' && msg.attachments[0]?.fileUrl ? (
