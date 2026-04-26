@@ -15,7 +15,7 @@ import { FloatingChat } from './components/FloatingChat';
 import { LoadingState } from './components/LoadingState';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
-import { Student, Opportunity, Club, Notification, Comment } from './types';
+import { Student, Opportunity, Club, Notification, Comment, ChatConversation } from './types';
 import { ProfileCard } from './components/ProfileCard';
 import { SuggestionsCard } from './components/SuggestionsCard';
 import { useAuth } from './context/AuthContext';
@@ -835,11 +835,21 @@ export default function App() {
     }
   }, [authToken, currentUserId, hashtagPageTag, currentUser]);
 
+  // Sort conversations by latest interaction (most recent first)
+  const sortConversationsByTimestamp = (convos: ChatConversation[]): ChatConversation[] => {
+    return [...convos].sort((a, b) => {
+      const timeA = new Date(a.timestamp).getTime();
+      const timeB = new Date(b.timestamp).getTime();
+      return timeB - timeA; // Latest first
+    });
+  };
+
   const refreshConversations = useCallback(async () => {
     if (!authToken) return;
     try {
       const convos = await apiFetchConversations(authToken, 'active');
-      setConversations(convos as any);
+      const sortedConvos = sortConversationsByTimestamp(convos as any);
+      setConversations(sortedConvos);
     } catch (err) {
       console.error('Failed to fetch conversations:', err);
     }
@@ -1887,32 +1897,22 @@ export default function App() {
   };
 
   const handleChatClick = (conversationId: string) => {
-    setConversations(prevConversations => {
-      const conversationIndex = prevConversations.findIndex(
-        (conv) => conv.id === conversationId
-      );
-
-      if (conversationIndex === -1) {
-        return prevConversations;
-      }
-
-      const updatedConversations = [...prevConversations];
-      const [clickedConversation] = updatedConversations.splice(conversationIndex, 1);
-      updatedConversations.unshift(clickedConversation);
-      return updatedConversations;
-    });
+    // No longer reorder on click; conversations maintain chronological order by timestamp
+    // The FloatingChat component manages the selectedConversation state internally
   };
 
   const handleCreateChat = (conversation: ChatConversation) => {
-    setConversations(prev => [conversation, ...prev]);
+    setConversations(prev => sortConversationsByTimestamp([conversation, ...prev]));
   };
 
   const handleChatRead = (conversationId: string) => {
-    setConversations(prevConversations =>
-      prevConversations.map((conversation) =>
+    setConversations(prevConversations => {
+      const updated = prevConversations.map((conversation) =>
         conversation.id === conversationId ? { ...conversation, unread: 0 } : conversation
-      )
-    );
+      );
+      // Maintain chronological order after updating read status
+      return sortConversationsByTimestamp(updated);
+    });
   };
 
   const handleViewProfile = (studentId: string) => {
