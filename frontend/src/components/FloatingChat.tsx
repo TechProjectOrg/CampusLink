@@ -368,9 +368,9 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                 </button>
               )}
               {isLoadingOlder && (
-                <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center py-2">
+                <div className="pointer-events-none absolute left-0 right-0 top-2 z-10 flex w-full justify-center">
                   <div className="rounded-full bg-white/90 p-1.5 shadow-sm">
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-primary" />
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-200 border-t-primary" />
                   </div>
                 </div>
               )}

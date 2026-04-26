@@ -574,9 +574,9 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                 </div>
               )}
               {isLoadingOlder && (
-                <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center py-3">
+                <div className="pointer-events-none absolute left-0 right-0 top-3 z-10 flex w-full justify-center">
                   <div className="rounded-full bg-white/90 p-2 shadow-sm">
-                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-primary" />
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-200 border-t-primary" />
                   </div>
                 </div>
               )}
