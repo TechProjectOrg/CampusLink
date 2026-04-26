@@ -3,6 +3,7 @@ import prisma from '../prisma';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
 import { createNotification } from '../lib/notifications';
 import { invalidateUserFeedCache } from '../lib/feedCache';
+import { getUserSummariesByIds, getUserSummaryById, incrementUserStat, toCachedUserCard } from '../lib/userCache';
 
 const router = express.Router();
 
@@ -10,28 +11,25 @@ router.use(authenticateToken);
 
 // ---- helpers ----
 
-interface MinimalUserRow {
-  user_id: string;
-  username: string;
-  profile_photo_url: string | null;
-  is_private: boolean;
-  user_type: string;
-  student_branch: string | null;
-  student_year: number | null;
-  alumni_branch: string | null;
-  alumni_passing_year: number | null;
+function mapMinimalUserFromSummary(summary: Awaited<ReturnType<typeof getUserSummaryById>> extends infer T ? NonNullable<T> : never) {
+  const card = toCachedUserCard(summary);
+  return {
+    userId: card.userId,
+    username: card.username,
+    profilePictureUrl: card.profilePictureUrl,
+    isPrivate: card.isPrivate,
+    type: card.type,
+    branch: card.branch,
+    year: card.year,
+  };
 }
 
-function mapMinimalUser(r: MinimalUserRow) {
-  return {
-    userId: r.user_id,
-    username: r.username,
-    profilePictureUrl: r.profile_photo_url,
-    isPrivate: r.is_private,
-    type: r.user_type,
-    branch: r.student_branch ?? r.alumni_branch ?? null,
-    year: r.student_year ?? r.alumni_passing_year ?? null,
-  };
+async function hydrateOrderedUsers(userIds: string[]) {
+  const summaries = await getUserSummariesByIds(userIds);
+  return userIds
+    .map((userId) => summaries.get(userId))
+    .filter((summary): summary is NonNullable<typeof summary> => summary !== undefined)
+    .map(mapMinimalUserFromSummary);
 }
 
 // ============================================================
@@ -44,97 +42,60 @@ router.get('/graph', async (req: Request, res: Response) => {
 
   try {
     // Followers (people who follow me)
-    const followerRows = await prisma.$queryRaw<MinimalUserRow[]>`
+    const followerRows = await prisma.$queryRaw<Array<{ user_id: string }>>`
       SELECT
-        u.user_id,
-        u.username,
-        u.profile_photo_url,
-        u.is_private,
-        u.user_type,
-        sp.branch AS student_branch,
-        sp.year   AS student_year,
-        ap.branch AS alumni_branch,
-        ap.passing_year AS alumni_passing_year
+        f.follower_user_id AS user_id
       FROM follows f
-      JOIN users u ON u.user_id = f.follower_user_id
-      LEFT JOIN student_profiles sp ON sp.user_id = u.user_id
-      LEFT JOIN alumni_profiles  ap ON ap.user_id = u.user_id
       WHERE f.followed_user_id = ${userId}
       ORDER BY f.created_at DESC
     `;
 
     // Following (people I follow)
-    const followingRows = await prisma.$queryRaw<MinimalUserRow[]>`
+    const followingRows = await prisma.$queryRaw<Array<{ user_id: string }>>`
       SELECT
-        u.user_id,
-        u.username,
-        u.profile_photo_url,
-        u.is_private,
-        u.user_type,
-        sp.branch AS student_branch,
-        sp.year   AS student_year,
-        ap.branch AS alumni_branch,
-        ap.passing_year AS alumni_passing_year
+        f.followed_user_id AS user_id
       FROM follows f
-      JOIN users u ON u.user_id = f.followed_user_id
-      LEFT JOIN student_profiles sp ON sp.user_id = u.user_id
-      LEFT JOIN alumni_profiles  ap ON ap.user_id = u.user_id
       WHERE f.follower_user_id = ${userId}
       ORDER BY f.created_at DESC
     `;
 
     // Incoming follow requests (pending)
-    const incomingRows = await prisma.$queryRaw<(MinimalUserRow & { follow_request_id: string })[]>`
+    const incomingRows = await prisma.$queryRaw<Array<{ follow_request_id: string; user_id: string }>>`
       SELECT fr.follow_request_id,
-             u.user_id,
-             u.username,
-             u.profile_photo_url,
-             u.is_private,
-             u.user_type,
-             sp.branch AS student_branch,
-             sp.year   AS student_year,
-             ap.branch AS alumni_branch,
-             ap.passing_year AS alumni_passing_year
+             fr.requester_user_id AS user_id
       FROM follow_requests fr
-      JOIN users u ON u.user_id = fr.requester_user_id
-      LEFT JOIN student_profiles sp ON sp.user_id = u.user_id
-      LEFT JOIN alumni_profiles  ap ON ap.user_id = u.user_id
       WHERE fr.target_user_id = ${userId}
         AND fr.status = 'pending'
       ORDER BY fr.created_at DESC
     `;
 
     // Outgoing follow requests (pending)
-    const outgoingRows = await prisma.$queryRaw<(MinimalUserRow & { follow_request_id: string })[]>`
+    const outgoingRows = await prisma.$queryRaw<Array<{ follow_request_id: string; user_id: string }>>`
       SELECT fr.follow_request_id,
-             u.user_id,
-             u.username,
-             u.profile_photo_url,
-             u.is_private,
-             u.user_type,
-             sp.branch AS student_branch,
-             sp.year   AS student_year,
-             ap.branch AS alumni_branch,
-             ap.passing_year AS alumni_passing_year
+             fr.target_user_id AS user_id
       FROM follow_requests fr
-      JOIN users u ON u.user_id = fr.target_user_id
-      LEFT JOIN student_profiles sp ON sp.user_id = u.user_id
-      LEFT JOIN alumni_profiles  ap ON ap.user_id = u.user_id
       WHERE fr.requester_user_id = ${userId}
         AND fr.status = 'pending'
       ORDER BY fr.created_at DESC
     `;
 
+    const [followers, following, incomingUsers, outgoingUsers] = await Promise.all([
+      hydrateOrderedUsers(followerRows.map((row) => row.user_id)),
+      hydrateOrderedUsers(followingRows.map((row) => row.user_id)),
+      hydrateOrderedUsers(incomingRows.map((row) => row.user_id)),
+      hydrateOrderedUsers(outgoingRows.map((row) => row.user_id)),
+    ]);
+
     return res.status(200).json({
-      followers: followerRows.map(mapMinimalUser),
-      following: followingRows.map(mapMinimalUser),
-      incomingRequests: incomingRows.map((r) => ({
-        requestId: r.follow_request_id,
-        ...mapMinimalUser(r),
+      followers,
+      following,
+      incomingRequests: incomingRows.map((row, index) => ({
+        requestId: row.follow_request_id,
+        ...incomingUsers[index],
       })),
-      outgoingRequests: outgoingRows.map((r) => ({
-        requestId: r.follow_request_id,
-        ...mapMinimalUser(r),
+      outgoingRequests: outgoingRows.map((row, index) => ({
+        requestId: row.follow_request_id,
+        ...outgoingUsers[index],
       })),
     });
   } catch (err) {
@@ -161,19 +122,14 @@ router.post('/follow', async (req: Request, res: Response) => {
 
   try {
     // Check if target user exists and get privacy status
-    const targetRows = await prisma.$queryRaw<{ user_id: string; is_private: boolean; username: string }[]>`
-      SELECT user_id, is_private, username FROM users WHERE user_id = ${targetUserId}
-    `;
-    const target = targetRows[0];
+    const [target, currentUser] = await Promise.all([
+      getUserSummaryById(targetUserId),
+      getUserSummaryById(currentUserId),
+    ]);
     if (!target) {
       return res.status(404).json({ message: 'User not found' });
     }
-
-    // Get current user's username for notifications
-    const currentRows = await prisma.$queryRaw<{ username: string }[]>`
-      SELECT username FROM users WHERE user_id = ${currentUserId}
-    `;
-    const currentUsername = currentRows[0]?.username ?? 'Someone';
+    const currentUsername = currentUser?.username ?? 'Someone';
 
     // Check already following
     const alreadyFollowing = await prisma.$queryRaw<{ count: number }[]>`
@@ -184,7 +140,7 @@ router.post('/follow', async (req: Request, res: Response) => {
       return res.status(409).json({ message: 'Already following this user' });
     }
 
-    if (target.is_private) {
+    if (target.isPrivate) {
       // Check for existing pending request
       const existingRequest = await prisma.$queryRaw<{ count: number }[]>`
         SELECT COUNT(*)::int AS count FROM follow_requests
@@ -217,12 +173,24 @@ router.post('/follow', async (req: Request, res: Response) => {
     }
 
     // Public account → direct follow
-    await prisma.$queryRaw`
-      INSERT INTO follows (follower_user_id, followed_user_id)
-      VALUES (${currentUserId}, ${targetUserId})
-      ON CONFLICT DO NOTHING
+    const inserted = await prisma.$queryRaw<Array<{ count: number }>>`
+      WITH inserted AS (
+        INSERT INTO follows (follower_user_id, followed_user_id)
+        VALUES (${currentUserId}, ${targetUserId})
+        ON CONFLICT DO NOTHING
+        RETURNING 1
+      )
+      SELECT COUNT(*)::int AS count FROM inserted
     `;
+    if ((inserted[0]?.count ?? 0) === 0) {
+      return res.status(409).json({ message: 'Already following this user' });
+    }
+
     await invalidateUserFeedCache(currentUserId);
+    await Promise.all([
+      incrementUserStat(currentUserId, 'followingCount', 1),
+      incrementUserStat(targetUserId, 'followerCount', 1),
+    ]);
 
     await createNotification({
       recipientUserId: targetUserId,
@@ -246,15 +214,25 @@ router.post('/follow', async (req: Request, res: Response) => {
 router.delete('/follow/:targetUserId', async (req: Request, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const currentUserId = authed.auth!.userId;
-  const { targetUserId } = req.params;
+  const targetUserId = String(req.params.targetUserId);
 
   try {
     // Delete from follows
-    await prisma.$queryRaw`
-      DELETE FROM follows
-      WHERE follower_user_id = ${currentUserId} AND followed_user_id = ${targetUserId}
+    const deleted = await prisma.$queryRaw<Array<{ count: number }>>`
+      WITH deleted AS (
+        DELETE FROM follows
+        WHERE follower_user_id = ${currentUserId} AND followed_user_id = ${targetUserId}
+        RETURNING 1
+      )
+      SELECT COUNT(*)::int AS count FROM deleted
     `;
-    await invalidateUserFeedCache(currentUserId);
+    if ((deleted[0]?.count ?? 0) > 0) {
+      await invalidateUserFeedCache(currentUserId);
+      await Promise.all([
+        incrementUserStat(currentUserId, 'followingCount', -1),
+        incrementUserStat(targetUserId, 'followerCount', -1),
+      ]);
+    }
 
     // Also clean up any accepted follow_request rows (per user preference)
     await prisma.$queryRaw`
@@ -281,11 +259,21 @@ router.delete('/followers/:followerUserId', async (req: Request, res: Response) 
   const followerUserId = String(req.params.followerUserId);
 
   try {
-    await prisma.$queryRaw`
-      DELETE FROM follows
-      WHERE follower_user_id = ${followerUserId} AND followed_user_id = ${currentUserId}
+    const deleted = await prisma.$queryRaw<Array<{ count: number }>>`
+      WITH deleted AS (
+        DELETE FROM follows
+        WHERE follower_user_id = ${followerUserId} AND followed_user_id = ${currentUserId}
+        RETURNING 1
+      )
+      SELECT COUNT(*)::int AS count FROM deleted
     `;
-    await invalidateUserFeedCache(followerUserId);
+    if ((deleted[0]?.count ?? 0) > 0) {
+      await invalidateUserFeedCache(followerUserId);
+      await Promise.all([
+        incrementUserStat(followerUserId, 'followingCount', -1),
+        incrementUserStat(currentUserId, 'followerCount', -1),
+      ]);
+    }
 
     // Clean up accepted request row
     await prisma.$queryRaw`
@@ -311,31 +299,21 @@ router.get('/requests/incoming', async (req: Request, res: Response) => {
   const userId = authed.auth!.userId;
 
   try {
-    const rows = await prisma.$queryRaw<(MinimalUserRow & { follow_request_id: string; created_at: Date })[]>`
+    const rows = await prisma.$queryRaw<Array<{ follow_request_id: string; created_at: Date; user_id: string }>>`
       SELECT fr.follow_request_id, fr.created_at,
-             u.user_id,
-             u.username,
-             u.profile_photo_url,
-             u.is_private,
-             u.user_type,
-             sp.branch AS student_branch,
-             sp.year   AS student_year,
-             ap.branch AS alumni_branch,
-             ap.passing_year AS alumni_passing_year
+             fr.requester_user_id AS user_id
       FROM follow_requests fr
-      JOIN users u ON u.user_id = fr.requester_user_id
-      LEFT JOIN student_profiles sp ON sp.user_id = u.user_id
-      LEFT JOIN alumni_profiles  ap ON ap.user_id = u.user_id
       WHERE fr.target_user_id = ${userId}
         AND fr.status = 'pending'
       ORDER BY fr.created_at DESC
     `;
+    const users = await hydrateOrderedUsers(rows.map((row) => row.user_id));
 
     return res.status(200).json(
-      rows.map((r) => ({
-        requestId: r.follow_request_id,
-        createdAt: r.created_at.toISOString(),
-        ...mapMinimalUser(r),
+      rows.map((row, index) => ({
+        requestId: row.follow_request_id,
+        createdAt: row.created_at.toISOString(),
+        ...users[index],
       }))
     );
   } catch (err) {
@@ -353,31 +331,21 @@ router.get('/requests/outgoing', async (req: Request, res: Response) => {
   const userId = authed.auth!.userId;
 
   try {
-    const rows = await prisma.$queryRaw<(MinimalUserRow & { follow_request_id: string; created_at: Date })[]>`
+    const rows = await prisma.$queryRaw<Array<{ follow_request_id: string; created_at: Date; user_id: string }>>`
       SELECT fr.follow_request_id, fr.created_at,
-             u.user_id,
-             u.username,
-             u.profile_photo_url,
-             u.is_private,
-             u.user_type,
-             sp.branch AS student_branch,
-             sp.year   AS student_year,
-             ap.branch AS alumni_branch,
-             ap.passing_year AS alumni_passing_year
+             fr.target_user_id AS user_id
       FROM follow_requests fr
-      JOIN users u ON u.user_id = fr.target_user_id
-      LEFT JOIN student_profiles sp ON sp.user_id = u.user_id
-      LEFT JOIN alumni_profiles  ap ON ap.user_id = u.user_id
       WHERE fr.requester_user_id = ${userId}
         AND fr.status = 'pending'
       ORDER BY fr.created_at DESC
     `;
+    const users = await hydrateOrderedUsers(rows.map((row) => row.user_id));
 
     return res.status(200).json(
-      rows.map((r) => ({
-        requestId: r.follow_request_id,
-        createdAt: r.created_at.toISOString(),
-        ...mapMinimalUser(r),
+      rows.map((row, index) => ({
+        requestId: row.follow_request_id,
+        createdAt: row.created_at.toISOString(),
+        ...users[index],
       }))
     );
   } catch (err) {
@@ -416,12 +384,10 @@ router.post('/requests/:requestId/accept', async (req: Request, res: Response) =
     const requesterId = request.requester_user_id;
 
     // Get current user's username for notification
-    const currentRows = await prisma.$queryRaw<{ username: string }[]>`
-      SELECT username FROM users WHERE user_id = ${currentUserId}
-    `;
-    const currentUsername = currentRows[0]?.username ?? 'Someone';
+    const currentUser = await getUserSummaryById(currentUserId);
+    const currentUsername = currentUser?.username ?? 'Someone';
 
-    await prisma.$transaction(async (tx) => {
+    const accepted = await prisma.$transaction(async (tx) => {
       // Update follow request status
       await tx.$queryRaw`
         UPDATE follow_requests
@@ -430,13 +396,25 @@ router.post('/requests/:requestId/accept', async (req: Request, res: Response) =
       `;
 
       // Create the follow relationship (requester now follows the target)
-      await tx.$queryRaw`
-        INSERT INTO follows (follower_user_id, followed_user_id)
-        VALUES (${requesterId}, ${currentUserId})
-        ON CONFLICT DO NOTHING
+      const inserted = await tx.$queryRaw<Array<{ count: number }>>`
+        WITH inserted AS (
+          INSERT INTO follows (follower_user_id, followed_user_id)
+          VALUES (${requesterId}, ${currentUserId})
+          ON CONFLICT DO NOTHING
+          RETURNING 1
+        )
+        SELECT COUNT(*)::int AS count FROM inserted
       `;
+
+      return (inserted[0]?.count ?? 0) > 0;
     });
     await invalidateUserFeedCache(requesterId);
+    if (accepted) {
+      await Promise.all([
+        incrementUserStat(requesterId, 'followingCount', 1),
+        incrementUserStat(currentUserId, 'followerCount', 1),
+      ]);
+    }
 
     await createNotification({
       recipientUserId: requesterId,

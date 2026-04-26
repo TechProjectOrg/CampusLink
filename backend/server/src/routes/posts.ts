@@ -21,6 +21,7 @@ import {
   setViewerLikedCache,
 } from '../lib/feedCache';
 import { emitFeedEvent } from '../lib/realtime';
+import { incrementUserStat } from '../lib/userCache';
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -1035,6 +1036,7 @@ router.delete('/posts/:postId', async (req: Request<{ postId: string }>, res: Re
         await deleteManagedPostMediaByUrl(item.media_url);
       }),
     );
+    await incrementUserStat(viewerUserId, 'postCount', -1);
 
     return res.status(204).send();
   } catch (err) {

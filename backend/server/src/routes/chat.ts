@@ -17,6 +17,15 @@ import {
 } from '../lib/chat';
 import { uploadChatMediaToStorage } from '../lib/objectStorage';
 import { encryptMessage, decryptMessage } from '../lib/encryption';
+import {
+  CachedConversationEntry,
+  getCachedConversationList,
+  getUserSummariesByIds,
+  getUserSummaryById,
+  invalidateConversationLists,
+  patchCachedConversationList,
+  setCachedConversationList,
+} from '../lib/userCache';
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -43,6 +52,116 @@ function normalizeReactions(value: unknown): Record<string, string[]> {
   }
 
   return reactions;
+}
+
+interface ConversationRow {
+  chat_id: string;
+  is_request: boolean;
+  updated_at: Date;
+  other_user_id: string;
+  last_message: string | null;
+  unread_count: number;
+}
+
+async function fetchConversationsFromDb(
+  userId: string,
+  isRequest: boolean,
+): Promise<CachedConversationEntry[]> {
+  const rows = await prisma.$queryRaw<ConversationRow[]>`
+    SELECT
+      c.chat_id,
+      c.is_request,
+      c.updated_at,
+      cp_other.user_id AS other_user_id,
+      (
+        SELECT m.content
+        FROM messages m
+        WHERE m.chat_id = c.chat_id
+          AND m.deleted_at IS NULL
+        ORDER BY m.created_at DESC
+        LIMIT 1
+      ) AS last_message,
+      (
+        SELECT COUNT(*)
+        FROM messages m
+        LEFT JOIN messages last_read ON last_read.message_id = cp_me.last_read_message_id
+        WHERE m.chat_id = c.chat_id
+          AND m.deleted_at IS NULL
+          AND m.sender_user_id != ${userId}
+          AND (cp_me.last_read_message_id IS NULL OR last_read.created_at IS NULL OR m.created_at > last_read.created_at)
+      )::int AS unread_count
+    FROM chats c
+    JOIN chat_participants cp_me ON cp_me.chat_id = c.chat_id AND cp_me.user_id = ${userId}
+    JOIN chat_participants cp_other ON cp_other.chat_id = c.chat_id AND cp_other.user_id != ${userId}
+    WHERE c.is_request = ${isRequest}
+      AND cp_me.left_at IS NULL
+      AND cp_other.left_at IS NULL
+    ORDER BY c.updated_at DESC
+  `;
+
+  const summaries = await getUserSummariesByIds(rows.map((row) => row.other_user_id));
+  return rows
+    .map((row) => {
+      const participant = summaries.get(row.other_user_id);
+      if (!participant) return null;
+
+      return {
+        id: row.chat_id,
+        participantId: row.other_user_id,
+        participantName: participant.username,
+        participantAvatar: participant.profilePictureUrl,
+        lastMessage: row.last_message ? decryptMessage(row.last_message) : 'No messages yet',
+        timestamp: row.updated_at.toISOString(),
+        unread: row.unread_count,
+        isOnline: participant.isOnline,
+        lastSeenAt: participant.lastSeenAt,
+        isRequest: row.is_request,
+      };
+    })
+    .filter((entry): entry is CachedConversationEntry => entry !== null);
+}
+
+async function updateConversationActivityCache(
+  participantIds: string[],
+  chatId: string,
+  senderUserId: string,
+  lastMessage: string,
+  timestamp: string,
+): Promise<void> {
+  await Promise.all(
+    participantIds.flatMap((viewerId) =>
+      (['active', 'requests'] as const).map((type) =>
+        patchCachedConversationList(viewerId, type, (conversations) => {
+          const next = conversations.map((conversation) =>
+            conversation.id === chatId
+              ? {
+                  ...conversation,
+                  lastMessage,
+                  timestamp,
+                  unread:
+                    viewerId === senderUserId ? conversation.unread : conversation.unread + 1,
+                }
+              : conversation,
+          );
+
+          next.sort((left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime());
+          return next;
+        }),
+      ),
+    ),
+  );
+}
+
+async function markConversationReadInCache(userId: string, chatId: string): Promise<void> {
+  await Promise.all(
+    (['active', 'requests'] as const).map((type) =>
+      patchCachedConversationList(userId, type, (conversations) =>
+        conversations.map((conversation) =>
+          conversation.id === chatId ? { ...conversation, unread: 0 } : conversation,
+        ),
+      ),
+    ),
+  );
 }
 
 async function loadReplyPreview(chatId: string, messageId: string | null | undefined): Promise<ChatReplyPreview | null> {
@@ -92,51 +211,16 @@ router.get('/conversations', async (req: Request, res: Response) => {
   const userId = authed.auth!.userId;
   const type = req.query.type as string; // 'active' or 'requests'
   const isRequest = type === 'requests';
+  const conversationType = isRequest ? 'requests' : 'active';
 
   try {
-    const rows = await prisma.$queryRaw<any[]>`
-      SELECT 
-        c.chat_id, c.is_request, c.updated_at,
-        cp_other.user_id as other_user_id,
-        u.username as other_username,
-        u.profile_photo_url as other_avatar,
-        u.is_online as other_is_online,
-        u.last_seen_at as other_last_seen,
-        (
-          SELECT m.content 
-          FROM messages m 
-          WHERE m.chat_id = c.chat_id 
-          ORDER BY m.created_at DESC 
-          LIMIT 1
-        ) as last_message,
-        (
-          SELECT COUNT(*) 
-          FROM messages m 
-          LEFT JOIN messages last_read ON last_read.message_id = cp_me.last_read_message_id
-          WHERE m.chat_id = c.chat_id 
-            AND m.sender_user_id != ${userId}
-            AND (cp_me.last_read_message_id IS NULL OR last_read.created_at IS NULL OR m.created_at > last_read.created_at)
-        )::int as unread_count
-      FROM chats c
-      JOIN chat_participants cp_me ON cp_me.chat_id = c.chat_id AND cp_me.user_id = ${userId}
-      JOIN chat_participants cp_other ON cp_other.chat_id = c.chat_id AND cp_other.user_id != ${userId}
-      JOIN users u ON u.user_id = cp_other.user_id
-      WHERE c.is_request = ${isRequest} AND cp_me.left_at IS NULL AND cp_other.left_at IS NULL
-      ORDER BY c.updated_at DESC
-    `;
+    const cached = await getCachedConversationList(userId, conversationType);
+    if (cached) {
+      return res.status(200).json(cached);
+    }
 
-    const conversations = rows.map(r => ({
-      id: r.chat_id,
-      participantId: r.other_user_id,
-      participantName: r.other_username,
-      participantAvatar: r.other_avatar,
-      lastMessage: r.last_message ? decryptMessage(r.last_message) : 'No messages yet',
-      timestamp: r.updated_at,
-      unread: r.unread_count,
-      isOnline: r.other_is_online,
-      lastSeenAt: r.other_last_seen,
-      isRequest: r.is_request
-    }));
+    const conversations = await fetchConversationsFromDb(userId, isRequest);
+    await setCachedConversationList(userId, conversationType, conversations);
 
     return res.status(200).json(conversations);
   } catch (err) {
@@ -157,6 +241,10 @@ router.post('/conversations', async (req: Request, res: Response) => {
   try {
     const result = await getOrCreateDirectChat(currentUserId, targetUserId);
     if (!result) return res.status(403).json({ message: 'You cannot message this user' });
+
+    if (result.isNew) {
+      await invalidateConversationLists([currentUserId, targetUserId]);
+    }
 
     return res.status(200).json({ chatId: result.chatId, isRequest: result.isRequest, isNew: result.isNew });
   } catch (err) {
@@ -309,7 +397,6 @@ router.get('/conversations/:chatId/messages', async (req: Request, res: Response
 router.post('/conversations/:chatId/messages', chatMessageRateLimiter, async (req: Request, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const userId = authed.auth!.userId;
-  const username = authed.auth!.username;
   const chatId = req.params.chatId as string;
   const content = req.body.content as string;
   const replyToMessageId = req.body.replyToMessageId as string | undefined;
@@ -338,16 +425,30 @@ router.post('/conversations/:chatId/messages', chatMessageRateLimiter, async (re
       RETURNING message_id, created_at
     `;
     const messageId = rows[0].message_id;
+    const createdAt = rows[0].created_at as Date;
 
     // Update chat updated_at
     await prisma.$queryRaw`UPDATE chats SET updated_at = NOW() WHERE chat_id = ${chatId}`;
 
     const participantIds = await getChatParticipantIds(chatId);
+    const sender = await getUserSummaryById(userId);
+    const createdAtIso = createdAt.toISOString();
+    await updateConversationActivityCache(participantIds, chatId, userId, content.trim(), createdAtIso);
     
     // Emit websocket
     emitChatMessage(participantIds, {
-      messageId, chatId, senderUserId: userId, senderUsername: username, senderProfilePhotoUrl: null,
-      messageType: 'text', content, reactions: {}, replyToMessageId: replyToMessageId ?? null, replyTo, attachments: [], createdAt: rows[0].created_at
+      messageId,
+      chatId,
+      senderUserId: userId,
+      senderUsername: sender?.username ?? authed.auth!.username,
+      senderProfilePhotoUrl: sender?.profilePictureUrl ?? null,
+      messageType: 'text',
+      content,
+      reactions: {},
+      replyToMessageId: replyToMessageId ?? null,
+      replyTo,
+      attachments: [],
+      createdAt: createdAtIso,
     });
 
     return res.status(201).json({ messageId });
@@ -360,7 +461,6 @@ router.post('/conversations/:chatId/messages', chatMessageRateLimiter, async (re
 router.post('/conversations/:chatId/messages/image', chatMessageRateLimiter, upload.single('image'), async (req: Request, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const userId = authed.auth!.userId;
-  const username = authed.auth!.username;
   const chatId = req.params.chatId as string;
   const file = req.file;
   const replyToMessageId = req.body.replyToMessageId as string | undefined;
@@ -393,6 +493,7 @@ router.post('/conversations/:chatId/messages/image', chatMessageRateLimiter, upl
       RETURNING message_id, created_at
     `;
     const messageId = rows[0].message_id;
+    const createdAt = rows[0].created_at as Date;
 
     await prisma.$queryRaw`
       INSERT INTO message_attachments (message_id, file_url, file_type)
@@ -402,10 +503,22 @@ router.post('/conversations/:chatId/messages/image', chatMessageRateLimiter, upl
     await prisma.$queryRaw`UPDATE chats SET updated_at = NOW() WHERE chat_id = ${chatId}`;
 
     const participantIds = await getChatParticipantIds(chatId);
+    const sender = await getUserSummaryById(userId);
+    const createdAtIso = createdAt.toISOString();
+    await updateConversationActivityCache(participantIds, chatId, userId, 'Photo', createdAtIso);
     emitChatMessage(participantIds, {
-      messageId, chatId, senderUserId: userId, senderUsername: username, senderProfilePhotoUrl: null,
-      messageType: 'image', content: null, reactions: {}, replyToMessageId: replyToMessageId ?? null, replyTo,
-      attachments: [{ fileUrl, fileType: file.mimetype }], createdAt: rows[0].created_at
+      messageId,
+      chatId,
+      senderUserId: userId,
+      senderUsername: sender?.username ?? authed.auth!.username,
+      senderProfilePhotoUrl: sender?.profilePictureUrl ?? null,
+      messageType: 'image',
+      content: null,
+      reactions: {},
+      replyToMessageId: replyToMessageId ?? null,
+      replyTo,
+      attachments: [{ fileUrl, fileType: file.mimetype }],
+      createdAt: createdAtIso,
     });
 
     return res.status(201).json({ messageId, fileUrl });
@@ -449,6 +562,7 @@ router.patch('/conversations/:chatId/read', async (req: Request, res: Response) 
       SET last_read_message_id = ${messageId}
       WHERE chat_id = ${chatId} AND user_id = ${userId}
     `;
+    await markConversationReadInCache(userId, chatId);
 
     const participantIds = await getChatParticipantIds(chatId);
     emitChatRead(participantIds, chatId, userId, messageId, new Date().toISOString());
@@ -599,6 +713,7 @@ router.post('/requests/:chatId/accept', async (req: Request, res: Response) => {
     await markChatAccepted(chatId);
 
     const participantIds = await getChatParticipantIds(chatId);
+    await invalidateConversationLists(participantIds);
     const otherParticipant = participantIds.find(id => id !== userId);
     if (otherParticipant) {
       emitChatRequestAccepted(otherParticipant, chatId);

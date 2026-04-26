@@ -11,8 +11,14 @@ import {
   uploadProfilePhotoToStorage,
 } from '../lib/objectStorage';
 import { createPostPublishedNotifications } from '../lib/notifications';
-import { addPostToFeedCaches, getPostFeedRecipientIds, refreshPostCaches } from '../lib/feedCache';
+import {
+  addPostToFeedCaches,
+  getPostFeedRecipientIds,
+  invalidateUserFeedCache,
+  refreshPostCaches,
+} from '../lib/feedCache';
 import { emitFeedEvent } from '../lib/realtime';
+import { incrementUserStat, patchUserSummary } from '../lib/userCache';
 
 const router = express.Router();
 
@@ -302,6 +308,16 @@ function passwordRequirementMessage(): string {
   return 'Password must be at least 8 characters long and contain at least one lowercase letter, one uppercase letter, one number, and one special character (!@#$%^&*).';
 }
 
+async function getFollowerUserIds(userId: string): Promise<string[]> {
+  const rows = await prisma.$queryRaw<Array<{ user_id: string }>>`
+    SELECT follower_user_id AS user_id
+    FROM follows
+    WHERE followed_user_id = ${userId}
+  `;
+
+  return rows.map((row) => row.user_id);
+}
+
 router.get('/:userId', async (req: Request<GetUserParams>, res: Response) => {
   const { userId } = req.params;
 
@@ -468,6 +484,17 @@ router.patch(
         `;
       });
 
+      await patchUserSummary(userId, (current) => ({
+        ...current,
+        isPrivate: next.privacy.accountType === 'private',
+        allowMessages: next.privacy.allowMessages,
+      }));
+
+      if (current.privacy.accountType !== next.privacy.accountType) {
+        const affectedViewerIds = [userId, ...(await getFollowerUserIds(userId))];
+        await Promise.all(affectedViewerIds.map((viewerId) => invalidateUserFeedCache(viewerId)));
+      }
+
       return res.status(200).json(next);
     } catch (err) {
       console.error('Error updating user settings:', err);
@@ -536,6 +563,24 @@ router.patch(
         `;
       });
 
+      await patchUserSummary(userId, (current) => ({
+        ...current,
+        username: trimmedUsername,
+        details:
+          profileRow.user_type === 'student'
+            ? {
+                ...current.details,
+                branch: trimmedBranch,
+                year: typeof numericYear === 'number' ? numericYear : current.details.year,
+              }
+            : {
+                ...current.details,
+                branch: trimmedBranch,
+                passingYear:
+                  typeof numericYear === 'number' ? numericYear : current.details.passingYear,
+              },
+      }));
+
       const updatedProfile = await getUserProfileById(userId);
       if (!updatedProfile) {
         return res.status(404).json({ message: 'User not found' });
@@ -599,6 +644,11 @@ router.patch(
         SET profile_photo_url = ${nextPhoto}
         WHERE user_id = ${userId}
       `;
+
+      await patchUserSummary(userId, (current) => ({
+        ...current,
+        profilePictureUrl: nextPhoto,
+      }));
 
       if (currentProfile.profilePictureUrl && currentProfile.profilePictureUrl !== nextPhoto) {
         try {
@@ -1558,6 +1608,7 @@ router.post(
         postId: created.post_id,
         postTitle: created.title,
       });
+      await incrementUserStat(userId, 'postCount', 1);
 
       return res.status(201).json(mapUserPostRow(created));
     } catch (err) {

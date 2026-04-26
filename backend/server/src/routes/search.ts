@@ -1,23 +1,11 @@
 import express, { Request, Response } from 'express';
 import prisma from '../prisma';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
+import { getUserSummariesByIds, toCachedUserCard } from '../lib/userCache';
 
 const router = express.Router();
 
 router.use(authenticateToken);
-
-interface SearchUserRow {
-  user_id: string;
-  username: string;
-  email: string;
-  profile_photo_url: string | null;
-  is_private: boolean;
-  user_type: string;
-  student_branch: string | null;
-  student_year: number | null;
-  alumni_branch: string | null;
-  alumni_passing_year: number | null;
-}
 
 interface SearchHashtagRow {
   tag_name: string;
@@ -33,21 +21,10 @@ function parsePaging(value: string | undefined, fallback: number, max: number): 
 async function searchUsers(currentUserId: string, q: string, limit: number, offset: number) {
   const pattern = `%${q}%`;
 
-  const rows = await prisma.$queryRaw<SearchUserRow[]>`
+  const rows = await prisma.$queryRaw<Array<{ user_id: string }>>`
     SELECT
-      u.user_id,
-      u.username,
-      u.email,
-      u.profile_photo_url,
-      u.is_private,
-      u.user_type,
-      sp.branch AS student_branch,
-      sp.year   AS student_year,
-      ap.branch AS alumni_branch,
-      ap.passing_year AS alumni_passing_year
+      u.user_id
     FROM users u
-    LEFT JOIN student_profiles sp ON sp.user_id = u.user_id
-    LEFT JOIN alumni_profiles  ap ON ap.user_id = u.user_id
     WHERE u.user_id <> ${currentUserId}
       AND (u.username ILIKE ${pattern} OR u.email ILIKE ${pattern})
     ORDER BY u.username
@@ -55,16 +32,24 @@ async function searchUsers(currentUserId: string, q: string, limit: number, offs
     OFFSET ${offset}
   `;
 
-  return rows.map((r) => ({
-    userId: r.user_id,
-    username: r.username,
-    email: r.email,
-    profilePictureUrl: r.profile_photo_url,
-    isPrivate: r.is_private,
-    type: r.user_type,
-    branch: r.student_branch ?? r.alumni_branch ?? null,
-    year: r.student_year ?? r.alumni_passing_year ?? null,
-  }));
+  const summaries = await getUserSummariesByIds(rows.map((row) => row.user_id));
+
+  return rows
+    .map((row) => summaries.get(row.user_id))
+    .filter((summary): summary is NonNullable<typeof summary> => summary !== undefined)
+    .map((summary) => {
+      const card = toCachedUserCard(summary);
+      return {
+        userId: card.userId,
+        username: card.username,
+        email: card.email,
+        profilePictureUrl: card.profilePictureUrl,
+        isPrivate: card.isPrivate,
+        type: card.type,
+        branch: card.branch,
+        year: card.year,
+      };
+    });
 }
 
 async function searchHashtags(currentUserId: string, q: string, limit: number, offset: number) {

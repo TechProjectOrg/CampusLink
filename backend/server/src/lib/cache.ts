@@ -115,6 +115,11 @@ export async function cacheSetJson(key: string, value: unknown, ttlSeconds?: num
   await runCommand(command);
 }
 
+export async function cacheExpire(key: string, ttlSeconds: number): Promise<void> {
+  if (!ttlSeconds || ttlSeconds <= 0) return;
+  await runCommand(['EXPIRE', key, ttlSeconds]);
+}
+
 export async function cacheDelete(...keys: string[]): Promise<void> {
   if (keys.length === 0) return;
   await runCommand(['DEL', ...keys]);
@@ -142,6 +147,22 @@ export async function cacheZRem(key: string, ...members: string[]): Promise<void
 
 export async function cacheIncrement(key: string, field: string, amount: number): Promise<void> {
   await runCommand(['HINCRBY', key, field, amount]);
+}
+
+export async function cacheHashSet(
+  key: string,
+  fields: Record<string, string | number | boolean | null | undefined>,
+  ttlSeconds?: number,
+): Promise<void> {
+  const entries = Object.entries(fields).filter(([, value]) => value !== undefined);
+  if (entries.length === 0) return;
+
+  const args = entries.flatMap(([field, value]) => [field, value === null ? 'null' : String(value)]);
+  await runCommand(['HSET', key, ...args]);
+
+  if (ttlSeconds && ttlSeconds > 0) {
+    await cacheExpire(key, ttlSeconds);
+  }
 }
 
 export async function cacheHGetAll(key: string): Promise<Record<string, string> | null> {

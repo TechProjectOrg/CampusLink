@@ -1,5 +1,6 @@
 import prisma from '../prisma';
 import { emitToUser } from './realtime';
+import { getUserSummaryById } from './userCache';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -76,25 +77,10 @@ export async function resolveMessagingPermission(
   senderUserId: string,
   recipientUserId: string
 ): Promise<MessagingPermission> {
-  // Fetch recipient profile + settings in one query
-  const rows = await prisma.$queryRaw<
-    { is_private: boolean; allow_messages: boolean | null }[]
-  >`
-    SELECT
-      u.is_private,
-      us.allow_messages
-    FROM users u
-    LEFT JOIN user_settings us ON us.user_id = u.user_id
-    WHERE u.user_id = ${recipientUserId}
-    LIMIT 1
-  `;
-
-  const recipient = rows[0];
+  const recipient = await getUserSummaryById(recipientUserId);
   if (!recipient) return { allowed: false, isRequest: false, reason: 'User not found' };
 
-  // Respect allow_messages setting (defaults true when no settings row)
-  const allowMessages = recipient.allow_messages ?? true;
-  if (!allowMessages) {
+  if (!recipient.allowMessages) {
     return { allowed: false, isRequest: false, reason: 'User does not accept messages' };
   }
 
@@ -105,7 +91,7 @@ export async function resolveMessagingPermission(
   }
 
   // Not mutually following — public accounts accept message requests
-  if (!recipient.is_private) {
+  if (!recipient.isPrivate) {
     return { allowed: true, isRequest: true };
   }
 

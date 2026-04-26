@@ -4,6 +4,7 @@ import {
   cacheDelete,
   cacheGetJson,
   cacheHGetAll,
+  cacheHashSet,
   cacheIncrement,
   cacheMGetJson,
   cacheSetJson,
@@ -12,6 +13,7 @@ import {
   cacheZRem,
   cacheZRevRange,
 } from './cache';
+import { getUserSummariesByIds } from './userCache';
 
 export type DbPostType = 'general' | 'opportunity' | 'event' | 'club_activity';
 export type DbOpportunityType = 'internship' | 'hackathon' | 'event' | 'contest' | 'club';
@@ -121,8 +123,6 @@ export interface FeedPostResponse {
 interface PostSnapshot {
   postId: string;
   authorUserId: string;
-  authorUsername: string;
-  authorProfilePhotoUrl: string | null;
   clubId: string | null;
   postType: DbPostType;
   opportunityType: DbOpportunityType | null;
@@ -226,8 +226,6 @@ function snapshotFromRow(row: FeedPostRow): PostSnapshot {
   return {
     postId: row.post_id,
     authorUserId: row.author_user_id,
-    authorUsername: row.author_username,
-    authorProfilePhotoUrl: row.author_profile_photo_url,
     clubId: row.club_id,
     postType: row.post_type,
     opportunityType: row.opportunity_type,
@@ -248,12 +246,17 @@ function snapshotFromRow(row: FeedPostRow): PostSnapshot {
   };
 }
 
-function rowFromSnapshot(snapshot: PostSnapshot, engagement: EngagementSnapshot, viewerState: { isLiked: boolean; isSaved: boolean }): FeedPostRow {
+function rowFromSnapshot(
+  snapshot: PostSnapshot,
+  author: { username: string; profilePictureUrl: string | null },
+  engagement: EngagementSnapshot,
+  viewerState: { isLiked: boolean; isSaved: boolean },
+): FeedPostRow {
   return {
     post_id: snapshot.postId,
     author_user_id: snapshot.authorUserId,
-    author_username: snapshot.authorUsername,
-    author_profile_photo_url: snapshot.authorProfilePhotoUrl,
+    author_username: author.username,
+    author_profile_photo_url: author.profilePictureUrl,
     club_id: snapshot.clubId,
     post_type: snapshot.postType,
     opportunity_type: snapshot.opportunityType,
@@ -558,10 +561,15 @@ async function getEngagement(postIds: string[]): Promise<Map<string, EngagementS
         saveCount: row.save_count,
       };
       result.set(row.post_id, engagement);
-      await cacheSetJson(`${engagementKey(row.post_id)}:seed`, { seededAt: new Date().toISOString() }, FEED_IDS_TTL_SECONDS);
-      await cacheIncrement(engagementKey(row.post_id), 'likeCount', engagement.likeCount);
-      await cacheIncrement(engagementKey(row.post_id), 'commentCount', engagement.commentCount);
-      await cacheIncrement(engagementKey(row.post_id), 'saveCount', engagement.saveCount);
+      await cacheHashSet(
+        engagementKey(row.post_id),
+        {
+          likeCount: engagement.likeCount,
+          commentCount: engagement.commentCount,
+          saveCount: engagement.saveCount,
+        },
+        FEED_IDS_TTL_SECONDS,
+      );
     }
   }
 
@@ -699,6 +707,9 @@ export async function hydratePosts(viewerUserId: string, postIds: string[]): Pro
   }
 
   const visibleIds = postIds.filter((postId) => snapshots.has(postId));
+  const authorSummaries = await getUserSummariesByIds(
+    visibleIds.map((postId) => snapshots.get(postId)!.authorUserId),
+  );
   const [engagement, viewerState, commentsByPost] = await Promise.all([
     getEngagement(visibleIds),
     getViewerState(viewerUserId, visibleIds),
@@ -707,8 +718,16 @@ export async function hydratePosts(viewerUserId: string, postIds: string[]): Pro
 
   const posts = visibleIds.map((postId) => {
     const snapshot = snapshots.get(postId)!;
+    const authorSummary = authorSummaries.get(snapshot.authorUserId);
+    if (!authorSummary) {
+      return null;
+    }
     const row = rowFromSnapshot(
       snapshot,
+      {
+        username: authorSummary.username,
+        profilePictureUrl: authorSummary.profilePictureUrl,
+      },
       engagement.get(postId) ?? { likeCount: 0, commentCount: 0, saveCount: 0 },
       viewerState.get(postId) ?? { isLiked: false, isSaved: false },
     );
@@ -744,7 +763,7 @@ export async function hydratePosts(viewerUserId: string, postIds: string[]): Pro
       createdAt: row.created_at.toISOString(),
       updatedAt: row.updated_at.toISOString(),
     };
-  });
+  }).filter((post): post is FeedPostResponse => post !== null);
 
   const staleIds = postIds.filter((postId) => !snapshots.has(postId));
   if (staleIds.length > 0) {
