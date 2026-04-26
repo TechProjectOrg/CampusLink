@@ -1,12 +1,11 @@
 import { useState } from 'react';
-import { Plus, Filter, Sparkles } from 'lucide-react';
+import { Plus, Filter } from 'lucide-react';
 import { Opportunity, Student } from '../types';
 import { OpportunityCard } from './OpportunityCard';
 import { ProfileCard } from './ProfileCard';
 import { SuggestionsCard } from './SuggestionsCard';
 import { EmptyState } from './EmptyState';
 import { Button } from './ui/button';
-import { Badge } from './ui/badge';
 import { CreateUnifiedPostModal } from './CreateUnifiedPostModal';
 
 interface FeedPageProps {
@@ -55,21 +54,9 @@ export function FeedPage({
   onViewProfile,
   onViewStudentProfile
 }: FeedPageProps) {
-  const [selectedFilter, setSelectedFilter] = useState<string>('all');
   const [isCreateUnifiedModalOpen, setIsCreateUnifiedModalOpen] = useState(false);
 
-  const filters = [
-    { id: 'all', label: 'All', icon: Sparkles },
-    { id: 'internship', label: 'Internships' },
-    { id: 'hackathon', label: 'Hackathons' },
-    { id: 'event', label: 'Events' },
-    { id: 'contest', label: 'Contests' },
-    { id: 'club', label: 'Club Activities' }
-  ];
-
-  const filteredOpportunities = selectedFilter === 'all'
-    ? opportunities
-    : opportunities.filter(opp => opp.type === selectedFilter);
+  const filteredOpportunities = opportunities;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
@@ -94,9 +81,9 @@ export function FeedPage({
             </div>
 
             {/* Filters */}
-            <div className="glass-morphism rounded-2xl border border-white/50 p-4 shadow-lg hover-lift animate-slide-in-up">
-              {selectedHashtag && (
-                <div className="mb-3 flex items-center gap-2">
+            {selectedHashtag && (
+              <div className="glass-morphism rounded-2xl border border-white/50 p-4 shadow-lg hover-lift animate-slide-in-up">
+                <div className="flex items-center gap-2 mb-3">
                   <Badge className="bg-primary/10 text-primary border-primary/20">#{selectedHashtag}</Badge>
                   <button
                     type="button"
@@ -106,31 +93,8 @@ export function FeedPage({
                     Clear hashtag filter
                   </button>
                 </div>
-              )}
-              <div className="flex items-center gap-2 mb-3">
-                <Filter className="w-5 h-5 text-primary" />
-                <span className="text-gray-900">Filter by:</span>
               </div>
-              <div className="flex flex-wrap gap-2">
-                {filters.map((filter) => {
-                  const Icon = filter.icon;
-                  return (
-                    <Badge
-                      key={filter.id}
-                      onClick={() => setSelectedFilter(filter.id)}
-                      className={`cursor-pointer transition-all duration-300 hover:scale-105 border ${
-                        selectedFilter === filter.id
-                          ? 'gradient-primary text-white shadow-lg scale-105'
-                          : 'bg-white text-gray-700 hover:bg-gray-50 border-primary/20'
-                      }`}
-                    >
-                      {Icon && <Icon className="w-3 h-3 mr-1" />}
-                      {filter.label}
-                    </Badge>
-                  );
-                })}
-              </div>
-            </div>
+            )}
 
             {/* Opportunities List */}
             <div className="space-y-4">
