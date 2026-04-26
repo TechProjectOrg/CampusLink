@@ -181,13 +181,20 @@ const pendingFeedRequests = new Map<string, Promise<UserPost[]>>();
 const pendingPostCommentsRequests = new Map<string, Promise<CommentsPage>>();
 const pendingCommentRepliesRequests = new Map<string, Promise<CommentsPage>>();
 
-export async function apiFetchFeedPosts(token?: string, hashtag?: string): Promise<UserPost[]> {
+export async function apiFetchFeedPosts(
+  token?: string,
+  hashtag?: string,
+  limit = 20,
+  offset = 0,
+): Promise<UserPost[]> {
   const params = new URLSearchParams();
   if (hashtag?.trim()) {
     params.set('hashtag', hashtag.trim());
   }
+  params.set('limit', String(limit));
+  params.set('offset', String(offset));
 
-  const requestKey = `${token ?? 'anonymous'}:${hashtag?.trim() ?? ''}`;
+  const requestKey = `${token ?? 'anonymous'}:${hashtag?.trim() ?? ''}:${limit}:${offset}`;
   const pending = pendingFeedRequests.get(requestKey);
   if (pending) return pending;
 

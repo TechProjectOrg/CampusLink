@@ -71,6 +71,7 @@ import {
 
 const POST_COMMENTS_PAGE_SIZE = 20;
 const COMMENT_REPLIES_PAGE_SIZE = 10;
+const FEED_PAGE_SIZE = 3;
 
 // ============================================================
 // FollowGraph adapter: backend shape → frontend FollowGraph shape
@@ -884,7 +885,7 @@ export default function App() {
 
   const refreshFeedPosts = useCallback(async () => {
     try {
-      await appData.ensureFeed({ force: true });
+      await appData.ensureFeed({ force: true, limit: FEED_PAGE_SIZE, offset: 0 });
     } catch (err) {
       console.error('Failed to fetch feed posts:', err);
     }
@@ -907,6 +908,33 @@ export default function App() {
       console.error('Failed to fetch conversations:', err);
     }
   }, [appData]);
+
+  const loadMoreFeedPosts = useCallback(async () => {
+    if (activeTab !== 'feed') return;
+    if (!auth.isAuthenticated || !authToken) return;
+    if (!feedTimeline?.isHydrated || feedTimeline.isRefreshing || feedTimeline.hasMore === false) return;
+
+    try {
+      await appData.ensureFeed({
+        append: true,
+        limit: FEED_PAGE_SIZE,
+        offset: feedTimeline.nextOffset,
+      });
+    } catch (err) {
+      console.error('Failed to load more feed posts:', err);
+    }
+  }, [activeTab, appData, auth.isAuthenticated, authToken, feedTimeline]);
+
+  const handleFeedScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      const element = event.currentTarget;
+      const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+      if (distanceFromBottom <= 240) {
+        void loadMoreFeedPosts();
+      }
+    },
+    [loadMoreFeedPosts],
+  );
 
   useEffect(() => {
     if (auth.isAuthenticated && authToken) {
@@ -2138,7 +2166,11 @@ export default function App() {
               />
             </div>
             {/* Feed Section (Center) - Expands to fill space */}
-            <div className="px-1 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)] w-full lg:w-3/4 xl:w-1/2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <div
+              className="px-1 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)] w-full lg:w-3/4 xl:w-1/2"
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              onScroll={handleFeedScroll}
+            >
               <FeedPage
                 opportunities={opportunities}
                 isLoading={!feedTimeline?.isHydrated || Boolean(feedTimeline?.isRefreshing && opportunities.length === 0)}

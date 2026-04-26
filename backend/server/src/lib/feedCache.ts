@@ -459,7 +459,8 @@ export async function fetchPostIdsByQuery(
       if (cached) return cached;
     }
 
-    const warmRows = await fetchFeedIdRowsFromDb(viewerUserId, Math.max(query.limit + query.offset, 100), 0);
+    const warmLimit = Math.max(query.limit + query.offset, query.limit);
+    const warmRows = await fetchFeedIdRowsFromDb(viewerUserId, warmLimit, 0);
     await cacheZAddMany(
       feedKey(viewerUserId),
       warmRows.map((row) => ({ score: row.created_at.getTime(), member: row.post_id })),

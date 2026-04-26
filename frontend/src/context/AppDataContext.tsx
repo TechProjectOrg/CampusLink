@@ -50,6 +50,8 @@ interface TimelineState {
   lastFetchedAt: number | null;
   isHydrated: boolean;
   isRefreshing: boolean;
+  hasMore: boolean;
+  nextOffset: number;
   error: string | null;
 }
 
@@ -106,7 +108,7 @@ interface AppDataStore {
   upsertUserProfile: (profile: ApiUserProfile) => Student;
   updateUser: (userId: string, updater: (current: Student) => Student) => void;
   ensureUser: (userId: string, force?: boolean) => Promise<Student | null>;
-  ensureFeed: (options?: { force?: boolean }) => Promise<void>;
+  ensureFeed: (options?: { force?: boolean; limit?: number; offset?: number; append?: boolean }) => Promise<void>;
   ensureHashtagFeed: (hashtag: string, options?: { force?: boolean }) => Promise<void>;
   refreshPost: (postId: string, options?: { insertToTop?: boolean }) => Promise<void>;
   updatePost: (postId: string, updater: (post: UserPost) => UserPost) => void;
@@ -152,6 +154,8 @@ function createInitialState(currentUser: Student | null): AppDataState {
         lastFetchedAt: null,
         isHydrated: false,
         isRefreshing: false,
+        hasMore: true,
+        nextOffset: 0,
         error: null,
       },
     },
@@ -266,6 +270,8 @@ function upsertTimelinePost(state: AppDataState, post: UserPost, key: string, in
     lastFetchedAt: null,
     isHydrated: false,
     isRefreshing: false,
+    hasMore: true,
+    nextOffset: 0,
     error: null,
   };
 
@@ -415,12 +421,20 @@ function createStore(): AppDataStore {
 
   const ensureTimeline = async (
     key: string,
-    fetcher: () => Promise<UserPost[]>,
+    fetcher: (params: { limit: number; offset: number }) => Promise<UserPost[]>,
     freshnessMs: number,
-    force = false,
+    options?: { force?: boolean; limit?: number; offset?: number; append?: boolean },
   ) => {
+    const force = options?.force ?? false;
+    const append = options?.append ?? false;
+    const limit = Math.max(options?.limit ?? 20, 1);
     const timeline = state.timelines[key];
-    if (!force && timeline?.isHydrated && isFresh(timeline.lastFetchedAt, freshnessMs)) {
+    const offset = Math.max(
+      options?.offset ?? (append ? timeline?.nextOffset ?? timeline?.postIds.length ?? 0 : 0),
+      0,
+    );
+
+    if (!append && !force && timeline?.isHydrated && isFresh(timeline.lastFetchedAt, freshnessMs)) {
       return;
     }
     const existing = pendingTimelines.get(key);
@@ -435,6 +449,8 @@ function createStore(): AppDataStore {
           lastFetchedAt: current.timelines[key]?.lastFetchedAt ?? null,
           isHydrated: current.timelines[key]?.isHydrated ?? false,
           isRefreshing: true,
+          hasMore: current.timelines[key]?.hasMore ?? true,
+          nextOffset: current.timelines[key]?.nextOffset ?? 0,
           error: null,
         },
       },
@@ -442,17 +458,21 @@ function createStore(): AppDataStore {
 
     const request = (async () => {
       try {
-        const posts = await fetcher();
+        const posts = await fetcher({ limit, offset });
         mergePosts(posts);
         setState((current) => ({
           ...current,
           timelines: {
             ...current.timelines,
             [key]: {
-              postIds: posts.map((post) => post.id),
+              postIds: append
+                ? upsertUniquePostIds(current.timelines[key]?.postIds ?? [], posts.map((post) => post.id))
+                : posts.map((post) => post.id),
               lastFetchedAt: Date.now(),
               isHydrated: true,
               isRefreshing: false,
+              hasMore: posts.length >= limit,
+              nextOffset: offset + posts.length,
               error: null,
             },
           },
@@ -467,6 +487,8 @@ function createStore(): AppDataStore {
               lastFetchedAt: current.timelines[key]?.lastFetchedAt ?? null,
               isHydrated: current.timelines[key]?.isHydrated ?? false,
               isRefreshing: false,
+              hasMore: current.timelines[key]?.hasMore ?? true,
+              nextOffset: current.timelines[key]?.nextOffset ?? 0,
               error: error instanceof Error ? error.message : 'Unable to load feed',
             },
           },
@@ -604,9 +626,9 @@ function createStore(): AppDataStore {
       if (!authToken) return;
       await ensureTimeline(
         FEED_TIMELINE_KEY,
-        () => apiFetchFeedPosts(authToken),
+        ({ limit, offset }) => apiFetchFeedPosts(authToken, undefined, limit, offset),
         FEED_FRESHNESS_MS,
-        options?.force ?? false,
+        options,
       );
     },
     ensureHashtagFeed: async (hashtag, options) => {
@@ -617,7 +639,7 @@ function createStore(): AppDataStore {
         hashtagTimelineKey(normalized),
         () => apiFetchHashtagPosts(normalized, authToken, 100, 0),
         FEED_FRESHNESS_MS,
-        options?.force ?? false,
+        { force: options?.force ?? false },
       );
     },
     refreshPost: async (postId, options) => {
