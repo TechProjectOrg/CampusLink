@@ -57,7 +57,7 @@ import { getUserSummariesByIds, getUserSummaryById } from '../lib/userCache';
 const router = express.Router();
 router.use(authenticateToken);
 
-const CHAT_PAGE_DEFAULT_LIMIT = 50;
+const CHAT_PAGE_DEFAULT_LIMIT = 12;
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -553,24 +553,25 @@ async function fetchMessagesForRequest(
   const cached = await getCachedRecentMessages(chatId);
   if (cached && cached.length > 0) {
     const selected = cached.slice(-limit);
-    let hasMore = cached.length > limit;
-    if (
-      !hasMore &&
-      cached.length === getChatRecentWindowSize() &&
-      selected.length > 0
-    ) {
-      hasMore = await hasOlderMessagesThan(chatId, selected[0].id);
-    }
+    const hasMore =
+      cached.length > limit ||
+      (selected.length > 0
+        ? await hasOlderMessagesThan(chatId, selected[0].id)
+        : false);
 
     return { messages: selected, hasMore };
   }
 
-  const fresh = await fetchMessageRows(chatId, limit);
+  const warmLimit = Math.max(limit, getChatRecentWindowSize());
+  const fresh = await fetchMessageRows(chatId, warmLimit);
   if (fresh.messages.length > 0) {
     await setCachedRecentMessages(chatId, fresh.messages);
   }
   noteConversationActivity(chatId);
-  return fresh;
+
+  const selected = fresh.messages.slice(-limit);
+  const hasMore = fresh.messages.length > limit || fresh.hasMore;
+  return { messages: selected, hasMore };
 }
 
 async function updateConversationListsForMessage(

@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
-import { MessageCircle, X, Minus, Search, MoreVertical, Smile, Image as ImageIcon, Reply, Flag } from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
+import { MessageCircle, X, Minus, Search, MoreVertical, Smile, Image as ImageIcon, Reply, Flag, ChevronDown } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 import { useAppDataSelector, useAppDataStore } from '../context/AppDataContext';
+import { useBottomAnchoredChatScroll } from '../hooks/useBottomAnchoredChatScroll';
 
 interface FloatingChatProps {
   conversations: ChatConversation[];
@@ -30,6 +31,21 @@ interface FloatingChatProps {
 export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onChatClick, onChatRead }: FloatingChatProps) {
   const appData = useAppDataStore();
   const selectedConversation = useAppDataSelector((state) => state.chat.selectedConversationId);
+  
+  const selectedChat = useAppDataSelector((state) =>
+    selectedConversation ? state.chat.conversationsById[selectedConversation] : null
+  );
+  
+  const selectedChatState = useAppDataSelector((state) =>
+    selectedConversation ? state.chat.messagesByConversationId[selectedConversation] : null
+  );
+
+  const chatMessages = selectedChatState?.messages ?? [];
+  const isLoadingMessages = selectedChatState?.isLoadingInitial ?? false;
+  const isLoadingOlder = selectedChatState?.isLoadingOlder ?? false;
+  const hasMoreMessages = selectedChatState?.hasMore ?? false;
+  const nextCursor = selectedChatState?.nextCursor ?? null;
+
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [messageInput, setMessageInput] = useState('');
@@ -40,11 +56,35 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
   const inputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const readMessageByChatRef = useRef<Record<string, string>>({});
+  const conversationsViewportRef = useRef<HTMLDivElement | null>(null);
+  const handleLoadOlderMessages = useCallback(() => {
+    if (!selectedConversation) return Promise.resolve();
+    return appData.loadOlderMessages(selectedConversation);
+  }, [appData, selectedConversation]);
+
+  const {
+    dismissNewMessageBanner,
+    isChatReady,
+    messagesViewportRef,
+    scrollToLatest,
+    showNewMessageBanner,
+    topSentinelRef,
+  } = useBottomAnchoredChatScroll({
+    conversationId: isOpen && !isMinimized ? selectedConversation : null,
+    messages: chatMessages,
+    isLoadingInitial: isLoadingMessages,
+    isLoadingOlder,
+    hasMore: hasMoreMessages,
+    nextCursor,
+    onLoadOlder: handleLoadOlderMessages,
+    topThreshold: 160,
+    bottomThreshold: 100,
+  });
 
   useEffect(() => {
     if (!selectedConversation) return;
     void appData.ensureConversationMessages(selectedConversation);
-  }, [appData, selectedConversation]);
+  }, [appData, selectedConversation, selectedChatState?.isHydrated]);
 
   const totalUnread = conversations.reduce((sum, conv) => sum + conv.unread, 0);
 
@@ -154,18 +194,6 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
     }, 1500);
   };
 
-  const selectedChat = selectedConversation
-    ? conversations.find(c => c.id === selectedConversation)
-    : null;
-  const selectedChatState = useAppDataSelector((state) =>
-    selectedConversation ? state.chat.messagesByConversationId[selectedConversation] ?? null : null,
-  );
-  const chatMessages = selectedChatState?.messages ?? [];
-  const isLoadingMessages = Boolean(selectedConversation && selectedChatState?.isLoadingInitial);
-
-  const messagesViewportRef = useRef<HTMLDivElement | null>(null);
-  const conversationsViewportRef = useRef<HTMLDivElement | null>(null);
-
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
       const target = e.currentTarget as HTMLElement;
@@ -195,16 +223,6 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
       conversationsEl?.removeEventListener('wheel', handleWheel);
     };
   }, [isOpen, selectedConversation]);
-
-  useEffect(() => {
-    if (messagesViewportRef.current) {
-      try {
-        messagesViewportRef.current.scrollTop = messagesViewportRef.current.scrollHeight;
-      } catch (e) {
-        // ignore
-      }
-    }
-  }, [selectedConversation, chatMessages.length]);
 
   useEffect(() => {
     const interval = window.setInterval(() => setSeenTick(tick => tick + 1), 60000);
@@ -336,13 +354,34 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
             </div>
 
             {/* Messages */}
-            <ScrollArea viewportRef={messagesViewportRef} className="flex-1 overflow-hidden px-4 py-3">
-              {isLoadingMessages && chatMessages.length === 0 ? (
+            <div className="flex-1 relative min-h-0 overflow-hidden px-4 py-3">
+              {showNewMessageBanner && (
+                <button
+                  onClick={() => {
+                    dismissNewMessageBanner();
+                    scrollToLatest('smooth');
+                  }}
+                  className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-primary text-white px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2 z-20 hover:scale-105 transition-all duration-300 animate-in fade-in slide-in-from-bottom-2"
+                >
+                  <ChevronDown className="w-3 h-3" />
+                  <span className="text-xs font-medium">New Messages</span>
+                </button>
+              )}
+              {isLoadingOlder && (
+                <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center py-2">
+                  <div className="rounded-full bg-white/90 p-1.5 shadow-sm">
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-primary" />
+                  </div>
+                </div>
+              )}
+              <ScrollArea viewportRef={messagesViewportRef} className="h-full">
+              {!isChatReady && isLoadingMessages && chatMessages.length === 0 ? (
                 <div className="flex h-full items-center justify-center text-sm text-gray-500">
                   Loading messages...
                 </div>
               ) : (
               <div className="space-y-3">
+                <div ref={topSentinelRef} className="h-px w-full" aria-hidden="true" />
                 {chatMessages.map((msg, index) => {
                   const prevMsg = chatMessages[index - 1];
                   const nextMsg = chatMessages[index + 1];
@@ -472,8 +511,9 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
               </div>
               )}
             </ScrollArea>
+          </div>
 
-            {/* Message Input */}
+          {/* Message Input */}
             <div className="px-4 py-3 border-t">
               {replyingTo && (
                 <div className="mb-3 flex items-center justify-between rounded-xl bg-gray-50 px-3 py-2">

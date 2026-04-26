@@ -1,11 +1,10 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Search, MoreVertical, Info, Image, Smile, CircleDot, Plus, Flag, Ban, Eye, Reply, X, Trash2, Copy } from 'lucide-react';
+import { Send, Search, MoreVertical, Info, Image, Smile, CircleDot, Plus, Flag, Ban, Eye, Reply, X, Trash2, Copy, ChevronDown } from 'lucide-react';
 import { ChatConversation, Student } from '../types';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Badge } from './ui/badge';
-import { ScrollArea } from './ui/scroll-area';
 import { NewChatModal } from './NewChatModal';
 import { GroupInfoPage } from './GroupInfoPage';
 import { apiStartConversation, ChatMessageApi } from '../lib/chatApi';
@@ -20,6 +19,8 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 import { useAppDataSelector, useAppDataStore } from '../context/AppDataContext';
+import { useAuth } from '../context/AuthContext';
+import { useBottomAnchoredChatScroll } from '../hooks/useBottomAnchoredChatScroll';
 
 interface ChatPageProps {
   conversations: ChatConversation[];
@@ -33,20 +34,18 @@ interface ChatPageProps {
 
 export function ChatPage({ conversations, students, currentUserId, onViewProfile, onChatClick, onCreateChat, onChatRead }: ChatPageProps) {
   const appData = useAppDataStore();
+  const auth = useAuth();
   const selectedConversationId = useAppDataSelector((state) => state.chat.selectedConversationId);
   const selectedChat = selectedConversationId ?? conversations[0]?.id ?? null;
   const [message, setMessage] = useState('');
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
   const [viewingGroupInfo, setViewingGroupInfo] = useState<string | null>(null);
-  const [chatReady, setChatReady] = useState<Record<string, boolean>>({});
   const [replyingTo, setReplyingTo] = useState<ChatMessageApi | null>(null);
   const [seenTick, setSeenTick] = useState(0);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const readMessageByChatRef = useRef<Record<string, string>>({});
-  // Flag to differentiate initial load (scroll to bottom) vs loading older messages (preserve scroll)
-  const isInitialLoadRef = useRef<Record<string, boolean>>({});
 
   const selectedConversation = conversations.find(c => c.id === selectedChat);
   const selectedChatState = useAppDataSelector((state) =>
@@ -55,6 +54,30 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   const chatMessages = selectedChatState?.messages ?? [];
   const isLoadingMessages = Boolean(selectedChat && selectedChatState?.isLoadingInitial);
   const isLoadingOlder = Boolean(selectedChat && selectedChatState?.isLoadingOlder);
+  const hasMoreMessages = Boolean(selectedChatState?.hasMore);
+  const nextCursor = selectedChatState?.nextCursor ?? null;
+
+  const handleLoadOlderMessages = useCallback(() => {
+    if (!selectedChat) return Promise.resolve();
+    return appData.loadOlderMessages(selectedChat);
+  }, [appData, selectedChat]);
+
+  const {
+    dismissNewMessageBanner,
+    isChatReady,
+    messagesViewportRef,
+    scrollToLatest,
+    showNewMessageBanner,
+    topSentinelRef,
+  } = useBottomAnchoredChatScroll({
+    conversationId: selectedChat,
+    messages: chatMessages,
+    isLoadingInitial: isLoadingMessages,
+    isLoadingOlder,
+    hasMore: hasMoreMessages,
+    nextCursor,
+    onLoadOlder: handleLoadOlderMessages,
+  });
 
   useEffect(() => {
     if (!selectedConversationId && conversations[0]?.id) {
@@ -64,95 +87,8 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
 
   useEffect(() => {
     if (!selectedChat) return;
-    if (!selectedChatState?.isHydrated) {
-      isInitialLoadRef.current[selectedChat] = true;
-      setChatReady((prev) => ({ ...prev, [selectedChat]: false }));
-    }
     void appData.ensureConversationMessages(selectedChat);
   }, [appData, selectedChat, selectedChatState?.isHydrated]);
-
-  // Load older messages (triggered by scrolling near top)
-  const loadOlderMessages = useCallback(async () => {
-    if (!selectedChat) return;
-    if (!selectedChatState?.hasMore || !selectedChatState.nextCursor || isLoadingOlder) return;
-
-    try {
-      // Save scroll position before prepending
-      const viewport = messagesViewportRef.current;
-      const prevScrollHeight = viewport?.scrollHeight ?? 0;
-      const prevScrollTop = viewport?.scrollTop ?? 0;
-
-      await appData.loadOlderMessages(selectedChat);
-
-      // Restore scroll position after prepend (run after DOM update)
-      requestAnimationFrame(() => {
-        if (viewport) {
-          const newScrollHeight = viewport.scrollHeight;
-          viewport.scrollTop = prevScrollTop + (newScrollHeight - prevScrollHeight);
-        }
-      });
-    } catch (err) {
-      console.error('Failed to load older messages', err);
-    }
-  }, [appData, selectedChat, selectedChatState?.hasMore, selectedChatState?.nextCursor, isLoadingOlder]);
-
-  const messagesViewportRef = useRef<HTMLDivElement | null>(null);
-
-  // Scroll to bottom on initial load or when sending a new message
-  // Also auto-scroll on incoming messages if user is already near the bottom
-  const wasNearBottomRef = useRef(true);
-
-  // Track whether user is near bottom (updated on every scroll)
-  useEffect(() => {
-    const viewport = messagesViewportRef.current;
-    if (!viewport) return;
-
-    const updateNearBottom = () => {
-      const threshold = 150;
-      wasNearBottomRef.current =
-        viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < threshold;
-    };
-
-    viewport.addEventListener('scroll', updateNearBottom, { passive: true });
-    return () => viewport.removeEventListener('scroll', updateNearBottom);
-  }, [selectedChat]);
-
-  useEffect(() => {
-    if (!selectedChat) return;
-    const isInitial = isInitialLoadRef.current[selectedChat];
-    const lastMsg = chatMessages[chatMessages.length - 1];
-    const shouldScroll = isInitial || lastMsg?.isOwn || wasNearBottomRef.current;
-
-    if (shouldScroll && messagesViewportRef.current) {
-      requestAnimationFrame(() => {
-        setTimeout(() => {
-          if (messagesViewportRef.current) {
-            messagesViewportRef.current.scrollTop = messagesViewportRef.current.scrollHeight;
-          }
-          if (isInitial) {
-            isInitialLoadRef.current[selectedChat] = false;
-            setChatReady(prev => ({ ...prev, [selectedChat]: true }));
-          }
-        }, 100);
-      });
-    }
-  }, [selectedChat, chatMessages.length]);
-
-  // Infinite scroll: detect when user scrolls near the top
-  useEffect(() => {
-    const viewport = messagesViewportRef.current;
-    if (!viewport) return;
-
-    const handleScroll = () => {
-      // Trigger load when within 200px of the top
-      if (viewport.scrollTop < 200) {
-        loadOlderMessages();
-      }
-    };
-
-    viewport.addEventListener('scroll', handleScroll, { passive: true });
-    return () => viewport.removeEventListener('scroll', handleScroll);
-  }, [loadOlderMessages]);
 
   useEffect(() => {
     const interval = window.setInterval(() => setSeenTick(tick => tick + 1), 60000);
@@ -552,34 +488,50 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
               </div>
             </div>
 
-            {/* Scrollable Messages */}
-            <div className="flex-1 relative bg-white">
-              {selectedChat && !chatReady[selectedChat] && isLoadingMessages && (
+            {/* Scrollable Messages Area */}
+            <div className="flex-1 relative bg-white min-h-0">
+              {showNewMessageBanner && (
+                <button
+                  onClick={() => {
+                    dismissNewMessageBanner();
+                    scrollToLatest('smooth');
+                  }}
+                  className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-primary text-white px-4 py-2 rounded-full shadow-xl flex items-center gap-2 z-20 hover:scale-105 transition-all duration-300 animate-in fade-in slide-in-from-bottom-4"
+                >
+                  <ChevronDown className="w-4 h-4" />
+                  <span className="text-sm font-medium">New Messages</span>
+                </button>
+              )}
+              {selectedChat && !isChatReady && isLoadingMessages && (
                 <div className="absolute inset-0 flex items-center justify-center bg-white z-10">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                 </div>
               )}
+              {isLoadingOlder && (
+                <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center py-3">
+                  <div className="rounded-full bg-white/90 p-2 shadow-sm">
+                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-primary" />
+                  </div>
+                </div>
+              )}
               <div
                 ref={messagesViewportRef}
+                style={{ overflowAnchor: 'none' }}
                 className={`absolute inset-0 overflow-y-auto transition-opacity duration-300 ${
-                  !selectedChat || chatReady[selectedChat] || !isLoadingMessages ? 'opacity-100' : 'opacity-0'
+                  !selectedChat || isChatReady || !isLoadingMessages ? 'opacity-100' : 'opacity-0'
                 }`}
               >
                 <div className="p-4 md:p-6 space-y-3">
-                {/* Loading older messages spinner */}
-                {isLoadingOlder && (
-                  <div className="flex justify-center py-3">
-                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-primary" />
-                  </div>
-                )}
-                {/* "Beginning of conversation" marker */}
-                {selectedChat && selectedChatState && !selectedChatState.hasMore && chatMessages.length > 0 && (
-                  <div className="flex justify-center py-4">
-                    <span className="text-xs text-gray-400 px-3 py-1 bg-gray-50 rounded-full">
-                      Beginning of conversation
-                    </span>
-                  </div>
-                )}
+                <div ref={topSentinelRef} className="h-px w-full" aria-hidden="true" />
+                <div className="space-y-3">
+                  {/* "Beginning of conversation" marker */}
+                  {selectedChat && selectedChatState && !selectedChatState.hasMore && chatMessages.length > 0 && (
+                    <div className="flex justify-center py-4">
+                      <span className="text-xs text-gray-400 px-3 py-1 bg-gray-50 rounded-full">
+                        Beginning of conversation
+                      </span>
+                    </div>
+                  )}
                 {chatMessages.map((msg, index) => {
                   const prevMsg = chatMessages[index - 1];
                   const nextMsg = chatMessages[index + 1];
@@ -733,6 +685,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                     </div>
                   );
                 })}
+                </div>
                 </div>
               </div>
             </div>
