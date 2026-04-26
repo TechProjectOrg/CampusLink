@@ -62,7 +62,7 @@ export function FeedPage({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      <div className="max-w-7xl mx-auto px-4 pb-6 pt-0">
         <div className="space-y-6">
           {/* Main Feed */}
           <div className="space-y-6">

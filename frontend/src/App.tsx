@@ -2139,7 +2139,7 @@ export default function App() {
           {activeTab === 'feed' ? (
           <div className="flex w-full xl:max-w-7xl">
             {/* Profile Section (Left) - Visible on XL screens and up */}
-             <div className="w-[280px] min-w-[280px] px-2 overflow-y-auto h-[calc(100vh-4rem)] hidden xl:block flex-shrink-0">
+             <div className="hide-scrollbar w-[280px] min-w-[280px] px-1 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)] hidden xl:block flex-shrink-0" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               <ProfileCard
                 student={currentUser}
                 followerCount={currentFollowerCount}
@@ -2148,7 +2148,7 @@ export default function App() {
               />
             </div>
             {/* Feed Section (Center) - Expands to fill space */}
-            <div className="px-2 overflow-y-auto h-[calc(100vh-4rem)] w-full lg:w-3/4 xl:w-1/2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <div className="px-1 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)] w-full lg:w-3/4 xl:w-1/2" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               <FeedPage
                 opportunities={opportunities}
                 currentUserId={currentUserId}
@@ -2173,7 +2173,7 @@ export default function App() {
               />
             </div>
             {/* Suggestions Section (Right) - Visible on LG screens and up */}
-            <div className="w-1/4 px-2 overflow-y-auto h-[calc(100vh-4rem)] hidden lg:block" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <div className="w-1/4 px-1 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)] hidden lg:block" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               <SuggestionsCard
                 students={students}
                 currentUserId={currentUserId}
