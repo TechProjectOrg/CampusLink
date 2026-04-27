@@ -1,0 +1,11 @@
+AGENTS.md        
+GEMINI.md
+CLAUDE.md
+.gemini/
+.opencode/
+.github/
+.codex/
+.claude/
+.agents/
+docs/translations/
+ai-context/
