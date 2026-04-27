@@ -40,6 +40,34 @@ export interface ConversationApiResponse {
   isOnline: boolean;
   lastSeenAt: string | null;
   isRequest: boolean;
+  isGroup?: boolean;
+}
+
+export async function apiCreateGroupConversation(
+  name: string,
+  description: string,
+  memberIds: string[],
+  token: string,
+): Promise<{ chatId: string }> {
+  const response = await fetch(`${API_BASE_URL}/group-chat/create`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      name,
+      description,
+      memberIds,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || error.message || 'Failed to create group chat');
+  }
+
+  return response.json();
 }
 
 export async function apiFetchConversations(token: string, type: 'active' | 'requests' = 'active'): Promise<ConversationApiResponse[]> {

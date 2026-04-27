@@ -905,24 +905,26 @@ function createStore(): AppDataStore {
         try {
           const conversations = (await apiFetchConversations(authToken, 'active')) as ConversationApiResponse[];
           const mapped = sortConversationsByTimestamp(conversations as ChatConversation[]);
-          const users = mapped.map((conversation) => ({
-            id: conversation.participantId,
-            name: conversation.participantName,
-            username: conversation.participantName,
-            email: '',
-            branch: 'Unknown',
-            year: 0,
-            avatar: conversation.participantAvatar || undefined,
-            bio: '',
-            skills: [],
-            interests: [],
-            certifications: [],
-            experience: [],
-            societies: [],
-            achievements: [],
-            projects: [],
-            accountType: 'public' as const,
-          }));
+          const users = mapped
+            .filter((conversation) => !conversation.isGroup)
+            .map((conversation) => ({
+              id: conversation.participantId,
+              name: conversation.participantName,
+              username: conversation.participantName,
+              email: '',
+              branch: 'Unknown',
+              year: 0,
+              avatar: conversation.participantAvatar || undefined,
+              bio: '',
+              skills: [],
+              interests: [],
+              certifications: [],
+              experience: [],
+              societies: [],
+              achievements: [],
+              projects: [],
+              accountType: 'public' as const,
+            }));
           mergeUsers(users);
           setConversations(mapped);
         } catch (error) {

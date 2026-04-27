@@ -6,7 +6,6 @@
 
 import express, { type Request, Response } from 'express';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
-import { checkChatPermission, ChatPermission } from '../lib/chatPermissions';
 import {
   createGroupChat,
   addUserToChat,
@@ -18,7 +17,6 @@ import {
   leaveGroupChat,
 } from '../lib/groupChat';
 import { validateChatAccess, validateActiveChatAccess } from '../lib/chatMembership';
-import { invalidateConversationLists } from '../lib/chatCache';
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -30,7 +28,7 @@ router.use(authenticateToken);
 router.post('/create', async (req: AuthedRequest, res: Response) => {
   try {
     const { name, description, memberIds } = req.body;
-    const userId = req.user!.userId;
+    const userId = req.auth!.userId;
 
     if (!name || typeof name !== 'string' || name.trim().length === 0) {
       return res.status(400).json({ error: 'Group name is required' });
@@ -61,8 +59,8 @@ router.post('/create', async (req: AuthedRequest, res: Response) => {
 router.post('/:chatId/add-member', async (req: AuthedRequest, res: Response) => {
   try {
     const { userId: targetUserId, role } = req.body;
-    const { chatId } = req.params;
-    const actorId = req.user!.userId;
+    const chatId = String(req.params.chatId);
+    const actorId = req.auth!.userId;
 
     if (!targetUserId || typeof targetUserId !== 'string') {
       return res.status(400).json({ error: 'targetUserId is required' });
@@ -95,8 +93,8 @@ router.post('/:chatId/add-member', async (req: AuthedRequest, res: Response) => 
 router.post('/:chatId/remove-member', async (req: AuthedRequest, res: Response) => {
   try {
     const { userId: targetUserId, reason } = req.body;
-    const { chatId } = req.params;
-    const actorId = req.user!.userId;
+    const chatId = String(req.params.chatId);
+    const actorId = req.auth!.userId;
 
     if (!targetUserId || typeof targetUserId !== 'string') {
       return res.status(400).json({ error: 'targetUserId is required' });
@@ -124,8 +122,8 @@ router.post('/:chatId/remove-member', async (req: AuthedRequest, res: Response) 
  */
 router.post('/:chatId/leave', async (req: AuthedRequest, res: Response) => {
   try {
-    const { chatId } = req.params;
-    const userId = req.user!.userId;
+    const chatId = String(req.params.chatId);
+    const userId = req.auth!.userId;
 
     // Validate user is a member
     await validateActiveChatAccess(userId, chatId);
@@ -147,8 +145,8 @@ router.post('/:chatId/leave', async (req: AuthedRequest, res: Response) => {
 router.post('/:chatId/change-role', async (req: AuthedRequest, res: Response) => {
   try {
     const { userId: targetUserId, newRole } = req.body;
-    const { chatId } = req.params;
-    const actorId = req.user!.userId;
+    const chatId = String(req.params.chatId);
+    const actorId = req.auth!.userId;
 
     if (!targetUserId || typeof targetUserId !== 'string') {
       return res.status(400).json({ error: 'targetUserId is required' });
@@ -184,8 +182,8 @@ router.post('/:chatId/change-role', async (req: AuthedRequest, res: Response) =>
 router.put('/:chatId', async (req: AuthedRequest, res: Response) => {
   try {
     const { name, description, avatarUrl } = req.body;
-    const { chatId } = req.params;
-    const userId = req.user!.userId;
+    const chatId = String(req.params.chatId);
+    const userId = req.auth!.userId;
 
     // Validate user's access
     await validateActiveChatAccess(userId, chatId);
@@ -213,8 +211,8 @@ router.put('/:chatId', async (req: AuthedRequest, res: Response) => {
  */
 router.delete('/:chatId', async (req: AuthedRequest, res: Response) => {
   try {
-    const { chatId } = req.params;
-    const userId = req.user!.userId;
+    const chatId = String(req.params.chatId);
+    const userId = req.auth!.userId;
 
     // Validate user's access
     await validateActiveChatAccess(userId, chatId);
@@ -238,8 +236,8 @@ router.delete('/:chatId', async (req: AuthedRequest, res: Response) => {
  */
 router.get('/:chatId/members', async (req: AuthedRequest, res: Response) => {
   try {
-    const { chatId } = req.params;
-    const userId = req.user!.userId;
+    const chatId = String(req.params.chatId);
+    const userId = req.auth!.userId;
 
     // Validate user can access this chat
     await validateChatAccess(userId, chatId);

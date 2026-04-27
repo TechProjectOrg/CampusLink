@@ -14,7 +14,7 @@ interface NewChatModalProps {
   students: Student[];
   currentUserId: string;
   onStartChat: (studentId: string) => void;
-  onCreateGroup: (name: string, description: string, memberIds: string[]) => void;
+  onCreateGroup: (name: string, description: string, memberIds: string[]) => Promise<void> | void;
 }
 
 export function NewChatModal({
@@ -49,9 +49,9 @@ export function NewChatModal({
     );
   };
 
-  const handleCreateGroup = () => {
+  const handleCreateGroup = async () => {
     if (groupName.trim() && selectedMembers.length > 0) {
-      onCreateGroup(groupName, groupDescription, selectedMembers);
+      await onCreateGroup(groupName, groupDescription, selectedMembers);
       handleClose();
     }
   };

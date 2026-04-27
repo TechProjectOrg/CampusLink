@@ -68,7 +68,10 @@ interface ConversationBaseRow {
   chat_id: string;
   is_request: boolean;
   updated_at: Date;
-  other_user_id: string;
+  chat_type: string;
+  chat_name: string | null;
+  avatar_url: string | null;
+  other_user_id: string | null;
 }
 
 interface ConversationUnreadRow {
@@ -135,17 +138,29 @@ async function fetchConversationBaseRows(
       c.chat_id,
       c.is_request,
       c.updated_at,
+      c.chat_type,
+      c.name AS chat_name,
+      c.avatar_url,
       cp_other.user_id AS other_user_id
     FROM chats c
     JOIN chat_participants cp_me
       ON cp_me.chat_id = c.chat_id
      AND cp_me.user_id = ${userId}
      AND cp_me.left_at IS NULL
-    JOIN chat_participants cp_other
-      ON cp_other.chat_id = c.chat_id
-     AND cp_other.user_id != ${userId}
-     AND cp_other.left_at IS NULL
+    LEFT JOIN LATERAL (
+      SELECT cp.user_id
+      FROM chat_participants cp
+      WHERE cp.chat_id = c.chat_id
+        AND cp.user_id != ${userId}
+        AND cp.left_at IS NULL
+      ORDER BY cp.joined_at ASC
+      LIMIT 1
+    ) cp_other ON TRUE
     WHERE c.is_request = ${isRequest}
+      AND (
+        c.chat_type != 'direct'
+        OR cp_other.user_id IS NOT NULL
+      )
     ORDER BY c.updated_at DESC
   `;
 }
@@ -194,7 +209,10 @@ async function buildConversationListEntries(
   const rows = await fetchConversationBaseRows(userId, isRequest);
   const conversationIds = rows.map((row) => row.chat_id);
   const latestMessages = await fetchLatestMessagesForConversations(conversationIds);
-  const summaries = await getUserSummariesByIds(rows.map((row) => row.other_user_id));
+  const directParticipantIds = rows
+    .map((row) => row.other_user_id)
+    .filter((value): value is string => Boolean(value));
+  const summaries = await getUserSummariesByIds(directParticipantIds);
   const unreadCounts = await fetchConversationUnreadRows(userId, conversationIds);
 
   await Promise.all(
@@ -208,7 +226,10 @@ async function buildConversationListEntries(
           : 'No messages yet',
         lastMessageAt: latestMessage?.timestamp ?? row.updated_at.toISOString(),
         isRequest: row.is_request,
-        participantIds: [userId, row.other_user_id].sort(),
+        participantIds:
+          row.chat_type === 'direct' && row.other_user_id
+            ? [userId, row.other_user_id].sort()
+            : await getChatParticipantIds(row.chat_id),
         lastNonDeletedMessageId: latestMessage?.id ?? null,
       };
       await setConversationMeta(row.chat_id, meta);
@@ -225,10 +246,25 @@ async function buildConversationListEntries(
 
   return rows
     .map((row) => {
-      const participant = summaries.get(row.other_user_id);
-      if (!participant) return null;
-
       const latestMessage = latestMessages.get(row.chat_id);
+      if (row.chat_type === 'group') {
+        return {
+          id: row.chat_id,
+          participantId: row.chat_id,
+          participantName: row.chat_name ?? 'Group chat',
+          participantAvatar: row.avatar_url,
+          lastMessage: latestMessage
+            ? formatMessagePreview(latestMessage.type, latestMessage.content)
+            : 'No messages yet',
+          timestamp: latestMessage?.timestamp ?? row.updated_at.toISOString(),
+          isRequest: row.is_request,
+          isGroup: true,
+        };
+      }
+
+      const participant = row.other_user_id ? summaries.get(row.other_user_id) : null;
+      if (!participant || !row.other_user_id) return null;
+
       return {
         id: row.chat_id,
         participantId: row.other_user_id,

@@ -131,7 +131,7 @@ export async function onUserJoinedClub(
   }
 
   // Invalidate conversation list
-  await invalidateConversationLists(userId);
+  await invalidateConversationLists([userId]);
 }
 
 /**
@@ -162,7 +162,7 @@ export async function onUserLeftClub(userId: string, clubId: string): Promise<vo
   `;
 
   // Invalidate conversation list
-  await invalidateConversationLists(userId);
+  await invalidateConversationLists([userId]);
 }
 
 /**
@@ -198,7 +198,7 @@ export async function onUserClubRoleChanged(
   `;
 
   // Invalidate conversation list
-  await invalidateConversationLists(userId);
+  await invalidateConversationLists([userId]);
 }
 
 /**
@@ -224,7 +224,7 @@ export async function onClubDeleted(clubId: string): Promise<void> {
   `;
 
   for (const row of participantRows) {
-    await invalidateConversationLists(row.user_id);
+    await invalidateConversationLists([row.user_id]);
   }
 
   // Delete chat (cascade deletes messages, participants)

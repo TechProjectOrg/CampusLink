@@ -30,60 +30,60 @@ export async function createGroupChat(
   description?: string,
   memberIds: string[] = [],
 ): Promise<string> {
-  // Create chat
-  const chatRows = await prisma.$queryRaw<{ chat_id: string }[]>`
-    INSERT INTO chats (
-      chat_type,
-      name,
-      description,
-      created_by_user_id
-    ) VALUES (
-      'group',
-      ${name},
-      ${description ?? null},
-      ${creatorId}
-    )
-    RETURNING chat_id
-  `;
-
-  const chatId = chatRows[0]?.chat_id;
-  if (!chatId) throw new Error('Failed to create group chat');
-
-  // Add creator as OWNER
-  const now = new Date().toISOString();
-  await prisma.$queryRaw`
-    INSERT INTO chat_participants (
-      chat_id,
-      user_id,
-      role,
-      joined_at
-    ) VALUES (
-      ${chatId},
-      ${creatorId},
-      'owner',
-      ${now}
-    )
-  `;
-
-  // Add other members (deduplicate and exclude creator)
   const uniqueMembers = Array.from(new Set(memberIds.filter((id) => id !== creatorId)));
-  if (uniqueMembers.length > 0) {
-    const values = uniqueMembers.map((memberId) => `('${chatId}', '${memberId}', 'member', '${now}')`).join(',');
 
-    await prisma.$queryRaw`
-      INSERT INTO chat_participants (chat_id, user_id, role, joined_at)
-      VALUES ${values}
-      ON CONFLICT (chat_id, user_id) DO NOTHING
+  const chatId = await prisma.$transaction(async (tx) => {
+    const chatRows = await tx.$queryRaw<{ chat_id: string }[]>`
+      INSERT INTO chats (
+        chat_type,
+        name,
+        description,
+        created_by_user_id
+      ) VALUES (
+        'group',
+        ${name},
+        ${description ?? null},
+        ${creatorId}
+      )
+      RETURNING chat_id
     `;
 
-    // Emit join events for each member
+    const createdChatId = chatRows[0]?.chat_id;
+    if (!createdChatId) throw new Error('Failed to create group chat');
+
+    const now = new Date().toISOString();
+    await tx.$queryRaw`
+      INSERT INTO chat_participants (
+        chat_id,
+        user_id,
+        role,
+        joined_at
+      ) VALUES (
+        ${createdChatId},
+        ${creatorId},
+        'owner',
+        ${now}
+      )
+    `;
+
     for (const memberId of uniqueMembers) {
-      await emitUserJoined(chatId, memberId);
+      await tx.$queryRaw`
+        INSERT INTO chat_participants (chat_id, user_id, role, joined_at)
+        VALUES (${createdChatId}, ${memberId}, 'member', ${now})
+      `;
     }
+
+    return createdChatId;
+  });
+
+  for (const memberId of uniqueMembers) {
+    await emitUserJoined(chatId, memberId);
   }
 
-  // Invalidate creator's conversation list
-  await invalidateConversationLists(creatorId);
+  await invalidateConversationLists([creatorId]);
+  for (const memberId of uniqueMembers) {
+    await invalidateConversationLists([memberId]);
+  }
 
   return chatId;
 }
@@ -137,8 +137,8 @@ export async function addUserToChat(
   await emitUserJoined(chatId, targetUserId);
 
   // Invalidate both users' conversation lists
-  await invalidateConversationLists(actorUserId);
-  await invalidateConversationLists(targetUserId);
+  await invalidateConversationLists([actorUserId]);
+  await invalidateConversationLists([targetUserId]);
 }
 
 /**
@@ -176,9 +176,9 @@ export async function removeUserFromChat(
   }
 
   // Invalidate conversation lists
-  await invalidateConversationLists(actorUserId);
+  await invalidateConversationLists([actorUserId]);
   if (actorUserId !== targetUserId) {
-    await invalidateConversationLists(targetUserId);
+    await invalidateConversationLists([targetUserId]);
   }
 }
 
@@ -232,7 +232,7 @@ export async function changeUserRole(
   await emitUserRoleChanged(chatId, targetUserId, currentRole, newRole, actorUserId);
 
   // Invalidate conversation lists
-  await invalidateConversationLists(targetUserId);
+  await invalidateConversationLists([targetUserId]);
 }
 
 /**
@@ -254,35 +254,46 @@ export async function updateGroupChat(
   // Check permission
   await checkChatPermission(actorUserId, chatId, ChatPermission.UPDATE_CHAT_SETTINGS);
 
-  // Build dynamic update query
-  const setClauses: string[] = [];
-  const values: Record<string, unknown> = { chatId };
-
-  if (updates.name !== undefined) {
-    setClauses.push('name = :name');
-    values.name = updates.name;
-  }
-  if (updates.description !== undefined) {
-    setClauses.push('description = :description');
-    values.description = updates.description;
-  }
-  if (updates.avatarUrl !== undefined) {
-    setClauses.push('avatar_url = :avatarUrl');
-    values.avatarUrl = updates.avatarUrl;
+  if (
+    updates.name === undefined &&
+    updates.description === undefined &&
+    updates.avatarUrl === undefined
+  ) {
+    return;
   }
 
-  if (setClauses.length === 0) return; // Nothing to update
+  const existingRows = await prisma.$queryRaw<
+    {
+      name: string | null;
+      description: string | null;
+      avatar_url: string | null;
+    }[]
+  >`
+    SELECT name, description, avatar_url
+    FROM chats
+    WHERE chat_id = ${chatId}
+    LIMIT 1
+  `;
+
+  const existing = existingRows[0];
+  if (!existing) {
+    throw new Error(`Chat ${chatId} not found`);
+  }
 
   await prisma.$queryRaw`
     UPDATE chats
-    SET ${setClauses.join(', ')}, updated_at = NOW()
-    WHERE chat_id = :chatId
+    SET
+      name = ${updates.name ?? existing.name},
+      description = ${updates.description ?? existing.description},
+      avatar_url = ${updates.avatarUrl ?? existing.avatar_url},
+      updated_at = NOW()
+    WHERE chat_id = ${chatId}
   `;
 
   // Invalidate all participants' conversation lists
   const participantIds = await getChatParticipantIds(chatId);
   for (const participantId of participantIds) {
-    await invalidateConversationLists(participantId);
+    await invalidateConversationLists([participantId]);
   }
 }
 
@@ -301,7 +312,7 @@ export async function deleteGroupChat(actorUserId: string, chatId: string): Prom
   // Invalidate all participants' conversation lists BEFORE deleting
   const participantIds = await getChatParticipantIds(chatId);
   for (const participantId of participantIds) {
-    await invalidateConversationLists(participantId);
+    await invalidateConversationLists([participantId]);
   }
 
   // Delete (cascade will clean up participants, messages, etc)

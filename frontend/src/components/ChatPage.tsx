@@ -7,7 +7,11 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { NewChatModal } from './NewChatModal';
 import { GroupInfoPage } from './GroupInfoPage';
-import { apiStartConversation, ChatMessageApi } from '../lib/chatApi';
+import {
+  apiCreateGroupConversation,
+  apiStartConversation,
+  ChatMessageApi,
+} from '../lib/chatApi';
 import { REACTION_EMOJIS, formatSeenTime, summarizeReply } from '../lib/chatUi';
 import { EmojiPicker } from './chat/EmojiPicker';
 import { Popover, PopoverContent, PopoverTrigger } from './ui/popover';
@@ -305,25 +309,19 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     }
   };
 
-  const handleCreateGroup = (name: string, description: string, memberIds: string[]) => {
-    // Create new group conversation (this would ideally trigger an update in App.tsx)
-    const newGroupId = `group${Date.now()}`;
-    const newGroup: ChatConversation = {
-      id: newGroupId,
-      participantId: newGroupId,
-      participantName: name,
-      participantAvatar: undefined,
-      lastMessage: 'Group created',
-      timestamp: new Date().toISOString(),
-      unread: 0,
-      isGroup: true,
-      groupMembers: [currentUserId, ...memberIds]
-    };
+  const handleCreateGroup = async (name: string, description: string, memberIds: string[]) => {
+    try {
+      const token = auth.session?.token;
+      if (!token) return;
 
-    // For now, we're not adding to `conversations` here, as `App.tsx` owns that state.
-    appData.upsertConversation(newGroup);
-    appData.selectConversation(newGroup.id);
-    setIsNewChatOpen(false);
+      const { chatId } = await apiCreateGroupConversation(name, description, memberIds, token);
+      await appData.ensureConversations({ force: true });
+      appData.selectConversation(chatId);
+      setIsNewChatOpen(false);
+    } catch (err: any) {
+      console.error('Failed to create group chat:', err);
+      window.alert(err?.message || 'Failed to create group chat');
+    }
   };
 
   const handleDeleteMessage = async (msg: ChatMessageApi) => {

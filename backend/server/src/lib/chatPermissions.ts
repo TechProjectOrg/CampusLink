@@ -107,7 +107,8 @@ export async function checkChatPermission(
       throw new Error(`User ${userId} is not a member of club ${clubId}`);
     }
 
-    const clubPermissions = ROLE_PERMISSIONS[clubRole] ?? [];
+    const normalizedClubRole = clubRole.toUpperCase() as ChatParticipantRole;
+    const clubPermissions = ROLE_PERMISSIONS[normalizedClubRole] ?? [];
     if (!clubPermissions.includes(permission)) {
       throw new Error(
         `User ${userId} with club role ${clubRole} lacks permission ${permission} in club chat`,
