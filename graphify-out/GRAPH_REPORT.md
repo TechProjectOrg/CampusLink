@@ -1,11 +1,11 @@
 # Graph Report - final-year-project  (2026-04-27)
 
 ## Corpus Check
-- 135 files · ~105,029 words
+- 135 files · ~105,207 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 858 nodes · 1229 edges · 33 communities detected
+- 860 nodes · 1232 edges · 33 communities detected
 - Extraction: 88% EXTRACTED · 12% INFERRED · 0% AMBIGUOUS · INFERRED: 142 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
@@ -31,7 +31,7 @@
 - [[_COMMUNITY_Community 19|Community 19]]
 - [[_COMMUNITY_Community 22|Community 22]]
 - [[_COMMUNITY_Community 27|Community 27]]
-- [[_COMMUNITY_Community 29|Community 29]]
+- [[_COMMUNITY_Community 30|Community 30]]
 - [[_COMMUNITY_Community 33|Community 33]]
 - [[_COMMUNITY_Community 35|Community 35]]
 - [[_COMMUNITY_Community 38|Community 38]]
@@ -57,16 +57,16 @@
 10. `cacheAndEmitMessage()` - 11 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `cacheDelete()` --calls--> `invalidateConversationLists()`  [INFERRED]
-  backend\server\src\lib\cache.ts → backend\server\src\lib\chatCache.ts
-- `cacheDelete()` --calls--> `invalidateConversationLists()`  [INFERRED]
-  backend\server\src\lib\cache.ts → backend\server\src\lib\userCache.ts
 - `getUserSummariesByIds()` --calls--> `formatMessagesForResponse()`  [INFERRED]
   backend\server\src\lib\userCache.ts → backend\server\src\routes\chat.ts
 - `loadPosts()` --calls--> `apiFetchProfilePosts()`  [INFERRED]
   frontend\src\components\ProfilePage.tsx → frontend\src\lib\postsApi.ts
 - `Legacy SQL Social Schema` --semantically_similar_to--> `Frontend Copy of Legacy SQL Social Schema`  [INFERRED] [semantically similar]
   database/DATABASE_README.md → frontend/database/DATABASE_README.md
+- `Legacy Database Bootstrap` --semantically_similar_to--> `Frontend Copy of Legacy Database Bootstrap`  [INFERRED] [semantically similar]
+  database/QUICKSTART.md → frontend/database/QUICKSTART.md
+- `cacheGetJson()` --calls--> `getCachedConversationList()`  [INFERRED]
+  backend\server\src\lib\cache.ts → backend\server\src\lib\userCache.ts
 
 ## Communities
 
@@ -76,11 +76,11 @@ Nodes (40): areStringArraysEqual(), buildCreatePostPayloadFromDraft(), createIni
 
 ### Community 1 - "Community 1"
 Cohesion: 0.07
-Nodes (53): cacheGetJson(), cacheHashGet(), cacheHashMultiGet(), parseJson(), buildConversationListEntries(), cacheAndEmitMessage(), fetchConversationBaseRows(), fetchConversationUnreadRows() (+45 more)
+Nodes (52): cacheGetJson(), cacheHashGet(), cacheHashMultiGet(), parseJson(), buildConversationListEntries(), cacheAndEmitMessage(), fetchConversationBaseRows(), fetchConversationUnreadRows() (+44 more)
 
 ### Community 2 - "Community 2"
-Cohesion: 0.08
-Nodes (49): appendStreamMessage(), cacheDelete(), cacheExpire(), cacheHashDelete(), cacheHashIncrementBy(), cacheHashSet(), cacheHGetAll(), cacheIncrement() (+41 more)
+Cohesion: 0.07
+Nodes (49): appendStreamMessage(), cacheDelete(), cacheExpire(), cacheHashDelete(), cacheHashIncrementBy(), cacheHashSet(), cacheIncrement(), cacheSetJson() (+41 more)
 
 ### Community 3 - "Community 3"
 Cohesion: 0.06
@@ -96,7 +96,7 @@ Nodes (23): areUsersMutuallyFollowing(), emitChatDelete(), emitChatMessage(), em
 
 ### Community 6 - "Community 6"
 Cohesion: 0.11
-Nodes (20): hydrateOrderedUsers(), mapMinimalUserFromSummary(), searchUsers(), chatConversationListKey(), fetchUserStatsByIdsFromDb(), fetchUserSummariesByIdsFromDb(), getCachedConversationList(), getUserStatsById() (+12 more)
+Nodes (21): cacheHGetAll(), hydrateOrderedUsers(), mapMinimalUserFromSummary(), searchUsers(), chatConversationListKey(), fetchUserStatsByIdsFromDb(), fetchUserSummariesByIdsFromDb(), getCachedConversationList() (+13 more)
 
 ### Community 7 - "Community 7"
 Cohesion: 0.16
@@ -107,12 +107,12 @@ Cohesion: 0.17
 Nodes (21): handleCreateClubPost(), apiAddComment(), apiAddReply(), apiCreateUserPost(), apiDeleteComment(), apiDeletePost(), apiFetchCommentContext(), apiFetchHashtagPosts() (+13 more)
 
 ### Community 9 - "Community 9"
-Cohesion: 0.13
-Nodes (14): buildResponseWithToken(), createAuthSession(), describeDevice(), detectBrowser(), detectPlatform(), getClientIp(), getJwtSecret(), getSingleHeaderValue() (+6 more)
+Cohesion: 0.12
+Nodes (17): canViewerAccessClubPost(), ensureUniqueClubSlug(), getClubPermissionSnapshot(), loadClubAccess(), normalizeClubCategoryName(), normalizeClubTagName(), parseActiveRestrictions(), resolveOrCreateClubCategory() (+9 more)
 
 ### Community 10 - "Community 10"
 Cohesion: 0.13
-Nodes (16): canViewerAccessClubPost(), ensureUniqueClubSlug(), getClubPermissionSnapshot(), loadClubAccess(), normalizeClubCategoryName(), normalizeClubTagName(), resolveOrCreateClubCategory(), slugifyClubName() (+8 more)
+Nodes (14): buildResponseWithToken(), createAuthSession(), describeDevice(), detectBrowser(), detectPlatform(), getClientIp(), getJwtSecret(), getSingleHeaderValue() (+6 more)
 
 ### Community 11 - "Community 11"
 Cohesion: 0.23
@@ -154,7 +154,7 @@ Nodes (2): mergeConversationPreviewOnMessage(), sortConversationsByTimestamp()
 Cohesion: 0.47
 Nodes (4): Assert-Status(), Assert-True(), Get-ResponseContent(), Invoke-JsonRequest()
 
-### Community 29 - "Community 29"
+### Community 30 - "Community 30"
 Cohesion: 0.53
 Nodes (4): FormControl(), FormDescription(), FormMessage(), useFormField()
 
