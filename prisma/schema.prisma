@@ -188,7 +188,8 @@ model UserSetting {
   weeklyDigestEnabled         Boolean  @default(false) @map("weekly_digest_enabled")
   showEmail                   Boolean  @default(true) @map("show_email")
   showProjects                Boolean  @default(true) @map("show_projects")
-  allowMessages               Boolean  @default(true) @map("allow_messages")
+    groupAddPreference          String   @default("everyone") @map("group_add_preference") @db.VarChar(20)
+    allowMessages               Boolean  @default(true) @map("allow_messages")
   createdAt                   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt                   DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
   user                        User     @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
@@ -562,6 +563,8 @@ model Chat {
   chatId           String            @id @default(dbgenerated("gen_random_uuid()")) @map("chat_id") @db.Uuid
   chatType         ChatType          @map("chat_type")
   name             String?           @db.VarChar(255)
+    description      String?           @db.Text
+    groupMetadata    Json              @default("{}") @map("group_metadata") @db.JsonB
   avatarUrl        String?           @map("avatar_url") @db.Text
   isRequest        Boolean           @default(false) @map("is_request")
   createdByUserId  String?           @map("created_by_user_id") @db.Uuid
@@ -605,6 +608,7 @@ model Message {
   createdAt               DateTime           @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt               DateTime           @updatedAt @map("updated_at") @db.Timestamp(6)
   deletedAt               DateTime?          @map("deleted_at") @db.Timestamp(6)
+    messageSequence         BigInt?            @map("message_sequence")
   chat                    Chat               @relation(fields: [chatId], references: [chatId], onDelete: Cascade, onUpdate: NoAction)
   sender                  User               @relation("MessageSender", fields: [senderUserId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
   replyToMessage          Message?           @relation("MessageReplies", fields: [replyToMessageId], references: [messageId], onDelete: SetNull, onUpdate: NoAction)
@@ -615,6 +619,7 @@ model Message {
   @@index([chatId], map: "idx_messages_chat_id")
   @@index([senderUserId], map: "idx_messages_sender_user_id")
   @@index([replyToMessageId], map: "idx_messages_reply_to_message_id")
+    @@index([chatId, messageSequence], map: "idx_messages_chat_sequence")
   @@map("messages")
 }
 
