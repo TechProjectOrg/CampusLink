@@ -7,7 +7,6 @@ import {
   ensureUniqueClubSlug,
   getClubPermissionSnapshot,
   normalizeClubCategoryName,
-  requireActiveClubMembership,
   resolveOrCreateClubCategory,
   upsertClubTags,
 } from '../lib/clubs';
@@ -421,10 +420,6 @@ router.post(
         deleteManagedClubMediaByUrl(coverImageUrl),
       ]);
 
-      if (isUniqueConstraintError(err, 'clubs_name_key')) {
-        return res.status(409).json({ message: 'A club with this name already exists' });
-      }
-
       if (isUniqueConstraintError(err, 'clubs_slug_key')) {
         return res.status(409).json({ message: 'A club with a similar name already exists. Try a different name.' });
       }
@@ -524,6 +519,235 @@ router.get('/:clubId/posts', async (req: Request<{ clubId: string }>, res: Respo
     return res.status(200).json(posts.filter((post) => post.clubId === req.params.clubId));
   } catch (err) {
     console.error('Error loading club posts:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.patch(
+  '/:clubId',
+  clubMediaUpload.fields([
+    { name: 'avatar', maxCount: 1 },
+    { name: 'coverImage', maxCount: 1 },
+  ]),
+  async (req: Request<{ clubId: string }>, res: Response) => {
+    const viewerUserId = getAuthedUserId(req);
+    const permissions = await getClubPermissionSnapshot(req.params.clubId, viewerUserId);
+    if (!permissions?.canManageClub) {
+      return res.status(403).json({ message: 'You are not allowed to update this club' });
+    }
+
+    let payload: any = req.body;
+    if (typeof req.body?.payload === 'string') {
+      try {
+        payload = JSON.parse(req.body.payload);
+      } catch {
+        return res.status(400).json({ message: 'Invalid JSON payload' });
+      }
+    }
+
+    const name = typeof payload?.name === 'string' ? payload.name.trim() : undefined;
+    const shortDescription = typeof payload?.shortDescription === 'string' ? payload.shortDescription.trim() : undefined;
+    const description = typeof payload?.description === 'string' ? payload.description.trim() : undefined;
+    const privacy = typeof payload?.privacy === 'string' ? payload.privacy.trim().toLowerCase() as 'open' | 'request' | 'private' : undefined;
+    const primaryCategory = typeof payload?.primaryCategory === 'string' ? payload.primaryCategory.trim() : undefined;
+    const tags = Array.isArray(payload?.tags)
+      ? payload.tags.map((tag: unknown) => String(tag).trim()).filter(Boolean)
+      : undefined;
+    const removeAvatar = Boolean(payload?.removeAvatar);
+    const removeCoverImage = Boolean(payload?.removeCoverImage);
+
+    if (privacy && !['open', 'request', 'private'].includes(privacy)) {
+      return res.status(400).json({ message: 'privacy must be open, request, or private' });
+    }
+
+    const files = req.files as Record<string, Express.Multer.File[]> | undefined;
+    const avatarFile = files?.avatar?.[0] ?? null;
+    const coverImageFile = files?.coverImage?.[0] ?? null;
+
+    if ((avatarFile && !avatarFile.mimetype.startsWith('image/')) || (coverImageFile && !coverImageFile.mimetype.startsWith('image/'))) {
+      return res.status(400).json({ message: 'Only image uploads are allowed for club media' });
+    }
+
+    const currentClub = await loadClubBySlugOrId(req.params.clubId, viewerUserId);
+    if (!currentClub) {
+      return res.status(404).json({ message: 'Club not found' });
+    }
+
+    let nextAvatarUrl = currentClub.avatar_url;
+    let nextCoverImageUrl = currentClub.cover_image_url;
+    let uploadedAvatarUrl: string | null = null;
+    let uploadedCoverImageUrl: string | null = null;
+
+    try {
+      if (avatarFile) {
+        uploadedAvatarUrl = await uploadClubMediaToStorage({
+          userId: viewerUserId,
+          fileBuffer: avatarFile.buffer,
+          mimeType: avatarFile.mimetype,
+        });
+        nextAvatarUrl = uploadedAvatarUrl;
+      } else if (removeAvatar) {
+        nextAvatarUrl = null;
+      }
+
+      if (coverImageFile) {
+        uploadedCoverImageUrl = await uploadClubMediaToStorage({
+          userId: viewerUserId,
+          fileBuffer: coverImageFile.buffer,
+          mimeType: coverImageFile.mimetype,
+        });
+        nextCoverImageUrl = uploadedCoverImageUrl;
+      } else if (removeCoverImage) {
+        nextCoverImageUrl = null;
+      }
+
+      const nextName = name && name.length > 0 ? name : currentClub.name;
+      const nextSlug = nextName !== currentClub.name
+        ? await ensureUniqueClubSlug(nextName)
+        : currentClub.slug;
+      const nextShortDescription = shortDescription !== undefined
+        ? (shortDescription || null)
+        : currentClub.short_description;
+      const nextDescription = description !== undefined
+        ? (description || null)
+        : currentClub.description;
+      const nextPrivacy = privacy ?? currentClub.privacy;
+
+      let nextCategoryId = currentClub.primary_category_id;
+      if (primaryCategory !== undefined && primaryCategory.length > 0) {
+        const category = await resolveOrCreateClubCategory({
+          displayName: primaryCategory,
+          createdByUserId: viewerUserId,
+        });
+        nextCategoryId = category.clubCategoryId;
+      }
+
+      await prisma.$queryRaw`
+        UPDATE clubs
+        SET
+          name = ${nextName},
+          slug = ${nextSlug},
+          short_description = ${nextShortDescription},
+          description = ${nextDescription},
+          privacy = CAST(${nextPrivacy} AS "ClubPrivacy"),
+          avatar_url = ${nextAvatarUrl},
+          cover_image_url = ${nextCoverImageUrl},
+          primary_category_id = ${nextCategoryId},
+          updated_at = NOW()
+        WHERE club_id = ${req.params.clubId}
+      `;
+
+      if (tags) {
+        await upsertClubTags(req.params.clubId, tags);
+      }
+
+      if (currentClub.avatar_url && currentClub.avatar_url !== nextAvatarUrl) {
+        await deleteManagedClubMediaByUrl(currentClub.avatar_url);
+      }
+      if (currentClub.cover_image_url && currentClub.cover_image_url !== nextCoverImageUrl) {
+        await deleteManagedClubMediaByUrl(currentClub.cover_image_url);
+      }
+
+      const updatedClub = await loadClubBySlugOrId(req.params.clubId, viewerUserId);
+      if (!updatedClub) {
+        return res.status(404).json({ message: 'Club not found after update' });
+      }
+
+      return res.status(200).json(mapClubRow(updatedClub, await getClubPermissionSnapshot(updatedClub.club_id, viewerUserId)));
+    } catch (err) {
+      await Promise.allSettled([
+        deleteManagedClubMediaByUrl(uploadedAvatarUrl),
+        deleteManagedClubMediaByUrl(uploadedCoverImageUrl),
+      ]);
+
+      if (isUniqueConstraintError(err, 'clubs_slug_key')) {
+        return res.status(409).json({ message: 'A club with a similar name already exists. Try a different name.' });
+      }
+
+      console.error('Error updating club:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  },
+);
+
+router.patch('/:clubId/members/:userId/role', async (req: Request<{ clubId: string; userId: string }>, res: Response) => {
+  const viewerUserId = getAuthedUserId(req);
+  const permissions = await getClubPermissionSnapshot(req.params.clubId, viewerUserId);
+  if (permissions?.membershipRole !== 'owner') {
+    return res.status(403).json({ message: 'Only the club owner can edit admin roles' });
+  }
+
+  const nextRole = String((req.body as { role?: string })?.role ?? '').trim().toLowerCase();
+  if (nextRole !== 'admin' && nextRole !== 'member') {
+    return res.status(400).json({ message: 'role must be admin or member' });
+  }
+
+  try {
+    const membershipRows = await prisma.$queryRaw<Array<{ role: 'owner' | 'admin' | 'member'; status: 'active' | 'pending' | 'invited' | 'removed' | 'left' }>>`
+      SELECT role, status
+      FROM club_memberships
+      WHERE club_id = ${req.params.clubId}
+        AND user_id = ${req.params.userId}
+      LIMIT 1
+    `;
+
+    const membership = membershipRows[0];
+    if (!membership) {
+      return res.status(404).json({ message: 'Club member not found' });
+    }
+
+    if (membership.role === 'owner') {
+      return res.status(400).json({ message: 'Owner role cannot be changed' });
+    }
+
+    await prisma.$queryRaw`
+      UPDATE club_memberships
+      SET role = CAST(${nextRole} AS "ClubMembershipRole"), updated_at = NOW()
+      WHERE club_id = ${req.params.clubId}
+        AND user_id = ${req.params.userId}
+        AND status = CAST('active' AS "ClubMembershipStatus")
+    `;
+
+    return res.status(204).send();
+  } catch (err) {
+    console.error('Error updating club role:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.delete('/:clubId', async (req: Request<{ clubId: string }>, res: Response) => {
+  const viewerUserId = getAuthedUserId(req);
+  const permissions = await getClubPermissionSnapshot(req.params.clubId, viewerUserId);
+  if (permissions?.membershipRole !== 'owner') {
+    return res.status(403).json({ message: 'Only the club owner can delete this club' });
+  }
+
+  try {
+    const rows = await prisma.$queryRaw<Array<{ avatar_url: string | null; cover_image_url: string | null }>>`
+      SELECT avatar_url, cover_image_url
+      FROM clubs
+      WHERE club_id = ${req.params.clubId}
+      LIMIT 1
+    `;
+
+    const row = rows[0];
+    if (!row) {
+      return res.status(404).json({ message: 'Club not found' });
+    }
+
+    await prisma.$queryRaw`
+      DELETE FROM clubs
+      WHERE club_id = ${req.params.clubId}
+    `;
+
+    await Promise.allSettled([
+      deleteManagedClubMediaByUrl(row.avatar_url),
+      deleteManagedClubMediaByUrl(row.cover_image_url),
+    ]);
+
+    return res.status(204).send();
+  } catch (err) {
+    console.error('Error deleting club:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });
@@ -707,40 +931,58 @@ router.post('/:clubId/remove', async (req: Request<{ clubId: string }>, res: Res
   }
 
   try {
-    const membership = await requireActiveClubMembership(req.params.clubId, targetUserId);
+    const membershipRows = await prisma.$queryRaw<Array<{
+      club_membership_id: string;
+      role: 'owner' | 'admin' | 'member';
+      status: 'active' | 'pending' | 'invited' | 'removed' | 'left';
+    }>>`
+      SELECT club_membership_id, role, status
+      FROM club_memberships
+      WHERE club_id = ${req.params.clubId}
+        AND user_id = ${targetUserId}
+      LIMIT 1
+    `;
+
+    const membership = membershipRows[0];
     if (!membership) {
-      return res.status(404).json({ message: 'Active membership not found' });
+      return res.status(404).json({ message: 'Club membership not found' });
+    }
+
+    if (membership.role === 'owner') {
+      return res.status(400).json({ message: 'Owner cannot be removed' });
     }
 
     await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`
         UPDATE club_memberships
         SET status = CAST('removed' AS "ClubMembershipStatus"), updated_at = NOW()
-        WHERE club_membership_id = ${membership.clubMembershipId}
+        WHERE club_membership_id = ${membership.club_membership_id}
       `;
 
-      const restrictions: Array<'posting_blocked' | 'comment_blocked' | 'membership_ban'> = ['membership_ban'];
-      if (restrictPosting) restrictions.push('posting_blocked');
-      if (restrictComments) restrictions.push('comment_blocked');
+      if (membership.status === 'active') {
+        const restrictions: Array<'posting_blocked' | 'comment_blocked' | 'membership_ban'> = ['membership_ban'];
+        if (restrictPosting) restrictions.push('posting_blocked');
+        if (restrictComments) restrictions.push('comment_blocked');
 
-      for (const restrictionType of restrictions) {
-        await tx.$queryRaw`
-          INSERT INTO club_member_restrictions (
-            club_id,
-            club_membership_id,
-            user_id,
-            imposed_by_user_id,
-            restriction_type,
-            reason
-          ) VALUES (
-            ${req.params.clubId},
-            ${membership.clubMembershipId},
-            ${targetUserId},
-            ${viewerUserId},
-            CAST(${restrictionType} AS "ClubRestrictionType"),
-            ${reason}
-          )
-        `;
+        for (const restrictionType of restrictions) {
+          await tx.$queryRaw`
+            INSERT INTO club_member_restrictions (
+              club_id,
+              club_membership_id,
+              user_id,
+              imposed_by_user_id,
+              restriction_type,
+              reason
+            ) VALUES (
+              ${req.params.clubId},
+              ${membership.club_membership_id},
+              ${targetUserId},
+              ${viewerUserId},
+              CAST(${restrictionType} AS "ClubRestrictionType"),
+              ${reason}
+            )
+          `;
+        }
       }
     });
 

@@ -323,6 +323,8 @@ export function userPostToOpportunity(
   let type: Opportunity['type'] = 'general';
   if (post.postType === 'event') {
     type = 'event';
+  } else if (post.postType === 'club_activity') {
+    type = 'club';
   } else if (post.postType === 'opportunity') {
     type = (post.opportunityType ?? 'event') as Opportunity['type'];
   }

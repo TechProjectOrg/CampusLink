@@ -48,6 +48,17 @@ export interface CreateClubPayload {
   tags?: string[];
 }
 
+export interface UpdateClubPayload {
+  name?: string;
+  shortDescription?: string;
+  description?: string;
+  privacy?: 'open' | 'request' | 'private';
+  primaryCategory?: string;
+  tags?: string[];
+  removeAvatar?: boolean;
+  removeCoverImage?: boolean;
+}
+
 function normalizeClub(raw: any): Club {
   return {
     id: String(raw?.id ?? ''),
@@ -202,4 +213,79 @@ export async function apiFetchClubPosts(clubId: string, token?: string, limit = 
   if (!response.ok) throw new Error(await parseErrorMessage(response));
   const data = (await response.json().catch(() => [])) as unknown[];
   return Array.isArray(data) ? data.map((item) => normalizeUserPost(item)) : [];
+}
+
+export async function apiApproveClubMember(clubId: string, userId: string, token?: string): Promise<void> {
+  const response = await safeFetch(`${API_BASE}/clubs/${encodeURIComponent(clubId)}/approve`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(token),
+    },
+    body: JSON.stringify({ userId }),
+  });
+  if (!response.ok && response.status !== 204) throw new Error(await parseErrorMessage(response));
+}
+
+export async function apiRemoveClubMember(
+  clubId: string,
+  userId: string,
+  token?: string,
+  options?: { reason?: string; restrictPosting?: boolean; restrictComments?: boolean },
+): Promise<void> {
+  const response = await safeFetch(`${API_BASE}/clubs/${encodeURIComponent(clubId)}/remove`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(token),
+    },
+    body: JSON.stringify({
+      userId,
+      reason: options?.reason,
+      restrictPosting: Boolean(options?.restrictPosting),
+      restrictComments: Boolean(options?.restrictComments),
+    }),
+  });
+  if (!response.ok && response.status !== 204) throw new Error(await parseErrorMessage(response));
+}
+
+export async function apiUpdateClubMemberRole(clubId: string, userId: string, role: 'admin' | 'member', token?: string): Promise<void> {
+  const response = await safeFetch(`${API_BASE}/clubs/${encodeURIComponent(clubId)}/members/${encodeURIComponent(userId)}/role`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(token),
+    },
+    body: JSON.stringify({ role }),
+  });
+  if (!response.ok && response.status !== 204) throw new Error(await parseErrorMessage(response));
+}
+
+export async function apiUpdateClub(
+  clubId: string,
+  payload: UpdateClubPayload,
+  token?: string,
+  files?: { avatar?: File | null; coverImage?: File | null },
+): Promise<Club> {
+  const formData = new FormData();
+  formData.append('payload', JSON.stringify(payload));
+  if (files?.avatar) formData.append('avatar', files.avatar);
+  if (files?.coverImage) formData.append('coverImage', files.coverImage);
+
+  const response = await safeFetch(`${API_BASE}/clubs/${encodeURIComponent(clubId)}`, {
+    method: 'PATCH',
+    headers: { ...authHeaders(token) },
+    body: formData,
+  });
+  if (!response.ok) throw new Error(await parseErrorMessage(response));
+
+  return normalizeClub(await response.json());
+}
+
+export async function apiDeleteClub(clubId: string, token?: string): Promise<void> {
+  const response = await safeFetch(`${API_BASE}/clubs/${encodeURIComponent(clubId)}`, {
+    method: 'DELETE',
+    headers: { ...authHeaders(token) },
+  });
+  if (!response.ok && response.status !== 204) throw new Error(await parseErrorMessage(response));
 }

@@ -1315,11 +1315,13 @@ router.post(
       media,
     } = requestBody;
 
+    const clubIdValue = clubId?.trim() || null;
+
     const allowedPostTypes: DbPostType[] = ['general', 'event', 'opportunity', 'club_activity'];
     const allowedOpportunityTypes: DbOpportunityType[] = ['internship', 'hackathon', 'event', 'contest', 'club'];
     const allowedVisibilities: DbPostVisibility[] = ['public', 'followers', 'club_members'];
 
-    const nextPostType = (postType ?? 'general').toLowerCase() as DbPostType;
+    const nextPostType = (postType ?? (clubIdValue ? 'club_activity' : 'general')).toLowerCase() as DbPostType;
     if (!allowedPostTypes.includes(nextPostType)) {
       return res.status(400).json({ message: 'postType must be general, event, opportunity, or club_activity' });
     }
@@ -1349,8 +1351,6 @@ router.post(
     const durationValue = duration?.trim() || null;
     const locationValue = location?.trim() || null;
     const externalUrlValue = externalUrl?.trim() || null;
-    const clubIdValue = clubId?.trim() || null;
-
     if (!titleValue && !contentValue) {
       return res.status(400).json({ message: 'At least one of title or contentText is required' });
     }

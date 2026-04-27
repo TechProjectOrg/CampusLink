@@ -331,7 +331,7 @@ model Follow {
 
 model Club {
   clubId           String           @id @default(dbgenerated("gen_random_uuid()")) @map("club_id") @db.Uuid
-  name             String           @unique @db.VarChar(255)
+  name             String           @db.VarChar(255)
   slug             String           @unique @db.VarChar(255)
   shortDescription String?          @map("short_description") @db.VarChar(255)
   description      String?          @db.Text

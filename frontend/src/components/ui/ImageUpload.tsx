@@ -6,9 +6,10 @@ import { Label } from './label';
 interface ImageUploadProps {
   onFileChange: (file: File | null) => void;
   disabled?: boolean;
+  label?: string;
 }
 
-export function ImageUpload({ onFileChange, disabled = false }: ImageUploadProps) {
+export function ImageUpload({ onFileChange, disabled = false, label = 'Cover Image (optional)' }: ImageUploadProps) {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -40,7 +41,7 @@ export function ImageUpload({ onFileChange, disabled = false }: ImageUploadProps
 
   return (
     <div className="space-y-2">
-      <Label>Cover Image (optional)</Label>
+      <Label>{label}</Label>
       <div
         className={`relative flex justify-center items-center w-full h-48 border-2 border-dashed border-gray-300 rounded-xl transition-all ${
           disabled ? 'cursor-not-allowed opacity-60' : 'hover:border-primary cursor-pointer'

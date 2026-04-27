@@ -11,6 +11,7 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Badge } from './ui/badge';
 import { ImageUpload } from './ui/ImageUpload';
+import { ClubLogoUpload } from './ui/ClubLogoUpload';
 
 interface CreateClubModalProps {
   isOpen: boolean;
@@ -246,8 +247,19 @@ export function CreateClubModal({ isOpen, onClose, onCreateClub }: CreateClubMod
             />
           </div>
 
-          <ImageUpload onFileChange={setAvatarFile} disabled={isSubmitting} />
-          <ImageUpload onFileChange={setCoverImageFile} disabled={isSubmitting} />
+          <div className="grid gap-4 md:grid-cols-2">
+            <ClubLogoUpload
+              label="Club Logo (optional)"
+              file={avatarFile}
+              onFileChange={setAvatarFile}
+              disabled={isSubmitting}
+            />
+            <ImageUpload
+              onFileChange={setCoverImageFile}
+              disabled={isSubmitting}
+              label="Club Background Image (optional)"
+            />
+          </div>
 
           <div className="space-y-2">
             <Label htmlFor="club-tags">Tags</Label>
