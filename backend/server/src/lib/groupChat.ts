@@ -33,17 +33,23 @@ export async function createGroupChat(
   const uniqueMembers = Array.from(new Set(memberIds.filter((id) => id !== creatorId)));
 
   const chatId = await prisma.$transaction(async (tx) => {
+    const now = new Date().toISOString();
+
     const chatRows = await tx.$queryRaw<{ chat_id: string }[]>`
       INSERT INTO chats (
         chat_type,
         name,
         description,
-        created_by_user_id
+        created_by_user_id,
+        created_at,
+        updated_at
       ) VALUES (
         'group',
         ${name},
         ${description ?? null},
-        ${creatorId}
+        ${creatorId},
+        ${now},
+        ${now}
       )
       RETURNING chat_id
     `;
@@ -51,7 +57,6 @@ export async function createGroupChat(
     const createdChatId = chatRows[0]?.chat_id;
     if (!createdChatId) throw new Error('Failed to create group chat');
 
-    const now = new Date().toISOString();
     await tx.$queryRaw`
       INSERT INTO chat_participants (
         chat_id,

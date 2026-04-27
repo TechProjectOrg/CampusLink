@@ -134,9 +134,10 @@ export async function getOrCreateDirectChat(
   }
 
   // Create new direct chat
+  const chatNow = new Date().toISOString();
   const chatRows = await prisma.$queryRaw<{ chat_id: string }[]>`
-    INSERT INTO chats (chat_type, is_request, created_by_user_id)
-    VALUES ('direct', ${permission.isRequest}, ${senderUserId})
+    INSERT INTO chats (chat_type, is_request, created_by_user_id, created_at, updated_at)
+    VALUES ('direct', ${permission.isRequest}, ${senderUserId}, ${chatNow}, ${chatNow})
     RETURNING chat_id
   `;
   const chatId = chatRows[0]?.chat_id;

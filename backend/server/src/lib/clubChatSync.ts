@@ -29,17 +29,22 @@ export async function getOrCreateClubChat(clubId: string, clubName: string): Pro
   }
 
   // Create new chat for club
+  const now = new Date().toISOString();
   const chatRows = await prisma.$queryRaw<{ chat_id: string }[]>`
     INSERT INTO chats (
       chat_type,
       name,
       description,
-      group_metadata
+      group_metadata,
+      created_at,
+      updated_at
     ) VALUES (
       'group',
       ${clubName},
       'Official chat for ' || ${clubName},
-      '{"type": "club_chat", "club_id": "${clubId}"}'::jsonb
+      '{"type": "club_chat", "club_id": "${clubId}"}'::jsonb,
+      ${now},
+      ${now}
     )
     RETURNING chat_id
   `;

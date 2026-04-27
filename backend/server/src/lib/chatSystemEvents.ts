@@ -28,6 +28,60 @@ interface SystemEventPayload {
   reason?: string; // For removals
 }
 
+async function findExistingUserId(userId: string | null | undefined): Promise<string | null> {
+  if (!userId) return null;
+
+  const rows = await prisma.$queryRaw<{ count: number }[]>`
+    SELECT COUNT(*)::int AS count
+    FROM users
+    WHERE user_id = ${userId}
+    LIMIT 1
+  `;
+
+  return (rows[0]?.count ?? 0) > 0 ? userId : null;
+}
+
+async function resolveSystemEventSenderUserId(
+  chatId: string,
+  payload: SystemEventPayload,
+): Promise<string> {
+  const configuredSystemUserId = process.env.SYSTEM_USER_ID;
+
+  // Priority order keeps semantics sensible while guaranteeing FK validity.
+  const actorUserId = await findExistingUserId(payload.actorUserId);
+  if (actorUserId) return actorUserId;
+
+  const systemUserId = await findExistingUserId(configuredSystemUserId);
+  if (systemUserId) return systemUserId;
+
+  const chatCreatorRows = await prisma.$queryRaw<{ created_by_user_id: string | null }[]>`
+    SELECT created_by_user_id
+    FROM chats
+    WHERE chat_id = ${chatId}
+    LIMIT 1
+  `;
+  const chatCreatorId = await findExistingUserId(chatCreatorRows[0]?.created_by_user_id ?? null);
+  if (chatCreatorId) return chatCreatorId;
+
+  const targetUserId = await findExistingUserId(payload.targetUserId);
+  if (targetUserId) return targetUserId;
+
+  const participantRows = await prisma.$queryRaw<{ user_id: string }[]>`
+    SELECT user_id
+    FROM chat_participants
+    WHERE chat_id = ${chatId} AND left_at IS NULL
+    ORDER BY joined_at ASC
+    LIMIT 1
+  `;
+  const participantUserId = await findExistingUserId(participantRows[0]?.user_id);
+  if (participantUserId) return participantUserId;
+
+  throw new Error(
+    `Unable to resolve a valid sender user for system event in chat ${chatId}. ` +
+      `Set SYSTEM_USER_ID to an existing user_id or ensure chat has valid participants.`,
+  );
+}
+
 /**
  * Generates and persists a system message for an event
  *
@@ -43,7 +97,8 @@ export async function createSystemEvent(
   chatId: string,
   payload: SystemEventPayload,
 ): Promise<string> {
-  const systemUserId = process.env.SYSTEM_USER_ID || '00000000-0000-0000-0000-000000000000';
+  const systemUserId = await resolveSystemEventSenderUserId(chatId, payload);
+  const now = new Date().toISOString();
 
   // Build human-readable content
   let content = '';
@@ -74,13 +129,17 @@ export async function createSystemEvent(
       sender_user_id,
       message_type,
       content,
-      reactions
+      reactions,
+      created_at,
+      updated_at
     ) VALUES (
       ${chatId},
       ${systemUserId},
       'system',
       ${content},
-      '{}'::jsonb
+      '{}'::jsonb,
+      ${now},
+      ${now}
     )
     RETURNING message_id
   `;

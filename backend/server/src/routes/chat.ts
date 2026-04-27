@@ -684,9 +684,26 @@ async function persistMessage(
 ): Promise<{ messageId: string; createdAt: Date }> {
   const encryptedContent = content ? encryptMessage(content) : null;
   return prisma.$transaction(async (tx) => {
+    const now = new Date().toISOString();
     const inserted = await tx.$queryRaw<Array<{ message_id: string; created_at: Date }>>`
-      INSERT INTO messages (chat_id, sender_user_id, message_type, content, reply_to_message_id)
-      VALUES (${chatId}, ${userId}, ${messageType}, ${encryptedContent}, ${replyToMessageId})
+      INSERT INTO messages (
+        chat_id,
+        sender_user_id,
+        message_type,
+        content,
+        reply_to_message_id,
+        created_at,
+        updated_at
+      )
+      VALUES (
+        ${chatId},
+        ${userId},
+        ${messageType},
+        ${encryptedContent},
+        ${replyToMessageId},
+        ${now},
+        ${now}
+      )
       RETURNING message_id, created_at
     `;
 
