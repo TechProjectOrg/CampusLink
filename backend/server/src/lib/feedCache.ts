@@ -605,6 +605,7 @@ export async function fetchPostIdsByQuery(
     SELECT p.post_id, p.created_at
     FROM posts p
     JOIN users au ON au.user_id = p.author_user_id
+    LEFT JOIN clubs c ON c.club_id = p.club_id
     WHERE p.author_user_id = ${query.authorUserId ?? viewerUserId}
       AND ${visibilitySql(viewerUserId)}
       AND (

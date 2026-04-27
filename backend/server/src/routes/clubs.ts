@@ -70,6 +70,19 @@ function getAuthedUserId(req: Request): string {
   return (req as unknown as AuthedRequest).auth!.userId;
 }
 
+function isUniqueConstraintError(err: unknown, constraintName: string): boolean {
+  if (!(err instanceof Prisma.PrismaClientKnownRequestError)) {
+    return false;
+  }
+
+  if (err.code !== 'P2010') {
+    return false;
+  }
+
+  const metaText = JSON.stringify(err.meta ?? {});
+  return metaText.includes(constraintName);
+}
+
 function mapClubRow(row: ClubListRow, permissionSnapshot?: Awaited<ReturnType<typeof getClubPermissionSnapshot>>) {
   return {
     id: row.club_id,
@@ -407,6 +420,15 @@ router.post(
         deleteManagedClubMediaByUrl(avatarUrl),
         deleteManagedClubMediaByUrl(coverImageUrl),
       ]);
+
+      if (isUniqueConstraintError(err, 'clubs_name_key')) {
+        return res.status(409).json({ message: 'A club with this name already exists' });
+      }
+
+      if (isUniqueConstraintError(err, 'clubs_slug_key')) {
+        return res.status(409).json({ message: 'A club with a similar name already exists. Try a different name.' });
+      }
+
       console.error('Error creating club:', err);
       return res.status(500).json({ message: 'Internal server error' });
     }

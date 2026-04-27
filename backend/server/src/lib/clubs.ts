@@ -34,7 +34,42 @@ interface ClubAccessRow {
   membership_role: ClubMembershipRole | null;
   membership_status: ClubMembershipStatus | null;
   club_membership_id: string | null;
-  active_restrictions: ClubRestrictionType[] | null;
+  active_restrictions: unknown;
+}
+
+const CLUB_RESTRICTION_TYPES: ClubRestrictionType[] = ['posting_blocked', 'comment_blocked', 'membership_ban'];
+
+function parseActiveRestrictions(rawValue: unknown): ClubRestrictionType[] {
+  let values: string[] = [];
+
+  if (Array.isArray(rawValue)) {
+    values = rawValue.map((value) => String(value));
+  } else if (typeof rawValue === 'string') {
+    const trimmed = rawValue.trim();
+    if (!trimmed) return [];
+
+    if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          values = parsed.map((value) => String(value));
+        }
+      } catch {
+        values = [];
+      }
+    } else if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      values = trimmed
+        .slice(1, -1)
+        .split(',')
+        .map((value) => value.trim().replace(/^"|"$/g, ''))
+        .filter(Boolean);
+    } else {
+      values = [trimmed];
+    }
+  }
+
+  const valid = new Set(CLUB_RESTRICTION_TYPES);
+  return values.filter((value): value is ClubRestrictionType => valid.has(value as ClubRestrictionType));
 }
 
 export function normalizeClubCategoryName(rawValue: string): string {
@@ -140,12 +175,12 @@ async function loadClubAccess(clubId: string, viewerUserId: string): Promise<Clu
       cm.club_membership_id,
       COALESCE(
         (
-          SELECT ARRAY_AGG(cmr.restriction_type)
+          SELECT JSON_AGG(cmr.restriction_type::text)
           FROM club_member_restrictions cmr
           WHERE cmr.club_membership_id = cm.club_membership_id
             AND (cmr.expires_at IS NULL OR cmr.expires_at > NOW())
         ),
-        ARRAY[]::"ClubRestrictionType"[]
+        '[]'::json
       ) AS active_restrictions
     FROM clubs c
     LEFT JOIN club_memberships cm
@@ -164,7 +199,7 @@ export async function getClubPermissionSnapshot(clubId: string, viewerUserId: st
 
   const membershipRole = row.membership_role;
   const membershipStatus = row.membership_status;
-  const restrictions = new Set((row.active_restrictions ?? []).map((value) => String(value) as ClubRestrictionType));
+  const restrictions = new Set(parseActiveRestrictions(row.active_restrictions));
   const isManager = membershipRole === 'owner' || membershipRole === 'admin';
   const isActiveMember = membershipStatus === 'active';
   const isCreator = row.created_by_user_id === viewerUserId;
