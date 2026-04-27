@@ -9,6 +9,7 @@ interface StorageEnv {
   profilePhotosPrefix: string;
   postMediaPrefix: string;
   chatMediaPrefix: string;
+  clubMediaPrefix: string;
   accessKeyId: string;
   secretAccessKey: string;
 }
@@ -72,6 +73,9 @@ function buildStorageEnv(): StorageEnv {
     chatMediaPrefix:
       optionalEnv(['STORAGE_S3_CHAT_MEDIA_PREFIX', 'S3_CHAT_MEDIA_PREFIX']) ??
       'chat/media',
+    clubMediaPrefix:
+      optionalEnv(['STORAGE_S3_CLUB_MEDIA_PREFIX', 'S3_CLUB_MEDIA_PREFIX']) ??
+      'clubs/media',
     accessKeyId,
     secretAccessKey,
   };
@@ -227,11 +231,52 @@ export async function uploadChatMediaToStorage(params: {
   return `${storageEnv.publicBaseUrl}/${key}`;
 }
 
+export async function uploadClubMediaToStorage(params: {
+  userId: string;
+  fileBuffer: Buffer;
+  mimeType: string;
+}): Promise<string> {
+  const storageEnv = getStorageEnv();
+  const extension = extensionFromMime(params.mimeType);
+  const fileName = `${Date.now()}-${randomUUID()}.${extension}`;
+  const key = `${storageEnv.clubMediaPrefix}/${params.userId}/${fileName}`;
+
+  await getS3Client().send(
+    new PutObjectCommand({
+      Bucket: storageEnv.bucketName,
+      Key: key,
+      Body: params.fileBuffer,
+      ContentType: params.mimeType,
+      CacheControl: 'public,max-age=31536000,immutable',
+    })
+  );
+
+  return `${storageEnv.publicBaseUrl}/${key}`;
+}
+
 export async function deleteManagedChatMediaByUrl(mediaUrl: string | null): Promise<void> {
   if (!mediaUrl) return;
 
   const storageEnv = getStorageEnv();
   const prefix = `${storageEnv.chatMediaPrefix}/`;
+  const prefixIdx = mediaUrl.indexOf(prefix);
+
+  if (prefixIdx === -1) return;
+
+  const key = mediaUrl.slice(prefixIdx);
+  await getS3Client().send(
+    new DeleteObjectCommand({
+      Bucket: storageEnv.bucketName,
+      Key: key,
+    })
+  );
+}
+
+export async function deleteManagedClubMediaByUrl(mediaUrl: string | null): Promise<void> {
+  if (!mediaUrl) return;
+
+  const storageEnv = getStorageEnv();
+  const prefix = `${storageEnv.clubMediaPrefix}/`;
   const prefixIdx = mediaUrl.indexOf(prefix);
 
   if (prefixIdx === -1) return;

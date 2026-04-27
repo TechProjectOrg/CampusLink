@@ -48,8 +48,21 @@ enum ClubMembershipRole {
 enum ClubMembershipStatus {
   ACTIVE  @map("active")
   PENDING @map("pending")
+  INVITED @map("invited")
   REMOVED @map("removed")
   LEFT    @map("left")
+}
+
+enum ClubPrivacy {
+  OPEN    @map("open")
+  REQUEST @map("request")
+  PRIVATE @map("private")
+}
+
+enum ClubRestrictionType {
+  POSTING_BLOCKED  @map("posting_blocked")
+  COMMENT_BLOCKED  @map("comment_blocked")
+  MEMBERSHIP_BAN   @map("membership_ban")
 }
 
 enum ChatType {
@@ -102,6 +115,9 @@ model User {
   followers              Follow[]            @relation("FollowFollowed")
   clubsCreated           Club[]              @relation("ClubCreator")
   clubMemberships        ClubMembership[]
+  clubCategoriesCreated  ClubCategory[]      @relation("ClubCategoryCreator")
+  clubRestrictionsIssued ClubMemberRestriction[] @relation("ClubRestrictionActor")
+  clubRestrictions       ClubMemberRestriction[] @relation("ClubRestrictionTarget")
   authoredPosts          Post[]              @relation("PostAuthor")
   postLikes              PostLike[]
   postComments           PostComment[]       @relation("PostCommentAuthor")
@@ -316,16 +332,27 @@ model Follow {
 model Club {
   clubId           String           @id @default(dbgenerated("gen_random_uuid()")) @map("club_id") @db.Uuid
   name             String           @unique @db.VarChar(255)
+  slug             String           @unique @db.VarChar(255)
+  shortDescription String?          @map("short_description") @db.VarChar(255)
   description      String?          @db.Text
+  privacy          ClubPrivacy      @default(OPEN)
   avatarUrl        String?          @map("avatar_url") @db.Text
+  coverImageUrl    String?          @map("cover_image_url") @db.Text
+  linkedChatId     String?          @map("linked_chat_id") @db.Uuid
   createdByUserId  String           @map("created_by_user_id") @db.Uuid
+  primaryCategoryId String?         @map("primary_category_id") @db.Uuid
   createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamp(6)
   createdBy        User             @relation("ClubCreator", fields: [createdByUserId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+  primaryCategory  ClubCategory?    @relation(fields: [primaryCategoryId], references: [clubCategoryId], onDelete: SetNull, onUpdate: NoAction)
   memberships      ClubMembership[]
   posts            Post[]           @relation("ClubPosts")
+  tags             ClubTagOnClub[]
+  restrictions     ClubMemberRestriction[]
 
+  @@index([slug], map: "idx_clubs_slug")
   @@index([createdByUserId], map: "idx_clubs_created_by_user_id")
+  @@index([primaryCategoryId], map: "idx_clubs_primary_category_id")
   @@map("clubs")
 }
 
@@ -340,11 +367,72 @@ model ClubMembership {
   updatedAt        DateTime             @updatedAt @map("updated_at") @db.Timestamp(6)
   club             Club                 @relation(fields: [clubId], references: [clubId], onDelete: Cascade, onUpdate: NoAction)
   user             User                 @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+  restrictions     ClubMemberRestriction[]
 
   @@unique([clubId, userId], map: "uq_club_memberships_club_id_user_id")
   @@index([userId], map: "idx_club_memberships_user_id")
   @@index([status], map: "idx_club_memberships_status")
   @@map("club_memberships")
+}
+
+model ClubCategory {
+  clubCategoryId  String    @id @default(dbgenerated("gen_random_uuid()")) @map("club_category_id") @db.Uuid
+  displayName     String    @map("display_name") @db.VarChar(100)
+  normalizedName  String    @unique @map("normalized_name") @db.VarChar(100)
+  isSystem        Boolean   @default(false) @map("is_system")
+  createdByUserId String?   @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+  createdBy       User?     @relation("ClubCategoryCreator", fields: [createdByUserId], references: [userId], onDelete: SetNull, onUpdate: NoAction)
+  clubs           Club[]
+
+  @@index([isSystem], map: "idx_club_categories_is_system")
+  @@map("club_categories")
+}
+
+model ClubTag {
+  clubTagId       String        @id @default(dbgenerated("gen_random_uuid()")) @map("club_tag_id") @db.Uuid
+  displayName     String        @map("display_name") @db.VarChar(100)
+  normalizedName  String        @unique @map("normalized_name") @db.VarChar(100)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamp(6)
+  clubs           ClubTagOnClub[]
+
+  @@index([normalizedName], map: "idx_club_tags_normalized_name")
+  @@map("club_tags")
+}
+
+model ClubTagOnClub {
+  clubId     String   @map("club_id") @db.Uuid
+  clubTagId  String   @map("club_tag_id") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  club       Club     @relation(fields: [clubId], references: [clubId], onDelete: Cascade, onUpdate: NoAction)
+  tag        ClubTag  @relation(fields: [clubTagId], references: [clubTagId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([clubId, clubTagId])
+  @@index([clubTagId], map: "idx_club_tags_on_clubs_tag_id")
+  @@map("club_tags_on_clubs")
+}
+
+model ClubMemberRestriction {
+  clubMemberRestrictionId String               @id @default(dbgenerated("gen_random_uuid()")) @map("club_member_restriction_id") @db.Uuid
+  clubId                  String               @map("club_id") @db.Uuid
+  clubMembershipId        String               @map("club_membership_id") @db.Uuid
+  userId                  String               @map("user_id") @db.Uuid
+  imposedByUserId         String?              @map("imposed_by_user_id") @db.Uuid
+  restrictionType         ClubRestrictionType  @map("restriction_type")
+  reason                  String?              @db.Text
+  expiresAt               DateTime?            @map("expires_at") @db.Timestamp(6)
+  createdAt               DateTime             @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt               DateTime             @updatedAt @map("updated_at") @db.Timestamp(6)
+  club                    Club                 @relation(fields: [clubId], references: [clubId], onDelete: Cascade, onUpdate: NoAction)
+  membership              ClubMembership       @relation(fields: [clubMembershipId], references: [clubMembershipId], onDelete: Cascade, onUpdate: NoAction)
+  user                    User                 @relation("ClubRestrictionTarget", fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+  imposedBy               User?                @relation("ClubRestrictionActor", fields: [imposedByUserId], references: [userId], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([clubId], map: "idx_club_member_restrictions_club_id")
+  @@index([clubMembershipId], map: "idx_club_member_restrictions_membership_id")
+  @@index([userId], map: "idx_club_member_restrictions_user_id")
+  @@map("club_member_restrictions")
 }
 
 model Post {

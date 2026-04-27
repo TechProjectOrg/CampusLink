@@ -267,6 +267,9 @@ export function OpportunityCard({
               <div>
                 <p className="text-gray-900 group-hover:text-primary transition-colors">{opportunity.authorName}</p>
                 <p className="text-sm text-gray-500">{formatDate(opportunity.date)}</p>
+                {opportunity.clubName ? (
+                  <p className="text-xs text-primary">{opportunity.clubName}</p>
+                ) : null}
               </div>
             </div>
             <div className="flex items-center gap-2">

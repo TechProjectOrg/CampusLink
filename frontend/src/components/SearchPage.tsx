@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
-import { Search, Loader2, Hash } from 'lucide-react';
+import { Search, Loader2, Hash, Users } from 'lucide-react';
 import type { Student } from '../types';
 import type { FollowGraph } from '../App';
 import { FollowButton } from './network/FollowButton';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Card, CardContent } from './ui/card';
 import { useAuth } from '../context/AuthContext';
-import { apiSearchAll, type SearchHashtagResult, type SearchUserResult } from '../lib/networkApi';
+import { apiSearchAll, type SearchClubResult, type SearchHashtagResult, type SearchUserResult } from '../lib/networkApi';
 
 interface SearchPageProps {
   students: Student[];
@@ -57,6 +57,7 @@ export function SearchPage({
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery);
   const [searchResults, setSearchResults] = useState<Student[]>([]);
   const [hashtagResults, setHashtagResults] = useState<SearchHashtagResult[]>([]);
+  const [clubResults, setClubResults] = useState<SearchClubResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
@@ -68,6 +69,7 @@ export function SearchPage({
     if (!searchQuery.trim()) {
       setSearchResults([]);
       setHashtagResults([]);
+      setClubResults([]);
       setHasSearched(false);
       return;
     }
@@ -79,10 +81,12 @@ export function SearchPage({
         const result = await apiSearchAll(searchQuery.trim(), auth.session?.token, 50, 25);
         setSearchResults(result.users.map(searchResultToStudent));
         setHashtagResults(result.hashtags);
+        setClubResults(result.clubs ?? []);
       } catch (err) {
         console.error('Search failed:', err);
         setSearchResults([]);
         setHashtagResults([]);
+        setClubResults([]);
       } finally {
         setIsLoading(false);
       }
@@ -120,6 +124,30 @@ export function SearchPage({
                   >
                     #{tag.hashtag} ({tag.postCount})
                   </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {clubResults.length > 0 && (
+          <Card className="border-primary/10 shadow-lg rounded-2xl animate-slide-in-up">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Users className="w-5 h-5 text-primary" />
+                <span className="text-gray-900">Clubs</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {clubResults.map((club) => (
+                  <div key={club.clubId} className="rounded-2xl border border-primary/10 p-4 bg-white">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-gray-900">{club.name}</p>
+                        <p className="text-sm text-gray-600">{club.shortDescription ?? club.category ?? 'Club'}</p>
+                      </div>
+                      <span className="text-xs text-primary">{club.memberCount} members</span>
+                    </div>
+                  </div>
                 ))}
               </div>
             </CardContent>
@@ -201,7 +229,7 @@ export function SearchPage({
             </Card>
           )}
 
-          {hasSearched && !isLoading && filteredStudents.length === 0 && hashtagResults.length === 0 && (
+          {hasSearched && !isLoading && filteredStudents.length === 0 && hashtagResults.length === 0 && clubResults.length === 0 && (
             <Card className="border-primary/10 rounded-2xl shadow-lg animate-fade-in">
               <CardContent className="p-12 text-center">
                 <div className="w-16 h-16 gradient-primary rounded-2xl mx-auto mb-4 flex items-center justify-center">

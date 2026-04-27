@@ -1,95 +1,133 @@
-import { useState } from 'react';
-import { X, Users, Image as ImageIcon } from 'lucide-react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
+import { useEffect, useMemo, useState } from 'react';
+import { Loader2, Users } from 'lucide-react';
+import { toast } from 'sonner';
+import { useAuth } from '../context/AuthContext';
+import type { Club } from '../types';
+import { apiCreateClub, apiFetchClubCategories, type ClubCategoryOption } from '../lib/clubsApi';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Badge } from './ui/badge';
-import { toast } from 'sonner@2.0.3';
-import { Club } from '../types';
+import { ImageUpload } from './ui/ImageUpload';
 
 interface CreateClubModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onCreateClub: (club: Club) => void;
-  currentUserId: string;
+  onCreateClub?: (club: Club) => void;
 }
 
-export function CreateClubModal({
-  isOpen,
-  onClose,
-  onCreateClub,
-  currentUserId
-}: CreateClubModalProps) {
+export function CreateClubModal({ isOpen, onClose, onCreateClub }: CreateClubModalProps) {
+  const auth = useAuth();
+  const [categories, setCategories] = useState<ClubCategoryOption[]>([]);
+  const [showAllCategories, setShowAllCategories] = useState(false);
+  const [isLoadingCategories, setIsLoadingCategories] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [tagInput, setTagInput] = useState('');
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
   const [formData, setFormData] = useState({
     name: '',
+    shortDescription: '',
     description: '',
-    avatarUrl: '',
-    category: '',
-    tags: [] as string[]
+    privacy: 'open' as Club['privacy'],
+    primaryCategory: '',
+    customCategory: '',
+    tags: [] as string[],
   });
 
-  const [tagInput, setTagInput] = useState('');
+  useEffect(() => {
+    if (!isOpen) return;
+    let isMounted = true;
+    setIsLoadingCategories(true);
+    apiFetchClubCategories(auth.session?.token, showAllCategories ? 20 : 6, 0)
+      .then((items) => {
+        if (isMounted) {
+          setCategories(items);
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to load club categories:', error);
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoadingCategories(false);
+        }
+      });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!formData.name || !formData.description) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-
-    const newClub: Club = {
-      id: `club-${Date.now()}`,
-      name: formData.name,
-      description: formData.description,
-      avatar: formData.avatarUrl || undefined,
-      members: [currentUserId],
-      admin: currentUserId,
-      posts: []
+    return () => {
+      isMounted = false;
     };
+  }, [auth.session?.token, isOpen, showAllCategories]);
 
-    onCreateClub(newClub);
-    toast.success(`${formData.name} club created successfully!`);
-    onClose();
-    
-    // Reset form
-    setFormData({
-      name: '',
-      description: '',
-      avatarUrl: '',
-      category: '',
-      tags: []
-    });
+  const selectedCategory = useMemo(() => {
+    if (formData.customCategory.trim()) return formData.customCategory.trim();
+    return formData.primaryCategory;
+  }, [formData.customCategory, formData.primaryCategory]);
+
+  const addTag = () => {
+    const nextTag = tagInput.trim();
+    if (!nextTag || formData.tags.includes(nextTag)) return;
+    setFormData((current) => ({ ...current, tags: [...current.tags, nextTag] }));
     setTagInput('');
   };
 
-  const addTag = () => {
-    if (tagInput && !formData.tags.includes(tagInput)) {
-      setFormData({ ...formData, tags: [...formData.tags, tagInput] });
-      setTagInput('');
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      shortDescription: '',
+      description: '',
+      privacy: 'open',
+      primaryCategory: '',
+      customCategory: '',
+      tags: [],
+    });
+    setAvatarFile(null);
+    setCoverImageFile(null);
+    setTagInput('');
+    setShowAllCategories(false);
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!formData.name.trim() || !formData.description.trim() || !selectedCategory) {
+      toast.error('Please fill in the required club details.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const club = await apiCreateClub(
+        {
+          name: formData.name.trim(),
+          shortDescription: formData.shortDescription.trim() || undefined,
+          description: formData.description.trim(),
+          privacy: formData.privacy,
+          primaryCategory: selectedCategory,
+          tags: formData.tags,
+        },
+        auth.session?.token,
+        {
+          avatar: avatarFile,
+          coverImage: coverImageFile,
+        },
+      );
+
+      onCreateClub?.(club);
+      toast.success('Club created successfully.');
+      resetForm();
+      onClose();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to create club';
+      toast.error(message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const removeTag = (tag: string) => {
-    setFormData({ ...formData, tags: formData.tags.filter(t => t !== tag) });
-  };
-
-  const categories = [
-    'Technology',
-    'Arts & Culture',
-    'Sports',
-    'Academic',
-    'Social',
-    'Professional',
-    'Gaming',
-    'Music',
-    'Other'
-  ];
-
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={(nextOpen) => !nextOpen && !isSubmitting && onClose()}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto max-w-[95vw]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -97,133 +135,165 @@ export function CreateClubModal({
             Create New Club
           </DialogTitle>
           <DialogDescription>
-            Start a community and bring together students with similar interests
+            Start a community and bring together students with similar interests.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Club Name */}
+
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div className="space-y-2">
-            <Label htmlFor="name">Club Name *</Label>
+            <Label htmlFor="club-name">Club Name *</Label>
             <Input
-              id="name"
+              id="club-name"
               value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="e.g. Tech Innovators Club, Photography Society"
+              onChange={(event) => setFormData((current) => ({ ...current, name: event.target.value }))}
+              placeholder="e.g. Tech Innovators Club"
               required
             />
           </div>
 
-          {/* Category Selection */}
           <div className="space-y-2">
-            <Label>Category *</Label>
+            <Label htmlFor="club-short-description">Short Description</Label>
+            <Input
+              id="club-short-description"
+              value={formData.shortDescription}
+              onChange={(event) => setFormData((current) => ({ ...current, shortDescription: event.target.value }))}
+              placeholder="One-line summary for discovery cards"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Privacy *</Label>
             <div className="grid grid-cols-3 gap-2">
-              {categories.slice(0, 6).map((category) => (
+              {[
+                { value: 'open', label: 'Open' },
+                { value: 'request', label: 'Request' },
+                { value: 'private', label: 'Private' },
+              ].map((option) => (
                 <button
-                  key={category}
+                  key={option.value}
                   type="button"
-                  onClick={() => setFormData({ ...formData, category })}
+                  onClick={() => setFormData((current) => ({ ...current, privacy: option.value as Club['privacy'] }))}
                   className={`p-3 rounded-xl border-2 transition-all text-sm ${
-                    formData.category === category
+                    formData.privacy === option.value
                       ? 'border-primary bg-primary/10 text-primary'
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
-                  {category}
+                  {option.label}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Description */}
           <div className="space-y-2">
-            <Label htmlFor="description">Description *</Label>
+            <Label>Primary Category *</Label>
+            {isLoadingCategories ? (
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Loading categories...
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {categories.map((category) => (
+                  <button
+                    key={category.id}
+                    type="button"
+                    onClick={() =>
+                      setFormData((current) => ({
+                        ...current,
+                        primaryCategory: category.displayName,
+                        customCategory: '',
+                      }))
+                    }
+                    className={`p-3 rounded-xl border-2 transition-all text-sm ${
+                      formData.primaryCategory === category.displayName && !formData.customCategory
+                        ? 'border-primary bg-primary/10 text-primary'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    {category.displayName}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex items-center justify-between">
+              <Button type="button" variant="ghost" className="px-0 text-primary" onClick={() => setShowAllCategories((value) => !value)}>
+                {showAllCategories ? 'Show less' : 'See more'}
+              </Button>
+            </div>
+            <Input
+              value={formData.customCategory}
+              onChange={(event) =>
+                setFormData((current) => ({
+                  ...current,
+                  customCategory: event.target.value,
+                  primaryCategory: '',
+                }))
+              }
+              placeholder="Or create a custom category"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="club-description">Description *</Label>
             <Textarea
-              id="description"
+              id="club-description"
               value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+              onChange={(event) => setFormData((current) => ({ ...current, description: event.target.value }))}
               placeholder="Describe what your club is about, goals, and activities..."
               rows={4}
               required
             />
           </div>
 
-          {/* Club Avatar URL */}
-          <div className="space-y-2">
-            <Label htmlFor="avatarUrl">Club Logo/Avatar URL (optional)</Label>
-            <div className="relative">
-              <ImageIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input
-                id="avatarUrl"
-                value={formData.avatarUrl}
-                onChange={(e) => setFormData({ ...formData, avatarUrl: e.target.value })}
-                placeholder="https://example.com/logo.jpg"
-                className="pl-10"
-              />
-            </div>
-            {formData.avatarUrl && (
-              <div className="mt-2 rounded-xl overflow-hidden border border-gray-200 w-32 h-32">
-                <img 
-                  src={formData.avatarUrl} 
-                  alt="Club avatar preview" 
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
-              </div>
-            )}
-            <p className="text-xs text-gray-500">Add a logo or avatar for your club</p>
-          </div>
+          <ImageUpload onFileChange={setAvatarFile} disabled={isSubmitting} />
+          <ImageUpload onFileChange={setCoverImageFile} disabled={isSubmitting} />
 
-          {/* Tags */}
           <div className="space-y-2">
-            <Label htmlFor="tags">Tags (optional)</Label>
+            <Label htmlFor="club-tags">Tags</Label>
             <div className="flex gap-2">
               <Input
-                id="tags"
+                id="club-tags"
                 value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
-                placeholder="Add relevant tags (press Enter)"
+                onChange={(event) => setTagInput(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    addTag();
+                  }
+                }}
+                placeholder="Add relevant tags"
               />
-              <Button type="button" onClick={addTag} variant="outline">
+              <Button type="button" variant="outline" onClick={addTag}>
                 Add
               </Button>
             </div>
-            <div className="flex flex-wrap gap-2 mt-2">
+            <div className="flex flex-wrap gap-2">
               {formData.tags.map((tag) => (
-                <Badge key={tag} className="bg-blue-100 text-blue-800">
+                <Badge key={tag} variant="secondary" className="gap-2">
                   {tag}
                   <button
                     type="button"
-                    onClick={() => removeTag(tag)}
-                    className="ml-2 hover:text-blue-900"
+                    onClick={() =>
+                      setFormData((current) => ({
+                        ...current,
+                        tags: current.tags.filter((existingTag) => existingTag !== tag),
+                      }))
+                    }
                   >
-                    <X className="w-3 h-3" />
+                    x
                   </button>
                 </Badge>
               ))}
             </div>
           </div>
 
-          {/* Club Guidelines */}
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-            <h4 className="text-sm font-semibold text-gray-900 mb-2">Club Guidelines</h4>
-            <ul className="text-xs text-gray-600 space-y-1">
-              <li>• Ensure your club promotes a positive and inclusive environment</li>
-              <li>• Regularly engage with members through events and activities</li>
-              <li>• Follow campus guidelines and policies</li>
-              <li>• Respect diversity and encourage collaboration</li>
-            </ul>
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-3 pt-4">
-            <Button type="button" onClick={onClose} variant="outline" className="flex-1">
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={onClose} disabled={isSubmitting}>
               Cancel
             </Button>
-            <Button type="submit" className="flex-1 gradient-success">
-              <Users className="w-4 h-4 mr-2" />
+            <Button type="submit" className="flex-1 gradient-success" disabled={isSubmitting}>
+              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Users className="w-4 h-4 mr-2" />}
               Create Club
             </Button>
           </div>

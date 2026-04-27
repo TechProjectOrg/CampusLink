@@ -10,7 +10,7 @@ import {
   uploadPostMediaToStorage,
   uploadProfilePhotoToStorage,
 } from '../lib/objectStorage';
-import { createPostPublishedNotifications } from '../lib/notifications';
+import { createPostPublishedNotifications, notifyClubPostPublished } from '../lib/notifications';
 import {
   addPostToFeedCaches,
   getPostFeedRecipientIds,
@@ -19,6 +19,7 @@ import {
 } from '../lib/feedCache';
 import { emitFeedEvent } from '../lib/realtime';
 import { incrementUserStat, patchUserSummary } from '../lib/userCache';
+import { getClubPermissionSnapshot, requireActiveClubMembership } from '../lib/clubs';
 
 const router = express.Router();
 
@@ -1445,6 +1446,20 @@ router.post(
         if (!clubRows[0]) {
           return res.status(400).json({ message: 'clubId does not exist' });
         }
+
+        const clubPermissions = await getClubPermissionSnapshot(clubIdValue, userId);
+        if (!clubPermissions?.canViewClub) {
+          return res.status(403).json({ message: 'You are not allowed to post in this club' });
+        }
+
+        const activeMembership = await requireActiveClubMembership(clubIdValue, userId);
+        if (nextPostType === 'club_activity' && !activeMembership) {
+          return res.status(403).json({ message: 'Active club membership is required for club_activity posts' });
+        }
+
+        if (nextVisibility === 'club_members' && !activeMembership) {
+          return res.status(403).json({ message: 'Active club membership is required for club_members visibility' });
+        }
       }
 
       uploadedMediaEntries = await Promise.all(
@@ -1608,6 +1623,14 @@ router.post(
         postId: created.post_id,
         postTitle: created.title,
       });
+      if (created.club_id) {
+        await notifyClubPostPublished({
+          clubId: created.club_id,
+          postId: created.post_id,
+          actorUserId: userId,
+          postTitle: created.title,
+        });
+      }
       await incrementUserStat(userId, 'postCount', 1);
 
       return res.status(201).json(mapUserPostRow(created));

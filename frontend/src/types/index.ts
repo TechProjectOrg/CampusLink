@@ -67,6 +67,10 @@ export interface Opportunity {
   authorId: string;
   authorName: string;
   authorAvatar: string;
+  clubId?: string | null;
+  clubName?: string | null;
+  clubSlug?: string | null;
+  clubAvatarUrl?: string | null;
   type: 'general' | 'internship' | 'hackathon' | 'event' | 'contest' | 'club';
   title: string;
   description: string;
@@ -111,11 +115,38 @@ export interface Comment {
 export interface Club {
   id: string;
   name: string;
-  description: string;
-  avatar: string;
-  members: string[];
-  admin: string;
-  posts: string[];
+  slug: string;
+  shortDescription?: string | null;
+  description: string | null;
+  privacy: 'open' | 'request' | 'private';
+  avatarUrl?: string | null;
+  coverImageUrl?: string | null;
+  createdByUserId: string;
+  createdAt: string;
+  updatedAt: string;
+  primaryCategory?: {
+    id: string;
+    displayName: string | null;
+  } | null;
+  tags: string[];
+  memberCount: number;
+  postCount: number;
+  membership?: {
+    status: 'active' | 'pending' | 'invited' | 'removed' | 'left' | null;
+    role: 'owner' | 'admin' | 'member' | null;
+  };
+  permissions?: {
+    canViewClub: boolean;
+    canJoinClub: boolean;
+    canRequestJoin: boolean;
+    canManageClub: boolean;
+    canModerateMembers: boolean;
+    canCreatePosts: boolean;
+    canComment: boolean;
+    canInviteMembers: boolean;
+    membershipStatus: 'active' | 'pending' | 'invited' | 'removed' | 'left' | null;
+    membershipRole: 'owner' | 'admin' | 'member' | null;
+  } | null;
 }
 
 export interface Message {

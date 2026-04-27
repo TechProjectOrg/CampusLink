@@ -45,6 +45,9 @@ export interface UserPost {
   authorUsername?: string;
   authorProfilePictureUrl?: string | null;
   clubId: string | null;
+  clubName?: string | null;
+  clubSlug?: string | null;
+  clubAvatarUrl?: string | null;
   postType: PostType;
   opportunityType: OpportunityType | null;
   title: string | null;
@@ -136,13 +139,16 @@ function normalizeComment(raw: any): PostComment {
   };
 }
 
-function normalizeUserPost(raw: any): UserPost {
+export function normalizeUserPost(raw: any): UserPost {
   return {
     id: String(raw?.id ?? ''),
     authorUserId: String(raw?.authorUserId ?? ''),
     authorUsername: raw?.authorUsername ? String(raw.authorUsername) : undefined,
     authorProfilePictureUrl: raw?.authorProfilePictureUrl ? String(raw.authorProfilePictureUrl) : null,
     clubId: raw?.clubId ? String(raw.clubId) : null,
+    clubName: raw?.clubName ? String(raw.clubName) : null,
+    clubSlug: raw?.clubSlug ? String(raw.clubSlug) : null,
+    clubAvatarUrl: raw?.clubAvatarUrl ? String(raw.clubAvatarUrl) : null,
     postType: String(raw?.postType ?? 'general') as PostType,
     opportunityType: raw?.opportunityType ? (String(raw.opportunityType) as OpportunityType) : null,
     title: raw?.title ? String(raw.title) : null,

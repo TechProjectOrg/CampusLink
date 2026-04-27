@@ -11,7 +11,8 @@ export type NotificationType =
   | 'comment'
   | 'reply'
   | 'opportunity'
-  | 'message';
+  | 'message'
+  | 'club';
 
 interface CreateNotificationParams {
   recipientUserId: string;
@@ -90,6 +91,10 @@ async function isNotificationEnabled(recipientUserId: string, type: Notification
 
   if (type === 'opportunity') {
     return prefs.newPostAlerts;
+  }
+
+  if (type === 'club') {
+    return prefs.clubUpdates;
   }
 
   return true;
@@ -515,5 +520,66 @@ export async function notifyCommentReply(params: {
     });
   } catch (err) {
     console.error('Failed to notify comment reply:', err);
+  }
+}
+
+export async function notifyClubPostPublished(params: {
+  clubId: string;
+  postId: string;
+  actorUserId: string;
+  postTitle?: string | null;
+}): Promise<void> {
+  try {
+    const actorRows = await prisma.$queryRaw<Array<{ username: string }>>`
+      SELECT username
+      FROM users
+      WHERE user_id = ${params.actorUserId}
+      LIMIT 1
+    `;
+    const clubRows = await prisma.$queryRaw<Array<{ name: string }>>`
+      SELECT name
+      FROM clubs
+      WHERE club_id = ${params.clubId}
+      LIMIT 1
+    `;
+
+    const actorName = actorRows[0]?.username ?? 'Someone';
+    const clubName = clubRows[0]?.name ?? 'a club';
+    const message = params.postTitle?.trim()
+      ? `${actorName} posted in ${clubName}: ${params.postTitle.trim()}`
+      : `${actorName} posted in ${clubName}`;
+
+    const inserted = await prisma.$queryRaw<Array<{ notification_id: string }>>`
+      INSERT INTO notifications (
+        user_id,
+        actor_user_id,
+        notification_type,
+        title,
+        message,
+        entity_type,
+        entity_id
+      )
+      SELECT
+        cm.user_id,
+        ${params.actorUserId},
+        'club',
+        ${clubName},
+        ${message},
+        'post',
+        ${params.postId}
+      FROM club_memberships cm
+      LEFT JOIN user_settings us ON us.user_id = cm.user_id
+      WHERE cm.club_id = ${params.clubId}
+        AND cm.status = CAST('active' AS "ClubMembershipStatus")
+        AND cm.user_id <> ${params.actorUserId}
+        AND COALESCE(us.club_update_notifications, TRUE) = TRUE
+      RETURNING notification_id
+    `;
+
+    await Promise.allSettled(
+      inserted.map((row) => fanoutNotification(row.notification_id, 'new')),
+    );
+  } catch (err) {
+    console.error('Failed to notify club post publication:', err);
   }
 }

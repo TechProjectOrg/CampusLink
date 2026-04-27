@@ -22,6 +22,7 @@ import {
 } from '../lib/feedCache';
 import { emitFeedEvent } from '../lib/realtime';
 import { incrementUserStat } from '../lib/userCache';
+import { canViewerAccessClubPost } from '../lib/clubs';
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -255,41 +256,7 @@ async function canViewerAccessAuthorPosts(viewerUserId: string, authorUserId: st
 }
 
 async function canViewerAccessPost(viewerUserId: string, postId: string): Promise<boolean> {
-  const rows = await prisma.$queryRaw<{ visible_to_viewer: boolean }[]>`
-    SELECT
-      (
-        p.author_user_id = ${viewerUserId}
-        OR (
-          (
-            p.visibility = CAST('public' AS "PostVisibility")
-            OR (
-              p.visibility = CAST('followers' AS "PostVisibility")
-              AND EXISTS (
-                SELECT 1
-                FROM follows f
-                WHERE f.follower_user_id = ${viewerUserId}
-                  AND f.followed_user_id = p.author_user_id
-              )
-            )
-          )
-          AND (
-            NOT au.is_private
-            OR EXISTS (
-              SELECT 1
-              FROM follows f
-              WHERE f.follower_user_id = ${viewerUserId}
-                AND f.followed_user_id = p.author_user_id
-            )
-          )
-        )
-      ) AS visible_to_viewer
-    FROM posts p
-    JOIN users au ON au.user_id = p.author_user_id
-    WHERE p.post_id = ${postId}
-    LIMIT 1
-  `;
-
-  return Boolean(rows[0]?.visible_to_viewer);
+  return canViewerAccessClubPost(viewerUserId, postId);
 }
 
 async function fetchCommentsForPost(postId: string, viewerUserId: string): Promise<PostCommentResponse[]> {

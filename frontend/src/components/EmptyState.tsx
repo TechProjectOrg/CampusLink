@@ -36,7 +36,7 @@ export function EmptyState({ type, onAction, actionLabel }: EmptyStateProps) {
     opportunities: {
       icon: Briefcase,
       title: 'No saved opportunities',
-      description: 'Browse the feed and save opportunities you're interested in.',
+      description: 'Browse the feed and save opportunities you\'re interested in.',
       action: 'Explore Feed'
     },
     clubs: {

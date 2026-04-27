@@ -25,6 +25,9 @@ export interface FeedPostRow {
   author_username: string;
   author_profile_photo_url: string | null;
   club_id: string | null;
+  club_name: string | null;
+  club_slug: string | null;
+  club_avatar_url: string | null;
   post_type: DbPostType;
   opportunity_type: DbOpportunityType | null;
   title: string | null;
@@ -94,6 +97,9 @@ export interface FeedPostResponse {
   authorUsername: string;
   authorProfilePictureUrl: string | null;
   clubId: string | null;
+  clubName: string | null;
+  clubSlug: string | null;
+  clubAvatarUrl: string | null;
   postType: DbPostType;
   opportunityType: DbOpportunityType | null;
   title: string | null;
@@ -124,6 +130,9 @@ interface PostSnapshot {
   postId: string;
   authorUserId: string;
   clubId: string | null;
+  clubName: string | null;
+  clubSlug: string | null;
+  clubAvatarUrl: string | null;
   postType: DbPostType;
   opportunityType: DbOpportunityType | null;
   title: string | null;
@@ -227,6 +236,9 @@ function snapshotFromRow(row: FeedPostRow): PostSnapshot {
     postId: row.post_id,
     authorUserId: row.author_user_id,
     clubId: row.club_id,
+    clubName: row.club_name,
+    clubSlug: row.club_slug,
+    clubAvatarUrl: row.club_avatar_url,
     postType: row.post_type,
     opportunityType: row.opportunity_type,
     title: row.title,
@@ -258,6 +270,9 @@ function rowFromSnapshot(
     author_username: author.username,
     author_profile_photo_url: author.profilePictureUrl,
     club_id: snapshot.clubId,
+    club_name: snapshot.clubName,
+    club_slug: snapshot.clubSlug,
+    club_avatar_url: snapshot.clubAvatarUrl,
     post_type: snapshot.postType,
     opportunity_type: snapshot.opportunityType,
     title: snapshot.title,
@@ -324,6 +339,9 @@ function postSelectSql(viewerUserId: string): Prisma.Sql {
       au.username AS author_username,
       au.profile_photo_url AS author_profile_photo_url,
       p.club_id,
+      c.name AS club_name,
+      c.slug AS club_slug,
+      c.avatar_url AS club_avatar_url,
       p.post_type,
       p.opportunity_type,
       p.title,
@@ -370,6 +388,7 @@ function postSelectSql(viewerUserId: string): Prisma.Sql {
       p.updated_at
     FROM posts p
     JOIN users au ON au.user_id = p.author_user_id
+    LEFT JOIN clubs c ON c.club_id = p.club_id
   `;
 }
 
@@ -378,25 +397,56 @@ function visibilitySql(viewerUserId: string): Prisma.Sql {
     (
       p.author_user_id = ${viewerUserId}
       OR (
-        (
-          p.visibility = CAST('public' AS "PostVisibility")
-          OR (
-            p.visibility = CAST('followers' AS "PostVisibility")
+        p.club_id IS NOT NULL
+        AND (
+          (
+            p.visibility = CAST('club_members' AS "PostVisibility")
             AND EXISTS (
+              SELECT 1
+              FROM club_memberships cm
+              WHERE cm.club_id = p.club_id
+                AND cm.user_id = ${viewerUserId}
+                AND cm.status = CAST('active' AS "ClubMembershipStatus")
+            )
+          )
+          OR (
+            p.visibility = CAST('public' AS "PostVisibility")
+            AND (
+              c.privacy <> CAST('private' AS "ClubPrivacy")
+              OR EXISTS (
+                SELECT 1
+                FROM club_memberships cm
+                WHERE cm.club_id = p.club_id
+                  AND cm.user_id = ${viewerUserId}
+                  AND cm.status = CAST('active' AS "ClubMembershipStatus")
+              )
+            )
+          )
+        )
+      )
+      OR (
+        p.club_id IS NULL
+        AND (
+          (
+            p.visibility = CAST('public' AS "PostVisibility")
+            OR (
+              p.visibility = CAST('followers' AS "PostVisibility")
+              AND EXISTS (
+                SELECT 1
+                FROM follows f
+                WHERE f.follower_user_id = ${viewerUserId}
+                  AND f.followed_user_id = p.author_user_id
+              )
+            )
+          )
+          AND (
+            NOT au.is_private
+            OR EXISTS (
               SELECT 1
               FROM follows f
               WHERE f.follower_user_id = ${viewerUserId}
                 AND f.followed_user_id = p.author_user_id
             )
-          )
-        )
-        AND (
-          NOT au.is_private
-          OR EXISTS (
-            SELECT 1
-            FROM follows f
-            WHERE f.follower_user_id = ${viewerUserId}
-              AND f.followed_user_id = p.author_user_id
           )
         )
       )
@@ -418,20 +468,45 @@ async function fetchFeedIdRowsFromDb(viewerUserId: string, limit: number, offset
     SELECT p.post_id, p.created_at
     FROM posts p
     JOIN users au ON au.user_id = p.author_user_id
+    LEFT JOIN clubs c ON c.club_id = p.club_id
     WHERE (
       p.author_user_id = ${viewerUserId}
       OR (
-        EXISTS (
-          SELECT 1
-          FROM follows f
-          WHERE f.follower_user_id = ${viewerUserId}
-            AND f.followed_user_id = p.author_user_id
-        )
+        p.club_id IS NULL
+        AND EXISTS (
+            SELECT 1
+            FROM follows f
+            WHERE f.follower_user_id = ${viewerUserId}
+              AND f.followed_user_id = p.author_user_id
+          )
         AND p.visibility IN (CAST('public' AS "PostVisibility"), CAST('followers' AS "PostVisibility"))
+      )
+      OR (
+        p.club_id IS NOT NULL
+        AND EXISTS (
+          SELECT 1
+          FROM club_memberships cm
+          WHERE cm.club_id = p.club_id
+            AND cm.user_id = ${viewerUserId}
+            AND cm.status = CAST('active' AS "ClubMembershipStatus")
+        )
       )
     )
     AND (
       p.author_user_id = ${viewerUserId}
+      OR (
+        p.club_id IS NOT NULL
+        AND (
+          c.privacy <> CAST('private' AS "ClubPrivacy")
+          OR EXISTS (
+            SELECT 1
+            FROM club_memberships cm
+            WHERE cm.club_id = p.club_id
+              AND cm.user_id = ${viewerUserId}
+              AND cm.status = CAST('active' AS "ClubMembershipStatus")
+          )
+        )
+      )
       OR NOT au.is_private
       OR EXISTS (
         SELECT 1
@@ -474,16 +549,28 @@ export async function fetchPostIdsByQuery(
       SELECT p.post_id, p.created_at
       FROM posts p
       JOIN users au ON au.user_id = p.author_user_id
+      LEFT JOIN clubs c ON c.club_id = p.club_id
       WHERE (
         p.author_user_id = ${viewerUserId}
         OR (
-          EXISTS (
-            SELECT 1
-            FROM follows f
-            WHERE f.follower_user_id = ${viewerUserId}
-              AND f.followed_user_id = p.author_user_id
-          )
+          p.club_id IS NULL
+          AND EXISTS (
+              SELECT 1
+              FROM follows f
+              WHERE f.follower_user_id = ${viewerUserId}
+                AND f.followed_user_id = p.author_user_id
+            )
           AND p.visibility IN (CAST('public' AS "PostVisibility"), CAST('followers' AS "PostVisibility"))
+        )
+        OR (
+          p.club_id IS NOT NULL
+          AND EXISTS (
+            SELECT 1
+            FROM club_memberships cm
+            WHERE cm.club_id = p.club_id
+              AND cm.user_id = ${viewerUserId}
+              AND cm.status = CAST('active' AS "ClubMembershipStatus")
+          )
         )
       )
       AND (
@@ -494,6 +581,17 @@ export async function fetchPostIdsByQuery(
           JOIN hashtags h ON h.hashtag_id = ph.hashtag_id
           WHERE ph.post_id = p.post_id
             AND h.tag_name ILIKE ${hashtagPattern ? `%${hashtagPattern}%` : null}
+        )
+      )
+      AND (
+        p.club_id IS NULL
+        OR c.privacy <> CAST('private' AS "ClubPrivacy")
+        OR EXISTS (
+          SELECT 1
+          FROM club_memberships cm
+          WHERE cm.club_id = p.club_id
+            AND cm.user_id = ${viewerUserId}
+            AND cm.status = CAST('active' AS "ClubMembershipStatus")
         )
       )
       ORDER BY p.created_at DESC
@@ -739,6 +837,9 @@ export async function hydratePosts(viewerUserId: string, postIds: string[]): Pro
       authorUsername: row.author_username,
       authorProfilePictureUrl: row.author_profile_photo_url,
       clubId: row.club_id,
+      clubName: row.club_name,
+      clubSlug: row.club_slug,
+      clubAvatarUrl: row.club_avatar_url,
       postType: row.post_type,
       opportunityType: row.opportunity_type,
       title: row.title,
@@ -811,7 +912,15 @@ export async function getPostFeedRecipientIds(postId: string): Promise<string[]>
     FROM posts p
     JOIN follows f ON f.followed_user_id = p.author_user_id
     WHERE p.post_id = ${postId}
+      AND p.club_id IS NULL
       AND p.visibility IN (CAST('public' AS "PostVisibility"), CAST('followers' AS "PostVisibility"))
+    UNION
+    SELECT cm.user_id AS user_id
+    FROM posts p
+    JOIN club_memberships cm ON cm.club_id = p.club_id
+    WHERE p.post_id = ${postId}
+      AND p.club_id IS NOT NULL
+      AND cm.status = CAST('active' AS "ClubMembershipStatus")
   `;
   return rows.map((row) => row.user_id);
 }

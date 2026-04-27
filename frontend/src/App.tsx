@@ -15,7 +15,7 @@ import { FloatingChat } from './components/FloatingChat';
 import { LoadingState } from './components/LoadingState';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
-import { Student, Opportunity, Club, Notification, Comment, ChatConversation } from './types';
+import { Student, Opportunity, Notification, Comment, ChatConversation } from './types';
 import { ProfileCard } from './components/ProfileCard';
 import { SuggestionsCard } from './components/SuggestionsCard';
 import { useAuth } from './context/AuthContext';
@@ -627,7 +627,6 @@ export default function App() {
   const appData = useAppDataStore();
 
   const [activeTab, setActiveTab] = useState('feed');
-  const [clubs, setClubs] = useState<Club[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [followGraph, setFollowGraph] = useState<FollowGraph>({
     followersByUserId: {},
@@ -1979,31 +1978,6 @@ export default function App() {
     };
   }, [activeTab, appData, viewingProfileId, currentUserId, authToken]);
 
-  // Club handlers
-  const handleJoinClub = (clubId: string) => {
-    setClubs(clubs.map(club => {
-      if (club.id === clubId) {
-        return {
-          ...club,
-          members: [...club.members, currentUserId]
-        };
-      }
-      return club;
-    }));
-  };
-
-  const handleLeaveClub = (clubId: string) => {
-    setClubs(clubs.map(club => {
-      if (club.id === clubId) {
-        return {
-          ...club,
-          members: club.members.filter(id => id !== currentUserId)
-        };
-      }
-      return club;
-    }));
-  };
-
   // Profile handlers
   const handleEditProfile = (updates: Partial<Student>) => {
     appData.updateUser(currentUserId, (student) => ({ ...student, ...updates }));
@@ -2094,11 +2068,6 @@ export default function App() {
   // Create opportunity handler
   const handleCreateOpportunity = async (opportunity: Opportunity) => {
     await persistCreatedPost(opportunity);
-  };
-
-  // Create club handler
-  const handleCreateClub = (club: Club) => {
-    setClubs([club, ...clubs]);
   };
 
   // Settings handler
@@ -2271,12 +2240,8 @@ export default function App() {
           />
           ) : activeTab === 'clubs' ? (
           <ClubsPage
-            clubs={clubs}
             students={students}
             currentUserId={currentUserId}
-            onJoinClub={handleJoinClub}
-            onLeaveClub={handleLeaveClub}
-            onCreateClub={handleCreateClub}
             onViewProfile={handleViewProfile}
           />
           ) : activeTab === 'profile' ? (

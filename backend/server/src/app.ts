@@ -7,6 +7,7 @@ import searchRouter from './routes/search';
 import networkRouter from './routes/network';
 import notificationsRouter from './routes/notifications';
 import chatRouter from './routes/chat';
+import clubsRouter from './routes/clubs';
 import cors from 'cors';
 
 const app: Application = express();
@@ -59,5 +60,6 @@ app.use('/search', searchRouter);
 app.use('/network', networkRouter);
 app.use('/notifications', notificationsRouter);
 app.use('/chat', chatRouter);
+app.use('/clubs', clubsRouter);
 
 export default app;

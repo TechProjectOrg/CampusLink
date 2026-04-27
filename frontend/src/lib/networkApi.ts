@@ -57,9 +57,21 @@ export interface SearchHashtagResult {
   postCount: number;
 }
 
+export interface SearchClubResult {
+  clubId: string;
+  name: string;
+  slug: string;
+  shortDescription: string | null;
+  avatarUrl: string | null;
+  privacy: 'open' | 'request' | 'private';
+  category: string | null;
+  memberCount: number;
+}
+
 export interface UnifiedSearchResult {
   users: SearchUserResult[];
   hashtags: SearchHashtagResult[];
+  clubs: SearchClubResult[];
 }
 
 // ============================================================
