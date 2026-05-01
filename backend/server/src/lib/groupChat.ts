@@ -143,9 +143,9 @@ export async function addUserToChat(
   // Emit event
   await emitUserJoined(chatId, targetUserId, actorUserId);
 
-  // Invalidate both users' conversation lists
-  await invalidateConversationLists([actorUserId]);
-  await invalidateConversationLists([targetUserId]);
+  // Invalidate conversation lists for all active participants (including new member).
+  const participantIds = await getChatParticipantIds(chatId);
+  await invalidateConversationLists(participantIds);
 }
 
 /**
@@ -182,11 +182,9 @@ export async function removeUserFromChat(
     await emitUserRemoved(chatId, targetUserId, actorUserId, reason);
   }
 
-  // Invalidate conversation lists
-  await invalidateConversationLists([actorUserId]);
-  if (actorUserId !== targetUserId) {
-    await invalidateConversationLists([targetUserId]);
-  }
+  // Invalidate conversation lists for all remaining active participants and removed user.
+  const participantIds = await getChatParticipantIds(chatId);
+  await invalidateConversationLists(Array.from(new Set([...participantIds, targetUserId])));
 }
 
 /**
@@ -238,8 +236,9 @@ export async function changeUserRole(
   // Emit event
   await emitUserRoleChanged(chatId, targetUserId, currentRole, newRole, actorUserId);
 
-  // Invalidate conversation lists
-  await invalidateConversationLists([targetUserId]);
+  // Invalidate conversation lists for all active participants so role/member metadata stays fresh.
+  const participantIds = await getChatParticipantIds(chatId);
+  await invalidateConversationLists(participantIds);
 }
 
 /**
@@ -299,9 +298,7 @@ export async function updateGroupChat(
 
   // Invalidate all participants' conversation lists
   const participantIds = await getChatParticipantIds(chatId);
-  for (const participantId of participantIds) {
-    await invalidateConversationLists([participantId]);
-  }
+  await invalidateConversationLists(participantIds);
 }
 
 /**
@@ -318,9 +315,7 @@ export async function deleteGroupChat(actorUserId: string, chatId: string): Prom
 
   // Invalidate all participants' conversation lists BEFORE deleting
   const participantIds = await getChatParticipantIds(chatId);
-  for (const participantId of participantIds) {
-    await invalidateConversationLists([participantId]);
-  }
+  await invalidateConversationLists(participantIds);
 
   // Delete (cascade will clean up participants, messages, etc)
   await prisma.$queryRaw`
