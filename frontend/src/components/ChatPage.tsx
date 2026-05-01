@@ -11,6 +11,7 @@ import {
   apiAddGroupMember,
   apiChangeGroupMemberRole,
   apiCreateGroupConversation,
+  apiDeleteGroupChat,
   apiFetchGroupChatDetails,
   apiLeaveGroupChat,
   apiRemoveGroupMember,
@@ -429,6 +430,23 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     }
   }, [appData, auth.session?.token]);
 
+  const handleDeleteGroup = useCallback(async (groupId: string) => {
+    const token = auth.session?.token;
+    if (!token) return;
+    const confirmed = window.confirm('Delete this group permanently? This cannot be undone.');
+    if (!confirmed) return;
+
+    try {
+      await apiDeleteGroupChat(groupId, token);
+      setViewingGroupInfo(null);
+      setGroupInfo(null);
+      appData.selectConversation(null);
+      await appData.ensureConversations({ force: true });
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Failed to delete group');
+    }
+  }, [appData, auth.session?.token]);
+
   if (viewingGroupInfo && !groupInfo) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center bg-white">
@@ -447,6 +465,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
         onBack={() => setViewingGroupInfo(null)}
         onViewProfile={onViewProfile}
         onAddMember={handleAddGroupMember}
+        onDeleteGroup={handleDeleteGroup}
         onLeaveGroup={handleLeaveGroup}
         onRemoveMember={handleRemoveGroupMember}
         onMakeAdmin={handleMakeGroupAdmin}
@@ -700,6 +719,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                   const groupHasMultipleMessages = Boolean(nextMsg && msg.isOwn === nextMsg.isOwn && isSameCalendarDay(msg.timestamp, nextMsg.timestamp));
                   const showDate = startsNewDate;
                   const showGroupStartTime = startsSenderGroup && groupHasMultipleMessages;
+                  const isSystemMessage = msg.type === 'system';
 
                   return (
                     <div key={msg.id} id={`chat-message-${msg.id}`}>
@@ -717,14 +737,29 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                           </span>
                         </div>
                       )}
+                      {isSystemMessage ? (
+                        <div className="flex justify-center py-1.5">
+                          <span
+                            className="text-xs text-gray-400 px-3 py-1 bg-gray-50 rounded-full"
+                            title={new Date(msg.timestamp).toLocaleString('en-US')}
+                          >
+                            {msg.content}
+                          </span>
+                        </div>
+                      ) : (
                       <div className={`flex items-end gap-2 ${msg.isOwn ? 'justify-end' : 'justify-start'}`}>
                         {!msg.isOwn && (
                           <Avatar className="w-6 h-6 md:w-7 md:h-7 flex-shrink-0 mb-1">
-                            <AvatarImage src={selectedConversation.participantAvatar} />
-                            <AvatarFallback>{selectedConversation.participantName[0]}</AvatarFallback>
+                            <AvatarImage src={msg.senderAvatar ?? undefined} />
+                            <AvatarFallback>{msg.senderName[0]}</AvatarFallback>
                           </Avatar>
                         )}
                         <div className={`group min-w-0 w-fit max-w-[78%] md:max-w-[70%] xl:max-w-[40rem] ${msg.isOwn ? 'order-2' : 'order-1'}`}>
+                          {selectedConversation.isGroup && !msg.isOwn && startsSenderGroup && (
+                            <p className="mb-1 px-2 text-xs font-medium text-gray-500">
+                              {msg.senderName}
+                            </p>
+                          )}
                           <div className="flex items-center gap-2">
                             <div
                               className={`${msg.isOwn ? 'order-2' : 'order-1'} min-w-0 w-fit max-w-full rounded-3xl px-3 py-2 transition-shadow duration-200 md:px-4 md:py-2.5 ${
@@ -842,6 +877,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                           {getSeenAvatarStack(msg)}
                         </div>
                       </div>
+                      )}
                     </div>
                   );
                 })}

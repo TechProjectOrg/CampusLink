@@ -394,6 +394,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                   const groupHasMultipleMessages = Boolean(nextMsg && msg.isOwn === nextMsg.isOwn && isSameCalendarDay(msg.timestamp, nextMsg.timestamp));
                   const showDate = startsNewDate;
                   const showGroupStartTime = startsSenderGroup && groupHasMultipleMessages;
+                  const isSystemMessage = msg.type === 'system';
 
                   return (
                     <div key={msg.id} id={`floating-chat-message-${msg.id}`}>
@@ -411,14 +412,29 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                           </span>
                         </div>
                       )}
+                      {isSystemMessage ? (
+                        <div className="flex justify-center py-1.5">
+                          <span
+                            className="text-xs text-gray-400 px-3 py-1 bg-gray-50 rounded-full"
+                            title={new Date(msg.timestamp).toLocaleString('en-US')}
+                          >
+                            {msg.content}
+                          </span>
+                        </div>
+                      ) : (
                       <div className={`flex items-end gap-2 ${msg.isOwn ? 'justify-end' : 'justify-start'}`}>
                         {!msg.isOwn && (
                           <Avatar className="w-6 h-6 flex-shrink-0 mb-1">
-                            <AvatarImage src={selectedChat.participantAvatar} />
-                            <AvatarFallback className="text-xs">{selectedChat.participantName[0]}</AvatarFallback>
+                            <AvatarImage src={msg.senderAvatar ?? undefined} />
+                            <AvatarFallback className="text-xs">{msg.senderName[0]}</AvatarFallback>
                           </Avatar>
                         )}
                         <div className={`group min-w-0 w-fit max-w-[82%] sm:max-w-[78%] ${msg.isOwn ? 'order-2' : 'order-1'}`}>
+                          {selectedChat.isGroup && !msg.isOwn && startsSenderGroup && (
+                            <p className="mb-1 px-2 text-xs font-medium text-gray-500">
+                              {msg.senderName}
+                            </p>
+                          )}
                           <div className="flex items-start gap-2">
                             <div
                               className={`${msg.isOwn ? 'order-2' : 'order-1'} min-w-0 w-fit max-w-full rounded-3xl px-4 py-2 transition-shadow duration-200 ${
@@ -509,6 +525,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                           {renderSeenBy(msg)}
                         </div>
                       </div>
+                      )}
                     </div>
                   );
                 })}

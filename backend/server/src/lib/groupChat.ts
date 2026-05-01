@@ -84,7 +84,7 @@ export async function createGroupChat(
   });
 
   for (const memberId of uniqueMembers) {
-    await emitUserJoined(chatId, memberId);
+    await emitUserJoined(chatId, memberId, creatorId);
   }
 
   await invalidateConversationLists([creatorId]);
@@ -141,7 +141,7 @@ export async function addUserToChat(
   `;
 
   // Emit event
-  await emitUserJoined(chatId, targetUserId);
+  await emitUserJoined(chatId, targetUserId, actorUserId);
 
   // Invalidate both users' conversation lists
   await invalidateConversationLists([actorUserId]);

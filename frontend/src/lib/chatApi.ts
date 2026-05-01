@@ -321,3 +321,16 @@ export async function apiLeaveGroupChat(chatId: string, token: string): Promise<
     throw new Error(error.error || error.message || 'Failed to leave group');
   }
 }
+
+export async function apiDeleteGroupChat(chatId: string, token: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/group-chat/${chatId}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || error.message || 'Failed to delete group');
+  }
+}

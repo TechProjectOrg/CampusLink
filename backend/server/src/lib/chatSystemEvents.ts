@@ -28,6 +28,19 @@ interface SystemEventPayload {
   reason?: string; // For removals
 }
 
+async function getUsernameById(userId: string | null | undefined): Promise<string | null> {
+  if (!userId) return null;
+
+  const rows = await prisma.$queryRaw<{ username: string }[]>`
+    SELECT username
+    FROM users
+    WHERE user_id = ${userId}
+    LIMIT 1
+  `;
+
+  return rows[0]?.username ?? null;
+}
+
 async function findExistingUserId(userId: string | null | undefined): Promise<string | null> {
   if (!userId) return null;
 
@@ -99,27 +112,55 @@ export async function createSystemEvent(
 ): Promise<string> {
   const systemUserId = await resolveSystemEventSenderUserId(chatId, payload);
   const now = new Date().toISOString();
+  const actorName = await getUsernameById(payload.actorUserId);
+  const targetName = await getUsernameById(payload.targetUserId);
+  const previousRole = payload.previousRole?.toLowerCase();
+  const newRole = payload.newRole?.toLowerCase();
 
   // Build human-readable content
   let content = '';
   switch (payload.eventType) {
     case SystemEventType.USER_JOINED:
-      content = `User joined the chat`;
+      if (targetName && actorName && payload.actorUserId !== payload.targetUserId) {
+        content = `${actorName} added ${targetName} to the group`;
+      } else if (targetName) {
+        content = `${targetName} joined the group`;
+      } else {
+        content = `Someone joined the group`;
+      }
       break;
     case SystemEventType.USER_LEFT:
-      content = `User left the chat`;
+      content = targetName ? `${targetName} left the group` : `Someone left the group`;
       break;
     case SystemEventType.USER_REMOVED:
-      content = `User was removed from the chat`;
+      if (targetName && actorName) {
+        content = `${actorName} removed ${targetName} from the group`;
+      } else if (targetName) {
+        content = `${targetName} was removed from the group`;
+      } else {
+        content = `A member was removed from the group`;
+      }
       break;
     case SystemEventType.USER_ROLE_CHANGED:
-      content = `User role changed from ${payload.previousRole} to ${payload.newRole}`;
+      if (targetName && actorName && previousRole && newRole) {
+        content = `${actorName} changed ${targetName}'s role from ${previousRole} to ${newRole}`;
+      } else if (targetName && newRole) {
+        content = `${targetName} is now ${newRole}`;
+      } else {
+        content = `A member role was updated`;
+      }
       break;
     case SystemEventType.CHAT_CREATED:
-      content = `Chat was created`;
+      content = actorName ? `${actorName} created the group` : `Group created`;
       break;
     case SystemEventType.CHAT_NAME_CHANGED:
-      content = `Chat name changed from "${payload.previousName}" to "${payload.newName}"`;
+      if (actorName && payload.previousName && payload.newName) {
+        content = `${actorName} changed the group name from "${payload.previousName}" to "${payload.newName}"`;
+      } else if (payload.newName) {
+        content = `Group name changed to "${payload.newName}"`;
+      } else {
+        content = `Group settings were updated`;
+      }
       break;
   }
 
@@ -161,9 +202,14 @@ export async function createSystemEvent(
 /**
  * Creates JOINED event when user is added to a chat
  */
-export async function emitUserJoined(chatId: string, userId: string): Promise<string> {
+export async function emitUserJoined(
+  chatId: string,
+  userId: string,
+  actorUserId?: string,
+): Promise<string> {
   return createSystemEvent(chatId, {
     eventType: SystemEventType.USER_JOINED,
+    actorUserId,
     targetUserId: userId,
   });
 }

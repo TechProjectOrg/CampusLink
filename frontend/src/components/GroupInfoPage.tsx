@@ -19,6 +19,7 @@ interface GroupInfoPageProps {
   onRemoveMember?: (groupId: string, memberId: string) => void | Promise<void>;
   onMakeAdmin?: (groupId: string, memberId: string) => void | Promise<void>;
   onAddMember?: (groupId: string, memberId: string) => void | Promise<void>;
+  onDeleteGroup?: (groupId: string) => void | Promise<void>;
 }
 
 export function GroupInfoPage({
@@ -32,12 +33,14 @@ export function GroupInfoPage({
   onRemoveMember,
   onMakeAdmin,
   onAddMember,
+  onDeleteGroup,
 }: GroupInfoPageProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddMembersOpen, setIsAddMembersOpen] = useState(false);
 
   const currentMember = group.members.find((member) => member.userId === currentUserId) ?? null;
   const isAdmin = currentMember?.role === 'owner' || currentMember?.role === 'admin';
+  const isOwner = currentMember?.role === 'owner';
 
   const studentLookup = useMemo(
     () => new Map(students.map((student) => [student.id, student])),
@@ -198,7 +201,7 @@ export function GroupInfoPage({
               <h3 className="text-gray-900">Members ({group.memberCount})</h3>
               {currentMember && (
                 <Badge className="capitalize bg-blue-100 text-blue-800 border-blue-200">
-                  {currentMember.role}
+                  {currentMember.role === 'owner' ? 'owner (admin)' : currentMember.role}
                 </Badge>
               )}
             </div>
@@ -241,7 +244,7 @@ export function GroupInfoPage({
                           {isOwner ? (
                             <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200">
                               <Crown className="w-3 h-3 mr-1" />
-                              Creator
+                              Owner Admin
                             </Badge>
                           ) : member.role === 'admin' ? (
                             <Badge className="bg-blue-100 text-blue-800 border-blue-200">
@@ -296,6 +299,16 @@ export function GroupInfoPage({
                 <UserPlus className="w-4 h-4 mr-2" />
                 Manage Members
               </Button>
+              {isOwner && (
+                <Button
+                  variant="outline"
+                  className="w-full justify-start border-destructive/20 text-destructive hover:bg-destructive/10 rounded-xl"
+                  onClick={() => void onDeleteGroup?.(group.id)}
+                >
+                  <UserMinus className="w-4 h-4 mr-2" />
+                  Delete Group
+                </Button>
+              )}
               <Button variant="outline" className="w-full justify-start rounded-xl" type="button">
                 <Flag className="w-4 h-4 mr-2" />
                 Report Group

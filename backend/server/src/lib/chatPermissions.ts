@@ -69,7 +69,7 @@ export async function getUserChatRole(
   userId: string,
   chatId: string,
 ): Promise<ChatParticipantRole | null> {
-  const rows = await prisma.$queryRaw<{ role: ChatParticipantRole }[]>`
+  const rows = await prisma.$queryRaw<{ role: string }[]>`
     SELECT role FROM chat_participants
     WHERE chat_id = ${chatId}
       AND user_id = ${userId}
@@ -77,7 +77,9 @@ export async function getUserChatRole(
     LIMIT 1
   `;
 
-  return rows[0]?.role ?? null;
+  const role = rows[0]?.role;
+  if (!role) return null;
+  return role.toUpperCase() as ChatParticipantRole;
 }
 
 /**
