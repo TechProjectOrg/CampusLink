@@ -1167,8 +1167,8 @@ export function ProfilePage({
       {/* ===== MODALS ===== */}
 
       {/* Edit Profile Modal */}
-      <Modal isOpen={activeModal === 'editProfile'} onClose={closeModal} title="Edit Profile">
-        <div className="space-y-4">
+      <Modal isOpen={activeModal === 'editProfile'} onClose={closeModal} title="Edit Profile" className="w-[min(40rem,calc(100vw-2rem))]" style={{ width: 'min(40rem, calc(100vw - 2rem))' }}>
+        <div className="space-y-4 max-w-[560px] w-full">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
             <Input
@@ -1192,8 +1192,8 @@ export function ProfilePage({
       </Modal>
 
       {/* About Modal */}
-      <Modal isOpen={activeModal === 'about'} onClose={closeModal} title="Edit About">
-        <div className="space-y-4">
+      <Modal isOpen={activeModal === 'about'} onClose={closeModal} title="Edit About" className="w-[min(40rem,calc(100vw-2rem))]" style={{ width: 'min(40rem, calc(100vw - 2rem))' }}>
+        <div className="space-y-4 max-w-[560px] w-full">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Bio</label>
             <Textarea
@@ -1213,8 +1213,8 @@ export function ProfilePage({
       </Modal>
 
       {/* Skill Modal */}
-      <Modal isOpen={activeModal === 'skill'} onClose={closeModal} title="Add Skill">
-        <div className="space-y-4">
+      <Modal isOpen={activeModal === 'skill'} onClose={closeModal} title="Add Skill" className="w-[min(28rem,calc(100vw-2rem))]" style={{ width: 'min(28rem, calc(100vw - 2rem))' }}>
+        <div className="space-y-4 max-w-[420px] w-full">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Skill Name</label>
             <Input
@@ -1234,8 +1234,8 @@ export function ProfilePage({
       </Modal>
 
       {/* Experience Modal */}
-      <Modal isOpen={activeModal === 'experience'} onClose={closeModal} title={editingItem ? 'Edit Experience' : 'Add Experience'}>
-        <div className="space-y-4">
+      <Modal isOpen={activeModal === 'experience'} onClose={closeModal} title={editingItem ? 'Edit Experience' : 'Add Experience'} className="w-[min(48rem,calc(100vw-2rem))]" style={{ width: 'min(48rem, calc(100vw - 2rem))' }}>
+        <div className="space-y-4 max-w-[640px] w-full">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Role Title *</label>
             <Input
@@ -1302,8 +1302,8 @@ export function ProfilePage({
       </Modal>
 
       {/* Project Modal */}
-      <Modal isOpen={activeModal === 'project'} onClose={closeModal} title={editingItem ? 'Edit Project' : 'Add Project'}>
-        <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+      <Modal isOpen={activeModal === 'project'} onClose={closeModal} title={editingItem ? 'Edit Project' : 'Add Project'} className="w-[min(40rem,calc(100vw-2rem))]" style={{ width: 'min(40rem, calc(100vw - 2rem))' }}>
+        <div className="space-y-4 max-h-[70vh] overflow-y-auto max-w-[560px] w-full">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Project Image</label>
             <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 text-center hover:border-blue-400 transition-colors cursor-pointer"
@@ -1346,6 +1346,7 @@ export function ProfilePage({
             <label className="block text-sm font-medium text-gray-700 mb-1">Tech Stack</label>
             <div className="flex gap-2">
               <Input
+                className="flex-1"
                 value={newProjectTag}
                 onChange={(e) => setNewProjectTag(e.target.value)}
                 placeholder="Add technology"
@@ -1396,8 +1397,8 @@ export function ProfilePage({
       </Modal>
 
       {/* Certification Modal */}
-      <Modal isOpen={activeModal === 'certification'} onClose={closeModal} title={editingItem ? 'Edit Certification' : 'Add Certification'}>
-        <div className="space-y-4">
+      <Modal isOpen={activeModal === 'certification'} onClose={closeModal} title={editingItem ? 'Edit Certification' : 'Add Certification'} className="w-[min(36rem,calc(100vw-2rem))]" style={{ width: 'min(36rem, calc(100vw - 2rem))' }}>
+        <div className="space-y-4 max-w-[520px] w-full">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Certificate Image (Optional)</label>
             <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 text-center hover:border-blue-400 transition-colors cursor-pointer"
@@ -1465,8 +1466,8 @@ export function ProfilePage({
       </Modal>
 
       {/* Society Modal */}
-      <Modal isOpen={activeModal === 'society'} onClose={closeModal} title={editingItem ? 'Edit Society/Club' : 'Add Society/Club'}>
-        <div className="space-y-4">
+      <Modal isOpen={activeModal === 'society'} onClose={closeModal} title={editingItem ? 'Edit Society/Club' : 'Add Society/Club'} className="w-[min(40rem,calc(100vw-2rem))]" style={{ width: 'min(40rem, calc(100vw - 2rem))' }}>
+        <div className="space-y-4 max-w-[560px] w-full">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Society/Club Name *</label>
             <Input
@@ -1515,8 +1516,8 @@ export function ProfilePage({
       </Modal>
 
       {/* Achievement Modal */}
-      <Modal isOpen={activeModal === 'achievement'} onClose={closeModal} title={editingItem ? 'Edit Achievement' : 'Add Achievement'}>
-        <div className="space-y-4">
+      <Modal isOpen={activeModal === 'achievement'} onClose={closeModal} title={editingItem ? 'Edit Achievement' : 'Add Achievement'} className="w-[min(36rem,calc(100vw-2rem))]" style={{ width: 'min(36rem, calc(100vw - 2rem))' }}>
+        <div className="space-y-4 max-w-[520px] w-full">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Achievement Title *</label>
             <Input
