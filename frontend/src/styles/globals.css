@@ -203,22 +203,18 @@ html {
 @keyframes slideInUp {
   from {
     opacity: 0;
-    transform: translateY(20px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
 @keyframes slideInDown {
   from {
     opacity: 0;
-    transform: translateY(-20px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
@@ -234,11 +230,9 @@ html {
 @keyframes fadeSlideIn {
   from {
     opacity: 0;
-    transform: translateX(-10px);
   }
   to {
     opacity: 1;
-    transform: translateX(0);
   }
 }
 
@@ -270,11 +264,11 @@ html {
 }
 
 .animate-slide-in-up {
-  animation: slideInUp 0.5s ease-out;
+  animation: slideInUp 0.2s ease-out;
 }
 
 .animate-slide-in-down {
-  animation: slideInDown 0.5s ease-out;
+  animation: slideInDown 0.2s ease-out;
 }
 
 .animate-fade-in {
@@ -282,7 +276,7 @@ html {
 }
 
 .animate-fade-slide-in {
-  animation: fadeSlideIn 0.35s ease-out;
+  animation: fadeSlideIn 0.2s ease-out;
 }
 
 .animate-float {
@@ -291,7 +285,7 @@ html {
 
 /* Smooth transitions for all interactive elements */
 * {
-  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, filter, backdrop-filter;
   transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   transition-duration: 200ms;
 }

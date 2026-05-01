@@ -21,7 +21,8 @@ interface NavbarProps {
 
 export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifications = 0, onSearch }: NavbarProps) {
   const [searchQuery, setSearchQuery] = useState('');
-  const { logout } = useAuth();
+  const { logout, profile } = useAuth();
+  const navbarProfilePhoto = profile?.profilePictureUrl ?? null;
 
   const navItems = [
     { id: 'feed', label: 'Feed', icon: Home },
@@ -119,14 +120,21 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
               <DropdownMenuTrigger asChild>
                 <button
                   aria-label="Me"
-                  className={`flex flex-col items-center justify-center gap-1 w-24 h-14 rounded-xl border relative transition-all duration-300 ${
+                  className={`flex items-center justify-center w-14 h-14 rounded-full border relative transition-all duration-300 ${
                     activeTab === 'profile' || activeTab === 'settings'
                       ? 'text-white bg-white/20 shadow-lg border-white/30'
                       : 'text-white/80 border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20'
                   }`}
                 >
-                  <User className="w-5 h-5" />
-                  <span className="text-xs leading-none whitespace-nowrap">Me</span>
+                  {navbarProfilePhoto ? (
+                    <img
+                      src={navbarProfilePhoto}
+                      alt="My profile"
+                      className="w-11 h-11 rounded-full object-cover border border-white/40"
+                    />
+                  ) : (
+                    <User className="w-7 h-7" />
+                  )}
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-48" align="end">

@@ -1,11 +1,11 @@
 # Graph Report - final-year-project  (2026-05-01)
 
 ## Corpus Check
-- 144 files · ~123,268 words
+- 144 files · ~123,097 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 931 nodes · 1378 edges · 33 communities detected
+- 934 nodes · 1381 edges · 33 communities detected
 - Extraction: 87% EXTRACTED · 13% INFERRED · 0% AMBIGUOUS · INFERRED: 183 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
@@ -29,9 +29,9 @@
 - [[_COMMUNITY_Community 16|Community 16]]
 - [[_COMMUNITY_Community 18|Community 18]]
 - [[_COMMUNITY_Community 19|Community 19]]
-- [[_COMMUNITY_Community 21|Community 21]]
-- [[_COMMUNITY_Community 27|Community 27]]
-- [[_COMMUNITY_Community 30|Community 30]]
+- [[_COMMUNITY_Community 22|Community 22]]
+- [[_COMMUNITY_Community 29|Community 29]]
+- [[_COMMUNITY_Community 31|Community 31]]
 - [[_COMMUNITY_Community 33|Community 33]]
 - [[_COMMUNITY_Community 35|Community 35]]
 - [[_COMMUNITY_Community 38|Community 38]]
@@ -61,12 +61,12 @@
   backend\server\src\lib\cache.ts → backend\server\src\lib\chatCache.ts
 - `getUserSummariesByIds()` --calls--> `formatMessagesForResponse()`  [INFERRED]
   backend\server\src\lib\userCache.ts → backend\server\src\routes\chat.ts
+- `handleCreateClubPostFromModal()` --calls--> `apiCreateUserPost()`  [INFERRED]
+  frontend\src\components\ClubActivityPage.tsx → frontend\src\lib\postsApi.ts
 - `loadPosts()` --calls--> `apiFetchProfilePosts()`  [INFERRED]
   frontend\src\components\ProfilePage.tsx → frontend\src\lib\postsApi.ts
 - `Legacy SQL Social Schema` --semantically_similar_to--> `Frontend Copy of Legacy SQL Social Schema`  [INFERRED] [semantically similar]
   database/DATABASE_README.md → frontend/database/DATABASE_README.md
-- `Legacy Database Bootstrap` --semantically_similar_to--> `Frontend Copy of Legacy Database Bootstrap`  [INFERRED] [semantically similar]
-  database/QUICKSTART.md → frontend/database/QUICKSTART.md
 
 ## Communities
 
@@ -100,7 +100,7 @@ Nodes (24): PollingRedisSubscriber, areUsersMutuallyFollowing(), emitChatDelete(
 
 ### Community 7 - "Community 7"
 Cohesion: 0.16
-Nodes (29): handleApproveRequest(), handleDeleteClub(), handleInviteMember(), handleJoinCurrentClub(), handleRejectRequest(), handleSaveSettings(), handleToggleAdminRole(), loadClubData() (+21 more)
+Nodes (30): handleApproveRequest(), handleCreateClubPostFromModal(), handleDeleteClub(), handleInviteMember(), handleJoinCurrentClub(), handleRejectRequest(), handleSaveSettings(), handleToggleAdminRole() (+22 more)
 
 ### Community 8 - "Community 8"
 Cohesion: 0.11
@@ -111,8 +111,8 @@ Cohesion: 0.16
 Nodes (22): apiChangePassword(), apiDeleteAccount(), apiFetchUserProfile(), apiFetchUserSessions(), apiFetchUserSettings(), apiLogin(), apiRevokeUserSession(), apiSignupAlumni() (+14 more)
 
 ### Community 10 - "Community 10"
-Cohesion: 0.18
-Nodes (21): handleCreateClubPostFromModal(), apiAddComment(), apiAddReply(), apiCreateUserPost(), apiDeleteComment(), apiDeletePost(), apiFetchCommentContext(), apiFetchHashtagPosts() (+13 more)
+Cohesion: 0.2
+Nodes (20): apiAddComment(), apiAddReply(), apiCreateUserPost(), apiDeleteComment(), apiDeletePost(), apiFetchCommentContext(), apiFetchHashtagPosts(), apiFetchPostById() (+12 more)
 
 ### Community 11 - "Community 11"
 Cohesion: 0.12
@@ -146,15 +146,15 @@ Nodes (4): mapUserPostRow(), normalizeHashtag(), normalizeHashtags(), parseMedia
 Cohesion: 0.22
 Nodes (2): SidebarMenuButton(), useSidebar()
 
-### Community 21 - "Community 21"
+### Community 22 - "Community 22"
 Cohesion: 0.25
 Nodes (2): mergeConversationPreviewOnMessage(), sortConversationsByTimestamp()
 
-### Community 27 - "Community 27"
+### Community 29 - "Community 29"
 Cohesion: 0.47
 Nodes (4): Assert-Status(), Assert-True(), Get-ResponseContent(), Invoke-JsonRequest()
 
-### Community 30 - "Community 30"
+### Community 31 - "Community 31"
 Cohesion: 0.53
 Nodes (4): FormControl(), FormDescription(), FormMessage(), useFormField()
 
@@ -207,7 +207,7 @@ Nodes (1): Custom Guidelines Placeholder
   These have ≤1 connection - possible missing edges or undocumented components.
 - **Thin community `Community 19`** (10 nodes): `sidebar.tsx`, `cn()`, `handleKeyDown()`, `SidebarFooter()`, `SidebarHeader()`, `SidebarMenu()`, `SidebarMenuButton()`, `SidebarMenuItem()`, `SidebarSeparator()`, `useSidebar()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 21`** (9 nodes): `formatSeenTime()`, `mapRealtimeChatMessage()`, `mergeChatMessageList()`, `mergeConversationPresenceUpdate()`, `mergeConversationPreviewOnMessage()`, `mergeConversationReadUpdate()`, `sortConversationsByTimestamp()`, `summarizeReply()`, `chatUi.ts`
+- **Thin community `Community 22`** (9 nodes): `formatSeenTime()`, `mapRealtimeChatMessage()`, `mergeChatMessageList()`, `mergeConversationPresenceUpdate()`, `mergeConversationPreviewOnMessage()`, `mergeConversationReadUpdate()`, `sortConversationsByTimestamp()`, `summarizeReply()`, `chatUi.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 35`** (5 nodes): `Carousel()`, `CarouselNext()`, `cn()`, `useCarousel()`, `carousel.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
@@ -225,10 +225,10 @@ Nodes (1): Custom Guidelines Placeholder
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `apiCreateUserPost()` connect `Community 10` to `Community 0`?**
-  _High betweenness centrality (0.057) - this node is a cross-community bridge._
+- **Why does `apiCreateUserPost()` connect `Community 10` to `Community 0`, `Community 7`?**
+  _High betweenness centrality (0.056) - this node is a cross-community bridge._
 - **Why does `persistCreatedPost()` connect `Community 0` to `Community 10`?**
-  _High betweenness centrality (0.049) - this node is a cross-community bridge._
+  _High betweenness centrality (0.048) - this node is a cross-community bridge._
 - **Why does `apiFetchProfilePosts()` connect `Community 10` to `Community 3`?**
   _High betweenness centrality (0.039) - this node is a cross-community bridge._
 - **Are the 13 inferred relationships involving `cacheSetJson()` (e.g. with `setCachedRecentMessages()` and `setConversationMeta()`) actually correct?**

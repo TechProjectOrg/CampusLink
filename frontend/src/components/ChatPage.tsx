@@ -712,7 +712,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                     dismissNewMessageBanner();
                     scrollToLatest('smooth');
                   }}
-                  className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-primary text-white px-4 py-2 rounded-full shadow-xl flex items-center gap-2 z-20 hover:scale-105 transition-all duration-300 animate-in fade-in slide-in-from-bottom-4"
+                  className="absolute bottom-6 left-1/2 transform -translate-x-1/2 bg-primary text-white px-4 py-2 rounded-full shadow-xl flex items-center gap-2 z-20 hover:scale-105 transition-all duration-300"
                 >
                   <ChevronDown className="w-4 h-4" />
                   <span className="text-sm font-medium">New Messages</span>

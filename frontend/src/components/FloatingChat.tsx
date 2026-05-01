@@ -367,7 +367,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                     dismissNewMessageBanner();
                     scrollToLatest('smooth');
                   }}
-                  className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-primary text-white px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2 z-20 hover:scale-105 transition-all duration-300 animate-in fade-in slide-in-from-bottom-2"
+                  className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-primary text-white px-3 py-1.5 rounded-full shadow-lg flex items-center gap-2 z-20 hover:scale-105 transition-all duration-300"
                 >
                   <ChevronDown className="w-3 h-3" />
                   <span className="text-xs font-medium">New Messages</span>
