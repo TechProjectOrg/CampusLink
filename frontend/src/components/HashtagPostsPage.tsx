@@ -2,6 +2,7 @@ import { ArrowLeft, Hash } from 'lucide-react';
 import { Opportunity } from '../types';
 import { OpportunityCard } from './OpportunityCard';
 import { Button } from './ui/button';
+import { LoadingIndicator } from './ui/LoadingIndicator';
 
 interface HashtagPostsPageProps {
   hashtag: string;
@@ -55,7 +56,7 @@ export function HashtagPostsPage({
         <div className="space-y-4">
           {isLoading ? (
             <div className="rounded-2xl border border-primary/10 bg-white p-8 text-center text-gray-600 shadow-sm">
-              Loading posts...
+              <LoadingIndicator label="Loading posts..." />
             </div>
           ) : posts.length === 0 ? (
             <div className="rounded-2xl border border-primary/10 bg-white p-8 text-center text-gray-600 shadow-sm">

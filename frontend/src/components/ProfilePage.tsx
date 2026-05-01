@@ -57,6 +57,7 @@ import { ProfilePhotoUpload } from './ui/profile-photo-upload';
 import { apiUpdateUserProfilePicture, apiUploadUserProfilePicture } from '../lib/authApi';
 import { OpportunityCard } from './OpportunityCard';
 import { apiFetchProfilePosts, type UserPost } from '../lib/postsApi';
+import { LoadingIndicator } from './ui/LoadingIndicator';
 
 interface ProfilePageProps {
   student: Student;
@@ -903,7 +904,7 @@ export function ProfilePage({
           <CardContent className="p-6 space-y-4">
             <SectionHeader title="Posts" icon={MessageCircle} />
             {isOwnProfile && postsLoading ? (
-              <p className="text-gray-400 text-sm">Loading posts...</p>
+              <LoadingIndicator label="Loading posts..." className="justify-start" size={20} />
             ) : profilePosts.length > 0 ? (
               <div className="space-y-4">
                 {profilePosts.map((post) => (
@@ -942,7 +943,7 @@ export function ProfilePage({
           <CardContent className="p-6">
             <SectionHeader title="Skills" icon={Award} onAdd={() => setActiveModal('skill')} />
             {skillsLoading ? (
-              <p className="text-gray-400 text-sm">Loading skills...</p>
+              <LoadingIndicator label="Loading skills..." className="justify-start" size={20} />
             ) : (isOwnProfile ? skills : student.skills || []).length > 0 ? (
               <div className="flex flex-wrap gap-2">
                 {(isOwnProfile ? skills : student.skills.map((s, i) => ({ id: String(i), name: s }))).map((skill) => (
@@ -1006,7 +1007,7 @@ export function ProfilePage({
           <CardContent className="p-6">
             <SectionHeader title="Projects" icon={ExternalLink} onAdd={() => setActiveModal('project')} />
             {projectsLoading ? (
-              <p className="text-gray-400 text-sm">Loading projects...</p>
+              <LoadingIndicator label="Loading projects..." className="justify-start" size={20} />
             ) : loadedProjects.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {loadedProjects.map((project) => (
@@ -1060,7 +1061,7 @@ export function ProfilePage({
           <CardContent className="p-6">
             <SectionHeader title="Certifications" icon={Trophy} onAdd={() => setActiveModal('certification')} />
             {certificationsLoading ? (
-              <p className="text-gray-400 text-sm">Loading certifications...</p>
+              <LoadingIndicator label="Loading certifications..." className="justify-start" size={20} />
             ) : loadedCertifications.length > 0 ? (
               <div className="space-y-3">
                 {loadedCertifications.map((cert) => (

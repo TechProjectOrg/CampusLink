@@ -14,6 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
+import { LoadingIndicator } from './ui/LoadingIndicator';
 
 interface GroupInfoPageProps {
   group: GroupChatDetailsApi;
@@ -307,7 +308,7 @@ export function GroupInfoPage({
           </CardHeader>
           <CardContent className="space-y-2">
             {isLoading ? (
-              <p className="text-sm text-gray-500">Loading members...</p>
+              <LoadingIndicator label="Loading members..." className="justify-start py-1" size={20} />
             ) : filteredMembers.length === 0 ? (
               <p className="text-sm text-gray-500">No members match this search.</p>
             ) : (

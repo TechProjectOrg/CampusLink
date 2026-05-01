@@ -9,7 +9,6 @@ import { Badge } from './ui/badge';
 import { CreateClubModal } from './CreateClubModal';
 import { ClubActivityPage } from './ClubActivityPage';
 import { LoadingState } from './LoadingState';
-import { EmptyState } from './EmptyState';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 
 interface ClubsPageProps {
@@ -92,36 +91,22 @@ export function ClubsPage({ students, currentUserId, initialClubSlug = null, onC
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
       <div className="max-w-6xl mx-auto px-4 md:px-6 py-6 md:py-8 space-y-6 md:space-y-8">
-        <div className="animate-slide-in-down">
-          <h1 className="text-gray-900 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent mb-2">Campus Clubs</h1>
-          <p className="text-gray-600">Join clubs and groups to connect with like-minded peers.</p>
+        <div className="animate-slide-in-down flex items-end justify-between gap-3">
+          <div>
+            <h1 className="text-3xl md:text-4xl text-gray-900 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">Campus Clubs</h1>
+            <p className="text-gray-600 mt-2 text-sm md:text-base">Join clubs and groups to connect with like-minded peers.</p>
+          </div>
+          <Button onClick={() => setIsCreateModalOpen(true)} className="bg-gradient-to-r from-primary to-secondary hover:shadow-xl transition-all duration-300 shrink-0">
+            <Users className="w-4 h-4 mr-2" />
+            Create Club
+          </Button>
         </div>
-
-        <Card className="border-2 border-dashed border-primary/20 hover:border-primary/40 transition-all duration-300 hover-lift bg-gradient-to-br from-white to-blue-50/30 animate-slide-in-up">
-          <CardContent className="p-6 md:p-8 lg:p-10">
-            <div className="flex flex-col md:flex-row items-center gap-6 md:gap-8">
-              <div className="w-16 h-16 md:w-20 md:h-20 rounded-full bg-gradient-to-br from-primary/10 to-secondary/10 flex items-center justify-center flex-shrink-0">
-                <Users className="w-8 h-8 md:w-10 md:h-10 text-primary" />
-              </div>
-              <div className="flex-1 text-center md:text-left">
-                <h3 className="text-gray-900 mb-2 text-xl md:text-2xl">Start Your Own Club</h3>
-                <p className="text-gray-600 text-sm md:text-base">
-                  Create a discoverable community with real membership, posts, and moderation controls.
-                </p>
-              </div>
-              <Button onClick={() => setIsCreateModalOpen(true)} className="bg-gradient-to-r from-primary to-secondary hover:shadow-xl transition-all duration-300 hover:scale-105 flex-shrink-0">
-                <Users className="w-4 h-4 mr-2" />
-                Create New Club
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
 
         {isLoading ? <LoadingState type="page" /> : null}
         {!isLoading && error ? <p className="text-sm text-red-600">{error}</p> : null}
 
         {!isLoading && clubs.length === 0 ? (
-          <EmptyState type="clubs" />
+          <p className="text-sm text-gray-600">No clubs found.</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 animate-slide-in-up">
             {clubs.map((club) => {

@@ -1,10 +1,11 @@
 import { useRef, useState } from 'react';
 import Cropper, { type Area } from 'react-easy-crop';
-import { Camera, Loader2, Trash2, Upload } from 'lucide-react';
+import { Camera, Trash2, Upload } from 'lucide-react';
 import { Button } from './button';
 import { Label } from './label';
 import { Modal } from './modal';
 import { getCroppedImage } from '../../lib/imageCrop';
+import { ButtonLoader } from './ButtonLoader';
 
 interface ClubLogoUploadProps {
   label: string;
@@ -162,7 +163,7 @@ export function ClubLogoUpload({ label, file, onFileChange, disabled = false }: 
               Cancel
             </Button>
             <Button type="button" onClick={() => void handleSaveCrop()} disabled={isSaving || !croppedAreaPixels}>
-              {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              {isSaving ? <ButtonLoader /> : null}
               {isSaving ? 'Saving...' : 'Save logo'}
             </Button>
           </div>

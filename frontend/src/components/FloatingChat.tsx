@@ -19,6 +19,7 @@ import {
 } from './ui/dropdown-menu';
 import { useAppDataSelector, useAppDataStore } from '../context/AppDataContext';
 import { useBottomAnchoredChatScroll } from '../hooks/useBottomAnchoredChatScroll';
+import { LoadingIndicator } from './ui/LoadingIndicator';
 
 interface FloatingChatProps {
   conversations: ChatConversation[];
@@ -374,8 +375,8 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
               )}
               {isLoadingOlder && (
                 <div className="pointer-events-none absolute left-0 right-0 top-2 z-10 flex w-full justify-center">
-                  <div className="rounded-full bg-white/90 p-1.5 shadow-sm">
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-200 border-t-primary" />
+                  <div className="rounded-full bg-white/90 px-2.5 py-1.5 shadow-sm">
+                    <LoadingIndicator label="Loading..." size={16} />
                   </div>
                 </div>
               )}
@@ -385,9 +386,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                 className="h-full overflow-y-auto"
               >
                 {!isChatReady && isLoadingMessages && chatMessages.length === 0 ? (
-                  <div className="flex h-full items-center justify-center text-sm text-gray-500">
-                    Loading messages...
-                  </div>
+                  <LoadingIndicator label="Loading messages..." className="h-full" />
                 ) : (
                 <div className="space-y-3">
                   <div ref={topSentinelRef} className="h-px w-full" aria-hidden="true" />

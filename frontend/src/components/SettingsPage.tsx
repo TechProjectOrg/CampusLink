@@ -11,6 +11,7 @@ import { toast } from 'sonner@2.0.3';
 import type { ApiUserSession, Student } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { apiChangePassword, apiFetchUserSessions, apiFetchUserSettings, apiRevokeUserSession, apiUpdateUserProfile, apiUpdateUserSettings, apiVerifyPasswordChange } from '../lib/authApi';
+import { LoadingIndicator } from './ui/LoadingIndicator';
 
 const PASSWORD_REQUIREMENTS = [
   'At least 8 characters long',
@@ -357,7 +358,9 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
       </CardHeader>
       <CardContent className="space-y-4">
         {sessionsLoading ? (
-          <div className="rounded-xl border border-dashed bg-gray-50 p-4 text-sm text-gray-600">Loading active sessions...</div>
+          <div className="rounded-xl border border-dashed bg-gray-50 p-4 text-sm text-gray-600">
+            <LoadingIndicator label="Loading active sessions..." className="justify-start" size={20} />
+          </div>
         ) : sessionsError ? (
           <div className="rounded-xl border border-dashed bg-red-50 p-4 text-sm text-red-700">{sessionsError}</div>
         ) : sessions.length === 0 ? (

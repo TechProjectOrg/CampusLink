@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, Loader2, Hash, Users } from 'lucide-react';
+import { Search, Hash, Users } from 'lucide-react';
 import type { Student } from '../types';
 import type { FollowGraph } from '../App';
 import { FollowButton } from './network/FollowButton';

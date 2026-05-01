@@ -7,10 +7,11 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Loader2, X, Calendar, MapPin, Link as LinkIcon, DollarSign } from 'lucide-react';
+import { X, Calendar, MapPin, Link as LinkIcon, DollarSign } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { ImageUpload } from './ui/ImageUpload';
 import { Opportunity } from '../types';
+import { ButtonLoader } from './ui/ButtonLoader';
 
 interface CreateUnifiedPostModalProps {
   isOpen: boolean;
@@ -366,7 +367,7 @@ export function CreateUnifiedPostModal({
                 <div className="flex justify-end gap-2">
                   <Button type="button" variant="ghost" onClick={handleClose} disabled={isSubmitting}>Cancel</Button>
                   <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting && submittingForm === 'post' ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    {isSubmitting && submittingForm === 'post' ? <ButtonLoader /> : null}
                     {getSubmitLabel('post')}
                   </Button>
                 </div>
@@ -459,7 +460,7 @@ export function CreateUnifiedPostModal({
                 <div className="flex justify-end gap-2">
                   <Button type="button" variant="ghost" onClick={handleClose} disabled={isSubmitting}>Cancel</Button>
                   <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting && submittingForm === 'event' ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                    {isSubmitting && submittingForm === 'event' ? <ButtonLoader /> : null}
                     {getSubmitLabel('event')}
                   </Button>
                 </div>
@@ -660,7 +661,7 @@ export function CreateUnifiedPostModal({
                     Cancel
                     </Button>
                     <Button type="submit" className="flex-1 gradient-primary" disabled={isSubmitting}>
-                      {isSubmitting && submittingForm === 'opportunity' ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                      {isSubmitting && submittingForm === 'opportunity' ? <ButtonLoader /> : null}
                       {getSubmitLabel('opportunity')}
                     </Button>
                 </div>

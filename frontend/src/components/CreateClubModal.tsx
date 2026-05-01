@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, Users } from 'lucide-react';
+import { Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import type { Club } from '../types';
@@ -11,6 +11,8 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { ImageUpload } from './ui/ImageUpload';
 import { ClubLogoUpload } from './ui/ClubLogoUpload';
+import { ButtonLoader } from './ui/ButtonLoader';
+import { LoadingIndicator } from './ui/LoadingIndicator';
 
 interface CreateClubModalProps {
   isOpen: boolean;
@@ -166,10 +168,7 @@ export function CreateClubModal({ isOpen, onClose, onCreateClub }: CreateClubMod
           <div className="space-y-2">
             <Label>Primary Category *</Label>
             {isLoadingCategories ? (
-              <div className="flex items-center gap-2 text-sm text-gray-500">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Loading categories...
-              </div>
+              <LoadingIndicator label="Loading categories..." size={20} className="justify-start" />
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                 {categories.map((category) => (
@@ -243,7 +242,7 @@ export function CreateClubModal({ isOpen, onClose, onCreateClub }: CreateClubMod
               Cancel
             </Button>
             <Button type="submit" className="flex-1 gradient-success" disabled={isSubmitting}>
-              {isSubmitting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Users className="w-4 h-4 mr-2" />}
+              {isSubmitting ? <ButtonLoader /> : <Users className="w-4 h-4 mr-2" />}
               Create Club
             </Button>
           </div>

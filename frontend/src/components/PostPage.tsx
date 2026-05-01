@@ -6,6 +6,7 @@ import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { ImageWithFallback } from './figma/ImageWithFallback';
+import { LoadingIndicator } from './ui/LoadingIndicator';
 
 interface DiscussionListState {
   isLoading: boolean;
@@ -358,7 +359,7 @@ export function PostPage({
             {topLevelComments.map((comment) => renderComment(comment))}
 
             {commentsState.isLoading && topLevelComments.length === 0 && (
-              <p className="text-sm text-gray-500">Loading comments...</p>
+              <LoadingIndicator label="Loading comments..." className="justify-start py-1" size={20} />
             )}
 
             {!commentsState.isLoading && commentsState.hasHydrated && topLevelComments.length === 0 && (
@@ -374,7 +375,7 @@ export function PostPage({
                   }}
                 />
                 {commentsState.isLoading && topLevelComments.length > 0 && (
-                  <p className="text-xs text-gray-500">Loading more comments...</p>
+                  <LoadingIndicator label="Loading more comments..." className="justify-start py-1 text-xs" size={18} />
                 )}
               </div>
             )}

@@ -35,6 +35,7 @@ import {
 import { useAppDataSelector, useAppDataStore } from '../context/AppDataContext';
 import { useAuth } from '../context/AuthContext';
 import { useBottomAnchoredChatScroll } from '../hooks/useBottomAnchoredChatScroll';
+import { LoadingIndicator } from './ui/LoadingIndicator';
 
 interface ChatPageProps {
   conversations: ChatConversation[];
@@ -483,7 +484,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   if (viewingGroupInfo && !groupInfo) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center bg-white">
-        <div className="text-sm text-gray-500">Loading group info...</div>
+        <LoadingIndicator label="Loading group info..." />
       </div>
     );
   }
@@ -719,13 +720,13 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
               )}
               {selectedChat && !isChatReady && isLoadingMessages && (
                 <div className="absolute inset-0 flex items-center justify-center bg-white z-10">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  <LoadingIndicator label="Loading messages..." />
                 </div>
               )}
               {isLoadingOlder && (
                 <div className="pointer-events-none absolute left-0 right-0 top-3 z-10 flex w-full justify-center">
-                  <div className="rounded-full bg-white/90 p-2 shadow-sm">
-                    <div className="h-5 w-5 animate-spin rounded-full border-2 border-gray-200 border-t-primary" />
+                  <div className="rounded-full bg-white/90 px-3 py-2 shadow-sm">
+                    <LoadingIndicator label="Loading..." size={18} />
                   </div>
                 </div>
               )}

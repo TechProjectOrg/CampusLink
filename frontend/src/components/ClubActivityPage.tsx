@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, CheckCircle, Crown, Loader2, Lock, MoreVertical, Plus, Search, ShieldCheck, TrendingUp, UserPlus, Users } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Crown, Lock, MoreVertical, Plus, Search, ShieldCheck, TrendingUp, UserPlus, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { userPostToOpportunity } from '../context/AppDataContext';
@@ -35,6 +35,7 @@ import { ClubLogoUpload } from './ui/ClubLogoUpload';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { CreateUnifiedPostModal } from './CreateUnifiedPostModal';
+import { LoadingIndicator } from './ui/LoadingIndicator';
 
 interface ClubActivityPageProps {
   clubSlug: string;
@@ -703,10 +704,7 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
               </div>
 
               {isSearchingInviteUsers ? (
-                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Searching users...
-                </div>
+                <LoadingIndicator label="Searching users..." size={20} className="justify-start" />
               ) : null}
 
               {inviteCandidates.connected.length > 0 ? (

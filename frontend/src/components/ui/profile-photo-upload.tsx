@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import Cropper, { type Area } from 'react-easy-crop';
-import { Camera, Loader2, Upload, User, Trash2 } from 'lucide-react';
+import { Camera, Upload, User, Trash2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from './avatar';
 import { Button } from './button';
 import { Modal } from './modal';
 import { getCroppedImage } from '../../lib/imageCrop';
+import { ButtonLoader } from './ButtonLoader';
 
 interface ProfilePhotoUploadProps {
   currentPhoto?: string;
@@ -191,7 +192,7 @@ export function ProfilePhotoUpload({
                 onClick={() => void handleRemovePhoto()}
                 disabled={isRemoving}
               >
-                {isRemoving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                {isRemoving ? <ButtonLoader /> : <Trash2 className="w-4 h-4" />}
                 {isRemoving ? 'Removing...' : 'Remove profile picture'}
               </Button>
             )}
@@ -240,7 +241,7 @@ export function ProfilePhotoUpload({
               Cancel
             </Button>
             <Button type="button" onClick={() => void handleSaveCrop()} disabled={isSaving || !croppedAreaPixels}>
-              {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              {isSaving ? <ButtonLoader /> : null}
               {isSaving ? 'Saving...' : 'Save picture'}
             </Button>
           </div>
