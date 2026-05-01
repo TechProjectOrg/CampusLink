@@ -847,6 +847,8 @@ export default function App() {
   const currentUser = useMemo(() => {
     return auth.currentUser as Student;
   }, [auth.currentUser]);
+  const feedViewportRef = useRef<HTMLDivElement | null>(null);
+  const feedLoadMoreTriggerRef = useRef<HTMLDivElement | null>(null);
 
   const students = useAppDataSelector((state) => Object.values(state.usersById));
   const feedTimeline = useAppDataSelector((state) => state.timelines[getFeedTimelineKey()]);
@@ -967,6 +969,40 @@ export default function App() {
     },
     [loadMoreFeedPosts],
   );
+
+  useEffect(() => {
+    const viewport = feedViewportRef.current;
+    const trigger = feedLoadMoreTriggerRef.current;
+    if (!viewport || !trigger || activeTab !== 'feed') return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          void loadMoreFeedPosts();
+        }
+      },
+      {
+        root: viewport,
+        threshold: 0,
+        rootMargin: '0px 0px 240px 0px',
+      },
+    );
+
+    observer.observe(trigger);
+    return () => observer.disconnect();
+  }, [activeTab, loadMoreFeedPosts]);
+
+  useEffect(() => {
+    const viewport = feedViewportRef.current;
+    if (!viewport || activeTab !== 'feed') return;
+    if (!feedTimeline?.isHydrated || feedTimeline.isRefreshing || feedTimeline.hasMore === false) return;
+
+    const nearBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 240;
+    const underfilled = viewport.scrollHeight <= viewport.clientHeight + 240;
+    if (nearBottom || underfilled) {
+      void loadMoreFeedPosts();
+    }
+  }, [activeTab, feedTimeline, loadMoreFeedPosts, opportunities.length]);
 
   useEffect(() => {
     if (auth.isAuthenticated && authToken) {
@@ -2181,6 +2217,7 @@ export default function App() {
             </div>
             {/* Feed Section (Center) - Expands to fill space */}
             <div
+              ref={feedViewportRef}
               className="px-1 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)] w-full lg:w-3/4 xl:w-1/2"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               onScroll={handleFeedScroll}
@@ -2209,6 +2246,7 @@ export default function App() {
                 onViewProfile={() => handleViewProfile(currentUserId)}
                 onViewStudentProfile={handleViewProfile}
               />
+              <div ref={feedLoadMoreTriggerRef} className="h-1 w-full" aria-hidden="true" />
             </div>
             {/* Suggestions Section (Right) - Visible on LG screens and up */}
             <div className="w-1/4 px-1 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)] hidden lg:block" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>

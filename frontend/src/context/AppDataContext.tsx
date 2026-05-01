@@ -626,8 +626,10 @@ function createStore(): AppDataStore {
               lastFetchedAt: Date.now(),
               isHydrated: true,
               isRefreshing: false,
-              hasMore: posts.length >= limit,
-              nextOffset: offset + posts.length,
+              // Advance by the requested window because the backend paginates by raw offset
+              // before hydration, so the returned post count can be smaller than the page size.
+              hasMore: posts.length > 0,
+              nextOffset: offset + limit,
               error: null,
             },
           },

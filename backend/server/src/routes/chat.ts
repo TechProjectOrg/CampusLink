@@ -396,8 +396,8 @@ async function fetchMessageRows(
   let rows: MessageRow[];
 
   if (before) {
-    const cursorRows = await prisma.$queryRaw<Array<{ created_at: Date }>>`
-      SELECT created_at
+    const cursorRows = await prisma.$queryRaw<Array<{ created_at: Date; message_id: string }>>`
+      SELECT created_at, message_id
       FROM messages
       WHERE message_id = ${before}
         AND chat_id = ${chatId}
@@ -410,6 +410,7 @@ async function fetchMessageRows(
     }
 
     const cursorCreatedAt = cursorRows[0].created_at;
+    const cursorMessageId = cursorRows[0].message_id;
     rows = await prisma.$queryRaw<MessageRow[]>`
       SELECT
         m.message_id,
@@ -422,7 +423,10 @@ async function fetchMessageRows(
       FROM messages m
       WHERE m.chat_id = ${chatId}
         AND m.deleted_at IS NULL
-        AND m.created_at < ${cursorCreatedAt}
+        AND (
+          m.created_at < ${cursorCreatedAt}
+          OR (m.created_at = ${cursorCreatedAt} AND m.message_id < ${cursorMessageId})
+        )
       ORDER BY m.created_at DESC, m.message_id DESC
       LIMIT ${fetchLimit}
     `;
@@ -534,8 +538,8 @@ async function hasOlderMessagesThan(
   chatId: string,
   oldestMessageId: string,
 ): Promise<boolean> {
-  const cursorRows = await prisma.$queryRaw<Array<{ created_at: Date }>>`
-    SELECT created_at
+  const cursorRows = await prisma.$queryRaw<Array<{ created_at: Date; message_id: string }>>`
+    SELECT created_at, message_id
     FROM messages
     WHERE message_id = ${oldestMessageId}
       AND chat_id = ${chatId}
@@ -544,14 +548,18 @@ async function hasOlderMessagesThan(
   `;
 
   const cursorCreatedAt = cursorRows[0]?.created_at;
-  if (!cursorCreatedAt) return false;
+  const cursorMessageId = cursorRows[0]?.message_id;
+  if (!cursorCreatedAt || !cursorMessageId) return false;
 
   const olderRows = await prisma.$queryRaw<Array<{ message_id: string }>>`
     SELECT message_id
     FROM messages
     WHERE chat_id = ${chatId}
       AND deleted_at IS NULL
-      AND created_at < ${cursorCreatedAt}
+      AND (
+        created_at < ${cursorCreatedAt}
+        OR (created_at = ${cursorCreatedAt} AND message_id < ${cursorMessageId})
+      )
     LIMIT 1
   `;
 

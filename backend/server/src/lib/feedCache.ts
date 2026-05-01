@@ -515,7 +515,7 @@ async function fetchFeedIdRowsFromDb(viewerUserId: string, limit: number, offset
           AND f.followed_user_id = p.author_user_id
       )
     )
-    ORDER BY p.created_at DESC
+    ORDER BY p.created_at DESC, p.post_id DESC
     LIMIT ${limit}
     OFFSET ${offset}
   `;
@@ -531,7 +531,9 @@ export async function fetchPostIdsByQuery(
     const warmed = await cacheGetJson<{ warmedAt: string }>(feedWarmedKey(viewerUserId));
     if (warmed) {
       const cached = await cacheZRevRange(feedKey(viewerUserId), query.offset, query.offset + query.limit - 1);
-      if (cached) return cached;
+      if (cached && cached.length === query.limit) {
+        return cached;
+      }
     }
 
     const warmLimit = Math.max(query.limit + query.offset, query.limit);
@@ -594,7 +596,7 @@ export async function fetchPostIdsByQuery(
             AND cm.status = CAST('active' AS "ClubMembershipStatus")
         )
       )
-      ORDER BY p.created_at DESC
+      ORDER BY p.created_at DESC, p.post_id DESC
       LIMIT ${query.limit}
       OFFSET ${query.offset}
     `;
@@ -618,7 +620,7 @@ export async function fetchPostIdsByQuery(
             AND h.tag_name ILIKE ${hashtagPattern ? `%${hashtagPattern}%` : null}
         )
       )
-    ORDER BY p.created_at DESC
+    ORDER BY p.created_at DESC, p.post_id DESC
     LIMIT ${query.limit}
     OFFSET ${query.offset}
   `;
