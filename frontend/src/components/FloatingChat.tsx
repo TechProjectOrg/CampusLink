@@ -51,7 +51,6 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
   const [messageInput, setMessageInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [replyingTo, setReplyingTo] = useState<ChatMessageApi | null>(null);
-  const [seenTick, setSeenTick] = useState(0);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -225,11 +224,6 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
   }, [isOpen, selectedConversation]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => setSeenTick(tick => tick + 1), 60000);
-    return () => window.clearInterval(interval);
-  }, []);
-
-  useEffect(() => {
     if (!selectedConversation || !isOpen || isMinimized) return;
     const latestIncoming = [...chatMessages].reverse().find(msg => !msg.isOwn && !msg.id.startsWith('temp-'));
     if (!latestIncoming) return;
@@ -244,9 +238,19 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
       });
   }, [appData, selectedConversation, chatMessages, isOpen, isMinimized, onChatRead]);
 
-  const latestSeenOwnMessage = [...chatMessages].reverse().find(msg => msg.isOwn && msg.readAt);
-  const latestSeenLabel = latestSeenOwnMessage?.readAt ? formatSeenTime(latestSeenOwnMessage.readAt) : null;
-  void seenTick;
+  const renderSeenBy = (msg: ChatMessageApi) => {
+    if (msg.seenBy.length === 0) return null;
+    return (
+      <div className={`mt-1 flex items-center gap-1 px-2 ${msg.isOwn ? 'justify-end' : 'justify-start'}`}>
+        {msg.seenBy.map((reader) => (
+          <Avatar key={`${msg.id}-${reader.userId}`} className="h-5 w-5 ring-2 ring-white shadow-sm" title={`${reader.username} has seen this`}>
+            <AvatarImage src={reader.avatarUrl ?? undefined} />
+            <AvatarFallback className="text-[9px]">{reader.username[0]}</AvatarFallback>
+          </Avatar>
+        ))}
+      </div>
+    );
+  };
 
   if (!isOpen) {
     return (
@@ -426,7 +430,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                               {msg.replyTo && (
                                 <button
                                   type="button"
-                                  onClick={() => jumpToMessage(msg.replyTo.id)}
+                                  onClick={() => msg.replyTo && jumpToMessage(msg.replyTo.id)}
                                   className={`mb-2 block w-full max-w-full overflow-hidden rounded-2xl border border-l-4 px-3 py-2 text-left text-xs ${msg.isOwn ? 'border-white/40 bg-black/20 text-blue-50' : 'border-gray-300 bg-gray-50 text-gray-700'}`}
                                   title="Go to referenced message"
                                 >
@@ -502,11 +506,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                               ))}
                             </div>
                           )}
-                          {latestSeenOwnMessage?.id === msg.id && latestSeenLabel && (
-                            <p className="text-xs text-gray-400 mt-1 px-2 text-right">
-                              {latestSeenLabel}
-                            </p>
-                          )}
+                          {renderSeenBy(msg)}
                         </div>
                       </div>
                     </div>

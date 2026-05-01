@@ -9,11 +9,13 @@
  * - Delete chat
  */
 
+import { Prisma } from '@prisma/client';
 import prisma from '../prisma';
 import { checkChatPermission, ChatPermission } from './chatPermissions';
 import { emitUserJoined, emitUserRemoved, emitUserRoleChanged } from './chatSystemEvents';
 import { invalidateConversationLists } from './chatCache';
 import { emitChatMessage, getChatParticipantIds } from './chat';
+import { getUserSummariesByIds } from './userCache';
 
 /**
  * Creates a new independent group chat
@@ -330,6 +332,10 @@ export async function deleteGroupChat(actorUserId: string, chatId: string): Prom
  * Gets group chat members with their info
  */
 export async function getChatMembers(chatId: string, includeInactive: boolean = false) {
+  const activeOnlyFilter = includeInactive
+    ? Prisma.empty
+    : Prisma.sql`AND cp.left_at IS NULL`;
+
   const rows = await prisma.$queryRaw<
     {
       user_id: string;
@@ -343,9 +349,59 @@ export async function getChatMembers(chatId: string, includeInactive: boolean = 
     FROM chat_participants cp
     JOIN users u ON u.user_id = cp.user_id
     WHERE cp.chat_id = ${chatId}
-      ${includeInactive ? '' : 'AND cp.left_at IS NULL'}
+      ${activeOnlyFilter}
     ORDER BY cp.joined_at ASC
   `;
 
   return rows;
+}
+
+export async function getGroupChatDetails(chatId: string, viewerUserId: string) {
+  const chatRows = await prisma.$queryRaw<
+    {
+      chat_id: string;
+      name: string | null;
+      description: string | null;
+      avatar_url: string | null;
+      created_at: Date;
+      created_by_user_id: string | null;
+    }[]
+  >`
+    SELECT chat_id, name, description, avatar_url, created_at, created_by_user_id
+    FROM chats
+    WHERE chat_id = ${chatId}
+      AND chat_type = 'group'
+    LIMIT 1
+  `;
+
+  const chat = chatRows[0];
+  if (!chat) {
+    throw new Error(`Group chat ${chatId} not found`);
+  }
+
+  const members = await getChatMembers(chatId, false);
+  const userSummaries = await getUserSummariesByIds(members.map((member) => member.user_id));
+  const currentViewerMembership = members.find((member) => member.user_id === viewerUserId) ?? null;
+
+  return {
+    id: chat.chat_id,
+    name: chat.name ?? 'Group chat',
+    description: chat.description ?? '',
+    avatarUrl: chat.avatar_url,
+    createdAt: chat.created_at.toISOString(),
+    createdBy: chat.created_by_user_id,
+    memberCount: members.length,
+    currentUserRole: currentViewerMembership?.role?.toLowerCase() ?? null,
+    members: members.map((member) => {
+      const summary = userSummaries.get(member.user_id);
+      return {
+        userId: member.user_id,
+        username: member.username,
+        avatarUrl: summary?.profilePictureUrl ?? null,
+        role: member.role.toLowerCase(),
+        joinedAt: member.joined_at.toISOString(),
+        leftAt: member.left_at?.toISOString() ?? null,
+      };
+    }),
+  };
 }

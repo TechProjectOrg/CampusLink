@@ -103,6 +103,11 @@ interface ReplyRow {
   attachment_url: string | null;
 }
 
+interface MessageSeenRow {
+  message_id: string;
+  user_id: string;
+}
+
 interface MessagePageResult {
   messages: ChatCachedMessage[];
   hasMore: boolean;
@@ -244,10 +249,20 @@ async function buildConversationListEntries(
     })),
   );
 
+  const participantIdsByConversationId = new Map<string, string[]>();
+  await Promise.all(
+    rows
+      .filter((row) => row.chat_type === 'group')
+      .map(async (row) => {
+        participantIdsByConversationId.set(row.chat_id, await getChatParticipantIds(row.chat_id));
+      }),
+  );
+
   return rows
-    .map((row) => {
+    .map<ChatConversationListEntry | null>((row) => {
       const latestMessage = latestMessages.get(row.chat_id);
       if (row.chat_type === 'group') {
+        const participantIds = participantIdsByConversationId.get(row.chat_id) ?? [];
         return {
           id: row.chat_id,
           participantId: row.chat_id,
@@ -259,6 +274,7 @@ async function buildConversationListEntries(
           timestamp: latestMessage?.timestamp ?? row.updated_at.toISOString(),
           isRequest: row.is_request,
           isGroup: true,
+          groupMemberCount: Math.max(participantIds.length, 1),
         };
       }
 
@@ -545,12 +561,16 @@ async function hasOlderMessagesThan(
 async function formatMessagesForResponse(
   messages: ChatCachedMessage[],
   viewerUserId: string,
+  seenByMessageId: Map<string, string[]>,
 ) {
   const senderIds = new Set<string>();
   for (const message of messages) {
     senderIds.add(message.senderId);
     if (message.replyTo?.senderId) {
       senderIds.add(message.replyTo.senderId);
+    }
+    for (const seenUserId of seenByMessageId.get(message.id) ?? []) {
+      senderIds.add(seenUserId);
     }
   }
 
@@ -573,8 +593,39 @@ async function formatMessagesForResponse(
             summaries.get(message.replyTo.senderId)?.username ?? 'Unknown user',
         }
       : null,
+    seenBy: (seenByMessageId.get(message.id) ?? []).map((seenUserId) => ({
+      userId: seenUserId,
+      username: summaries.get(seenUserId)?.username ?? 'Unknown user',
+      avatarUrl: summaries.get(seenUserId)?.profilePictureUrl ?? null,
+    })),
     isOwn: message.senderId === viewerUserId,
   }));
+}
+
+async function fetchSeenByMap(
+  chatId: string,
+  viewerUserId: string,
+  messageIds: string[],
+): Promise<Map<string, string[]>> {
+  const seenByMap = new Map<string, string[]>();
+  if (messageIds.length === 0) return seenByMap;
+
+  const rows = await prisma.$queryRaw<MessageSeenRow[]>`
+    SELECT cp.last_read_message_id AS message_id, cp.user_id
+    FROM chat_participants cp
+    WHERE cp.chat_id = ${chatId}
+      AND cp.left_at IS NULL
+      AND cp.user_id != ${viewerUserId}
+      AND cp.last_read_message_id IN (${Prisma.join(messageIds)})
+  `;
+
+  for (const row of rows) {
+    const existing = seenByMap.get(row.message_id) ?? [];
+    existing.push(row.user_id);
+    seenByMap.set(row.message_id, existing);
+  }
+
+  return seenByMap;
 }
 
 async function fetchMessagesForRequest(
@@ -898,7 +949,12 @@ router.get('/conversations/:chatId/messages', async (req: Request, res: Response
 
     const result = await fetchMessagesForRequest(chatId, limit, before);
     const nextCursor = result.messages.length > 0 ? result.messages[0].id : null;
-    const formatted = await formatMessagesForResponse(result.messages, userId);
+    const seenByMap = await fetchSeenByMap(
+      chatId,
+      userId,
+      result.messages.map((message) => message.id),
+    );
+    const formatted = await formatMessagesForResponse(result.messages, userId, seenByMap);
 
     return res.status(200).json({
       messages: formatted,

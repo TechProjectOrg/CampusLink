@@ -1,5 +1,4 @@
 import { API_BASE as API_BASE_URL } from './authApi';
-import { ChatConversation } from '../types';
 
 // Types for chat API
 export type ChatReactions = Record<string, string[]>;
@@ -25,7 +24,7 @@ export interface ChatMessageApi {
   attachments: Array<{ fileUrl: string; fileType: string }>;
   replyToMessageId?: string | null;
   replyTo?: ChatReplyPreviewApi | null;
-  readAt?: string | null;
+  seenBy: GroupChatMemberSummaryApi[];
   isOwn: boolean;
 }
 
@@ -41,6 +40,31 @@ export interface ConversationApiResponse {
   lastSeenAt: string | null;
   isRequest: boolean;
   isGroup?: boolean;
+  groupMemberCount?: number;
+}
+
+export interface GroupChatMemberSummaryApi {
+  userId: string;
+  username: string;
+  avatarUrl: string | null;
+}
+
+export interface GroupChatMemberApi extends GroupChatMemberSummaryApi {
+  role: 'owner' | 'admin' | 'member';
+  joinedAt: string;
+  leftAt: string | null;
+}
+
+export interface GroupChatDetailsApi {
+  id: string;
+  name: string;
+  description: string;
+  avatarUrl: string | null;
+  createdAt: string;
+  createdBy: string | null;
+  memberCount: number;
+  members: GroupChatMemberApi[];
+  currentUserRole: 'owner' | 'admin' | 'member' | null;
 }
 
 export async function apiCreateGroupConversation(
@@ -219,5 +243,81 @@ export async function apiDeleteMessage(chatId: string, messageId: string, token:
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
     throw new Error(error.error || 'Failed to delete message');
+  }
+}
+
+export async function apiFetchGroupChatDetails(chatId: string, token: string): Promise<GroupChatDetailsApi> {
+  const response = await fetch(`${API_BASE_URL}/group-chat/${chatId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || error.message || 'Failed to fetch group details');
+  }
+  return response.json();
+}
+
+export async function apiAddGroupMember(chatId: string, userId: string, token: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/group-chat/${chatId}/add-member`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ userId }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || error.message || 'Failed to add member');
+  }
+}
+
+export async function apiRemoveGroupMember(chatId: string, userId: string, token: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/group-chat/${chatId}/remove-member`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ userId }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || error.message || 'Failed to remove member');
+  }
+}
+
+export async function apiChangeGroupMemberRole(
+  chatId: string,
+  userId: string,
+  newRole: 'OWNER' | 'ADMIN' | 'MEMBER',
+  token: string,
+): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/group-chat/${chatId}/change-role`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ userId, newRole }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || error.message || 'Failed to change role');
+  }
+}
+
+export async function apiLeaveGroupChat(chatId: string, token: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/group-chat/${chatId}/leave`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || error.message || 'Failed to leave group');
   }
 }

@@ -171,6 +171,7 @@ export interface ChatConversation {
   isRequest?: boolean;
   isGroup?: boolean;
   groupMembers?: string[];
+  groupMemberCount?: number;
 }
 
 export interface Notification {

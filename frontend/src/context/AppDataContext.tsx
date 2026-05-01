@@ -1100,6 +1100,7 @@ function createStore(): AppDataStore {
               attachmentUrl: input.replyTo.attachments[0]?.fileUrl ?? null,
             }
           : null,
+        seenBy: [],
         isOwn: true,
       };
 
@@ -1144,6 +1145,7 @@ function createStore(): AppDataStore {
               attachmentUrl: input.replyTo.attachments[0]?.fileUrl ?? null,
             }
           : null,
+        seenBy: [],
         isOwn: true,
       };
 
@@ -1254,13 +1256,25 @@ function createStore(): AppDataStore {
         const payload = event.payload;
         if (!payload || payload.userId === currentUserId) return;
         setMessagesState(payload.chatId, (current) => {
-          const readIndex = current.messages.findIndex((message) => message.id === payload.lastReadMessageId);
-          if (readIndex === -1) return current;
+          if (!current.messages.some((message) => message.id === payload.lastReadMessageId)) {
+            return current;
+          }
           return {
             ...current,
-            messages: current.messages.map((message, index) =>
-              message.isOwn && index <= readIndex ? { ...message, readAt: payload.readAt } : message,
-            ),
+            messages: current.messages.map((message) => ({
+              ...message,
+              seenBy:
+                message.id === payload.lastReadMessageId
+                  ? [
+                      ...message.seenBy.filter((user) => user.userId !== payload.userId),
+                      {
+                        userId: payload.userId,
+                        username: state.usersById[payload.userId]?.name ?? 'Someone',
+                        avatarUrl: state.usersById[payload.userId]?.avatar ?? null,
+                      },
+                    ]
+                  : message.seenBy.filter((user) => user.userId !== payload.userId),
+            })),
           };
         });
         return;

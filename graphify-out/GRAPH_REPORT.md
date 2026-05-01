@@ -1,12 +1,12 @@
 # Graph Report - final-year-project  (2026-05-01)
 
 ## Corpus Check
-- 142 files · ~119,475 words
+- 142 files · ~120,754 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 920 nodes · 1356 edges · 33 communities detected
-- Extraction: 87% EXTRACTED · 13% INFERRED · 0% AMBIGUOUS · INFERRED: 176 edges (avg confidence: 0.8)
+- 918 nodes · 1356 edges · 33 communities detected
+- Extraction: 87% EXTRACTED · 13% INFERRED · 0% AMBIGUOUS · INFERRED: 178 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
@@ -39,10 +39,10 @@
 - [[_COMMUNITY_Community 40|Community 40]]
 - [[_COMMUNITY_Community 46|Community 46]]
 - [[_COMMUNITY_Community 49|Community 49]]
-- [[_COMMUNITY_Community 63|Community 63]]
-- [[_COMMUNITY_Community 91|Community 91]]
+- [[_COMMUNITY_Community 62|Community 62]]
+- [[_COMMUNITY_Community 90|Community 90]]
+- [[_COMMUNITY_Community 116|Community 116]]
 - [[_COMMUNITY_Community 117|Community 117]]
-- [[_COMMUNITY_Community 118|Community 118]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `authHeaders()` - 17 edges
@@ -59,14 +59,14 @@
 ## Surprising Connections (you probably didn't know these)
 - `cacheDelete()` --calls--> `invalidateConversationLists()`  [INFERRED]
   backend\server\src\lib\cache.ts → backend\server\src\lib\chatCache.ts
-- `getUserSummariesByIds()` --calls--> `hydrateOrderedUsers()`  [INFERRED]
-  backend\server\src\lib\userCache.ts → backend\server\src\routes\network.ts
 - `loadPosts()` --calls--> `apiFetchProfilePosts()`  [INFERRED]
   frontend\src\components\ProfilePage.tsx → frontend\src\lib\postsApi.ts
 - `Legacy SQL Social Schema` --semantically_similar_to--> `Frontend Copy of Legacy SQL Social Schema`  [INFERRED] [semantically similar]
   database/DATABASE_README.md → frontend/database/DATABASE_README.md
 - `Legacy Database Bootstrap` --semantically_similar_to--> `Frontend Copy of Legacy Database Bootstrap`  [INFERRED] [semantically similar]
   database/QUICKSTART.md → frontend/database/QUICKSTART.md
+- `cacheGetJson()` --calls--> `getCachedRecentMessages()`  [INFERRED]
+  backend\server\src\lib\cache.ts → backend\server\src\lib\chatCache.ts
 
 ## Communities
 
@@ -75,24 +75,24 @@ Cohesion: 0.04
 Nodes (47): areStringArraysEqual(), buildCreatePostPayloadFromDraft(), createInitialDiscussionPageState(), findCommentInTree(), findCommentStateById(), findOpportunityIdByCommentId(), getAccountType(), handleAcceptFollowRequest() (+39 more)
 
 ### Community 1 - "Community 1"
-Cohesion: 0.06
-Nodes (54): cacheHashGet(), cacheHashMultiGet(), buildConversationListEntries(), cacheAndEmitMessage(), fetchConversationBaseRows(), fetchConversationUnreadRows(), fetchMessageRows(), fetchMessagesForRequest() (+46 more)
+Cohesion: 0.05
+Nodes (57): cacheHashGet(), cacheHashMultiGet(), buildConversationListEntries(), cacheAndEmitMessage(), fetchConversationBaseRows(), fetchConversationUnreadRows(), fetchMessageRows(), fetchMessagesForRequest() (+49 more)
 
 ### Community 2 - "Community 2"
 Cohesion: 0.04
-Nodes (23): Alert(), handleMessage(), handleForgotPassword(), handleSignup(), apiCreateGroupConversation(), apiStartConversation(), formatDate(), formatMenuTimestamp() (+15 more)
+Nodes (23): Alert(), handleMessage(), handleForgotPassword(), handleSignup(), apiCreateGroupConversation(), apiStartConversation(), ChatPage(), formatDate() (+15 more)
 
 ### Community 3 - "Community 3"
 Cohesion: 0.06
 Nodes (31): apiCreateUserCertification(), apiDeleteUserCertification(), apiFetchUserCertifications(), authHeaders(), parseErrorMessage(), closeModal(), handleAddAchievement(), handleAddCertification() (+23 more)
 
 ### Community 4 - "Community 4"
-Cohesion: 0.07
-Nodes (39): appendStreamMessage(), cacheExpire(), cacheGetJson(), cacheHashDelete(), cacheHashIncrementBy(), cacheHashSet(), cacheHGetAll(), cacheIncrement() (+31 more)
+Cohesion: 0.08
+Nodes (36): appendStreamMessage(), cacheExpire(), cacheGetJson(), cacheHashDelete(), cacheHashIncrementBy(), cacheHashSet(), cacheHGetAll(), cacheIncrement() (+28 more)
 
 ### Community 5 - "Community 5"
 Cohesion: 0.11
-Nodes (29): getChatParticipantIds(), checkCanAddUserToChat(), checkChatPermission(), getUserChatRole(), getUserClubRole(), isGroupChatOwner(), validateRoleChange(), createSystemEvent() (+21 more)
+Nodes (31): getChatParticipantIds(), checkCanAddUserToChat(), checkChatPermission(), getUserChatRole(), getUserClubRole(), isGroupChatOwner(), validateRoleChange(), createSystemEvent() (+23 more)
 
 ### Community 6 - "Community 6"
 Cohesion: 0.16
@@ -186,19 +186,19 @@ Nodes (4): Legacy Database Bootstrap, Legacy SQL Social Schema, Frontend Copy of
 Cohesion: 1.0
 Nodes (2): mutualFollowersCount(), uniqueIntersection()
 
-### Community 63 - "Community 63"
+### Community 62 - "Community 62"
 Cohesion: 0.67
 Nodes (3): shadcn/ui MIT Attribution, Unsplash License Attribution, Figma Design Reference
 
-### Community 91 - "Community 91"
+### Community 90 - "Community 90"
 Cohesion: 1.0
 Nodes (2): Mock Data Architecture, Tab-Based SPA Navigation
 
-### Community 117 - "Community 117"
+### Community 116 - "Community 116"
 Cohesion: 1.0
 Nodes (1): Local Development Setup
 
-### Community 118 - "Community 118"
+### Community 117 - "Community 117"
 Cohesion: 1.0
 Nodes (1): Custom Guidelines Placeholder
 
@@ -215,11 +215,11 @@ Nodes (1): Custom Guidelines Placeholder
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 49`** (3 nodes): `NetworkPage.tsx`, `mutualFollowersCount()`, `uniqueIntersection()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 91`** (2 nodes): `Mock Data Architecture`, `Tab-Based SPA Navigation`
+- **Thin community `Community 90`** (2 nodes): `Mock Data Architecture`, `Tab-Based SPA Navigation`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 117`** (1 nodes): `Local Development Setup`
+- **Thin community `Community 116`** (1 nodes): `Local Development Setup`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 118`** (1 nodes): `Custom Guidelines Placeholder`
+- **Thin community `Community 117`** (1 nodes): `Custom Guidelines Placeholder`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 
 ## Suggested Questions
@@ -238,4 +238,4 @@ _Questions this graph is uniquely positioned to answer:_
 - **Should `Community 0` be split into smaller, more focused modules?**
   _Cohesion score 0.04 - nodes in this community are weakly interconnected._
 - **Should `Community 1` be split into smaller, more focused modules?**
-  _Cohesion score 0.06 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.05 - nodes in this community are weakly interconnected._

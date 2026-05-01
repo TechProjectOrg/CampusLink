@@ -23,6 +23,7 @@ export function mapRealtimeChatMessage(payload: any, currentUserId: string): Cha
     attachments: payload.attachments || [],
     replyToMessageId: payload.replyToMessageId ?? null,
     replyTo: payload.replyTo ?? null,
+    seenBy: payload.seenBy ?? [],
     isOwn: payload.senderUserId === currentUserId
   };
 }

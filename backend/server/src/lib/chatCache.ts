@@ -60,6 +60,7 @@ export interface ChatConversationListEntry {
   timestamp: string;
   isRequest: boolean;
   isGroup?: boolean;
+  groupMemberCount?: number;
 }
 
 export interface ChatPresenceState {

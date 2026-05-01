@@ -8,9 +8,15 @@ import { Badge } from './ui/badge';
 import { NewChatModal } from './NewChatModal';
 import { GroupInfoPage } from './GroupInfoPage';
 import {
+  apiAddGroupMember,
+  apiChangeGroupMemberRole,
   apiCreateGroupConversation,
+  apiFetchGroupChatDetails,
+  apiLeaveGroupChat,
+  apiRemoveGroupMember,
   apiStartConversation,
   ChatMessageApi,
+  GroupChatDetailsApi,
 } from '../lib/chatApi';
 import { REACTION_EMOJIS, formatSeenTime, summarizeReply } from '../lib/chatUi';
 import { EmojiPicker } from './chat/EmojiPicker';
@@ -66,8 +72,9 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   const [message, setMessage] = useState('');
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
   const [viewingGroupInfo, setViewingGroupInfo] = useState<string | null>(null);
+  const [groupInfo, setGroupInfo] = useState<GroupChatDetailsApi | null>(null);
+  const [isGroupInfoLoading, setIsGroupInfoLoading] = useState(false);
   const [replyingTo, setReplyingTo] = useState<ChatMessageApi | null>(null);
-  const [seenTick, setSeenTick] = useState(0);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -135,14 +142,34 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     void appData.ensureConversationMessages(selectedChat);
   }, [appData, selectedChat, selectedChatState?.isHydrated]);
 
-  useEffect(() => {
-    const interval = window.setInterval(() => setSeenTick(tick => tick + 1), 60000);
-    return () => window.clearInterval(interval);
-  }, []);
-
   useEffect(() => () => {
     appData.clearLocalTyping(selectedChat);
   }, [appData, selectedChat]);
+
+  const loadGroupInfo = useCallback(async (chatId: string) => {
+    const token = auth.session?.token;
+    if (!token) return;
+    setGroupInfo(null);
+    setIsGroupInfoLoading(true);
+    try {
+      const details = await apiFetchGroupChatDetails(chatId, token);
+      setGroupInfo(details);
+    } catch (err) {
+      console.error('Failed to load group info:', err);
+      window.alert(err instanceof Error ? err.message : 'Failed to load group info');
+      setViewingGroupInfo(null);
+    } finally {
+      setIsGroupInfoLoading(false);
+    }
+  }, [auth.session?.token]);
+
+  useEffect(() => {
+    if (!viewingGroupInfo) {
+      setGroupInfo(null);
+      return;
+    }
+    void loadGroupInfo(viewingGroupInfo);
+  }, [loadGroupInfo, viewingGroupInfo]);
 
   useEffect(() => {
     if (!selectedChat) return;
@@ -184,9 +211,26 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     });
   };
 
-  const latestSeenOwnMessage = [...chatMessages].reverse().find(msg => msg.isOwn && msg.readAt);
-  const latestSeenLabel = latestSeenOwnMessage?.readAt ? formatSeenTime(latestSeenOwnMessage.readAt) : null;
-  void seenTick;
+  const getSeenAvatarStack = (msg: ChatMessageApi) => {
+    if (msg.seenBy.length === 0) return null;
+
+    return (
+      <div className={`mt-1 flex items-center gap-1 px-2 ${msg.isOwn ? 'justify-end' : 'justify-start'}`}>
+        {msg.seenBy.map((reader) => (
+          <Avatar
+            key={`${msg.id}-${reader.userId}`}
+            className="h-5 w-5 ring-2 ring-white shadow-sm"
+            title={`${reader.username} has seen this`}
+          >
+            <AvatarImage src={reader.avatarUrl ?? undefined} />
+            <AvatarFallback className="text-[9px]">
+              {reader.username[0]}
+            </AvatarFallback>
+          </Avatar>
+        ))}
+      </div>
+    );
+  };
 
   const handleSendMessage = async () => {
     if (!message.trim() || !selectedChat) return;
@@ -333,27 +377,79 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     }
   };
 
-  // Mock group data for demonstration
-  const mockGroup = viewingGroupInfo ? {
-    id: viewingGroupInfo,
-    name: selectedConversation?.participantName || 'Group',
-    description: 'This is a study group for CS students working on projects together.',
-    avatar: selectedConversation?.participantAvatar || '',
-    members: selectedConversation?.groupMembers || [],
-    admins: [currentUserId],
-    createdAt: new Date().toISOString(),
-    createdBy: currentUserId
-  } : null;
+  const refreshGroupConversationData = useCallback(async (chatId: string) => {
+    await appData.ensureConversations({ force: true });
+    await loadGroupInfo(chatId);
+  }, [appData, loadGroupInfo]);
 
-  // If viewing group info, show GroupInfoPage
-  if (viewingGroupInfo && mockGroup) {
+  const handleAddGroupMember = useCallback(async (groupId: string, memberId: string) => {
+    const token = auth.session?.token;
+    if (!token) return;
+    try {
+      await apiAddGroupMember(groupId, memberId, token);
+      await refreshGroupConversationData(groupId);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Failed to add member');
+    }
+  }, [auth.session?.token, refreshGroupConversationData]);
+
+  const handleRemoveGroupMember = useCallback(async (groupId: string, memberId: string) => {
+    const token = auth.session?.token;
+    if (!token) return;
+    try {
+      await apiRemoveGroupMember(groupId, memberId, token);
+      await refreshGroupConversationData(groupId);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Failed to remove member');
+    }
+  }, [auth.session?.token, refreshGroupConversationData]);
+
+  const handleMakeGroupAdmin = useCallback(async (groupId: string, memberId: string) => {
+    const token = auth.session?.token;
+    if (!token) return;
+    try {
+      await apiChangeGroupMemberRole(groupId, memberId, 'ADMIN', token);
+      await refreshGroupConversationData(groupId);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Failed to update member role');
+    }
+  }, [auth.session?.token, refreshGroupConversationData]);
+
+  const handleLeaveGroup = useCallback(async (groupId: string) => {
+    const token = auth.session?.token;
+    if (!token) return;
+    try {
+      await apiLeaveGroupChat(groupId, token);
+      setViewingGroupInfo(null);
+      setGroupInfo(null);
+      appData.selectConversation(null);
+      await appData.ensureConversations({ force: true });
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Failed to leave group');
+    }
+  }, [appData, auth.session?.token]);
+
+  if (viewingGroupInfo && !groupInfo) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center bg-white">
+        <div className="text-sm text-gray-500">Loading group info...</div>
+      </div>
+    );
+  }
+
+  if (viewingGroupInfo && groupInfo) {
     return (
       <GroupInfoPage
-        group={mockGroup}
+        group={groupInfo}
         students={students}
         currentUserId={currentUserId}
+        isLoading={isGroupInfoLoading}
         onBack={() => setViewingGroupInfo(null)}
         onViewProfile={onViewProfile}
+        onAddMember={handleAddGroupMember}
+        onLeaveGroup={handleLeaveGroup}
+        onRemoveMember={handleRemoveGroupMember}
+        onMakeAdmin={handleMakeGroupAdmin}
       />
     );
   }
@@ -489,7 +585,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                         </>
                       ) : selectedConversation.isGroup ? (
                         <p className="text-xs text-gray-500">
-                          {selectedConversation.groupMembers?.length || 0} members
+                          {selectedConversation.groupMemberCount ?? selectedConversation.groupMembers?.length ?? 0} members
                         </p>
                       ) : (
                         <>
@@ -640,7 +736,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                               {msg.replyTo && (
                                 <button
                                   type="button"
-                                  onClick={() => jumpToMessage(msg.replyTo.id)}
+                                  onClick={() => msg.replyTo && jumpToMessage(msg.replyTo.id)}
                                   className={`mb-2 block w-full max-w-full overflow-hidden rounded-2xl border border-l-4 px-3 py-2 text-left text-xs ${msg.isOwn ? 'border-white/40 bg-black/20 text-blue-50' : 'border-gray-300 bg-gray-50 text-gray-700'}`}
                                   title="Go to referenced message"
                                 >
@@ -743,11 +839,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                               ))}
                             </div>
                           )}
-                          {latestSeenOwnMessage?.id === msg.id && latestSeenLabel && (
-                            <p className="text-xs text-gray-400 mt-1 px-2 text-right">
-                              {latestSeenLabel}
-                            </p>
-                          )}
+                          {getSeenAvatarStack(msg)}
                         </div>
                       </div>
                     </div>

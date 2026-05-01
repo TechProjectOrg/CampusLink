@@ -13,6 +13,7 @@ import {
   changeUserRole,
   updateGroupChat,
   deleteGroupChat,
+  getGroupChatDetails,
   getChatMembers,
   leaveGroupChat,
 } from '../lib/groupChat';
@@ -49,6 +50,21 @@ router.post('/create', async (req: AuthedRequest, res: Response) => {
   } catch (err) {
     console.error('Error creating group chat:', err);
     res.status(500).json({ error: 'Failed to create group chat' });
+  }
+});
+
+router.get('/:chatId', async (req: AuthedRequest, res: Response) => {
+  try {
+    const chatId = String(req.params.chatId);
+    const userId = req.auth!.userId;
+
+    await validateChatAccess(userId, chatId);
+
+    const details = await getGroupChatDetails(chatId, userId);
+    res.json(details);
+  } catch (err: any) {
+    console.error('Error fetching group chat details:', err);
+    res.status(500).json({ error: 'Failed to fetch group details' });
   }
 });
 
