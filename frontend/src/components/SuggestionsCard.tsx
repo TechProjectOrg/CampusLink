@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { TrendingUp, Users, Sparkles } from 'lucide-react';
+import { TrendingUp, Users } from 'lucide-react';
 import type { Opportunity, Student } from '../types';
 import type { FollowGraph } from '../App';
 import { FollowButton } from './network/FollowButton';
@@ -30,10 +30,16 @@ export function SuggestionsCard({
 }: SuggestionsCardProps) {
   const currentUser = students.find((student) => student.id === currentUserId);
 
+  const starterHashtags = [
+    { hashtag: 'PlacementPrep', postCount: 1, badge: 'Starter' },
+    { hashtag: 'HackathonSeason', postCount: 1, badge: 'Starter' },
+    { hashtag: 'OpenSource', postCount: 1, badge: 'Starter' },
+  ];
+
   const suggestedStudents = useMemo(() => {
     if (!currentUser) return [];
 
-    return students
+    const candidates = students
       .filter((student) => {
         if (student.id === currentUserId) return false;
         const isFollowing = (followGraph.followingByUserId[currentUserId] ?? []).includes(student.id);
@@ -43,20 +49,45 @@ export function SuggestionsCard({
       .map((student) => {
         const sharedSkills = student.skills.filter((skill) => currentUser.skills.includes(skill));
         const sharedInterests = student.interests.filter((interest) => currentUser.interests.includes(interest));
-        const score = (student.branch === currentUser.branch ? 4 : 0)
-          + (student.year === currentUser.year ? 2 : 0)
+        const branchMatch = student.branch === currentUser.branch;
+        const yearMatch = student.year === currentUser.year;
+        const score = (branchMatch ? 4 : 0)
+          + (yearMatch ? 2 : 0)
           + sharedSkills.length * 2
           + sharedInterests.length;
+        const createdAtMs = student.createdAt ? Date.parse(student.createdAt) : Number.NaN;
 
-        return { student, sharedSkills, sharedInterests, score };
+        return {
+          student,
+          sharedSkills,
+          sharedInterests,
+          branchMatch,
+          yearMatch,
+          score,
+          createdAtMs: Number.isFinite(createdAtMs) ? createdAtMs : 0,
+        };
       })
       .sort((left, right) => {
+        if (right.branchMatch !== left.branchMatch) return Number(right.branchMatch) - Number(left.branchMatch);
+        if (right.yearMatch !== left.yearMatch) return Number(right.yearMatch) - Number(left.yearMatch);
         if (right.score !== left.score) return right.score - left.score;
         if (right.sharedSkills.length !== left.sharedSkills.length) return right.sharedSkills.length - left.sharedSkills.length;
         if (right.sharedInterests.length !== left.sharedInterests.length) return right.sharedInterests.length - left.sharedInterests.length;
+        if (right.createdAtMs !== left.createdAtMs) return right.createdAtMs - left.createdAtMs;
         return left.student.name.localeCompare(right.student.name);
-      })
-      .slice(0, 3);
+      });
+
+    if (candidates[0]?.score ?? 0 < 3) {
+      return candidates
+        .slice()
+        .sort((left, right) => {
+          if (right.createdAtMs !== left.createdAtMs) return right.createdAtMs - left.createdAtMs;
+          return left.student.name.localeCompare(right.student.name);
+        })
+        .slice(0, 3);
+    }
+
+    return candidates.slice(0, 3);
   }, [currentUser, currentUserId, followGraph.followingByUserId, followGraph.outgoingRequestsByUserId, students]);
 
   const trendingTopics = useMemo(() => {
@@ -70,7 +101,7 @@ export function SuggestionsCard({
       }
     }
 
-    return Array.from(counts.entries())
+    const realTopics = Array.from(counts.entries())
       .sort((left, right) => {
         if (right[1] !== left[1]) return right[1] - left[1];
         return left[0].localeCompare(right[0]);
@@ -81,15 +112,8 @@ export function SuggestionsCard({
         postCount,
         badge: index === 0 ? 'Hot' : index === 1 ? 'Trending' : 'Rising',
       }));
-  }, [opportunities]);
 
-  const uniqueClubs = useMemo(() => {
-    const clubs = new Set<string>();
-    for (const opportunity of opportunities) {
-      const clubName = opportunity.clubName?.trim();
-      if (clubName) clubs.add(clubName);
-    }
-    return clubs;
+      return realTopics.length > 0 ? realTopics : starterHashtags;
   }, [opportunities]);
 
   return (
@@ -189,31 +213,6 @@ export function SuggestionsCard({
         </CardContent>
       </Card>
 
-      <Card className="border-primary/10 rounded-2xl shadow-lg hover-lift animate-slide-in-up" style={{ animationDelay: '200ms' }}>
-        <CardContent className="p-6 space-y-4">
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-xl bg-purple-100 flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-purple-600" />
-            </div>
-            <h4 className="text-gray-900">Campus Stats</h4>
-          </div>
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 bg-gradient-to-r from-primary/5 to-secondary/5 rounded-xl">
-              <p className="text-sm text-gray-700">Active Students</p>
-              <p className="text-primary">{students.length}</p>
-            </div>
-            <div className="flex items-center justify-between p-3 bg-gradient-to-r from-secondary/5 to-purple-100/50 rounded-xl">
-              <p className="text-sm text-gray-700">Live Opportunities</p>
-              <p className="text-secondary">{opportunities.length}</p>
-            </div>
-            <div className="flex items-center justify-between p-3 bg-gradient-to-r from-accent/5 to-accent/10 rounded-xl">
-              <p className="text-sm text-gray-700">Active Clubs</p>
-              <p className="text-accent">{uniqueClubs.size}</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

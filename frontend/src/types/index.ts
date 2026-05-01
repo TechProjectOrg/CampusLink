@@ -39,6 +39,7 @@ export interface Student {
   headline?: string;
   username: string;
   email: string;
+  createdAt?: string;
   branch: string;
   year: number;
   avatar: string;
