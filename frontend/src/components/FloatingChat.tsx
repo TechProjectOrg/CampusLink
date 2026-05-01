@@ -382,7 +382,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
               )}
               <div
                 ref={messagesViewportRef}
-                style={{ overflowAnchor: 'none' }}
+                style={{ overflowAnchor: 'auto' }}
                 className="h-full overflow-y-auto"
               >
                 {!isChatReady && isLoadingMessages && chatMessages.length === 0 ? (
@@ -401,7 +401,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                   const isSystemMessage = msg.type === 'system';
 
                   return (
-                    <div key={msg.id} id={`floating-chat-message-${msg.id}`}>
+                    <div key={msg.id} id={`floating-chat-message-${msg.id}`} data-chat-scroll-message={msg.id}>
                       {showDate && (
                         <div className="flex justify-center my-4">
                           <span className="text-xs text-gray-500 px-3 py-1 bg-gray-100 rounded-full">

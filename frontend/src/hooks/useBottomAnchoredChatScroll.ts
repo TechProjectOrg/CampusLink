@@ -13,6 +13,10 @@ type ConversationScrollState = {
   preScrollTop: number;
   preScrollHeight: number;
   preMessageCount: number;
+  anchorMessageId: string | null;
+  anchorOffsetTop: number;
+  anchorResizeTimerId: number | null;
+  stabilizeUntil: number;
   lastRenderedMessageId: string | null;
   firstRenderedMessageId: string | null;
   renderedMessageCount: number;
@@ -43,12 +47,43 @@ const createConversationScrollState = (): ConversationScrollState => ({
   preScrollTop: 0,
   preScrollHeight: 0,
   preMessageCount: 0,
+  anchorMessageId: null,
+  anchorOffsetTop: 0,
+  anchorResizeTimerId: null,
+  stabilizeUntil: 0,
   lastRenderedMessageId: null,
   firstRenderedMessageId: null,
   renderedMessageCount: 0,
   wasNearBottom: true,
   lastBottomAnchorKey: null,
 });
+
+function getMessageElement(viewport: HTMLElement, messageId: string | null): HTMLElement | null {
+  if (!messageId) return null;
+
+  const elements = viewport.querySelectorAll<HTMLElement>('[data-chat-scroll-message]');
+  for (const element of elements) {
+    if (element.dataset.chatScrollMessage === messageId) {
+      return element;
+    }
+  }
+  return null;
+}
+
+function getFirstVisibleMessageAnchor(viewport: HTMLElement): { id: string; offsetTop: number } | null {
+  const viewportTop = viewport.getBoundingClientRect().top;
+  const elements = viewport.querySelectorAll<HTMLElement>('[data-chat-scroll-message]');
+
+  for (const element of elements) {
+    const rect = element.getBoundingClientRect();
+    if (rect.bottom > viewportTop + 8) {
+      const id = element.dataset.chatScrollMessage;
+      return id ? { id, offsetTop: rect.top - viewportTop } : null;
+    }
+  }
+
+  return null;
+}
 
 export function useBottomAnchoredChatScroll<TMessage extends MessageLike>({
   conversationId,
@@ -64,6 +99,7 @@ export function useBottomAnchoredChatScroll<TMessage extends MessageLike>({
 }: UseBottomAnchoredChatScrollOptions<TMessage>) {
   const messagesViewportRef = useRef<HTMLDivElement | null>(null);
   const topSentinelRef = useRef<HTMLDivElement | null>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const conversationStateRef = useRef<Record<string, ConversationScrollState>>({});
   const activeConversationIdRef = useRef<string | null>(null);
   const [readyByConversation, setReadyByConversation] = useState<Record<string, boolean>>({});
@@ -118,6 +154,58 @@ export function useBottomAnchoredChatScroll<TMessage extends MessageLike>({
     [bottomAnchorKey, conversationId, ensureConversationState, firstMessageId, latestMessageId, messages.length],
   );
 
+  const restorePrependAnchor = useCallback((viewport: HTMLElement, scrollState: ConversationScrollState) => {
+    const anchor = getMessageElement(viewport, scrollState.anchorMessageId);
+    if (!anchor) {
+      const heightDelta = viewport.scrollHeight - scrollState.preScrollHeight;
+      viewport.scrollTop = scrollState.preScrollTop + heightDelta;
+      return;
+    }
+
+    const viewportTop = viewport.getBoundingClientRect().top;
+    const currentOffsetTop = anchor.getBoundingClientRect().top - viewportTop;
+    viewport.scrollTop += currentOffsetTop - scrollState.anchorOffsetTop;
+  }, []);
+
+  const guardPrependAnchorDuringResize = useCallback(
+    (viewport: HTMLElement, scrollState: ConversationScrollState) => {
+      resizeObserverRef.current?.disconnect();
+      if (scrollState.anchorResizeTimerId !== null) {
+        window.clearTimeout(scrollState.anchorResizeTimerId);
+        scrollState.anchorResizeTimerId = null;
+      }
+
+      if (!scrollState.anchorMessageId) return;
+
+      const observedElement = viewport.firstElementChild;
+      if (!observedElement) return;
+
+      let frameId: number | null = null;
+      const observer = new ResizeObserver(() => {
+        if (frameId !== null) return;
+        frameId = window.requestAnimationFrame(() => {
+          frameId = null;
+          restorePrependAnchor(viewport, scrollState);
+        });
+      });
+
+      observer.observe(observedElement);
+      resizeObserverRef.current = observer;
+
+      scrollState.anchorResizeTimerId = window.setTimeout(() => {
+        if (frameId !== null) {
+          window.cancelAnimationFrame(frameId);
+        }
+        observer.disconnect();
+        if (resizeObserverRef.current === observer) {
+          resizeObserverRef.current = null;
+        }
+        scrollState.anchorResizeTimerId = null;
+      }, 1_500);
+    },
+    [restorePrependAnchor],
+  );
+
   const loadOlderMessages = useCallback(async () => {
     if (!conversationId || !hasMore || !nextCursor || isLoadingOlder) return;
 
@@ -125,10 +213,12 @@ export function useBottomAnchoredChatScroll<TMessage extends MessageLike>({
     if (!viewport) return;
 
     const scrollState = ensureConversationState(conversationId);
+    const isStabilizingPrepend = Date.now() < scrollState.stabilizeUntil;
     if (
       scrollState.needsInitialAnchor ||
       scrollState.pendingPrependRestore ||
-      scrollState.prependRequestInFlight
+      scrollState.prependRequestInFlight ||
+      isStabilizingPrepend
     ) {
       return;
     }
@@ -138,6 +228,9 @@ export function useBottomAnchoredChatScroll<TMessage extends MessageLike>({
     scrollState.preScrollTop = viewport.scrollTop;
     scrollState.preScrollHeight = viewport.scrollHeight;
     scrollState.preMessageCount = messages.length;
+    const anchor = getFirstVisibleMessageAnchor(viewport);
+    scrollState.anchorMessageId = anchor?.id ?? firstMessageId;
+    scrollState.anchorOffsetTop = anchor?.offsetTop ?? 0;
 
     try {
       await onLoadOlder();
@@ -150,6 +243,7 @@ export function useBottomAnchoredChatScroll<TMessage extends MessageLike>({
   }, [
     conversationId,
     ensureConversationState,
+    firstMessageId,
     hasMore,
     isLoadingOlder,
     messages.length,
@@ -187,8 +281,20 @@ export function useBottomAnchoredChatScroll<TMessage extends MessageLike>({
     const viewport = messagesViewportRef.current;
     if (!viewport) return;
 
-    viewport.style.overflowAnchor = 'none';
+    viewport.style.overflowAnchor = 'auto';
   }, [conversationId]);
+
+  useEffect(() => {
+    return () => {
+      resizeObserverRef.current?.disconnect();
+      for (const scrollState of Object.values(conversationStateRef.current)) {
+        if (scrollState.anchorResizeTimerId !== null) {
+          window.clearTimeout(scrollState.anchorResizeTimerId);
+          scrollState.anchorResizeTimerId = null;
+        }
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const viewport = messagesViewportRef.current;
@@ -199,6 +305,14 @@ export function useBottomAnchoredChatScroll<TMessage extends MessageLike>({
       const distanceFromBottom =
         viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
       const isNearBottom = distanceFromBottom < bottomThreshold;
+      const isStabilizingPrepend = Date.now() < scrollState.stabilizeUntil;
+
+      if (scrollState.pendingPrependRestore || isStabilizingPrepend) {
+        const anchor = getMessageElement(viewport, scrollState.anchorMessageId);
+        if (anchor) {
+          scrollState.anchorOffsetTop = anchor.getBoundingClientRect().top - viewport.getBoundingClientRect().top;
+        }
+      }
 
       scrollState.wasNearBottom = isNearBottom;
       if (isNearBottom) {
@@ -238,6 +352,7 @@ export function useBottomAnchoredChatScroll<TMessage extends MessageLike>({
         const visible = entries.some((entry) => entry.isIntersecting);
         if (!visible) return;
         if (!scrollState.hasAnchoredInitial || scrollState.needsInitialAnchor) return;
+        if (scrollState.pendingPrependRestore || Date.now() < scrollState.stabilizeUntil) return;
 
         void loadOlderMessages().catch((error) => {
           console.error('Failed to load older messages', error);
@@ -264,8 +379,9 @@ export function useBottomAnchoredChatScroll<TMessage extends MessageLike>({
 
     if (scrollState.pendingPrependRestore && !isLoadingOlder) {
       if (messages.length > scrollState.preMessageCount) {
-        const heightDelta = viewport.scrollHeight - scrollState.preScrollHeight;
-        viewport.scrollTop = scrollState.preScrollTop + heightDelta;
+        restorePrependAnchor(viewport, scrollState);
+        guardPrependAnchorDuringResize(viewport, scrollState);
+        scrollState.stabilizeUntil = Date.now() + 1_500;
       }
 
       scrollState.pendingPrependRestore = false;
@@ -292,11 +408,13 @@ export function useBottomAnchoredChatScroll<TMessage extends MessageLike>({
     conversationId,
     ensureConversationState,
     firstMessageId,
+    guardPrependAnchorDuringResize,
     isLoadingInitial,
     isLoadingOlder,
     latestMessageId,
     markConversationReady,
     messages.length,
+    restorePrependAnchor,
   ]);
 
   useEffect(() => {

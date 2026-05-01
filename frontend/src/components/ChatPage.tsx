@@ -732,7 +732,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
               )}
               <div
                 ref={messagesViewportRef}
-                style={{ overflowAnchor: 'none' }}
+                style={{ overflowAnchor: 'auto' }}
                 className={`absolute inset-0 overflow-y-auto transition-opacity duration-300 ${
                   !selectedChat || isChatReady || !isLoadingMessages ? 'opacity-100' : 'opacity-0'
                 }`}
@@ -759,7 +759,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                   const isSystemMessage = msg.type === 'system';
 
                   return (
-                    <div key={msg.id} id={`chat-message-${msg.id}`}>
+                    <div key={msg.id} id={`chat-message-${msg.id}`} data-chat-scroll-message={msg.id}>
                       {showDate && (
                         <div className="flex justify-center my-4 md:my-6">
                           <span className="text-xs text-gray-500 px-3 md:px-4 py-1 bg-gray-100 rounded-full">
