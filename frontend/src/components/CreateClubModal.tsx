@@ -9,7 +9,6 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
-import { Badge } from './ui/badge';
 import { ImageUpload } from './ui/ImageUpload';
 import { ClubLogoUpload } from './ui/ClubLogoUpload';
 
@@ -25,7 +24,6 @@ export function CreateClubModal({ isOpen, onClose, onCreateClub }: CreateClubMod
   const [showAllCategories, setShowAllCategories] = useState(false);
   const [isLoadingCategories, setIsLoadingCategories] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [tagInput, setTagInput] = useState('');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
   const [formData, setFormData] = useState({
@@ -67,13 +65,6 @@ export function CreateClubModal({ isOpen, onClose, onCreateClub }: CreateClubMod
     return formData.primaryCategory;
   }, [formData.customCategory, formData.primaryCategory]);
 
-  const addTag = () => {
-    const nextTag = tagInput.trim();
-    if (!nextTag || formData.tags.includes(nextTag)) return;
-    setFormData((current) => ({ ...current, tags: [...current.tags, nextTag] }));
-    setTagInput('');
-  };
-
   const resetForm = () => {
     setFormData({
       name: '',
@@ -86,7 +77,6 @@ export function CreateClubModal({ isOpen, onClose, onCreateClub }: CreateClubMod
     });
     setAvatarFile(null);
     setCoverImageFile(null);
-    setTagInput('');
     setShowAllCategories(false);
   };
 
@@ -259,45 +249,6 @@ export function CreateClubModal({ isOpen, onClose, onCreateClub }: CreateClubMod
               disabled={isSubmitting}
               label="Club Background Image (optional)"
             />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="club-tags">Tags</Label>
-            <div className="flex gap-2">
-              <Input
-                id="club-tags"
-                value={tagInput}
-                onChange={(event) => setTagInput(event.target.value)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') {
-                    event.preventDefault();
-                    addTag();
-                  }
-                }}
-                placeholder="Add relevant tags"
-              />
-              <Button type="button" variant="outline" onClick={addTag}>
-                Add
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {formData.tags.map((tag) => (
-                <Badge key={tag} variant="secondary" className="gap-2">
-                  {tag}
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setFormData((current) => ({
-                        ...current,
-                        tags: current.tags.filter((existingTag) => existingTag !== tag),
-                      }))
-                    }
-                  >
-                    x
-                  </button>
-                </Badge>
-              ))}
-            </div>
           </div>
 
           <div className="flex gap-3 pt-2">

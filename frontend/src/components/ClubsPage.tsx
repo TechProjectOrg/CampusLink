@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle, Lock, UserPlus, Users } from 'lucide-react';
+import { Lock, UserPlus, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import type { Club, Student } from '../types';
-import { apiFetchClubs, apiJoinClub, apiLeaveClub } from '../lib/clubsApi';
+import { apiFetchClubs, apiJoinClub } from '../lib/clubsApi';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
@@ -70,35 +70,6 @@ export function ClubsPage({ students, currentUserId, onCreateClub, onViewProfile
     }
   };
 
-  const handleLeaveClub = async (clubId: string) => {
-    try {
-      await apiLeaveClub(clubId, auth.session?.token);
-      setClubs((current) =>
-        current.map((club) =>
-          club.id === clubId
-            ? {
-                ...club,
-                membership: { status: 'left', role: null },
-                permissions: club.permissions
-                  ? {
-                      ...club.permissions,
-                      canJoinClub: club.privacy === 'open',
-                      canRequestJoin: club.privacy === 'request',
-                      canCreatePosts: false,
-                      canComment: false,
-                      membershipStatus: 'left',
-                      membershipRole: null,
-                    }
-                  : club.permissions,
-              }
-            : club,
-        ),
-      );
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'Unable to leave club');
-    }
-  };
-
   if (selectedClubSlug) {
     return (
       <ClubActivityPage
@@ -161,11 +132,20 @@ export function ClubsPage({ students, currentUserId, onCreateClub, onViewProfile
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
                     <div className="absolute bottom-3 md:bottom-4 left-3 md:left-4 right-3 md:right-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge className="bg-white/15 text-white border-white/20">{club.primaryCategory?.displayName ?? 'Club'}</Badge>
-                        {club.privacy === 'private' ? <Lock className="w-4 h-4 text-white" /> : null}
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full border border-white/40 bg-white/15 overflow-hidden shrink-0">
+                          <ImageWithFallback
+                            src={club.avatarUrl ?? club.coverImageUrl ?? undefined}
+                            alt={`${club.name} logo`}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <h2 className="text-white text-lg md:text-xl truncate">{club.name}</h2>
+                          <Badge className="mt-1 bg-white/15 text-white border-white/20">Sports</Badge>
+                        </div>
+                        {club.privacy === 'private' ? <Lock className="w-4 h-4 text-white shrink-0" /> : null}
                       </div>
-                      <h2 className="text-white text-lg md:text-xl">{club.name}</h2>
                     </div>
                   </div>
 
@@ -182,27 +162,14 @@ export function ClubsPage({ students, currentUserId, onCreateClub, onViewProfile
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap gap-2">
-                      {club.tags.slice(0, 3).map((tag) => (
-                        <Badge key={tag} variant="outline">{tag}</Badge>
-                      ))}
-                    </div>
-
                     {isMember ? (
-                      <div className="space-y-2 pt-2">
-                        <Badge className="bg-green-100 text-green-800 w-full justify-center py-2 hover:bg-green-200 transition-colors">
-                          <CheckCircle className="w-4 h-4 mr-2" />
-                          Member
-                        </Badge>
-                        <div className="flex gap-2">
-                          <Button variant="outline" onClick={() => setSelectedClubSlug(club.slug)} size="sm" className="flex-1 hover:bg-primary/5 hover:border-primary/30 transition-all">
-                            View Activity
-                          </Button>
-                          <Button variant="outline" onClick={() => handleLeaveClub(club.id)} size="sm" className="text-red-600 hover:text-red-700 hover:bg-red-50 hover:border-red-200 transition-all">
-                            Leave
-                          </Button>
-                        </div>
-                      </div>
+                      <Button
+                        onClick={() => setSelectedClubSlug(club.slug)}
+                        variant="outline"
+                        className="w-full mt-2 hover:bg-primary/5 hover:border-primary/30 transition-all"
+                      >
+                        Open Club
+                      </Button>
                     ) : (
                       <Button
                         onClick={() => handleJoinClub(club)}

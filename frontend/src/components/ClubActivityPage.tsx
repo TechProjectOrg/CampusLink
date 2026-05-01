@@ -292,13 +292,21 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
               <div className="absolute bottom-6 left-6 right-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <Badge className="bg-white/15 text-white border-white/20">{club.primaryCategory?.displayName ?? 'Club'}</Badge>
-                  {club.privacy === 'private' ? <Lock className="w-4 h-4 text-white" /> : null}
-                  {membershipRole ? <Badge className="bg-white/20 text-white border-white/20 capitalize">{membershipRole}</Badge> : null}
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-12 h-12 rounded-full border border-white/40 bg-white/15 overflow-hidden shrink-0">
+                    <ImageWithFallback
+                      src={club.avatarUrl ?? club.coverImageUrl ?? undefined}
+                      alt={`${club.name} logo`}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <h1 className="text-white truncate">{club.name}</h1>
+                    <Badge className="mt-1 bg-white/15 text-white border-white/20">Sports</Badge>
+                  </div>
+                  {club.privacy === 'private' ? <Lock className="w-4 h-4 text-white shrink-0" /> : null}
                 </div>
-                <h1 className="text-white mb-2">{club.name}</h1>
-                <p className="text-white/90 text-sm md:text-base mb-4">{club.description ?? club.shortDescription}</p>
+                <p className="text-white/90 text-sm md:text-base mb-4">{club.shortDescription ?? club.description}</p>
                 <div className="flex flex-wrap items-center gap-4 text-white/90 text-sm">
                   <div className="flex items-center gap-2">
                     <Users className="w-4 h-4" />
