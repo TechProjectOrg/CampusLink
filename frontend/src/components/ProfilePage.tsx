@@ -1186,7 +1186,7 @@ export function ProfilePage({
           </div>
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
-            <Button onClick={handleSaveProfile} className="bg-blue-600 hover:bg-blue-700">Save Changes</Button>
+            <Button variant="outline" onClick={handleSaveProfile}>Save Changes</Button>
           </div>
         </div>
       </Modal>
@@ -1207,7 +1207,7 @@ export function ProfilePage({
           </div>
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
-            <Button onClick={handleSaveProfile} className="bg-blue-600 hover:bg-blue-700">Save</Button>
+            <Button variant="outline" onClick={handleSaveProfile}>Save</Button>
           </div>
         </div>
       </Modal>
@@ -1226,7 +1226,7 @@ export function ProfilePage({
           </div>
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
-            <Button onClick={handleAddSkill} disabled={!newSkillName.trim()} className="bg-blue-600 hover:bg-blue-700">
+            <Button variant="outline" onClick={handleAddSkill} disabled={!newSkillName.trim()}>
               Add Skill
             </Button>
           </div>
@@ -1291,9 +1291,9 @@ export function ProfilePage({
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button
+              variant="outline"
               onClick={handleAddExperience}
               disabled={!newExperience.roleTitle?.trim() || !newExperience.organization?.trim()}
-              className="bg-blue-600 hover:bg-blue-700"
             >
               {editingItem ? 'Update' : 'Add'} Experience
             </Button>
@@ -1386,9 +1386,9 @@ export function ProfilePage({
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button
+              variant="outline"
               onClick={handleAddProject}
               disabled={!newProject.title?.trim() || !newProject.description?.trim()}
-              className="bg-blue-600 hover:bg-blue-700"
             >
               {editingItem ? 'Update' : 'Add'} Project
             </Button>
@@ -1455,9 +1455,9 @@ export function ProfilePage({
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button
+              variant="outline"
               onClick={handleAddCertification}
               disabled={!newCertification.name?.trim()}
-              className="bg-blue-600 hover:bg-blue-700"
             >
               {editingItem ? 'Update' : 'Add'} Certification
             </Button>
@@ -1505,9 +1505,9 @@ export function ProfilePage({
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button
+              variant="outline"
               onClick={handleAddSociety}
               disabled={!newSociety.societyName?.trim() || !newSociety.role?.trim()}
-              className="bg-blue-600 hover:bg-blue-700"
             >
               {editingItem ? 'Update' : 'Add'} Society
             </Button>
@@ -1549,9 +1549,9 @@ export function ProfilePage({
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button
+              variant="outline"
               onClick={handleAddAchievement}
               disabled={!newAchievement.title?.trim() || !newAchievement.year}
-              className="bg-blue-600 hover:bg-blue-700"
             >
               {editingItem ? 'Update' : 'Add'} Achievement
             </Button>
