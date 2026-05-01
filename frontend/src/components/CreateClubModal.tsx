@@ -28,7 +28,6 @@ export function CreateClubModal({ isOpen, onClose, onCreateClub }: CreateClubMod
   const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
   const [formData, setFormData] = useState({
     name: '',
-    shortDescription: '',
     description: '',
     privacy: 'open' as Club['privacy'],
     primaryCategory: '',
@@ -68,7 +67,6 @@ export function CreateClubModal({ isOpen, onClose, onCreateClub }: CreateClubMod
   const resetForm = () => {
     setFormData({
       name: '',
-      shortDescription: '',
       description: '',
       privacy: 'open',
       primaryCategory: '',
@@ -92,7 +90,6 @@ export function CreateClubModal({ isOpen, onClose, onCreateClub }: CreateClubMod
       const club = await apiCreateClub(
         {
           name: formData.name.trim(),
-          shortDescription: formData.shortDescription.trim() || undefined,
           description: formData.description.trim(),
           privacy: formData.privacy,
           primaryCategory: selectedCategory,
@@ -139,16 +136,6 @@ export function CreateClubModal({ isOpen, onClose, onCreateClub }: CreateClubMod
               onChange={(event) => setFormData((current) => ({ ...current, name: event.target.value }))}
               placeholder="e.g. Tech Innovators Club"
               required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="club-short-description">Short Description</Label>
-            <Input
-              id="club-short-description"
-              value={formData.shortDescription}
-              onChange={(event) => setFormData((current) => ({ ...current, shortDescription: event.target.value }))}
-              placeholder="One-line summary for discovery cards"
             />
           </div>
 

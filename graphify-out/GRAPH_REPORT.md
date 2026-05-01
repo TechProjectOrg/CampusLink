@@ -1,11 +1,11 @@
 # Graph Report - final-year-project  (2026-05-01)
 
 ## Corpus Check
-- 142 files · ~122,021 words
+- 142 files · ~121,893 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 924 nodes · 1366 edges · 34 communities detected
+- 923 nodes · 1365 edges · 34 communities detected
 - Extraction: 87% EXTRACTED · 13% INFERRED · 0% AMBIGUOUS · INFERRED: 181 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
@@ -27,7 +27,7 @@
 - [[_COMMUNITY_Community 14|Community 14]]
 - [[_COMMUNITY_Community 15|Community 15]]
 - [[_COMMUNITY_Community 16|Community 16]]
-- [[_COMMUNITY_Community 17|Community 17]]
+- [[_COMMUNITY_Community 18|Community 18]]
 - [[_COMMUNITY_Community 19|Community 19]]
 - [[_COMMUNITY_Community 20|Community 20]]
 - [[_COMMUNITY_Community 22|Community 22]]
@@ -100,12 +100,12 @@ Cohesion: 0.09
 Nodes (24): PollingRedisSubscriber, areUsersMutuallyFollowing(), emitChatDelete(), emitChatMessage(), emitChatReaction(), emitChatRead(), emitChatRequestAccepted(), emitTypingIndicator() (+16 more)
 
 ### Community 7 - "Community 7"
-Cohesion: 0.17
-Nodes (26): handleApproveRequest(), handleDeleteClub(), handleRejectRequest(), handleSaveSettings(), handleToggleAdminRole(), loadClubData(), apiApproveClubMember(), apiCreateClub() (+18 more)
-
-### Community 8 - "Community 8"
 Cohesion: 0.11
 Nodes (22): cacheHGetAll(), hydrateOrderedUsers(), mapMinimalUserFromSummary(), searchUsers(), chatConversationListKey(), fetchUserStatsByIdsFromDb(), fetchUserSummariesByIdsFromDb(), getCachedConversationList() (+14 more)
+
+### Community 8 - "Community 8"
+Cohesion: 0.18
+Nodes (26): handleApproveRequest(), handleDeleteClub(), handleRejectRequest(), handleSaveSettings(), handleToggleAdminRole(), loadClubData(), apiApproveClubMember(), apiCreateClub() (+18 more)
 
 ### Community 9 - "Community 9"
 Cohesion: 0.16
@@ -113,7 +113,7 @@ Nodes (22): apiChangePassword(), apiDeleteAccount(), apiFetchUserProfile(), apiF
 
 ### Community 10 - "Community 10"
 Cohesion: 0.18
-Nodes (21): handleCreateClubPost(), apiAddComment(), apiAddReply(), apiCreateUserPost(), apiDeleteComment(), apiDeletePost(), apiFetchCommentContext(), apiFetchHashtagPosts() (+13 more)
+Nodes (21): handleCreateClubPostFromModal(), apiAddComment(), apiAddReply(), apiCreateUserPost(), apiDeleteComment(), apiDeletePost(), apiFetchCommentContext(), apiFetchHashtagPosts() (+13 more)
 
 ### Community 11 - "Community 11"
 Cohesion: 0.12
@@ -139,7 +139,7 @@ Nodes (5): AppDataProvider(), createInitialState(), createStore(), upsertTimelin
 Cohesion: 0.21
 Nodes (4): handleEventSubmit(), handleOpportunitySubmit(), handlePostSubmit(), resetAllForms()
 
-### Community 17 - "Community 17"
+### Community 18 - "Community 18"
 Cohesion: 0.4
 Nodes (10): handleMarkAllAsRead(), handleMarkAsRead(), apiDeletePushSubscription(), apiFetchNotifications(), apiFetchPushPublicKey(), apiMarkAllNotificationsRead(), apiMarkNotificationRead(), apiSavePushSubscription() (+2 more)
 

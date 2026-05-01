@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Crown, Lock, Settings, ShieldCheck, TrendingUp, Users } from 'lucide-react';
+import { ArrowLeft, Crown, Lock, MoreVertical, Plus, ShieldCheck, TrendingUp, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { userPostToOpportunity } from '../context/AppDataContext';
@@ -29,6 +29,9 @@ import { ImageUpload } from './ui/ImageUpload';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { ClubLogoUpload } from './ui/ClubLogoUpload';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
+import { CreateUnifiedPostModal } from './CreateUnifiedPostModal';
 
 interface ClubActivityPageProps {
   clubSlug: string;
@@ -46,14 +49,12 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [postText, setPostText] = useState('');
-  const [postTags, setPostTags] = useState<string[]>([]);
-  const [postTagInput, setPostTagInput] = useState('');
-  const [postImageFile, setPostImageFile] = useState<File | null>(null);
+  const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
 
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [isDeletingClub, setIsDeletingClub] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [busyMemberId, setBusyMemberId] = useState<string | null>(null);
   const [settingsAvatarFile, setSettingsAvatarFile] = useState<File | null>(null);
   const [settingsCoverImageFile, setSettingsCoverImageFile] = useState<File | null>(null);
@@ -61,11 +62,9 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
   const [removeCoverImage, setRemoveCoverImage] = useState(false);
   const [settingsForm, setSettingsForm] = useState({
     name: '',
-    shortDescription: '',
     description: '',
     privacy: 'open' as Club['privacy'],
     primaryCategory: '',
-    tagsText: '',
   });
 
   const loadClubData = async () => {
@@ -80,11 +79,9 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
     setPosts(postRows.map((post) => userPostToOpportunity(post, {}, auth.currentUser ?? null)));
     setSettingsForm({
       name: clubValue.name,
-      shortDescription: clubValue.shortDescription ?? '',
-      description: clubValue.description ?? '',
+      description: clubValue.description ?? clubValue.shortDescription ?? '',
       privacy: clubValue.privacy,
       primaryCategory: clubValue.primaryCategory?.displayName ?? '',
-      tagsText: clubValue.tags.join(', '),
     });
   };
 
@@ -120,15 +117,14 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
     return lookup;
   }, [students]);
 
-  const addPostTag = () => {
-    const nextTag = postTagInput.trim().replace(/^#+/, '');
-    if (!nextTag || postTags.includes(nextTag)) return;
-    setPostTags((current) => [...current, nextTag]);
-    setPostTagInput('');
-  };
-
-  const handleCreateClubPost = async () => {
-    if (!club || !postText.trim()) return;
+  const handleCreateClubPostFromModal = async (draft: any) => {
+    if (!club) return;
+    const contentText = typeof draft?.description === 'string' ? draft.description.trim() : '';
+    if (!contentText) return;
+    const hashtags = Array.isArray(draft?.tags)
+      ? draft.tags.map((tag: unknown) => String(tag).trim()).filter(Boolean)
+      : [];
+    const imageFile: File | undefined = draft?.imageFile instanceof File ? draft.imageFile : undefined;
     setIsPosting(true);
     try {
       const created = await apiCreateUserPost(
@@ -137,18 +133,15 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
           postType: 'club_activity',
           visibility: 'club_members',
           clubId: club.id,
-          contentText: postText.trim(),
-          hashtags: postTags,
+          contentText,
+          hashtags,
         },
         auth.session?.token,
-        postImageFile ? [postImageFile] : undefined,
+        imageFile ? [imageFile] : undefined,
       );
       setPosts((current) => [userPostToOpportunity(created, {}, auth.currentUser ?? null), ...current]);
-      setPostText('');
-      setPostTags([]);
-      setPostTagInput('');
-      setPostImageFile(null);
       toast.success('Club post published');
+      setIsCreatePostOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to publish club post');
     } finally {
@@ -205,20 +198,13 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
 
     setIsSavingSettings(true);
     try {
-      const tags = settingsForm.tagsText
-        .split(',')
-        .map((tag) => tag.trim())
-        .filter(Boolean);
-
       const updated = await apiUpdateClub(
         club.id,
         {
           name: settingsForm.name.trim(),
-          shortDescription: settingsForm.shortDescription.trim(),
           description: settingsForm.description.trim(),
           privacy: settingsForm.privacy,
           primaryCategory: settingsForm.primaryCategory.trim(),
-          tags,
           removeAvatar,
           removeCoverImage,
         },
@@ -236,6 +222,7 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
       setRemoveCoverImage(false);
       await loadClubData();
       toast.success('Club settings updated');
+      setIsSettingsOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to save settings');
     } finally {
@@ -278,11 +265,6 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
       <div className="max-w-6xl mx-auto px-4 md:px-6 py-6 md:py-8 space-y-6">
         <div className="animate-slide-in-down">
-          <Button variant="ghost" onClick={onBack} className="mb-4 hover:bg-white/50 transition-all">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Clubs
-          </Button>
-
           <Card className="overflow-hidden border-0 shadow-xl">
             <div className="relative h-48 md:h-64 bg-gradient-to-r from-blue-500 to-purple-600">
               <ImageWithFallback
@@ -291,6 +273,26 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
                 className="w-full h-full object-cover opacity-40"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+              <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10">
+                <Button variant="ghost" onClick={onBack} className="bg-black/30 text-white hover:bg-black/45 hover:text-white transition-all">
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Back to Clubs
+                </Button>
+                {canManageClub ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" size="icon" className="rounded-full bg-black/30 text-white border-white/30 hover:bg-black/45 hover:text-white">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setIsSettingsOpen(true)}>
+                        Club Settings
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : null}
+              </div>
               <div className="absolute bottom-6 left-6 right-6">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-12 h-12 rounded-full border border-white/40 bg-white/15 overflow-hidden shrink-0">
@@ -306,7 +308,7 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
                   </div>
                   {club.privacy === 'private' ? <Lock className="w-4 h-4 text-white shrink-0" /> : null}
                 </div>
-                <p className="text-white/90 text-sm md:text-base mb-4">{club.shortDescription ?? club.description}</p>
+                <p className="text-white/90 text-sm md:text-base mb-4">{club.description ?? club.shortDescription}</p>
                 <div className="flex flex-wrap items-center gap-4 text-white/90 text-sm">
                   <div className="flex items-center gap-2">
                     <Users className="w-4 h-4" />
@@ -325,7 +327,7 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
         <Tabs defaultValue="feed" className="space-y-6">
-          <TabsList className={`grid w-full ${canManageClub ? 'grid-cols-4' : 'grid-cols-2'} bg-white shadow-sm border border-gray-200`}>
+          <TabsList className={`grid w-full ${canManageClub ? 'grid-cols-3' : 'grid-cols-2'} bg-white shadow-sm border border-gray-200`}>
             <TabsTrigger value="feed" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-secondary data-[state=active]:text-white">
               Feed
             </TabsTrigger>
@@ -337,62 +339,17 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
                 Requests
               </TabsTrigger>
             ) : null}
-            {canManageClub ? (
-              <TabsTrigger value="settings" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-secondary data-[state=active]:text-white">
-                <Settings className="w-4 h-4 mr-2" />
-                Settings
-              </TabsTrigger>
-            ) : null}
           </TabsList>
 
           <TabsContent value="feed" className="space-y-6">
             {club.permissions?.canCreatePosts ? (
               <Card className="border border-primary/10 shadow-sm">
-                <CardContent className="p-4 md:p-6 space-y-4">
-                  <h3 className="text-gray-900">Share with the community</h3>
-                  <Textarea
-                    placeholder="What's happening in the club?"
-                    value={postText}
-                    onChange={(event) => setPostText(event.target.value)}
-                    rows={3}
-                    className="resize-none"
-                  />
-                  <ImageUpload onFileChange={setPostImageFile} disabled={isPosting} label="Post Image (optional)" />
-                  <div className="space-y-2">
-                    <Label>Hashtags (optional)</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        value={postTagInput}
-                        onChange={(event) => setPostTagInput(event.target.value)}
-                        placeholder="Add tags and press Enter"
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            event.preventDefault();
-                            addPostTag();
-                          }
-                        }}
-                      />
-                      <Button type="button" variant="outline" onClick={addPostTag}>
-                        Add
-                      </Button>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {postTags.map((tag) => (
-                        <Badge key={tag} variant="secondary" className="gap-2">
-                          #{tag}
-                          <button
-                            type="button"
-                            onClick={() => setPostTags((current) => current.filter((value) => value !== tag))}
-                          >
-                            x
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex justify-end">
-                    <Button onClick={handleCreateClubPost} disabled={isPosting || !postText.trim()} className="bg-gradient-to-r from-primary to-secondary">
-                      {isPosting ? 'Posting...' : 'Post'}
+                <CardContent className="p-4 md:p-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-gray-900">Share with the community</h3>
+                    <Button onClick={() => setIsCreatePostOpen(true)} className="bg-gradient-to-r from-primary to-secondary" disabled={isPosting}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Post
                     </Button>
                   </div>
                 </CardContent>
@@ -495,164 +452,148 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
             </TabsContent>
           ) : null}
 
-          {canManageClub ? (
-            <TabsContent value="settings" className="space-y-4">
-              <Card className="border border-primary/10 shadow-sm">
-                <CardContent className="p-4 md:p-6">
-                  <form className="space-y-4" onSubmit={handleSaveSettings}>
-                    <h3 className="text-gray-900">Club Settings</h3>
-
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label>Club Name</Label>
-                        <Input
-                          value={settingsForm.name}
-                          onChange={(event) => setSettingsForm((current) => ({ ...current, name: event.target.value }))}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Primary Category</Label>
-                        <Input
-                          value={settingsForm.primaryCategory}
-                          onChange={(event) => setSettingsForm((current) => ({ ...current, primaryCategory: event.target.value }))}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Short Description</Label>
-                      <Input
-                        value={settingsForm.shortDescription}
-                        onChange={(event) => setSettingsForm((current) => ({ ...current, shortDescription: event.target.value }))}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>About</Label>
-                      <Textarea
-                        rows={4}
-                        value={settingsForm.description}
-                        onChange={(event) => setSettingsForm((current) => ({ ...current, description: event.target.value }))}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Tags (comma separated)</Label>
-                      <Input
-                        value={settingsForm.tagsText}
-                        onChange={(event) => setSettingsForm((current) => ({ ...current, tagsText: event.target.value }))}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label>Membership Permission</Label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {[
-                          { value: 'open', label: 'Open' },
-                          { value: 'request', label: 'Request' },
-                          { value: 'private', label: 'Private' },
-                        ].map((option) => (
-                          <button
-                            key={option.value}
-                            type="button"
-                            onClick={() => setSettingsForm((current) => ({ ...current, privacy: option.value as Club['privacy'] }))}
-                            className={`p-2 rounded-xl border-2 transition-all text-sm ${
-                              settingsForm.privacy === option.value
-                                ? 'border-primary bg-primary/10 text-primary'
-                                : 'border-gray-200 hover:border-gray-300'
-                            }`}
-                          >
-                            {option.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
-                          <p className="text-xs text-gray-500 mb-2">Current logo</p>
-                          {club.avatarUrl ? (
-                            <img src={club.avatarUrl} alt="Current club logo" className="h-16 w-16 rounded-lg object-cover" />
-                          ) : (
-                            <p className="text-xs text-gray-400">No logo uploaded</p>
-                          )}
-                        </div>
-                        <ClubLogoUpload
-                          label="Update Club Logo"
-                          file={settingsAvatarFile}
-                          onFileChange={(file) => {
-                            setSettingsAvatarFile(file);
-                            if (file) {
-                              setRemoveAvatar(false);
-                            }
-                          }}
-                          disabled={isSavingSettings}
-                        />
-                        <label className="flex items-center gap-2 text-sm text-gray-600">
-                          <input
-                            type="checkbox"
-                            checked={removeAvatar}
-                            onChange={(event) => {
-                              setRemoveAvatar(event.target.checked);
-                              if (event.target.checked) {
-                                setSettingsAvatarFile(null);
-                              }
-                            }}
-                          />
-                          Remove existing logo
-                        </label>
-                      </div>
-
-                      <div className="space-y-2">
-                        <div className="rounded-lg border border-gray-200 p-3 bg-gray-50">
-                          <p className="text-xs text-gray-500 mb-2">Current background image</p>
-                          {club.coverImageUrl ? (
-                            <img src={club.coverImageUrl} alt="Current club cover" className="h-16 w-full rounded-lg object-cover" />
-                          ) : (
-                            <p className="text-xs text-gray-400">No background uploaded</p>
-                          )}
-                        </div>
-                        <ImageUpload
-                          onFileChange={(file) => {
-                            setSettingsCoverImageFile(file);
-                            if (file) {
-                              setRemoveCoverImage(false);
-                            }
-                          }}
-                          disabled={isSavingSettings}
-                          label="Update Background Image"
-                        />
-                        <label className="flex items-center gap-2 text-sm text-gray-600">
-                          <input
-                            type="checkbox"
-                            checked={removeCoverImage}
-                            onChange={(event) => {
-                              setRemoveCoverImage(event.target.checked);
-                              if (event.target.checked) {
-                                setSettingsCoverImageFile(null);
-                              }
-                            }}
-                          />
-                          Remove existing background image
-                        </label>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap justify-between gap-2 pt-2">
-                      <Button type="button" variant="destructive" onClick={handleDeleteClub} disabled={isDeletingClub || isSavingSettings}>
-                        {isDeletingClub ? 'Deleting...' : 'Delete Club'}
-                      </Button>
-                      <Button type="submit" className="bg-gradient-to-r from-primary to-secondary" disabled={isSavingSettings || isDeletingClub}>
-                        {isSavingSettings ? 'Saving...' : 'Save Changes'}
-                      </Button>
-                    </div>
-                  </form>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          ) : null}
         </Tabs>
+        {canManageClub ? (
+          <Dialog open={isSettingsOpen} onOpenChange={(nextOpen) => !isSavingSettings && setIsSettingsOpen(nextOpen)}>
+            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto max-w-[95vw]">
+              <DialogHeader>
+                <DialogTitle>Club Settings</DialogTitle>
+                <DialogDescription>
+                  Update this club using the same layout as the club creation form.
+                </DialogDescription>
+              </DialogHeader>
+              <form className="space-y-5" onSubmit={handleSaveSettings}>
+                <div className="space-y-2">
+                  <Label>Club Name *</Label>
+                  <Input
+                    value={settingsForm.name}
+                    onChange={(event) => setSettingsForm((current) => ({ ...current, name: event.target.value }))}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Privacy *</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { value: 'open', label: 'Open' },
+                      { value: 'request', label: 'Request' },
+                      { value: 'private', label: 'Private' },
+                    ].map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setSettingsForm((current) => ({ ...current, privacy: option.value as Club['privacy'] }))}
+                        className={`p-3 rounded-xl border-2 transition-all text-sm ${
+                          settingsForm.privacy === option.value
+                            ? 'border-primary bg-primary/10 text-primary'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Primary Category *</Label>
+                  <Input
+                    value={settingsForm.primaryCategory}
+                    onChange={(event) => setSettingsForm((current) => ({ ...current, primaryCategory: event.target.value }))}
+                    placeholder="e.g. Sports"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Description *</Label>
+                  <Textarea
+                    rows={4}
+                    value={settingsForm.description}
+                    onChange={(event) => setSettingsForm((current) => ({ ...current, description: event.target.value }))}
+                    placeholder="Describe what your club is about, goals, and activities..."
+                    required
+                  />
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <ClubLogoUpload
+                      label="Club Logo (optional)"
+                      file={settingsAvatarFile}
+                      onFileChange={(file) => {
+                        setSettingsAvatarFile(file);
+                        if (file) {
+                          setRemoveAvatar(false);
+                        }
+                      }}
+                      disabled={isSavingSettings}
+                    />
+                    <label className="flex items-center gap-2 text-sm text-gray-600">
+                      <input
+                        type="checkbox"
+                        checked={removeAvatar}
+                        onChange={(event) => {
+                          setRemoveAvatar(event.target.checked);
+                          if (event.target.checked) {
+                            setSettingsAvatarFile(null);
+                          }
+                        }}
+                      />
+                      Remove existing logo
+                    </label>
+                  </div>
+
+                  <div className="space-y-2">
+                    <ImageUpload
+                      onFileChange={(file) => {
+                        setSettingsCoverImageFile(file);
+                        if (file) {
+                          setRemoveCoverImage(false);
+                        }
+                      }}
+                      disabled={isSavingSettings}
+                      label="Club Background Image (optional)"
+                    />
+                    <label className="flex items-center gap-2 text-sm text-gray-600">
+                      <input
+                        type="checkbox"
+                        checked={removeCoverImage}
+                        onChange={(event) => {
+                          setRemoveCoverImage(event.target.checked);
+                          if (event.target.checked) {
+                            setSettingsCoverImageFile(null);
+                          }
+                        }}
+                      />
+                      Remove existing background image
+                    </label>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <Button type="button" variant="destructive" onClick={handleDeleteClub} disabled={isDeletingClub || isSavingSettings}>
+                    {isDeletingClub ? 'Deleting...' : 'Delete Club'}
+                  </Button>
+                  <Button type="submit" className="ml-auto bg-gradient-to-r from-primary to-secondary" disabled={isSavingSettings || isDeletingClub}>
+                    {isSavingSettings ? 'Saving...' : 'Save Changes'}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        ) : null}
+        <CreateUnifiedPostModal
+          isOpen={isCreatePostOpen}
+          onClose={() => setIsCreatePostOpen(false)}
+          onCreatePost={handleCreateClubPostFromModal}
+          onCreateEvent={() => {}}
+          onCreateOpportunity={() => {}}
+          currentUser={auth.currentUser}
+          initialTab="post"
+          postOnly
+        />
       </div>
     </div>
   );

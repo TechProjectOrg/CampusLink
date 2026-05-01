@@ -150,7 +150,7 @@ export function ClubsPage({ students, currentUserId, onCreateClub, onViewProfile
                   </div>
 
                   <CardContent className="p-4 md:p-6 space-y-3 md:space-y-4">
-                    <p className="text-gray-600 text-sm md:text-base line-clamp-3">{club.shortDescription ?? club.description ?? 'No description yet.'}</p>
+                    <p className="text-gray-600 text-sm md:text-base line-clamp-3">{club.description ?? club.shortDescription ?? 'No description yet.'}</p>
 
                     <div className="flex items-center gap-3 md:gap-4 text-sm text-gray-600">
                       <div className="flex items-center gap-1 md:gap-1.5">

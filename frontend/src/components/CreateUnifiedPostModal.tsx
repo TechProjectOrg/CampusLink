@@ -20,6 +20,7 @@ interface CreateUnifiedPostModalProps {
   onCreateOpportunity: (opportunity: any) => Promise<void> | void;
   currentUser: any;
   initialTab?: 'post' | 'event' | 'opportunity';
+  postOnly?: boolean;
 }
 
 export function CreateUnifiedPostModal({
@@ -29,7 +30,8 @@ export function CreateUnifiedPostModal({
   onCreateEvent,
   onCreateOpportunity,
   currentUser,
-  initialTab = 'post'
+  initialTab = 'post',
+  postOnly = false
 }: CreateUnifiedPostModalProps) {
 
   // State for Post Form
@@ -69,9 +71,9 @@ export function CreateUnifiedPostModal({
 
   useEffect(() => {
     if (isOpen) {
-      setActiveTab(initialTab);
+      setActiveTab(postOnly ? 'post' : initialTab);
     }
-  }, [isOpen, initialTab]);
+  }, [isOpen, initialTab, postOnly]);
 
   const getOpportunityTitlePlaceholder = (type: Opportunity['type']): string => {
     switch (type) {
@@ -312,11 +314,13 @@ export function CreateUnifiedPostModal({
         </DialogHeader>
         
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'post' | 'event' | 'opportunity')} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="post" disabled={isSubmitting}>Post</TabsTrigger>
-            <TabsTrigger value="event" disabled={isSubmitting}>Create Event</TabsTrigger>
-            <TabsTrigger value="opportunity" disabled={isSubmitting}>Post Opportunity</TabsTrigger>
-          </TabsList>
+          {!postOnly ? (
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="post" disabled={isSubmitting}>Post</TabsTrigger>
+              <TabsTrigger value="event" disabled={isSubmitting}>Create Event</TabsTrigger>
+              <TabsTrigger value="opportunity" disabled={isSubmitting}>Post Opportunity</TabsTrigger>
+            </TabsList>
+          ) : null}
           
           {/* Post Tab */}
           <TabsContent value="post">
