@@ -1,72 +1,6 @@
 {
   "communities": {
     "0": [
-      "backend_server_src_lib_chatcache_ts",
-      "backend_server_src_lib_encryption_ts",
-      "backend_server_src_routes_chat_ts",
-      "cache_cachegetjson",
-      "chat_buildconversationlistentries",
-      "chat_cacheandemitmessage",
-      "chat_fetchconversationbaserows",
-      "chat_fetchconversationunreadrows",
-      "chat_fetchmessagerows",
-      "chat_fetchmessagesforrequest",
-      "chat_fetchreplypreview",
-      "chat_formatmessagesforresponse",
-      "chat_hasoldermessagesthan",
-      "chat_hydrateconversationlistresponse",
-      "chat_isvaliduuid",
-      "chat_normalizereactions",
-      "chat_persistmessage",
-      "chat_updateconversationlistsformessage",
-      "chat_updateconversationlistsformeta",
-      "chatcache_appendrecentmessage",
-      "chatcache_conversationmetakey",
-      "chatcache_conversationreadkey",
-      "chatcache_fetchconversationmetamap",
-      "chatcache_fetchlatestmessagesforconversations",
-      "chatcache_formatmessagepreview",
-      "chatcache_getcachedrecentmessages",
-      "chatcache_getchatrecentwindowsize",
-      "chatcache_getconversationlist",
-      "chatcache_getconversationmeta",
-      "chatcache_getreadstate",
-      "chatcache_getunreadcount",
-      "chatcache_getunreadcounts",
-      "chatcache_getuserpresence",
-      "chatcache_getuserpresencemap",
-      "chatcache_incrementunreadcount",
-      "chatcache_invalidateconversationlists",
-      "chatcache_maybestartchatcachereconciler",
-      "chatcache_normalizereactions",
-      "chatcache_noteconversationactivity",
-      "chatcache_patchconversationlist",
-      "chatcache_patchconversationmeta",
-      "chatcache_patchrecentmessage",
-      "chatcache_primeconversationunreadstate",
-      "chatcache_recentmessageskey",
-      "chatcache_reconcileconversationmeta",
-      "chatcache_reconcileunreadstate",
-      "chatcache_refreshconversationmetafromrecentcache",
-      "chatcache_removerecentmessage",
-      "chatcache_setcachedrecentmessages",
-      "chatcache_setconversationlist",
-      "chatcache_setconversationmeta",
-      "chatcache_setreadstate",
-      "chatcache_setunreadcount",
-      "chatcache_setuserpresence",
-      "chatcache_userconversationlistkey",
-      "chatcache_userpresencekey",
-      "chatcache_userunreadkey",
-      "chatcache_warmconversationcachesfromdb",
-      "d_college_btech_final_year_project_final_year_project_backend_server_src_lib_chatcache_ts",
-      "d_college_btech_final_year_project_final_year_project_backend_server_src_lib_encryption_ts",
-      "d_college_btech_final_year_project_final_year_project_backend_server_src_routes_chat_ts",
-      "encryption_decryptmessage",
-      "encryption_encryptmessage",
-      "usercache_getusersummariesbyids"
-    ],
-    "1": [
       "app_addunique",
       "app_apinotificationtolocal",
       "app_arestringarraysequal",
@@ -129,72 +63,89 @@
       "app_updatereplythreads",
       "app_userposttoopportunity",
       "d_college_btech_final_year_project_final_year_project_frontend_src_app_tsx",
-      "frontend_src_app_tsx"
+      "d_college_btech_final_year_project_final_year_project_frontend_src_lib_networkapi_ts",
+      "frontend_src_app_tsx",
+      "frontend_src_lib_networkapi_ts",
+      "networkapi_apiacceptfollowrequest",
+      "networkapi_apicancelfollowrequest",
+      "networkapi_apifollow",
+      "networkapi_apigetfollowgraph",
+      "networkapi_apirejectfollowrequest",
+      "networkapi_apiremovefollower",
+      "networkapi_apisearchall",
+      "networkapi_apisearchusers",
+      "networkapi_apiunfollow",
+      "networkapi_authheaders",
+      "networkapi_safefetch"
+    ],
+    "1": [
+      "backend_server_src_lib_chatcache_ts",
+      "backend_server_src_lib_encryption_ts",
+      "backend_server_src_routes_chat_ts",
+      "cache_cachegetjson",
+      "chat_buildconversationlistentries",
+      "chat_cacheandemitmessage",
+      "chat_fetchconversationbaserows",
+      "chat_fetchconversationunreadrows",
+      "chat_fetchmessagerows",
+      "chat_fetchmessagesforrequest",
+      "chat_fetchreplypreview",
+      "chat_fetchseenbymap",
+      "chat_formatmessagesforresponse",
+      "chat_hasoldermessagesthan",
+      "chat_hydrateconversationlistresponse",
+      "chat_isvaliduuid",
+      "chat_normalizereactions",
+      "chat_persistmessage",
+      "chat_updateconversationlistsformessage",
+      "chat_updateconversationlistsformeta",
+      "chatcache_appendrecentmessage",
+      "chatcache_conversationmetakey",
+      "chatcache_conversationreadkey",
+      "chatcache_fetchconversationmetamap",
+      "chatcache_fetchlatestmessagesforconversations",
+      "chatcache_formatmessagepreview",
+      "chatcache_getcachedrecentmessages",
+      "chatcache_getchatrecentwindowsize",
+      "chatcache_getconversationlist",
+      "chatcache_getconversationmeta",
+      "chatcache_getreadstate",
+      "chatcache_getunreadcount",
+      "chatcache_getunreadcounts",
+      "chatcache_getuserpresence",
+      "chatcache_getuserpresencemap",
+      "chatcache_incrementunreadcount",
+      "chatcache_invalidateconversationlists",
+      "chatcache_maybestartchatcachereconciler",
+      "chatcache_normalizereactions",
+      "chatcache_noteconversationactivity",
+      "chatcache_patchconversationlist",
+      "chatcache_patchconversationmeta",
+      "chatcache_patchrecentmessage",
+      "chatcache_primeconversationunreadstate",
+      "chatcache_recentmessageskey",
+      "chatcache_reconcileconversationmeta",
+      "chatcache_reconcileunreadstate",
+      "chatcache_refreshconversationmetafromrecentcache",
+      "chatcache_removerecentmessage",
+      "chatcache_setcachedrecentmessages",
+      "chatcache_setconversationlist",
+      "chatcache_setconversationmeta",
+      "chatcache_setreadstate",
+      "chatcache_setunreadcount",
+      "chatcache_setuserpresence",
+      "chatcache_userconversationlistkey",
+      "chatcache_userpresencekey",
+      "chatcache_userunreadkey",
+      "chatcache_warmconversationcachesfromdb",
+      "d_college_btech_final_year_project_final_year_project_backend_server_src_lib_chatcache_ts",
+      "d_college_btech_final_year_project_final_year_project_backend_server_src_lib_encryption_ts",
+      "d_college_btech_final_year_project_final_year_project_backend_server_src_routes_chat_ts",
+      "encryption_decryptmessage",
+      "encryption_encryptmessage",
+      "usercache_getusersummariesbyids"
     ],
     "2": [
-      "alert_alert",
-      "alert_cn",
-      "authpage_handleforgotpassword",
-      "authpage_handlelogin",
-      "authpage_handlesignup",
-      "chatapi_apiacceptchatrequest",
-      "chatapi_apideletemessage",
-      "chatapi_apifetchconversations",
-      "chatapi_apifetchmessages",
-      "chatapi_apimarkchatread",
-      "chatapi_apireacttomessage",
-      "chatapi_apisendimagemessage",
-      "chatapi_apisendmessage",
-      "chatapi_apistartconversation",
-      "chatpage_appendemoji",
-      "chatpage_formatdate",
-      "chatpage_formatmenutimestamp",
-      "chatpage_formattime",
-      "chatpage_handlecreategroup",
-      "chatpage_handledeletemessage",
-      "chatpage_handlereacttomessage",
-      "chatpage_handlesendimage",
-      "chatpage_handlesendmessage",
-      "chatpage_handlestartchat",
-      "chatpage_issamecalendarday",
-      "chatpage_jumptomessage",
-      "chatpage_typinganimatedtext",
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_authpage_tsx",
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_chatpage_tsx",
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_floatingchat_tsx",
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_alert_tsx",
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_profile_photo_upload_tsx",
-      "d_college_btech_final_year_project_final_year_project_frontend_src_lib_chatapi_ts",
-      "d_college_btech_final_year_project_final_year_project_frontend_src_lib_imagecrop_ts",
-      "d_college_btech_final_year_project_final_year_project_frontend_src_lib_validation_ts",
-      "floatingchat_appendemoji",
-      "floatingchat_formatdate",
-      "floatingchat_formatmenutimestamp",
-      "floatingchat_formattime",
-      "floatingchat_handlereacttomessage",
-      "floatingchat_handlesendimage",
-      "floatingchat_handlesendmessage",
-      "floatingchat_handlewheel",
-      "floatingchat_issamecalendarday",
-      "floatingchat_jumptomessage",
-      "frontend_src_components_authpage_tsx",
-      "frontend_src_components_chatpage_tsx",
-      "frontend_src_components_floatingchat_tsx",
-      "frontend_src_components_ui_alert_tsx",
-      "frontend_src_components_ui_profile_photo_upload_tsx",
-      "frontend_src_lib_chatapi_ts",
-      "frontend_src_lib_imagecrop_ts",
-      "frontend_src_lib_validation_ts",
-      "imagecrop_getcroppedimage",
-      "imagecrop_loadimage",
-      "profile_photo_upload_dataurltofile",
-      "profile_photo_upload_handlefilechange",
-      "profile_photo_upload_handleremovephoto",
-      "profile_photo_upload_handlesavecrop",
-      "validation_getpasswordvalidationmessage",
-      "validation_validatepassword"
-    ],
-    "3": [
       "certificationsapi_apicreateusercertification",
       "certificationsapi_apideleteusercertification",
       "certificationsapi_apifetchusercertifications",
@@ -254,7 +205,7 @@
       "skillsapi_normalizeskill",
       "skillsapi_parseerrormessage"
     ],
-    "4": [
+    "3": [
       "backend_server_src_lib_cache_ts",
       "backend_server_src_lib_feedcache_ts",
       "cache_appendstreammessage",
@@ -267,6 +218,7 @@
       "cache_cachehashset",
       "cache_cacheincrement",
       "cache_cachemgetjson",
+      "cache_cachesetadd",
       "cache_cachesetjson",
       "cache_cachezadd",
       "cache_cachezaddmany",
@@ -311,7 +263,98 @@
       "feedcache_snapshotfromrow",
       "feedcache_visibilitysql"
     ],
+    "4": [
+      "alert_alert",
+      "alert_cn",
+      "authpage_handleforgotpassword",
+      "authpage_handlelogin",
+      "authpage_handlesignup",
+      "chatpage_appendemoji",
+      "chatpage_formatdate",
+      "chatpage_formatmenutimestamp",
+      "chatpage_formattime",
+      "chatpage_handlecreategroup",
+      "chatpage_handledeletemessage",
+      "chatpage_handlereacttomessage",
+      "chatpage_handlesendimage",
+      "chatpage_handlesendmessage",
+      "chatpage_handlestartchat",
+      "chatpage_issamecalendarday",
+      "chatpage_jumptomessage",
+      "chatpage_typinganimatedtext",
+      "clublogoupload_dataurltofile",
+      "clublogoupload_handleremove",
+      "clublogoupload_handlesavecrop",
+      "clublogoupload_handleselectfile",
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_authpage_tsx",
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_chatpage_tsx",
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_groupinfopage_tsx",
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_alert_tsx",
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_profile_photo_upload_tsx",
+      "d_college_btech_final_year_project_final_year_project_frontend_src_lib_imagecrop_ts",
+      "d_college_btech_final_year_project_final_year_project_frontend_src_lib_validation_ts",
+      "frontend_src_components_authpage_tsx",
+      "frontend_src_components_chatpage_tsx",
+      "frontend_src_components_groupinfopage_tsx",
+      "frontend_src_components_ui_alert_tsx",
+      "frontend_src_components_ui_clublogoupload_tsx",
+      "frontend_src_components_ui_profile_photo_upload_tsx",
+      "frontend_src_lib_imagecrop_ts",
+      "frontend_src_lib_validation_ts",
+      "groupinfopage_formatdate",
+      "groupinfopage_formatmembersubtitle",
+      "groupinfopage_handlesavedescription",
+      "imagecrop_getcroppedimage",
+      "imagecrop_loadimage",
+      "profile_photo_upload_dataurltofile",
+      "profile_photo_upload_handlefilechange",
+      "profile_photo_upload_handleremovephoto",
+      "profile_photo_upload_handlesavecrop",
+      "validation_getpasswordvalidationmessage",
+      "validation_validatepassword"
+    ],
     "5": [
+      "clubactivitypage_handleapproverequest",
+      "clubactivitypage_handledeleteclub",
+      "clubactivitypage_handleinvitemember",
+      "clubactivitypage_handlejoincurrentclub",
+      "clubactivitypage_handlerejectrequest",
+      "clubactivitypage_handlesavesettings",
+      "clubactivitypage_handletoggleadminrole",
+      "clubactivitypage_loadclubdata",
+      "clubsapi_apiapproveclubmember",
+      "clubsapi_apicreateclub",
+      "clubsapi_apideleteclub",
+      "clubsapi_apifetchclub",
+      "clubsapi_apifetchclubcategories",
+      "clubsapi_apifetchclubmembers",
+      "clubsapi_apifetchclubposts",
+      "clubsapi_apifetchclubs",
+      "clubsapi_apiinviteclubmember",
+      "clubsapi_apijoinclub",
+      "clubsapi_apileaveclub",
+      "clubsapi_apiremoveclubmember",
+      "clubsapi_apiupdateclub",
+      "clubsapi_apiupdateclubmemberrole",
+      "clubsapi_authheaders",
+      "clubsapi_normalizeclub",
+      "clubsapi_parseerrormessage",
+      "clubsapi_safefetch",
+      "clubspage_handleclubcreate",
+      "clubspage_handlejoinclub",
+      "clubspage_handleleaveclub",
+      "createclubmodal_addtag",
+      "createclubmodal_handlesubmit",
+      "createclubmodal_resetform",
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_clubspage_tsx",
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_createclubmodal_tsx",
+      "d_college_btech_final_year_project_final_year_project_frontend_src_lib_clubsapi_ts",
+      "frontend_src_components_clubactivitypage_tsx",
+      "frontend_src_components_clubspage_tsx",
+      "frontend_src_components_createclubmodal_tsx",
+      "frontend_src_lib_clubsapi_ts"
+    ],
+    "6": [
       "backend_server_src_lib_chat_ts",
       "backend_server_src_lib_realtime_ts",
       "cache_pollingredissubscriber",
@@ -327,7 +370,6 @@
       "chat_emitchatread",
       "chat_emitchatrequestaccepted",
       "chat_emittypingindicator",
-      "chat_getchatparticipantids",
       "chat_getorcreatedirectchat",
       "chat_ischatparticipant",
       "chat_markchataccepted",
@@ -352,67 +394,44 @@
       "realtime_unmarksockettyping",
       "realtime_unregistersocket"
     ],
-    "6": [
-      "backend_server_src_lib_usercache_ts",
-      "backend_server_src_routes_network_ts",
-      "backend_server_src_services_userprofile_ts",
-      "cache_cachehgetall",
-      "d_college_btech_final_year_project_final_year_project_backend_server_src_lib_usercache_ts",
-      "d_college_btech_final_year_project_final_year_project_backend_server_src_routes_network_ts",
-      "d_college_btech_final_year_project_final_year_project_backend_server_src_services_userprofile_ts",
-      "network_hydrateorderedusers",
-      "network_mapminimaluserfromsummary",
-      "usercache_chatconversationlistkey",
-      "usercache_fetchuserstatsbyidsfromdb",
-      "usercache_fetchusersummariesbyidsfromdb",
-      "usercache_getcachedconversationlist",
-      "usercache_getuserstatsbyid",
-      "usercache_getusersummarybyid",
-      "usercache_incrementuserstat",
-      "usercache_invalidateconversationlists",
-      "usercache_invalidateusercache",
-      "usercache_mapstatsrow",
-      "usercache_mapsummaryrow",
-      "usercache_patchcachedconversationlist",
-      "usercache_patchuserstats",
-      "usercache_patchusersummary",
-      "usercache_setcachedconversationlist",
-      "usercache_setusersummary",
-      "usercache_tocachedusercard",
-      "usercache_userstatskey",
-      "usercache_usersummarykey",
-      "userprofile_getuserprofilebyid"
-    ],
     "7": [
-      "clubactivitypage_handlecreateclubpost",
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_clubactivitypage_tsx",
-      "d_college_btech_final_year_project_final_year_project_frontend_src_lib_postsapi_ts",
-      "frontend_src_components_clubactivitypage_tsx",
-      "frontend_src_lib_postsapi_ts",
-      "postsapi_apiaddcomment",
-      "postsapi_apiaddreply",
-      "postsapi_apicreateuserpost",
-      "postsapi_apideletecomment",
-      "postsapi_apideletepost",
-      "postsapi_apifetchcommentcontext",
-      "postsapi_apifetchcommentreplies",
-      "postsapi_apifetchfeedposts",
-      "postsapi_apifetchhashtagposts",
-      "postsapi_apifetchpostbyid",
-      "postsapi_apifetchpostcomments",
-      "postsapi_apifetchprofileposts",
-      "postsapi_apifetchuserposts",
-      "postsapi_apilikecomment",
-      "postsapi_apilikepost",
-      "postsapi_apisavepost",
-      "postsapi_apiunlikecomment",
-      "postsapi_apiunlikepost",
-      "postsapi_apiunsavepost",
-      "postsapi_apiupdatepost",
-      "postsapi_authheaders",
-      "postsapi_normalizecomment",
-      "postsapi_normalizeuserpost",
-      "postsapi_parseerrormessage"
+      "backend_server_src_lib_chatpermissions_ts",
+      "backend_server_src_lib_chatsystemevents_ts",
+      "backend_server_src_lib_clubchatsync_ts",
+      "backend_server_src_lib_groupchat_ts",
+      "chat_getchatparticipantids",
+      "chatpermissions_checkcanaddusertochat",
+      "chatpermissions_checkchatpermission",
+      "chatpermissions_getuserchatrole",
+      "chatpermissions_getuserclubrole",
+      "chatpermissions_isgroupchatowner",
+      "chatpermissions_validaterolechange",
+      "chatsystemevents_createsystemevent",
+      "chatsystemevents_emituserjoined",
+      "chatsystemevents_emituserleft",
+      "chatsystemevents_emituserremoved",
+      "chatsystemevents_emituserrolechanged",
+      "chatsystemevents_extractsystemeventpayload",
+      "chatsystemevents_findexistinguserid",
+      "chatsystemevents_getusernamebyid",
+      "chatsystemevents_resolvesystemeventsenderuserid",
+      "clubchatsync_getorcreateclubchat",
+      "clubchatsync_mapclubroletochatrole",
+      "clubchatsync_onclubdeleted",
+      "clubchatsync_onclubmembershipapproved",
+      "clubchatsync_onuserclubrolechanged",
+      "clubchatsync_onuserjoinedclub",
+      "clubchatsync_onuserleftclub",
+      "groupchat_addusertochat",
+      "groupchat_changeuserrole",
+      "groupchat_creategroupchat",
+      "groupchat_deletegroupchat",
+      "groupchat_getchatmembers",
+      "groupchat_getgroupchatdetails",
+      "groupchat_leavegroupchat",
+      "groupchat_removeuserfromchat",
+      "groupchat_updategroupchat",
+      "usercache_invalidateconversationlists"
     ],
     "8": [
       "authapi_apichangepassword",
@@ -446,6 +465,96 @@
       "settingspage_meetspasswordrequirements"
     ],
     "9": [
+      "clubactivitypage_handlecreateclubpost",
+      "clubactivitypage_handlecreateclubpostfrommodal",
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_clubactivitypage_tsx",
+      "d_college_btech_final_year_project_final_year_project_frontend_src_lib_postsapi_ts",
+      "frontend_src_lib_postsapi_ts",
+      "postsapi_apiaddcomment",
+      "postsapi_apiaddreply",
+      "postsapi_apicreateuserpost",
+      "postsapi_apideletecomment",
+      "postsapi_apideletepost",
+      "postsapi_apifetchcommentcontext",
+      "postsapi_apifetchcommentreplies",
+      "postsapi_apifetchfeedposts",
+      "postsapi_apifetchhashtagposts",
+      "postsapi_apifetchpostbyid",
+      "postsapi_apifetchpostcomments",
+      "postsapi_apifetchprofileposts",
+      "postsapi_apifetchuserposts",
+      "postsapi_apilikecomment",
+      "postsapi_apilikepost",
+      "postsapi_apisavepost",
+      "postsapi_apiunlikecomment",
+      "postsapi_apiunlikepost",
+      "postsapi_apiunsavepost",
+      "postsapi_apiupdatepost",
+      "postsapi_authheaders",
+      "postsapi_normalizecomment",
+      "postsapi_normalizeuserpost",
+      "postsapi_parseerrormessage"
+    ],
+    "10": [
+      "backend_server_src_lib_usercache_ts",
+      "backend_server_src_routes_network_ts",
+      "backend_server_src_services_userprofile_ts",
+      "cache_cachehgetall",
+      "d_college_btech_final_year_project_final_year_project_backend_server_src_lib_usercache_ts",
+      "d_college_btech_final_year_project_final_year_project_backend_server_src_routes_network_ts",
+      "d_college_btech_final_year_project_final_year_project_backend_server_src_services_userprofile_ts",
+      "network_hydrateorderedusers",
+      "network_mapminimaluserfromsummary",
+      "usercache_chatconversationlistkey",
+      "usercache_fetchuserstatsbyidsfromdb",
+      "usercache_fetchusersummariesbyidsfromdb",
+      "usercache_getcachedconversationlist",
+      "usercache_getuserstatsbyid",
+      "usercache_getusersummarybyid",
+      "usercache_incrementuserstat",
+      "usercache_invalidateusercache",
+      "usercache_mapstatsrow",
+      "usercache_mapsummaryrow",
+      "usercache_patchcachedconversationlist",
+      "usercache_patchuserstats",
+      "usercache_patchusersummary",
+      "usercache_setcachedconversationlist",
+      "usercache_setusersummary",
+      "usercache_tocachedusercard",
+      "usercache_userstatskey",
+      "usercache_usersummarykey",
+      "userprofile_getuserprofilebyid"
+    ],
+    "11": [
+      "backend_server_src_lib_socialinsights_ts",
+      "cache_cachesetcardinality",
+      "cache_cachesetmembers",
+      "socialinsights_applydiversity",
+      "socialinsights_cosinesimilarity",
+      "socialinsights_getsuggestedusersforapi",
+      "socialinsights_gettrendinghashtagsforapi",
+      "socialinsights_getvectormap",
+      "socialinsights_hashtagengagementbucketkey",
+      "socialinsights_hashtagpostbucketkey",
+      "socialinsights_hashtagusersbucketkey",
+      "socialinsights_hashtaguserspamkey",
+      "socialinsights_houroffsetbucket",
+      "socialinsights_maybestartsocialinsightsschedulers",
+      "socialinsights_nowhourbucket",
+      "socialinsights_queuesuggestedusersrecompute",
+      "socialinsights_randomexplorationfactor",
+      "socialinsights_recencyweight",
+      "socialinsights_recomputesuggestedusers",
+      "socialinsights_recomputetrendinghashtags",
+      "socialinsights_recordsuggestionsseen",
+      "socialinsights_seenkey",
+      "socialinsights_suggestedkey",
+      "socialinsights_sumtagbuckets",
+      "socialinsights_tonumber",
+      "socialinsights_trackpostcreatedhashtags",
+      "socialinsights_trackpostengagementforpost"
+    ],
+    "12": [
       "backend_server_src_lib_clubs_ts",
       "backend_server_src_routes_posts_ts",
       "clubs_canvieweraccessclubpost",
@@ -454,6 +563,7 @@
       "clubs_loadclubaccess",
       "clubs_normalizeclubcategoryname",
       "clubs_normalizeclubtagname",
+      "clubs_parseactiverestrictions",
       "clubs_requireactiveclubmembership",
       "clubs_resolveorcreateclubcategory",
       "clubs_slugifyclubname",
@@ -471,33 +581,7 @@
       "posts_parsecommentcursor",
       "posts_parsemedia"
     ],
-    "10": [
-      "clubsapi_apicreateclub",
-      "clubsapi_apifetchclub",
-      "clubsapi_apifetchclubcategories",
-      "clubsapi_apifetchclubmembers",
-      "clubsapi_apifetchclubposts",
-      "clubsapi_apifetchclubs",
-      "clubsapi_apijoinclub",
-      "clubsapi_apileaveclub",
-      "clubsapi_authheaders",
-      "clubsapi_normalizeclub",
-      "clubsapi_parseerrormessage",
-      "clubsapi_safefetch",
-      "clubspage_handleclubcreate",
-      "clubspage_handlejoinclub",
-      "clubspage_handleleaveclub",
-      "createclubmodal_addtag",
-      "createclubmodal_handlesubmit",
-      "createclubmodal_resetform",
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_clubspage_tsx",
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_createclubmodal_tsx",
-      "d_college_btech_final_year_project_final_year_project_frontend_src_lib_clubsapi_ts",
-      "frontend_src_components_clubspage_tsx",
-      "frontend_src_components_createclubmodal_tsx",
-      "frontend_src_lib_clubsapi_ts"
-    ],
-    "11": [
+    "13": [
       "auth_buildresponsewithtoken",
       "auth_createauthsession",
       "auth_createdefaultusersettings",
@@ -522,7 +606,30 @@
       "d_college_btech_final_year_project_final_year_project_backend_server_src_lib_auth_ts",
       "d_college_btech_final_year_project_final_year_project_backend_server_src_routes_auth_ts"
     ],
-    "12": [
+    "14": [
+      "chatapi_apiacceptchatrequest",
+      "chatapi_apiaddgroupmember",
+      "chatapi_apichangegroupmemberrole",
+      "chatapi_apicreategroupconversation",
+      "chatapi_apideletegroupchat",
+      "chatapi_apideletemessage",
+      "chatapi_apifetchconversations",
+      "chatapi_apifetchgroupchatdetails",
+      "chatapi_apifetchmessages",
+      "chatapi_apileavegroupchat",
+      "chatapi_apimarkchatread",
+      "chatapi_apireacttomessage",
+      "chatapi_apiremovegroupavatar",
+      "chatapi_apiremovegroupmember",
+      "chatapi_apisendimagemessage",
+      "chatapi_apisendmessage",
+      "chatapi_apistartconversation",
+      "chatapi_apiupdategroupavatar",
+      "chatapi_apiupdategroupsettings",
+      "d_college_btech_final_year_project_final_year_project_frontend_src_lib_chatapi_ts",
+      "frontend_src_lib_chatapi_ts"
+    ],
+    "15": [
       "backend_server_src_lib_notifications_ts",
       "backend_server_src_lib_push_ts",
       "d_college_btech_final_year_project_final_year_project_backend_server_src_lib_notifications_ts",
@@ -544,7 +651,29 @@
       "push_getwebpushpublickey",
       "push_sendpushnotificationtouser"
     ],
-    "13": [
+    "16": [
+      "chatpage_chatpage",
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_floatingchat_tsx",
+      "d_college_btech_final_year_project_final_year_project_frontend_src_hooks_usebottomanchoredchatscroll_ts",
+      "floatingchat_appendemoji",
+      "floatingchat_floatingchat",
+      "floatingchat_formatdate",
+      "floatingchat_formatmenutimestamp",
+      "floatingchat_formattime",
+      "floatingchat_handlereacttomessage",
+      "floatingchat_handlesendimage",
+      "floatingchat_handlesendmessage",
+      "floatingchat_handlewheel",
+      "floatingchat_issamecalendarday",
+      "floatingchat_jumptomessage",
+      "frontend_src_components_floatingchat_tsx",
+      "frontend_src_hooks_usebottomanchoredchatscroll_ts",
+      "usebottomanchoredchatscroll_createconversationscrollstate",
+      "usebottomanchoredchatscroll_getfirstvisiblemessageanchor",
+      "usebottomanchoredchatscroll_getmessageelement",
+      "usebottomanchoredchatscroll_usebottomanchoredchatscroll"
+    ],
+    "17": [
       "backend_server_src_lib_objectstorage_ts",
       "d_college_btech_final_year_project_final_year_project_backend_server_src_lib_objectstorage_ts",
       "objectstorage_buildstorageenv",
@@ -563,7 +692,7 @@
       "objectstorage_uploadpostmediatostorage",
       "objectstorage_uploadprofilephototostorage"
     ],
-    "14": [
+    "18": [
       "appdatacontext_apiprofiletostudent",
       "appdatacontext_appdataprovider",
       "appdatacontext_createemptymessagesstate",
@@ -580,7 +709,22 @@
       "d_college_btech_final_year_project_final_year_project_frontend_src_context_appdatacontext_tsx",
       "frontend_src_context_appdatacontext_tsx"
     ],
-    "15": [
+    "19": [
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_dropdown_menu_tsx",
+      "dropdown_menu_cn",
+      "dropdown_menu_dropdownmenucontent",
+      "dropdown_menu_dropdownmenuitem",
+      "dropdown_menu_dropdownmenulabel",
+      "dropdown_menu_dropdownmenuportal",
+      "dropdown_menu_dropdownmenuradiogroup",
+      "dropdown_menu_dropdownmenuradioitem",
+      "dropdown_menu_dropdownmenushortcut",
+      "dropdown_menu_dropdownmenusubcontent",
+      "dropdown_menu_dropdownmenusubtrigger",
+      "dropdown_menu_dropdownmenutrigger",
+      "frontend_src_components_ui_dropdown_menu_tsx"
+    ],
+    "20": [
       "createunifiedpostmodal_addopportunitytag",
       "createunifiedpostmodal_addposttag",
       "createunifiedpostmodal_getopportunitytitleplaceholder",
@@ -595,36 +739,20 @@
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_createunifiedpostmodal_tsx",
       "frontend_src_components_createunifiedpostmodal_tsx"
     ],
-    "16": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_lib_networkapi_ts",
-      "frontend_src_lib_networkapi_ts",
-      "networkapi_apiacceptfollowrequest",
-      "networkapi_apicancelfollowrequest",
-      "networkapi_apifollow",
-      "networkapi_apigetfollowgraph",
-      "networkapi_apirejectfollowrequest",
-      "networkapi_apiremovefollower",
-      "networkapi_apisearchall",
-      "networkapi_apisearchusers",
-      "networkapi_apiunfollow",
-      "networkapi_authheaders",
-      "networkapi_safefetch"
+    "21": [
+      "backend_server_src_routes_users_ts",
+      "d_college_btech_final_year_project_final_year_project_backend_server_src_routes_users_ts",
+      "users_getconversationvieweruserids",
+      "users_getfolloweruserids",
+      "users_mapuserpostrow",
+      "users_normalizehashtag",
+      "users_normalizehashtags",
+      "users_parsemediavalue",
+      "users_passwordrequirementmessage",
+      "users_requireownuser",
+      "users_settingsfromrow"
     ],
-    "17": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_dropdown_menu_tsx",
-      "dropdown_menu_dropdownmenucontent",
-      "dropdown_menu_dropdownmenuitem",
-      "dropdown_menu_dropdownmenulabel",
-      "dropdown_menu_dropdownmenuportal",
-      "dropdown_menu_dropdownmenuradiogroup",
-      "dropdown_menu_dropdownmenuradioitem",
-      "dropdown_menu_dropdownmenushortcut",
-      "dropdown_menu_dropdownmenusubcontent",
-      "dropdown_menu_dropdownmenusubtrigger",
-      "dropdown_menu_dropdownmenutrigger",
-      "frontend_src_components_ui_dropdown_menu_tsx"
-    ],
-    "18": [
+    "22": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_sidebar_tsx",
       "frontend_src_components_ui_sidebar_tsx",
       "sidebar_cn",
@@ -637,19 +765,7 @@
       "sidebar_sidebarseparator",
       "sidebar_usesidebar"
     ],
-    "19": [
-      "backend_server_src_routes_users_ts",
-      "d_college_btech_final_year_project_final_year_project_backend_server_src_routes_users_ts",
-      "users_getfolloweruserids",
-      "users_mapuserpostrow",
-      "users_normalizehashtag",
-      "users_normalizehashtags",
-      "users_parsemediavalue",
-      "users_passwordrequirementmessage",
-      "users_requireownuser",
-      "users_settingsfromrow"
-    ],
-    "20": [
+    "23": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_menubar_tsx",
       "frontend_src_components_ui_menubar_tsx",
       "menubar_cn",
@@ -661,7 +777,7 @@
       "menubar_menubarsubcontent",
       "menubar_menubarsubtrigger"
     ],
-    "21": [
+    "24": [
       "chatui_formatseentime",
       "chatui_maprealtimechatmessage",
       "chatui_mergechatmessagelist",
@@ -673,7 +789,7 @@
       "d_college_btech_final_year_project_final_year_project_frontend_src_lib_chatui_ts",
       "frontend_src_lib_chatui_ts"
     ],
-    "22": [
+    "25": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_lib_notificationsapi_ts",
       "frontend_src_lib_notificationsapi_ts",
       "notificationsapi_apideletepushsubscription",
@@ -685,7 +801,18 @@
       "notificationsapi_authheaders",
       "notificationsapi_safefetch"
     ],
-    "23": [
+    "26": [
+      "context_menu_cn",
+      "context_menu_contextmenugroup",
+      "context_menu_contextmenuportal",
+      "context_menu_contextmenuradiogroup",
+      "context_menu_contextmenuradioitem",
+      "context_menu_contextmenusub",
+      "context_menu_contextmenutrigger",
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_context_menu_tsx",
+      "frontend_src_components_ui_context_menu_tsx"
+    ],
+    "27": [
       "alert_dialog_alertdialogaction",
       "alert_dialog_alertdialogcancel",
       "alert_dialog_alertdialogdescription",
@@ -695,7 +822,7 @@
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_alert_dialog_tsx",
       "frontend_src_components_ui_alert_dialog_tsx"
     ],
-    "24": [
+    "28": [
       "breadcrumb_breadcrumb",
       "breadcrumb_breadcrumbellipsis",
       "breadcrumb_breadcrumblink",
@@ -705,17 +832,17 @@
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_breadcrumb_tsx",
       "frontend_src_components_ui_breadcrumb_tsx"
     ],
-    "25": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_pagination_tsx",
-      "frontend_src_components_ui_pagination_tsx",
-      "pagination_cn",
-      "pagination_pagination",
-      "pagination_paginationcontent",
-      "pagination_paginationellipsis",
-      "pagination_paginationitem",
-      "pagination_paginationnext"
+    "29": [
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_drawer_tsx",
+      "drawer_drawercontent",
+      "drawer_drawerdescription",
+      "drawer_drawerfooter",
+      "drawer_drawerheader",
+      "drawer_draweroverlay",
+      "drawer_drawertitle",
+      "frontend_src_components_ui_drawer_tsx"
     ],
-    "26": [
+    "30": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_select_tsx",
       "frontend_src_components_ui_select_tsx",
       "select_selectitem",
@@ -725,7 +852,37 @@
       "select_selectseparator",
       "select_selecttrigger"
     ],
-    "27": [
+    "31": [
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_pagination_tsx",
+      "frontend_src_components_ui_pagination_tsx",
+      "pagination_cn",
+      "pagination_pagination",
+      "pagination_paginationcontent",
+      "pagination_paginationellipsis",
+      "pagination_paginationitem",
+      "pagination_paginationnext"
+    ],
+    "32": [
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_sheet_tsx",
+      "frontend_src_components_ui_sheet_tsx",
+      "sheet_sheetcontent",
+      "sheet_sheetdescription",
+      "sheet_sheetfooter",
+      "sheet_sheetheader",
+      "sheet_sheetoverlay",
+      "sheet_sheettitle"
+    ],
+    "33": [
+      "backend_server_src_lib_chatmembership_ts",
+      "chatmembership_canaccessmessage",
+      "chatmembership_getmembershipwindow",
+      "chatmembership_getunreadcountforuser",
+      "chatmembership_getvisiblemessagesforuser",
+      "chatmembership_messagemembershipfilter",
+      "chatmembership_validateactivechataccess",
+      "chatmembership_validatechataccess"
+    ],
+    "34": [
       "backend_scripts_network_e2e_test_ps1",
       "d_college_btech_final_year_project_final_year_project_backend_scripts_network_e2e_test_ps1",
       "network_e2e_test_assert_status",
@@ -734,16 +891,7 @@
       "network_e2e_test_get_responsecontent",
       "network_e2e_test_invoke_jsonrequest"
     ],
-    "28": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_drawer_tsx",
-      "drawer_drawerdescription",
-      "drawer_drawerfooter",
-      "drawer_drawerheader",
-      "drawer_draweroverlay",
-      "drawer_drawertitle",
-      "frontend_src_components_ui_drawer_tsx"
-    ],
-    "29": [
+    "35": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_form_tsx",
       "form_cn",
       "form_formcontrol",
@@ -752,7 +900,7 @@
       "form_useformfield",
       "frontend_src_components_ui_form_tsx"
     ],
-    "30": [
+    "36": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_navigation_menu_tsx",
       "frontend_src_components_ui_navigation_menu_tsx",
       "navigation_menu_navigationmenu",
@@ -761,24 +909,16 @@
       "navigation_menu_navigationmenutrigger",
       "navigation_menu_navigationmenuviewport"
     ],
-    "31": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_sheet_tsx",
-      "frontend_src_components_ui_sheet_tsx",
-      "sheet_sheetdescription",
-      "sheet_sheetfooter",
-      "sheet_sheetheader",
-      "sheet_sheetoverlay",
-      "sheet_sheettitle"
-    ],
-    "32": [
+    "37": [
       "backend_server_src_routes_clubs_ts",
       "clubs_getautheduserid",
+      "clubs_isuniqueconstrainterror",
       "clubs_loadclubbyslugorid",
       "clubs_mapclubrow",
       "clubs_parsepaging",
       "d_college_btech_final_year_project_final_year_project_backend_server_src_routes_clubs_ts"
     ],
-    "33": [
+    "38": [
       "backend_server_src_routes_search_ts",
       "d_college_btech_final_year_project_final_year_project_backend_server_src_routes_search_ts",
       "search_parsepaging",
@@ -786,7 +926,7 @@
       "search_searchhashtags",
       "search_searchusers"
     ],
-    "34": [
+    "39": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_newchatmodal_tsx",
       "frontend_src_components_newchatmodal_tsx",
       "newchatmodal_handleclose",
@@ -794,15 +934,7 @@
       "newchatmodal_handlestartchat",
       "newchatmodal_togglememberselection"
     ],
-    "35": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_notificationscard_tsx",
-      "frontend_src_components_notificationscard_tsx",
-      "notificationscard_formattimestamp",
-      "notificationscard_getnotificationcolor",
-      "notificationscard_getnotificationicon",
-      "notificationscard_markfollowrequesthandled"
-    ],
-    "36": [
+    "40": [
       "carousel_carousel",
       "carousel_carouselnext",
       "carousel_cn",
@@ -810,15 +942,7 @@
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_carousel_tsx",
       "frontend_src_components_ui_carousel_tsx"
     ],
-    "37": [
-      "context_menu_contextmenugroup",
-      "context_menu_contextmenuportal",
-      "context_menu_contextmenusub",
-      "context_menu_contextmenutrigger",
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_context_menu_tsx",
-      "frontend_src_components_ui_context_menu_tsx"
-    ],
-    "38": [
+    "41": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_table_tsx",
       "frontend_src_components_ui_table_tsx",
       "table_cn",
@@ -826,7 +950,15 @@
       "table_tablebody",
       "table_tableheader"
     ],
-    "39": [
+    "42": [
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_notificationscard_tsx",
+      "frontend_src_components_notificationscard_tsx",
+      "notificationscard_formattimestamp",
+      "notificationscard_getnotificationcolor",
+      "notificationscard_getnotificationicon",
+      "notificationscard_markfollowrequesthandled"
+    ],
+    "43": [
       "authstorage_clearstoredsession",
       "authstorage_getauthtoken",
       "authstorage_readstoredsession",
@@ -834,457 +966,612 @@
       "d_college_btech_final_year_project_final_year_project_frontend_src_lib_authstorage_ts",
       "frontend_src_lib_authstorage_ts"
     ],
-    "40": [
+    "44": [
       "accordion_accordioncontent",
       "accordion_accordionitem",
       "accordion_accordiontrigger",
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_accordion_tsx",
       "frontend_src_components_ui_accordion_tsx"
     ],
-    "41": [
+    "45": [
       "card_carddescription",
       "card_cardfooter",
       "card_cn",
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_card_tsx",
       "frontend_src_components_ui_card_tsx"
     ],
-    "42": [
+    "46": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_input_otp_tsx",
       "frontend_src_components_ui_input_otp_tsx",
       "input_otp_cn",
       "input_otp_inputotp",
       "input_otp_inputotpgroup"
     ],
-    "43": [
+    "47": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_toggle_group_tsx",
       "frontend_src_components_ui_toggle_group_tsx",
       "toggle_group_cn",
       "toggle_group_togglegroup",
       "toggle_group_togglegroupitem"
     ],
-    "44": [
+    "48": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_tooltip_tsx",
       "frontend_src_components_ui_tooltip_tsx",
       "tooltip_tooltip",
       "tooltip_tooltipcontent",
       "tooltip_tooltipprovider"
     ],
-    "45": [
+    "49": [
       "chatpage_chat_scroll_architecture",
       "chatpage_fixed_sidebar_header",
       "chatpage_infinite_scroll_pagination",
       "chatpage_newest_message_bottom",
       "chatpage_pagination_performance_rationale"
     ],
-    "46": [
+    "50": [
       "schema_alignment_canonical_schema_direction",
       "schema_alignment_clean_schema_rationale",
       "schema_alignment_full_product_coverage",
       "schema_alignment_normalized_target_schema",
       "schema_alignment_teacher_removal"
     ],
-    "47": [
+    "51": [
       "app_normalizeorigin",
       "app_sanitizeorigin",
       "backend_server_src_app_ts",
       "d_college_btech_final_year_project_final_year_project_backend_server_src_app_ts"
     ],
-    "48": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_navbar_tsx",
-      "frontend_src_components_navbar_tsx",
-      "navbar_handlesearchchange",
-      "navbar_handlesearchfocus"
-    ],
-    "49": [
+    "52": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_networkpage_tsx",
       "frontend_src_components_networkpage_tsx",
       "networkpage_mutualfollowerscount",
       "networkpage_uniqueintersection"
     ],
-    "50": [
-      "chart_cn",
-      "chart_usechart",
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_chart_tsx",
-      "frontend_src_components_ui_chart_tsx"
-    ],
-    "51": [
-      "collapsible_collapsiblecontent",
-      "collapsible_collapsibletrigger",
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_collapsible_tsx",
-      "frontend_src_components_ui_collapsible_tsx"
-    ],
-    "52": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_hover_card_tsx",
-      "frontend_src_components_ui_hover_card_tsx",
-      "hover_card_hovercardcontent",
-      "hover_card_hovercardtrigger"
-    ],
     "53": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_imageupload_tsx",
-      "frontend_src_components_ui_imageupload_tsx",
-      "imageupload_handlefilechange",
-      "imageupload_handleremoveimage"
-    ],
-    "54": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_radio_group_tsx",
-      "frontend_src_components_ui_radio_group_tsx",
-      "radio_group_radiogroup",
-      "radio_group_radiogroupitem"
-    ],
-    "55": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_scroll_area_tsx",
-      "frontend_src_components_ui_scroll_area_tsx",
-      "scroll_area_scrollarea",
-      "scroll_area_scrollbar"
-    ],
-    "56": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_slider_tsx",
-      "frontend_src_components_ui_slider_tsx",
-      "slider_cn",
-      "slider_slider"
-    ],
-    "57": [
-      "authcontext_authprovider",
-      "authcontext_profiletostudent",
-      "d_college_btech_final_year_project_final_year_project_frontend_src_context_authcontext_tsx",
-      "frontend_src_context_authcontext_tsx"
-    ],
-    "58": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_postpage_tsx",
       "frontend_src_components_postpage_tsx",
       "postpage_autoloadtrigger",
       "postpage_postpage"
     ],
-    "59": [
+    "54": [
       "avatar_avatar",
       "avatar_avatarfallback",
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_avatar_tsx",
       "frontend_src_components_ui_avatar_tsx"
     ],
-    "60": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_dialog_tsx",
-      "dialog_cn",
-      "dialog_dialogclose",
-      "frontend_src_components_ui_dialog_tsx"
+    "55": [
+      "chart_cn",
+      "chart_usechart",
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_chart_tsx",
+      "frontend_src_components_ui_chart_tsx"
     ],
-    "61": [
+    "56": [
+      "collapsible_collapsiblecontent",
+      "collapsible_collapsibletrigger",
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_collapsible_tsx",
+      "frontend_src_components_ui_collapsible_tsx"
+    ],
+    "57": [
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_imageupload_tsx",
+      "frontend_src_components_ui_imageupload_tsx",
+      "imageupload_handlefilechange",
+      "imageupload_handleremoveimage"
+    ],
+    "58": [
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_scroll_area_tsx",
+      "frontend_src_components_ui_scroll_area_tsx",
+      "scroll_area_scrollarea",
+      "scroll_area_scrollbar"
+    ],
+    "59": [
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_slider_tsx",
+      "frontend_src_components_ui_slider_tsx",
+      "slider_cn",
+      "slider_slider"
+    ],
+    "60": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_tabs_tsx",
       "frontend_src_components_ui_tabs_tsx",
       "tabs_cn",
       "tabs_tabs"
     ],
+    "61": [
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_navbar_tsx",
+      "frontend_src_components_navbar_tsx",
+      "navbar_handlesearchchange",
+      "navbar_handlesearchfocus"
+    ],
     "62": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_hooks_usebottomanchoredchatscroll_ts",
-      "frontend_src_hooks_usebottomanchoredchatscroll_ts",
-      "usebottomanchoredchatscroll_createconversationscrollstate",
-      "usebottomanchoredchatscroll_usebottomanchoredchatscroll"
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_dialog_tsx",
+      "dialog_cn",
+      "dialog_dialogclose",
+      "frontend_src_components_ui_dialog_tsx"
     ],
     "63": [
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_hover_card_tsx",
+      "frontend_src_components_ui_hover_card_tsx",
+      "hover_card_hovercardcontent",
+      "hover_card_hovercardtrigger"
+    ],
+    "64": [
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_radio_group_tsx",
+      "frontend_src_components_ui_radio_group_tsx",
+      "radio_group_radiogroup",
+      "radio_group_radiogroupitem"
+    ],
+    "65": [
+      "authcontext_authprovider",
+      "authcontext_profiletostudent",
+      "d_college_btech_final_year_project_final_year_project_frontend_src_context_authcontext_tsx",
+      "frontend_src_context_authcontext_tsx"
+    ],
+    "66": [
       "database_legacy_bootstrap",
       "database_legacy_social_schema",
       "frontend_database_legacy_bootstrap",
       "frontend_database_legacy_social_schema"
     ],
-    "64": [
+    "67": [
       "backend_server_src_middleware_ratelimiter_ts",
       "d_college_btech_final_year_project_final_year_project_backend_server_src_middleware_ratelimiter_ts",
       "ratelimiter_chatmessageratelimiter"
     ],
-    "65": [
+    "68": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_feedpage_tsx",
       "feedpage_feedpage",
       "frontend_src_components_feedpage_tsx"
     ],
-    "66": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_groupinfopage_tsx",
-      "frontend_src_components_groupinfopage_tsx",
-      "groupinfopage_formatdate"
-    ],
-    "67": [
+    "69": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_notificationspage_tsx",
       "frontend_src_components_notificationspage_tsx",
       "notificationspage_notificationspage"
     ],
-    "68": [
+    "70": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_opportunitycard_tsx",
       "frontend_src_components_opportunitycard_tsx",
       "opportunitycard_opportunitycard"
     ],
-    "69": [
+    "71": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_searchpage_tsx",
       "frontend_src_components_searchpage_tsx",
       "searchpage_searchresulttostudent"
     ],
-    "70": [
+    "72": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_chat_emojipicker_tsx",
       "emojipicker_emojipicker",
       "frontend_src_components_chat_emojipicker_tsx"
     ],
-    "71": [
+    "73": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_figma_imagewithfallback_tsx",
       "frontend_src_components_figma_imagewithfallback_tsx",
       "imagewithfallback_imagewithfallback"
     ],
-    "72": [
+    "74": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_network_followbutton_tsx",
       "followbutton_followbutton",
       "frontend_src_components_network_followbutton_tsx"
     ],
-    "73": [
+    "75": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_network_followingactionbutton_tsx",
       "followingactionbutton_followingactionbutton",
       "frontend_src_components_network_followingactionbutton_tsx"
     ],
-    "74": [
+    "76": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_network_requestcard_tsx",
       "frontend_src_components_network_requestcard_tsx",
       "requestcard_requestcard"
     ],
-    "75": [
+    "77": [
       "badge_badge",
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_badge_tsx",
       "frontend_src_components_ui_badge_tsx"
     ],
-    "76": [
+    "78": [
       "checkbox_checkbox",
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_checkbox_tsx",
       "frontend_src_components_ui_checkbox_tsx"
     ],
-    "77": [
+    "79": [
       "command_cn",
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_command_tsx",
       "frontend_src_components_ui_command_tsx"
     ],
-    "78": [
+    "80": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_date_picker_tsx",
       "date_picker_datepicker",
       "frontend_src_components_ui_date_picker_tsx"
     ],
-    "79": [
+    "81": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_label_tsx",
       "frontend_src_components_ui_label_tsx",
       "label_label"
     ],
-    "80": [
+    "82": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_modal_tsx",
       "frontend_src_components_ui_modal_tsx",
       "modal_modal"
     ],
-    "81": [
+    "83": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_popover_tsx",
       "frontend_src_components_ui_popover_tsx",
       "popover_popovertrigger"
     ],
-    "82": [
+    "84": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_resizable_tsx",
       "frontend_src_components_ui_resizable_tsx",
       "resizable_resizablepanelgroup"
     ],
-    "83": [
+    "85": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_separator_tsx",
       "frontend_src_components_ui_separator_tsx",
       "separator_separator"
     ],
-    "84": [
+    "86": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_skeleton_tsx",
       "frontend_src_components_ui_skeleton_tsx",
       "skeleton_skeleton"
     ],
-    "85": [
+    "87": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_sonner_tsx",
       "frontend_src_components_ui_sonner_tsx",
       "sonner_toaster"
     ],
-    "86": [
+    "88": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_switch_tsx",
       "frontend_src_components_ui_switch_tsx",
       "switch_switch"
     ],
-    "87": [
+    "89": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_textarea_tsx",
       "frontend_src_components_ui_textarea_tsx",
       "textarea_cn"
     ],
-    "88": [
+    "90": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_use_mobile_ts",
       "frontend_src_components_ui_use_mobile_ts",
       "use_mobile_useismobile"
     ],
-    "89": [
+    "91": [
       "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_utils_ts",
       "frontend_src_components_ui_utils_ts",
       "utils_cn"
     ],
-    "90": [
+    "92": [
       "apibase_resolveapibaseurl",
       "d_college_btech_final_year_project_final_year_project_frontend_src_lib_apibase_ts",
       "frontend_src_lib_apibase_ts"
     ],
-    "91": [
+    "93": [
       "attributions_shadcn_ui_mit",
       "attributions_unsplash_license",
       "warp_figma_design_reference"
     ],
-    "92": [
+    "94": [
       "warp_mock_data_architecture",
       "warp_tab_based_spa_navigation"
     ],
-    "93": [
-      "backend_prisma_config_ts"
-    ],
-    "94": [
-      "backend_server_src_prisma_ts"
-    ],
     "95": [
-      "backend_server_src_server_ts"
+      "buttonloader_buttonloader",
+      "frontend_src_components_ui_buttonloader_tsx"
     ],
     "96": [
-      "backend_server_src_types_d_ts"
+      "frontend_src_components_ui_loadingindicator_tsx",
+      "loadingindicator_loadingindicator"
     ],
     "97": [
-      "backend_server_src_routes_notifications_ts"
+      "backend_prisma_config_ts"
     ],
     "98": [
-      "database_setup_ps1"
+      "backend_server_src_prisma_ts"
     ],
     "99": [
-      "frontend_tailwind_config_js"
+      "backend_server_src_server_ts"
     ],
     "100": [
-      "frontend_vite_config_ts"
+      "backend_server_src_types_d_ts"
     ],
     "101": [
-      "frontend_database_setup_ps1"
+      "backend_server_src_routes_notifications_ts"
     ],
     "102": [
-      "frontend_public_sw_js"
+      "database_setup_ps1"
     ],
     "103": [
-      "frontend_src_main_tsx"
+      "frontend_tailwind_config_js"
     ],
     "104": [
-      "frontend_src_components_emptystate_tsx"
+      "frontend_vite_config_ts"
     ],
     "105": [
-      "frontend_src_components_hashtagpostspage_tsx"
+      "frontend_database_setup_ps1"
     ],
     "106": [
-      "frontend_src_components_loadingstate_tsx"
+      "frontend_public_sw_js"
     ],
     "107": [
-      "frontend_src_components_profilecard_tsx"
+      "frontend_src_main_tsx"
     ],
     "108": [
-      "frontend_src_components_suggestionscard_tsx"
+      "frontend_src_components_emptystate_tsx"
     ],
     "109": [
-      "frontend_src_components_network_usercard_tsx"
+      "frontend_src_components_hashtagpostspage_tsx"
     ],
     "110": [
-      "frontend_src_components_ui_aspect_ratio_tsx"
+      "frontend_src_components_loadingstate_tsx"
     ],
     "111": [
-      "frontend_src_components_ui_button_tsx"
+      "frontend_src_components_profilecard_tsx"
     ],
     "112": [
-      "frontend_src_components_ui_calendar_tsx"
+      "frontend_src_components_suggestionscard_tsx"
     ],
     "113": [
-      "frontend_src_components_ui_input_tsx"
+      "frontend_src_components_network_usercard_tsx"
     ],
     "114": [
-      "frontend_src_components_ui_progress_tsx"
+      "frontend_src_components_ui_aspect_ratio_tsx"
     ],
     "115": [
-      "frontend_src_components_ui_toggle_tsx"
+      "frontend_src_components_ui_button_tsx"
     ],
     "116": [
-      "frontend_src_types_index_ts"
+      "frontend_src_components_ui_calendar_tsx"
     ],
     "117": [
-      "d_college_btech_final_year_project_final_year_project_backend_prisma_config_ts"
+      "frontend_src_components_ui_input_tsx"
     ],
     "118": [
-      "d_college_btech_final_year_project_final_year_project_backend_server_src_prisma_ts"
+      "frontend_src_components_ui_progress_tsx"
     ],
     "119": [
-      "d_college_btech_final_year_project_final_year_project_backend_server_src_server_ts"
+      "frontend_src_components_ui_toggle_tsx"
     ],
     "120": [
-      "d_college_btech_final_year_project_final_year_project_backend_server_src_types_d_ts"
+      "frontend_src_types_index_ts"
     ],
     "121": [
-      "d_college_btech_final_year_project_final_year_project_backend_server_src_routes_notifications_ts"
+      "d_college_btech_final_year_project_final_year_project_backend_prisma_config_ts"
     ],
     "122": [
-      "d_college_btech_final_year_project_final_year_project_database_setup_ps1"
+      "d_college_btech_final_year_project_final_year_project_backend_server_src_prisma_ts"
     ],
     "123": [
-      "d_college_btech_final_year_project_final_year_project_frontend_tailwind_config_js"
+      "d_college_btech_final_year_project_final_year_project_backend_server_src_server_ts"
     ],
     "124": [
-      "d_college_btech_final_year_project_final_year_project_frontend_vite_config_ts"
+      "d_college_btech_final_year_project_final_year_project_backend_server_src_types_d_ts"
     ],
     "125": [
-      "d_college_btech_final_year_project_final_year_project_frontend_database_setup_ps1"
+      "d_college_btech_final_year_project_final_year_project_backend_server_src_routes_notifications_ts"
     ],
     "126": [
-      "d_college_btech_final_year_project_final_year_project_frontend_public_sw_js"
+      "d_college_btech_final_year_project_final_year_project_database_setup_ps1"
     ],
     "127": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_main_tsx"
+      "d_college_btech_final_year_project_final_year_project_frontend_tailwind_config_js"
     ],
     "128": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_emptystate_tsx"
+      "d_college_btech_final_year_project_final_year_project_frontend_vite_config_ts"
     ],
     "129": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_hashtagpostspage_tsx"
+      "d_college_btech_final_year_project_final_year_project_frontend_database_setup_ps1"
     ],
     "130": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_loadingstate_tsx"
+      "d_college_btech_final_year_project_final_year_project_frontend_public_sw_js"
     ],
     "131": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_profilecard_tsx"
+      "d_college_btech_final_year_project_final_year_project_frontend_src_main_tsx"
     ],
     "132": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_suggestionscard_tsx"
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_emptystate_tsx"
     ],
     "133": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_network_usercard_tsx"
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_hashtagpostspage_tsx"
     ],
     "134": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_aspect_ratio_tsx"
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_loadingstate_tsx"
     ],
     "135": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_button_tsx"
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_profilecard_tsx"
     ],
     "136": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_calendar_tsx"
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_suggestionscard_tsx"
     ],
     "137": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_input_tsx"
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_network_usercard_tsx"
     ],
     "138": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_progress_tsx"
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_aspect_ratio_tsx"
     ],
     "139": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_toggle_tsx"
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_button_tsx"
     ],
     "140": [
-      "d_college_btech_final_year_project_final_year_project_frontend_src_types_index_ts"
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_calendar_tsx"
     ],
     "141": [
-      "readme_local_dev_setup"
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_input_tsx"
     ],
     "142": [
-      "frontend_index_root_mount"
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_progress_tsx"
     ],
     "143": [
+      "d_college_btech_final_year_project_final_year_project_frontend_src_components_ui_toggle_tsx"
+    ],
+    "144": [
+      "d_college_btech_final_year_project_final_year_project_frontend_src_types_index_ts"
+    ],
+    "145": [
+      "readme_local_dev_setup"
+    ],
+    "146": [
+      "frontend_index_root_mount"
+    ],
+    "147": [
       "guidelines_custom_placeholder"
+    ],
+    "148": [
+      "backend_server_src_routes_groupchat_ts"
     ]
   },
-  "cohesion": {},
-  "god_nodes": [
+  "cohesion": {
+    "0": 0.07,
+    "1": 0.09,
+    "2": 0.09,
+    "3": 0.11,
+    "4": 0.07,
+    "5": 0.16,
+    "6": 0.12,
+    "7": 0.11,
+    "8": 0.2,
+    "9": 0.21,
+    "10": 0.16,
+    "11": 0.15,
+    "12": 0.17,
+    "13": 0.19,
+    "14": 0.13,
+    "15": 0.24,
+    "16": 0.16,
+    "17": 0.4,
+    "18": 0.28,
+    "19": 0.27,
+    "20": 0.32,
+    "21": 0.35,
+    "22": 0.35,
+    "23": 0.36,
+    "24": 0.38,
+    "25": 0.62,
+    "26": 0.31,
+    "27": 0.43,
+    "28": 0.43,
+    "29": 0.39,
+    "30": 0.43,
+    "31": 0.43,
+    "32": 0.39,
+    "33": 0.25,
+    "34": 0.57,
+    "35": 0.62,
+    "36": 0.48,
+    "37": 0.43,
+    "38": 0.53,
+    "39": 0.67,
+    "40": 0.6,
+    "41": 0.53,
+    "42": 0.53,
+    "43": 0.6,
+    "44": 0.6,
+    "45": 0.6,
+    "46": 0.6,
+    "47": 0.6,
+    "48": 0.6,
+    "49": 0.5,
+    "50": 0.4,
+    "51": 0.67,
+    "52": 0.83,
+    "53": 0.67,
+    "54": 0.67,
+    "55": 0.67,
+    "56": 0.67,
+    "57": 0.67,
+    "58": 0.67,
+    "59": 0.67,
+    "60": 0.67,
+    "61": 0.67,
+    "62": 0.67,
+    "63": 0.67,
+    "64": 0.67,
+    "65": 0.67,
+    "66": 0.5,
+    "67": 0.67,
+    "68": 0.67,
+    "69": 0.67,
+    "70": 0.67,
+    "71": 0.67,
+    "72": 0.67,
+    "73": 0.67,
+    "74": 0.67,
+    "75": 0.67,
+    "76": 0.67,
+    "77": 0.67,
+    "78": 0.67,
+    "79": 0.67,
+    "80": 0.67,
+    "81": 0.67,
+    "82": 0.67,
+    "83": 0.67,
+    "84": 0.67,
+    "85": 0.67,
+    "86": 0.67,
+    "87": 0.67,
+    "88": 0.67,
+    "89": 0.67,
+    "90": 0.67,
+    "91": 0.67,
+    "92": 0.67,
+    "93": 0.67,
+    "94": 1.0,
+    "95": 1.0,
+    "96": 1.0,
+    "97": 1.0,
+    "98": 1.0,
+    "99": 1.0,
+    "100": 1.0,
+    "101": 1.0,
+    "102": 1.0,
+    "103": 1.0,
+    "104": 1.0,
+    "105": 1.0,
+    "106": 1.0,
+    "107": 1.0,
+    "108": 1.0,
+    "109": 1.0,
+    "110": 1.0,
+    "111": 1.0,
+    "112": 1.0,
+    "113": 1.0,
+    "114": 1.0,
+    "115": 1.0,
+    "116": 1.0,
+    "117": 1.0,
+    "118": 1.0,
+    "119": 1.0,
+    "120": 1.0,
+    "121": 1.0,
+    "122": 1.0,
+    "123": 1.0,
+    "124": 1.0,
+    "125": 1.0,
+    "126": 1.0,
+    "127": 1.0,
+    "128": 1.0,
+    "129": 1.0,
+    "130": 1.0,
+    "131": 1.0,
+    "132": 1.0,
+    "133": 1.0,
+    "134": 1.0,
+    "135": 1.0,
+    "136": 1.0,
+    "137": 1.0,
+    "138": 1.0,
+    "139": 1.0,
+    "140": 1.0,
+    "141": 1.0,
+    "142": 1.0,
+    "143": 1.0,
+    "144": 1.0,
+    "145": 1.0,
+    "146": 1.0,
+    "147": 1.0,
+    "148": 1.0
+  },
+  "gods": [
+    {
+      "id": "cache_cachesetjson",
+      "label": "cacheSetJson()",
+      "degree": 21
+    },
     {
       "id": "postsapi_authheaders",
       "label": "authHeaders()",
@@ -1296,19 +1583,29 @@
       "degree": 18
     },
     {
-      "id": "cache_cachesetjson",
-      "label": "cacheSetJson()",
-      "degree": 16
-    },
-    {
       "id": "authapi_safefetch",
       "label": "safeFetch()",
       "degree": 16
     },
     {
+      "id": "clubsapi_authheaders",
+      "label": "authHeaders()",
+      "degree": 16
+    },
+    {
+      "id": "clubsapi_safefetch",
+      "label": "safeFetch()",
+      "degree": 16
+    },
+    {
+      "id": "clubsapi_parseerrormessage",
+      "label": "parseErrorMessage()",
+      "degree": 16
+    },
+    {
       "id": "cache_runcommand",
       "label": "runCommand()",
-      "degree": 13
+      "degree": 14
     },
     {
       "id": "feedcache_hydrateposts",
@@ -1316,81 +1613,103 @@
       "degree": 13
     },
     {
-      "id": "authapi_authheaders",
-      "label": "authHeaders()",
+      "id": "usercache_invalidateconversationlists",
+      "label": "invalidateConversationLists()",
       "degree": 13
-    },
-    {
-      "id": "cache_cachedelete",
-      "label": "cacheDelete()",
-      "degree": 12
-    },
-    {
-      "id": "objectstorage_getstorageenv",
-      "label": "getStorageEnv()",
-      "degree": 12
-    },
-    {
-      "id": "chat_cacheandemitmessage",
-      "label": "cacheAndEmitMessage()",
-      "degree": 12
     }
   ],
   "surprises": [
     {
-      "source": "Frontend Copy of Legacy SQL Social Schema",
-      "target": "Legacy SQL Social Schema",
+      "source": "cacheGetJson()",
+      "target": "getTrendingHashtagsForApi()",
       "source_files": [
-        "frontend/database/DATABASE_README.md",
-        "database/DATABASE_README.md"
+        "D:\\College\\BTech\\Final Year Project\\final-year-project\\backend\\server\\src\\lib\\cache.ts",
+        "D:\\College\\BTech\\Final Year Project\\final-year-project\\backend\\server\\src\\lib\\socialInsights.ts"
+      ],
+      "confidence": "INFERRED",
+      "relation": "calls",
+      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities; peripheral node `getTrendingHashtagsForApi()` unexpectedly reaches hub `cacheGetJson()`"
+    },
+    {
+      "source": "Legacy SQL Social Schema",
+      "target": "Frontend Copy of Legacy SQL Social Schema",
+      "source_files": [
+        "database/DATABASE_README.md",
+        "frontend/database/DATABASE_README.md"
       ],
       "confidence": "INFERRED",
       "relation": "semantically_similar_to",
       "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; semantically similar concepts with no structural link"
     },
     {
-      "source": "Frontend Copy of Legacy Database Bootstrap",
-      "target": "Legacy Database Bootstrap",
+      "source": "Legacy Database Bootstrap",
+      "target": "Frontend Copy of Legacy Database Bootstrap",
       "source_files": [
-        "frontend/database/QUICKSTART.md",
-        "database/QUICKSTART.md"
+        "database/QUICKSTART.md",
+        "frontend/database/QUICKSTART.md"
       ],
       "confidence": "INFERRED",
       "relation": "semantically_similar_to",
       "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; semantically similar concepts with no structural link"
     },
     {
-      "source": "authenticateSocket()",
-      "target": "verifyAuthToken()",
+      "source": "verifyAuthToken()",
+      "target": "authenticateSocket()",
       "source_files": [
-        "D:\\College\\BTech\\Final Year Project\\final-year-project\\backend\\server\\src\\lib\\realtime.ts",
-        "D:\\College\\BTech\\Final Year Project\\final-year-project\\backend\\server\\src\\lib\\auth.ts"
+        "D:\\College\\BTech\\Final Year Project\\final-year-project\\backend\\server\\src\\lib\\auth.ts",
+        "D:\\College\\BTech\\Final Year Project\\final-year-project\\backend\\server\\src\\lib\\realtime.ts"
       ],
       "confidence": "INFERRED",
       "relation": "calls",
       "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
     },
     {
-      "source": "maybeStartChatCacheReconciler()",
-      "target": "isRedisConfigured()",
+      "source": "isRedisConfigured()",
+      "target": "maybeStartChatCacheReconciler()",
       "source_files": [
-        "D:\\College\\BTech\\Final Year Project\\final-year-project\\backend\\server\\src\\lib\\chatCache.ts",
-        "D:\\College\\BTech\\Final Year Project\\final-year-project\\backend\\server\\src\\lib\\cache.ts"
+        "D:\\College\\BTech\\Final Year Project\\final-year-project\\backend\\server\\src\\lib\\cache.ts",
+        "D:\\College\\BTech\\Final Year Project\\final-year-project\\backend\\server\\src\\lib\\chatCache.ts"
       ],
       "confidence": "INFERRED",
       "relation": "calls",
       "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+    }
+  ],
+  "questions": [
+    {
+      "type": "bridge_node",
+      "question": "Why does `apiCreateUserPost()` connect `Community 9` to `Community 0`?",
+      "why": "High betweenness centrality (0.054) - this node is a cross-community bridge."
     },
     {
-      "source": "getCachedConversationList()",
-      "target": "cacheGetJson()",
-      "source_files": [
-        "D:\\College\\BTech\\Final Year Project\\final-year-project\\backend\\server\\src\\lib\\userCache.ts",
-        "D:\\College\\BTech\\Final Year Project\\final-year-project\\backend\\server\\src\\lib\\cache.ts"
-      ],
-      "confidence": "INFERRED",
-      "relation": "calls",
-      "why": "inferred connection - not explicitly stated in source; connects across different repos/directories; bridges separate communities"
+      "type": "bridge_node",
+      "question": "Why does `persistCreatedPost()` connect `Community 0` to `Community 9`?",
+      "why": "High betweenness centrality (0.048) - this node is a cross-community bridge."
+    },
+    {
+      "type": "bridge_node",
+      "question": "Why does `apiFetchProfilePosts()` connect `Community 9` to `Community 2`?",
+      "why": "High betweenness centrality (0.041) - this node is a cross-community bridge."
+    },
+    {
+      "type": "verify_inferred",
+      "question": "Are the 18 inferred relationships involving `cacheSetJson()` (e.g. with `setCachedRecentMessages()` and `setConversationMeta()`) actually correct?",
+      "why": "`cacheSetJson()` has 18 INFERRED edges - model-reasoned connections that need verification."
+    },
+    {
+      "type": "isolated_nodes",
+      "question": "What connects `Fixed Sidebar Header`, `Pagination Prevents Large Conversation Performance Issues`, `Local Development Setup` to the rest of the system?",
+      "why": "15 weakly-connected nodes found - possible documentation gaps or missing edges."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `Community 0` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.07 - nodes in this community are weakly interconnected."
+    },
+    {
+      "type": "low_cohesion",
+      "question": "Should `Community 1` be split into smaller, more focused modules?",
+      "why": "Cohesion score 0.09 - nodes in this community are weakly interconnected."
     }
   ]
 }
