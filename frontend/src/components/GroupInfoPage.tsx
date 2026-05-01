@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { ArrowLeft, Calendar, Crown, Flag, LogOut, Shield, UserMinus, UserPlus, Users } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft, Calendar, Crown, Flag, LogOut, MoreVertical, Shield, UserMinus, UserPlus, Users } from 'lucide-react';
 import { Student } from '../types';
 import type { GroupChatDetailsApi } from '../lib/chatApi';
 import { Button } from './ui/button';
@@ -7,6 +7,13 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { Input } from './ui/input';
+import { ProfilePhotoUpload } from './ui/profile-photo-upload';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
 
 interface GroupInfoPageProps {
   group: GroupChatDetailsApi;
@@ -18,8 +25,14 @@ interface GroupInfoPageProps {
   onLeaveGroup?: (groupId: string) => void | Promise<void>;
   onRemoveMember?: (groupId: string, memberId: string) => void | Promise<void>;
   onMakeAdmin?: (groupId: string, memberId: string) => void | Promise<void>;
+  onRemoveAdmin?: (groupId: string, memberId: string) => void | Promise<void>;
   onAddMember?: (groupId: string, memberId: string) => void | Promise<void>;
   onDeleteGroup?: (groupId: string) => void | Promise<void>;
+  onGroupPhotoChange?: (
+    groupId: string,
+    payload: { file?: File; previewUrl?: string; remove?: boolean },
+  ) => Promise<void> | void;
+  onGroupDescriptionSave?: (groupId: string, description: string) => Promise<void> | void;
 }
 
 export function GroupInfoPage({
@@ -32,11 +45,16 @@ export function GroupInfoPage({
   onLeaveGroup,
   onRemoveMember,
   onMakeAdmin,
+  onRemoveAdmin,
   onAddMember,
   onDeleteGroup,
+  onGroupPhotoChange,
+  onGroupDescriptionSave,
 }: GroupInfoPageProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddMembersOpen, setIsAddMembersOpen] = useState(false);
+  const [descriptionDraft, setDescriptionDraft] = useState(group.description ?? '');
+  const [isSavingDescription, setIsSavingDescription] = useState(false);
 
   const currentMember = group.members.find((member) => member.userId === currentUserId) ?? null;
   const isAdmin = currentMember?.role === 'owner' || currentMember?.role === 'admin';
@@ -53,9 +71,19 @@ export function GroupInfoPage({
 
   const filteredMembers = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
+    const roleRank: Record<string, number> = {
+      owner: 0,
+      admin: 1,
+      member: 2,
+    };
+
     return group.members.filter((member) => {
       if (!normalizedQuery) return true;
       return member.username.toLowerCase().includes(normalizedQuery);
+    }).sort((left, right) => {
+      const rankDiff = (roleRank[left.role] ?? 99) - (roleRank[right.role] ?? 99);
+      if (rankDiff !== 0) return rankDiff;
+      return left.username.localeCompare(right.username);
     });
   }, [group.members, searchQuery]);
 
@@ -77,6 +105,47 @@ export function GroupInfoPage({
       year: 'numeric',
     });
 
+  const formatMemberSubtitle = (
+    member: GroupChatDetailsApi['members'][number],
+    student?: Student,
+  ) => {
+    const memberBranch = typeof member.branch === 'string' ? member.branch.trim() : '';
+    const memberYear = Number(member.year);
+    const fallbackBranch = typeof student?.branch === 'string' ? student.branch.trim() : '';
+    const fallbackYear = Number(student?.year);
+
+    const branch = memberBranch || fallbackBranch;
+    const year = Number.isFinite(memberYear) && memberYear > 0 ? memberYear : fallbackYear;
+    const hasKnownBranch = branch.length > 0 && branch.toLowerCase() !== 'unknown';
+    const hasValidYear = Number.isFinite(year) && year > 0;
+    if (hasKnownBranch && hasValidYear) {
+      return `${branch} - Year ${year}`;
+    }
+    return 'Group member';
+  };
+
+  useEffect(() => {
+    setDescriptionDraft(group.description ?? '');
+  }, [group.description]);
+
+  const handleSaveDescription = async () => {
+    const normalized = descriptionDraft.trim();
+    const current = (group.description ?? '').trim();
+    if (normalized === current) return;
+
+    setIsSavingDescription(true);
+    try {
+      await onGroupDescriptionSave?.(group.id, normalized);
+    } catch (err) {
+      console.error('Failed to update group description:', err);
+      window.alert(err instanceof Error ? err.message : 'Failed to update group description');
+    } finally {
+      setIsSavingDescription(false);
+    }
+  };
+
+  const hasDescriptionChanges = descriptionDraft.trim() !== (group.description ?? '').trim();
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
@@ -91,16 +160,40 @@ export function GroupInfoPage({
           <div className="h-32 bg-gradient-to-br from-primary to-secondary" />
           <CardContent className="relative pt-0 pb-6">
             <div className="flex flex-col items-center -mt-16 mb-4">
-              <Avatar className="w-32 h-32 ring-4 ring-white shadow-xl">
-                <AvatarImage src={group.avatarUrl ?? undefined} />
-                <AvatarFallback className="text-3xl bg-gradient-to-br from-primary to-secondary text-white">
-                  {group.name[0]}
-                </AvatarFallback>
-              </Avatar>
+              <ProfilePhotoUpload
+                currentPhoto={group.avatarUrl ?? undefined}
+                name={group.name}
+                hasCustomPhoto={Boolean(group.avatarUrl)}
+                editable={isAdmin}
+                size="lg"
+                onPhotoChange={(payload) => onGroupPhotoChange?.(group.id, payload)}
+              />
               <h2 className="text-gray-900 mt-4">{group.name}</h2>
-              <p className="text-gray-600 text-center max-w-md mt-2">
-                {group.description || 'No group description yet.'}
-              </p>
+              {isAdmin ? (
+                <div className="mt-3 w-full max-w-md space-y-2">
+                  <Input
+                    value={descriptionDraft}
+                    onChange={(event) => setDescriptionDraft(event.target.value)}
+                    placeholder="Add group description"
+                    className="rounded-xl text-center"
+                    maxLength={280}
+                  />
+                  {hasDescriptionChanges && (
+                    <Button
+                      size="sm"
+                      onClick={() => void handleSaveDescription()}
+                      disabled={isSavingDescription}
+                      className="w-full rounded-xl"
+                    >
+                      {isSavingDescription ? 'Saving...' : 'Save Description'}
+                    </Button>
+                  )}
+                </div>
+              ) : (
+                <p className="text-gray-600 text-center max-w-md mt-2">
+                  {group.description || 'No group description yet.'}
+                </p>
+              )}
             </div>
 
             <div className="flex justify-center gap-8 mt-6 pt-6 border-t border-gray-100">
@@ -223,6 +316,7 @@ export function GroupInfoPage({
                 const isCurrentUser = member.userId === currentUserId;
                 const isOwner = member.role === 'owner';
                 const canModerate = isAdmin && !isCurrentUser && !isOwner;
+                const canDemoteAdmin = currentMember?.role === 'owner' && member.role === 'admin' && !isCurrentUser;
 
                 return (
                   <div key={member.userId} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors">
@@ -254,33 +348,40 @@ export function GroupInfoPage({
                           ) : null}
                         </div>
                         <p className="text-xs text-gray-500">
-                          {linkedStudent ? `${linkedStudent.branch} - Year ${linkedStudent.year}` : 'Group member'}
+                          {formatMemberSubtitle(member, linkedStudent)}
                         </p>
                       </div>
                     </button>
 
                     {canModerate && (
-                      <div className="flex items-center gap-2">
-                        {member.role === 'member' && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="rounded-full"
-                            onClick={() => void onMakeAdmin?.(group.id, member.userId)}
-                          >
-                            Make Admin
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm" className="h-9 w-9 rounded-full p-0">
+                            <MoreVertical className="h-4 w-4" />
                           </Button>
-                        )}
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="rounded-full border-destructive/20 text-destructive hover:bg-destructive/10"
-                          onClick={() => void onRemoveMember?.(group.id, member.userId)}
-                        >
-                          <UserMinus className="w-4 h-4 mr-2" />
-                          Remove
-                        </Button>
-                      </div>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44">
+                          {member.role === 'member' && (
+                            <DropdownMenuItem onClick={() => void onMakeAdmin?.(group.id, member.userId)}>
+                              <Shield className="w-4 h-4 mr-2" />
+                              Make Admin
+                            </DropdownMenuItem>
+                          )}
+                          {canDemoteAdmin && (
+                            <DropdownMenuItem onClick={() => void onRemoveAdmin?.(group.id, member.userId)}>
+                              <Shield className="w-4 h-4 mr-2" />
+                              Remove Admin
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem
+                            onClick={() => void onRemoveMember?.(group.id, member.userId)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <UserMinus className="w-4 h-4 mr-2" />
+                            Remove
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     )}
                   </div>
                 );

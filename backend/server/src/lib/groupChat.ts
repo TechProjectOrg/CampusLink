@@ -394,11 +394,19 @@ export async function getGroupChatDetails(chatId: string, viewerUserId: string) 
     currentUserRole: currentViewerMembership?.role?.toLowerCase() ?? null,
     members: members.map((member) => {
       const summary = userSummaries.get(member.user_id);
+      const branch = summary?.details.branch ?? null;
+      const year =
+        summary && summary.type === 'student'
+          ? (summary.details.year ?? null)
+          : (summary?.details.passingYear ?? null);
       return {
         userId: member.user_id,
         username: member.username,
         avatarUrl: summary?.profilePictureUrl ?? null,
         role: member.role.toLowerCase(),
+        branch,
+        year,
+        userType: summary?.type ?? null,
         joinedAt: member.joined_at.toISOString(),
         leftAt: member.left_at?.toISOString() ?? null,
       };

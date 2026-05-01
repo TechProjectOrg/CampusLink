@@ -5,6 +5,7 @@
  */
 
 import express, { type Request, Response } from 'express';
+import multer from 'multer';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
 import {
   createGroupChat,
@@ -18,9 +19,14 @@ import {
   leaveGroupChat,
 } from '../lib/groupChat';
 import { validateChatAccess, validateActiveChatAccess } from '../lib/chatMembership';
+import { deleteManagedChatMediaByUrl, uploadChatMediaToStorage } from '../lib/objectStorage';
 
 const router = express.Router();
 router.use(authenticateToken);
+const groupAvatarUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
 
 /**
  * POST /api/group-chat/create
@@ -220,6 +226,62 @@ router.put('/:chatId', async (req: AuthedRequest, res: Response) => {
     res.status(500).json({ error: 'Failed to update group chat' });
   }
 });
+
+/**
+ * PATCH /api/group-chat/:chatId/avatar
+ * Upload and update group avatar (admin/owner only)
+ */
+router.patch(
+  '/:chatId/avatar',
+  groupAvatarUpload.single('image'),
+  async (req: AuthedRequest & { file?: Express.Multer.File }, res: Response) => {
+    try {
+      const chatId = String(req.params.chatId);
+      const userId = req.auth!.userId;
+      const uploadedFile = req.file;
+
+      if (!uploadedFile) {
+        return res.status(400).json({ error: 'image file is required' });
+      }
+      if (!uploadedFile.mimetype.startsWith('image/')) {
+        return res.status(400).json({ error: 'Only image uploads are allowed' });
+      }
+
+      await validateActiveChatAccess(userId, chatId);
+      const current = await getGroupChatDetails(chatId, userId);
+
+      const nextAvatarUrl = await uploadChatMediaToStorage({
+        userId,
+        fileBuffer: uploadedFile.buffer,
+        mimeType: uploadedFile.mimetype,
+      });
+
+      await updateGroupChat(userId, chatId, { avatarUrl: nextAvatarUrl });
+
+      if (current.avatarUrl && current.avatarUrl !== nextAvatarUrl) {
+        try {
+          await deleteManagedChatMediaByUrl(current.avatarUrl);
+        } catch (storageErr) {
+          console.warn('Unable to delete previous group avatar from object storage:', storageErr);
+        }
+      }
+
+      return res.json({ avatarUrl: nextAvatarUrl });
+    } catch (err: any) {
+      console.error('Error updating group avatar:', err);
+      if (err?.message?.includes('permission')) {
+        return res.status(403).json({ error: err.message });
+      }
+      if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: 'Group avatar must be 5MB or smaller' });
+      }
+      if (err instanceof Error && err.message.startsWith('Missing required environment variable')) {
+        return res.status(500).json({ error: 'Image storage is not configured on the server' });
+      }
+      return res.status(500).json({ error: 'Failed to update group avatar' });
+    }
+  },
+);
 
 /**
  * DELETE /api/group-chat/:chatId

@@ -14,8 +14,11 @@ import {
   apiDeleteGroupChat,
   apiFetchGroupChatDetails,
   apiLeaveGroupChat,
+  apiRemoveGroupAvatar,
   apiRemoveGroupMember,
   apiStartConversation,
+  apiUpdateGroupSettings,
+  apiUpdateGroupAvatar,
   ChatMessageApi,
   GroupChatDetailsApi,
 } from '../lib/chatApi';
@@ -410,6 +413,17 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     }
   }, [auth.session?.token, refreshGroupConversationData]);
 
+  const handleRemoveGroupAdmin = useCallback(async (groupId: string, memberId: string) => {
+    const token = auth.session?.token;
+    if (!token) return;
+    try {
+      await apiChangeGroupMemberRole(groupId, memberId, 'MEMBER', token);
+      await refreshGroupConversationData(groupId);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Failed to update member role');
+    }
+  }, [auth.session?.token, refreshGroupConversationData]);
+
   const handleLeaveGroup = useCallback(async (groupId: string) => {
     const token = auth.session?.token;
     if (!token) return;
@@ -441,6 +455,31 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     }
   }, [appData, auth.session?.token]);
 
+  const handleGroupPhotoChange = useCallback(async (
+    groupId: string,
+    payload: { file?: File; previewUrl?: string; remove?: boolean },
+  ) => {
+    const token = auth.session?.token;
+    if (!token) return;
+
+    if (payload.remove) {
+      await apiRemoveGroupAvatar(groupId, token);
+    } else if (payload.file) {
+      await apiUpdateGroupAvatar(groupId, payload.file, token);
+    } else {
+      return;
+    }
+
+    await refreshGroupConversationData(groupId);
+  }, [auth.session?.token, refreshGroupConversationData]);
+
+  const handleGroupDescriptionSave = useCallback(async (groupId: string, description: string) => {
+    const token = auth.session?.token;
+    if (!token) return;
+    await apiUpdateGroupSettings(groupId, { description }, token);
+    await refreshGroupConversationData(groupId);
+  }, [auth.session?.token, refreshGroupConversationData]);
+
   if (viewingGroupInfo && !groupInfo) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center bg-white">
@@ -463,6 +502,9 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
         onLeaveGroup={handleLeaveGroup}
         onRemoveMember={handleRemoveGroupMember}
         onMakeAdmin={handleMakeGroupAdmin}
+        onRemoveAdmin={handleRemoveGroupAdmin}
+        onGroupPhotoChange={handleGroupPhotoChange}
+        onGroupDescriptionSave={handleGroupDescriptionSave}
       />
     );
   }

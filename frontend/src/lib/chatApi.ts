@@ -51,6 +51,9 @@ export interface GroupChatMemberSummaryApi {
 
 export interface GroupChatMemberApi extends GroupChatMemberSummaryApi {
   role: 'owner' | 'admin' | 'member';
+  branch: string | null;
+  year: number | null;
+  userType: 'student' | 'alumni' | null;
   joinedAt: string;
   leftAt: string | null;
 }
@@ -332,5 +335,61 @@ export async function apiDeleteGroupChat(chatId: string, token: string): Promise
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
     throw new Error(error.error || error.message || 'Failed to delete group');
+  }
+}
+
+export async function apiUpdateGroupAvatar(chatId: string, file: File, token: string): Promise<{ avatarUrl: string }> {
+  const formData = new FormData();
+  formData.append('image', file);
+
+  const response = await fetch(`${API_BASE_URL}/group-chat/${chatId}/avatar`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || error.message || 'Failed to update group avatar');
+  }
+
+  return response.json();
+}
+
+export async function apiRemoveGroupAvatar(chatId: string, token: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/group-chat/${chatId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ avatarUrl: null }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || error.message || 'Failed to remove group avatar');
+  }
+}
+
+export async function apiUpdateGroupSettings(
+  chatId: string,
+  updates: { name?: string; description?: string; avatarUrl?: string | null },
+  token: string,
+): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/group-chat/${chatId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(updates),
+  });
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.error || error.message || 'Failed to update group settings');
   }
 }
