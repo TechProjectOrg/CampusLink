@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Search, Hash, Users } from 'lucide-react';
 import type { Student } from '../types';
 import type { FollowGraph } from '../App';
@@ -43,7 +43,7 @@ function searchResultToStudent(r: SearchUserResult): Student {
 }
 
 export function SearchPage({
-  students: _students,
+  students,
   currentUserId,
   followGraph,
   onFollow,
@@ -60,6 +60,48 @@ export function SearchPage({
   const [clubResults, setClubResults] = useState<SearchClubResult[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const currentUser = students.find((student) => student.id === currentUserId);
+
+  const suggestedUsers = useMemo(() => {
+    if (!currentUser) return [];
+
+    return students
+      .filter((student) => {
+        if (student.id === currentUserId) return false;
+        const isFollowing = (followGraph.followingByUserId[currentUserId] ?? []).includes(student.id);
+        const isRequested = (followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id);
+        return !isFollowing && !isRequested;
+      })
+      .map((student) => {
+        const sharedSkills = student.skills.filter((skill) => currentUser.skills.includes(skill));
+        const sharedInterests = student.interests.filter((interest) => currentUser.interests.includes(interest));
+        const branchMatch = student.branch === currentUser.branch;
+        const yearMatch = student.year === currentUser.year;
+        const score = (branchMatch ? 4 : 0)
+          + (yearMatch ? 2 : 0)
+          + sharedSkills.length * 2
+          + sharedInterests.length;
+        const createdAtMs = student.createdAt ? Date.parse(student.createdAt) : Number.NaN;
+
+        return {
+          student,
+          sharedSkills,
+          sharedInterests,
+          branchMatch,
+          yearMatch,
+          score,
+          createdAtMs: Number.isFinite(createdAtMs) ? createdAtMs : 0,
+        };
+      })
+      .sort((left, right) => {
+        if (right.branchMatch !== left.branchMatch) return Number(right.branchMatch) - Number(left.branchMatch);
+        if (right.yearMatch !== left.yearMatch) return Number(right.yearMatch) - Number(left.yearMatch);
+        if (right.score !== left.score) return right.score - left.score;
+        if (right.createdAtMs !== left.createdAtMs) return right.createdAtMs - left.createdAtMs;
+        return left.student.name.localeCompare(right.student.name);
+      })
+      .slice(0, 6);
+  }, [currentUser, currentUserId, followGraph.followingByUserId, followGraph.outgoingRequestsByUserId, students]);
 
   useEffect(() => {
     setSearchQuery(initialSearchQuery);
@@ -155,6 +197,84 @@ export function SearchPage({
         )}
 
         <div>
+          {!searchQuery.trim() && !isLoading && suggestedUsers.length > 0 && (
+            <Card className="border-primary/10 shadow-lg rounded-2xl animate-slide-in-up mb-6">
+              <CardContent className="p-6 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Users className="w-5 h-5 text-primary" />
+                  <span className="text-gray-900">Suggested Users</span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {suggestedUsers.map((suggestion, index) => {
+                    const { student, sharedSkills, sharedInterests } = suggestion;
+
+                    return (
+                      <Card
+                        key={student.id}
+                        className="hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 border-primary/10 rounded-2xl animate-slide-in-up"
+                        style={{ animationDelay: `${index * 50}ms` }}
+                      >
+                        <CardContent className="p-5 space-y-4">
+                          <div className="flex items-start gap-3">
+                            <Avatar className="w-14 h-14 ring-2 ring-primary/20 transition-all duration-300 hover:ring-primary/40">
+                              <AvatarImage src={student.avatar} />
+                              <AvatarFallback>{student.name[0]}</AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 min-w-0">
+                              <h3 className="text-gray-900 truncate">{student.name}</h3>
+                              <p className="text-sm text-gray-600">{student.branch}</p>
+                              {student.year > 0 && <p className="text-sm text-secondary">Year {student.year}</p>}
+                              <p className="text-xs text-gray-500 mt-1">
+                                {sharedSkills.length > 0
+                                  ? `Shared skills: ${sharedSkills.slice(0, 2).join(', ')}`
+                                  : sharedInterests.length > 0
+                                    ? `Shared interests: ${sharedInterests.slice(0, 2).join(', ')}`
+                                    : 'New member'}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-4 text-sm text-gray-600 pt-2 border-t border-primary/10">
+                            <div>
+                              <span className="text-primary">{(followGraph.followersByUserId[student.id] ?? []).length}</span>
+                              <span className="ml-1">followers</span>
+                            </div>
+                            <div>
+                              <span className="text-primary">{student.projects.length}</span>
+                              <span className="ml-1">projects</span>
+                            </div>
+                          </div>
+
+                          <div className="flex gap-2 items-center">
+                            <button
+                              type="button"
+                              onClick={() => onViewProfile(student.id)}
+                              className="flex-1 border border-primary/20 hover:border-primary transition-all duration-300 hover:scale-105 rounded-xl px-3 py-2 text-sm"
+                            >
+                              View Profile
+                            </button>
+                            <div className="flex-shrink-0">
+                              <FollowButton
+                                targetName={student.name}
+                                accountType={student.accountType}
+                                isFollowing={(followGraph.followingByUserId[currentUserId] ?? []).includes(student.id)}
+                                isFollower={(followGraph.followersByUserId[currentUserId] ?? []).includes(student.id)}
+                                requestStatus={(followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id) ? 'requested' : 'none'}
+                                onFollow={() => onFollow(student.id, student.accountType)}
+                                onUnfollow={() => onUnfollow(student.id)}
+                                onCancelRequest={() => onCancelRequest(student.id)}
+                              />
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           {hasSearched && !isLoading && (
             <p className="text-gray-600 mb-4 animate-fade-in">
               {filteredStudents.length} {filteredStudents.length === 1 ? 'user' : 'users'} found
@@ -218,7 +338,7 @@ export function SearchPage({
             ))}
           </div>
 
-          {!hasSearched && (
+          {!hasSearched && searchQuery.trim().length > 0 && (
             <Card className="border-primary/10 rounded-2xl shadow-lg animate-fade-in">
               <CardContent className="p-12 text-center">
                 <div className="w-16 h-16 gradient-primary rounded-2xl mx-auto mb-4 flex items-center justify-center">
