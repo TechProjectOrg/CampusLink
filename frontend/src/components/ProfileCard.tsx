@@ -10,9 +10,11 @@ interface ProfileCardProps {
   followerCount: number;
   followingCount: number;
   onViewProfile: () => void;
+  onEditProfile: () => void;
+  onViewNetwork: () => void;
 }
 
-export function ProfileCard({ student, followerCount, followingCount, onViewProfile }: ProfileCardProps) {
+export function ProfileCard({ student, followerCount, followingCount, onViewProfile, onEditProfile, onViewNetwork }: ProfileCardProps) {
   return (
     <div className="space-y-4">
       {/* Main Profile Card */}
@@ -102,7 +104,11 @@ export function ProfileCard({ student, followerCount, followingCount, onViewProf
             <Briefcase className="w-5 h-5 text-primary" />
             <h4 className="text-gray-900">Quick Actions</h4>
           </div>
-          <button className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-all duration-300 hover:scale-105 text-left">
+          <button
+            type="button"
+            onClick={onEditProfile}
+            className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-all duration-300 hover:scale-105 text-left"
+          >
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
               <Edit className="w-5 h-5 text-primary" />
             </div>
@@ -111,7 +117,11 @@ export function ProfileCard({ student, followerCount, followingCount, onViewProf
               <p className="text-xs text-gray-500">Update your information</p>
             </div>
           </button>
-          <button className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-all duration-300 hover:scale-105 text-left">
+          <button
+            type="button"
+            onClick={onViewNetwork}
+            className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-all duration-300 hover:scale-105 text-left"
+          >
             <div className="w-10 h-10 rounded-xl bg-secondary/10 flex items-center justify-center flex-shrink-0">
               <Users className="w-5 h-5 text-secondary" />
             </div>

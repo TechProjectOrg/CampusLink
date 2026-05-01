@@ -2213,6 +2213,8 @@ export default function App() {
                 followerCount={currentFollowerCount}
                 followingCount={currentFollowingCount}
                 onViewProfile={() => handleViewProfile(currentUserId)}
+                onEditProfile={() => navigate('settings')}
+                onViewNetwork={() => navigate('network')}
               />
             </div>
             {/* Feed Section (Center) - Expands to fill space */}
