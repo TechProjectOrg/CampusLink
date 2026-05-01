@@ -649,6 +649,7 @@ export default function App() {
   const [openedPostRepliesByCommentId, setOpenedPostRepliesByCommentId] = useState<Record<string, ReplyThreadState>>({});
   const [focusedCommentId, setFocusedCommentId] = useState<string | null>(null);
   const [hashtagPageTag, setHashtagPageTag] = useState<string | null>(null);
+  const [clubPageSlug, setClubPageSlug] = useState<string | null>(null);
 
   const prevAuthenticatedRef = useRef<boolean>(auth.isAuthenticated);
   const openedPostCommentsRef = useRef<DiscussionPageState<Comment>>(createInitialDiscussionPageState<Comment>());
@@ -712,6 +713,7 @@ export default function App() {
             setOpenedPostRepliesByCommentId({});
             setFocusedCommentId(null);
             setHashtagPageTag(null);
+            setClubPageSlug(null);
         } else if (mainPath === 'post' && pathParts[1]) {
             setOpenedPostId(pathParts[1]);
             const matched = opportunities.find((item) => item.id === pathParts[1]) ?? null;
@@ -721,6 +723,7 @@ export default function App() {
             setViewingProfileId(null);
             setFocusedCommentId(searchParams.get('commentId')?.trim() || null);
             setHashtagPageTag(null);
+            setClubPageSlug(null);
         } else if (mainPath === 'hashtag' && pathParts[1]) {
             const decodedTag = decodeURIComponent(pathParts[1]).trim().replace(/^#+/, '');
             setHashtagPageTag(decodedTag || null);
@@ -730,6 +733,17 @@ export default function App() {
             setOpenedPostComments(createInitialDiscussionPageState<Comment>());
             setOpenedPostRepliesByCommentId({});
             setFocusedCommentId(null);
+            setClubPageSlug(null);
+        } else if (mainPath === 'clubs' && pathParts[1]) {
+            const decodedClubSlug = decodeURIComponent(pathParts[1]).trim();
+            setClubPageSlug(decodedClubSlug || null);
+            setViewingProfileId(null);
+            setOpenedPostId(null);
+            setOpenedPost(null);
+            setOpenedPostComments(createInitialDiscussionPageState<Comment>());
+            setOpenedPostRepliesByCommentId({});
+            setFocusedCommentId(null);
+            setHashtagPageTag(null);
         } else {
             setViewingProfileId(null);
             setOpenedPostId(null);
@@ -738,6 +752,7 @@ export default function App() {
             setOpenedPostRepliesByCommentId({});
             setFocusedCommentId(null);
             setHashtagPageTag(null);
+            setClubPageSlug(null);
         }
     };
 
@@ -758,10 +773,10 @@ export default function App() {
     tab: string,
     profileId?: string,
     postId?: string,
-    options?: { commentId?: string; hashtag?: string }
+    options?: { commentId?: string; hashtag?: string; clubSlug?: string }
   ) => {
     let path = `/${tab}`;
-    const state: { tab: string; profileId?: string; postId?: string; commentId?: string; hashtag?: string } = { tab };
+    const state: { tab: string; profileId?: string; postId?: string; commentId?: string; hashtag?: string; clubSlug?: string } = { tab };
     if (tab === 'profile' && profileId) {
         path += `/${profileId}`;
         state.profileId = profileId;
@@ -796,6 +811,19 @@ export default function App() {
         setOpenedPostComments(createInitialDiscussionPageState<Comment>());
         setOpenedPostRepliesByCommentId({});
         setFocusedCommentId(null);
+        setClubPageSlug(null);
+    } else if (tab === 'clubs' && options?.clubSlug) {
+        const normalizedClubSlug = options.clubSlug.trim();
+        path += `/${encodeURIComponent(normalizedClubSlug)}`;
+        state.clubSlug = normalizedClubSlug;
+        setClubPageSlug(normalizedClubSlug || null);
+        setViewingProfileId(null);
+        setOpenedPostId(null);
+        setOpenedPost(null);
+        setOpenedPostComments(createInitialDiscussionPageState<Comment>());
+        setOpenedPostRepliesByCommentId({});
+        setFocusedCommentId(null);
+        setHashtagPageTag(null);
     } else if (tab !== 'profile') {
         setViewingProfileId(null);
         if (tab !== 'post') {
@@ -807,6 +835,9 @@ export default function App() {
         }
         if (tab !== 'hashtag') {
           setHashtagPageTag(null);
+        }
+        if (tab !== 'clubs') {
+          setClubPageSlug(null);
         }
     }
     window.history.pushState(state, '', path);
@@ -2057,7 +2088,11 @@ export default function App() {
           }
           break;
         case 'club':
-          navigate('clubs');
+          if (entityId) {
+            navigate('clubs', undefined, undefined, { clubSlug: entityId });
+          } else {
+            navigate('clubs');
+          }
           break;
         default:
           navigate('notifications');
@@ -2247,6 +2282,7 @@ export default function App() {
           <ClubsPage
             students={students}
             currentUserId={currentUserId}
+            initialClubSlug={clubPageSlug}
             onViewProfile={handleViewProfile}
           />
           ) : activeTab === 'profile' ? (

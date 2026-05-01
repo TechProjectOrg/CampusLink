@@ -227,6 +227,18 @@ export async function apiApproveClubMember(clubId: string, userId: string, token
   if (!response.ok && response.status !== 204) throw new Error(await parseErrorMessage(response));
 }
 
+export async function apiInviteClubMember(clubId: string, userId: string, token?: string): Promise<void> {
+  const response = await safeFetch(`${API_BASE}/clubs/${encodeURIComponent(clubId)}/invite`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(token),
+    },
+    body: JSON.stringify({ userId }),
+  });
+  if (!response.ok && response.status !== 204) throw new Error(await parseErrorMessage(response));
+}
+
 export async function apiRemoveClubMember(
   clubId: string,
   userId: string,

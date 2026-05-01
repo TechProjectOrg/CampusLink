@@ -309,9 +309,14 @@ router.post(
   ]),
   async (req: Request, res: Response) => {
     const viewerUserId = getAuthedUserId(req);
-    const payload = typeof req.body.payload === 'string'
-      ? JSON.parse(req.body.payload)
-      : req.body;
+    let payload: any;
+    try {
+      payload = typeof req.body.payload === 'string'
+        ? JSON.parse(req.body.payload)
+        : req.body;
+    } catch (_err) {
+      return res.status(400).json({ message: 'Invalid create club payload' });
+    }
     const name = String(payload?.name ?? '').trim();
     const shortDescription = String(payload?.shortDescription ?? '').trim() || null;
     const description = String(payload?.description ?? '').trim() || null;
@@ -372,7 +377,9 @@ router.post(
             avatar_url,
             cover_image_url,
             created_by_user_id,
-            primary_category_id
+            primary_category_id,
+            created_at,
+            updated_at
           )
           VALUES (
             ${name},
@@ -383,7 +390,9 @@ router.post(
             ${avatarUrl},
             ${coverImageUrl},
             ${viewerUserId},
-            ${category.clubCategoryId}
+            ${category.clubCategoryId},
+            NOW(),
+            NOW()
           )
           RETURNING club_id
         `;
@@ -394,12 +403,14 @@ router.post(
         }
 
         await tx.$queryRaw`
-          INSERT INTO club_memberships (club_id, user_id, role, status, joined_at)
+          INSERT INTO club_memberships (club_id, user_id, role, status, joined_at, created_at, updated_at)
           VALUES (
             ${clubId},
             ${viewerUserId},
             CAST('owner' AS "ClubMembershipRole"),
             CAST('active' AS "ClubMembershipStatus"),
+            NOW(),
+            NOW(),
             NOW()
           )
         `;
@@ -422,6 +433,15 @@ router.post(
 
       if (isUniqueConstraintError(err, 'clubs_slug_key')) {
         return res.status(409).json({ message: 'A club with a similar name already exists. Try a different name.' });
+      }
+
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2010') {
+        const metaText = JSON.stringify(err.meta ?? {});
+        if (metaText.includes('ClubPrivacy') || metaText.toLowerCase().includes('invalid input value for enum')) {
+          return res.status(500).json({
+            message: 'Database schema is missing private club support. Run prisma migrations and restart backend.',
+          });
+        }
       }
 
       console.error('Error creating club:', err);
@@ -760,19 +780,22 @@ router.post('/:clubId/join', async (req: Request<{ clubId: string }>, res: Respo
   }
 
   try {
-    if (clubRow.privacy === 'private') {
+    const isInvited = clubRow.membership_status === 'invited';
+    if (clubRow.privacy === 'private' && !isInvited) {
       return res.status(403).json({ message: 'This club is private and invite-only' });
     }
 
-    const nextStatus = clubRow.privacy === 'open' ? 'active' : 'pending';
+    const nextStatus = clubRow.privacy === 'open' || isInvited ? 'active' : 'pending';
     await prisma.$queryRaw`
-      INSERT INTO club_memberships (club_id, user_id, role, status, joined_at)
+      INSERT INTO club_memberships (club_id, user_id, role, status, joined_at, created_at, updated_at)
       VALUES (
         ${clubRow.club_id},
         ${viewerUserId},
         CAST('member' AS "ClubMembershipRole"),
         CAST(${nextStatus} AS "ClubMembershipStatus"),
-        ${nextStatus === 'active' ? Prisma.sql`NOW()` : null}
+        ${nextStatus === 'active' ? Prisma.sql`NOW()` : null},
+        NOW(),
+        NOW()
       )
       ON CONFLICT (club_id, user_id)
       DO UPDATE SET
@@ -860,12 +883,14 @@ router.post('/:clubId/invite', async (req: Request<{ clubId: string }>, res: Res
 
   try {
     await prisma.$queryRaw`
-      INSERT INTO club_memberships (club_id, user_id, role, status)
+      INSERT INTO club_memberships (club_id, user_id, role, status, created_at, updated_at)
       VALUES (
         ${req.params.clubId},
         ${targetUserId},
         CAST('member' AS "ClubMembershipRole"),
-        CAST('invited' AS "ClubMembershipStatus")
+        CAST('invited' AS "ClubMembershipStatus"),
+        NOW(),
+        NOW()
       )
       ON CONFLICT (club_id, user_id)
       DO UPDATE SET

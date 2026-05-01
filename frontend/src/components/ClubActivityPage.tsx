@@ -1,20 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Crown, Lock, MoreVertical, Plus, ShieldCheck, TrendingUp, Users } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Crown, Loader2, Lock, MoreVertical, Plus, Search, ShieldCheck, TrendingUp, UserPlus, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { userPostToOpportunity } from '../context/AppDataContext';
 import { apiCreateUserPost } from '../lib/postsApi';
 import {
+  apiJoinClub,
   apiApproveClubMember,
   apiDeleteClub,
   apiFetchClub,
   apiFetchClubMembers,
   apiFetchClubPosts,
+  apiInviteClubMember,
   apiRemoveClubMember,
   apiUpdateClub,
   apiUpdateClubMemberRole,
   type ClubMember,
 } from '../lib/clubsApi';
+import { apiGetFollowGraph, apiSearchUsers, type SearchUserResult } from '../lib/networkApi';
 import type { Club, Student } from '../types';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
@@ -41,6 +44,15 @@ interface ClubActivityPageProps {
   onViewProfile?: (studentId: string) => void;
 }
 
+interface InviteCandidate {
+  userId: string;
+  username: string;
+  profilePictureUrl: string | null;
+  branch: string | null;
+  year: number | null;
+  isConnected: boolean;
+}
+
 export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, onViewProfile }: ClubActivityPageProps) {
   const auth = useAuth();
   const [club, setClub] = useState<Club | null>(null);
@@ -51,6 +63,12 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
 
   const [isCreatePostOpen, setIsCreatePostOpen] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
+  const [isInviteOpen, setIsInviteOpen] = useState(false);
+  const [inviteSearch, setInviteSearch] = useState('');
+  const [isSearchingInviteUsers, setIsSearchingInviteUsers] = useState(false);
+  const [inviteBusyUserId, setInviteBusyUserId] = useState<string | null>(null);
+  const [inviteSearchResults, setInviteSearchResults] = useState<SearchUserResult[]>([]);
+  const [connectedUserIds, setConnectedUserIds] = useState<Set<string>>(new Set());
 
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [isDeletingClub, setIsDeletingClub] = useState(false);
@@ -116,6 +134,122 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
     }
     return lookup;
   }, [students]);
+
+  useEffect(() => {
+    if (!auth.session?.token || !isInviteOpen) return;
+    let isMounted = true;
+    apiGetFollowGraph(auth.session.token)
+      .then((graph) => {
+        if (!isMounted) return;
+        const connected = new Set<string>();
+        for (const user of graph.followers ?? []) connected.add(user.userId);
+        for (const user of graph.following ?? []) connected.add(user.userId);
+        connected.delete(currentUserId);
+        setConnectedUserIds(connected);
+      })
+      .catch(() => {
+        if (isMounted) setConnectedUserIds(new Set());
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [auth.session?.token, currentUserId, isInviteOpen]);
+
+  useEffect(() => {
+    if (!isInviteOpen || !auth.session?.token) return;
+    const q = inviteSearch.trim();
+    if (!q) {
+      setInviteSearchResults([]);
+      setIsSearchingInviteUsers(false);
+      return;
+    }
+    let isMounted = true;
+    const timer = setTimeout(async () => {
+      setIsSearchingInviteUsers(true);
+      try {
+        const rows = await apiSearchUsers(q, auth.session?.token, 50, 0);
+        if (isMounted) {
+          setInviteSearchResults(rows);
+        }
+      } catch {
+        if (isMounted) {
+          setInviteSearchResults([]);
+        }
+      } finally {
+        if (isMounted) {
+          setIsSearchingInviteUsers(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [auth.session?.token, inviteSearch, isInviteOpen]);
+
+  const existingMemberIds = useMemo(() => new Set(members.map((member) => member.userId)), [members]);
+
+  const inviteCandidates = useMemo(() => {
+    const pushCandidate = (map: Map<string, InviteCandidate>, candidate: InviteCandidate) => {
+      if (candidate.userId === currentUserId) return;
+      if (existingMemberIds.has(candidate.userId)) return;
+      if (map.has(candidate.userId)) return;
+      map.set(candidate.userId, candidate);
+    };
+
+    const candidateMap = new Map<string, InviteCandidate>();
+
+    if (inviteSearch.trim()) {
+      for (const user of inviteSearchResults) {
+        pushCandidate(candidateMap, {
+          userId: user.userId,
+          username: user.username,
+          profilePictureUrl: user.profilePictureUrl,
+          branch: user.branch,
+          year: user.year,
+          isConnected: connectedUserIds.has(user.userId),
+        });
+      }
+    } else {
+      for (const student of students) {
+        pushCandidate(candidateMap, {
+          userId: student.id,
+          username: student.name || student.username,
+          profilePictureUrl: student.avatar ?? null,
+          branch: student.branch ?? null,
+          year: student.year ?? null,
+          isConnected: connectedUserIds.has(student.id),
+        });
+      }
+    }
+
+    const connected: InviteCandidate[] = [];
+    const others: InviteCandidate[] = [];
+    for (const candidate of candidateMap.values()) {
+      if (candidate.isConnected) connected.push(candidate);
+      else others.push(candidate);
+    }
+
+    connected.sort((a, b) => a.username.localeCompare(b.username));
+    others.sort((a, b) => a.username.localeCompare(b.username));
+
+    return { connected, others };
+  }, [connectedUserIds, currentUserId, existingMemberIds, inviteSearch, inviteSearchResults, students]);
+
+  const handleInviteMember = async (userId: string) => {
+    if (!club) return;
+    setInviteBusyUserId(userId);
+    try {
+      await apiInviteClubMember(club.id, userId, auth.session?.token);
+      await loadClubData();
+      toast.success('Invitation sent');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to invite member');
+    } finally {
+      setInviteBusyUserId(null);
+    }
+  };
 
   const handleCreateClubPostFromModal = async (draft: any) => {
     if (!club) return;
@@ -256,10 +390,33 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
   }
 
   const canManageClub = Boolean(club.permissions?.canManageClub);
+  const canInviteMembers = Boolean(club.permissions?.canInviteMembers);
   const canModerateMembers = Boolean(club.permissions?.canModerateMembers);
   const membershipRole = club.permissions?.membershipRole;
+  const canShowRequestsTab = canManageClub && club.privacy !== 'private';
   const pendingMembers = members.filter((member) => member.status === 'pending');
+  const invitedMembers = members.filter((member) => member.status === 'invited');
   const activeMembers = members.filter((member) => member.status === 'active');
+  const isInvited = club.membership?.status === 'invited' || club.permissions?.membershipStatus === 'invited';
+  const isPendingMembership = club.membership?.status === 'pending' || club.permissions?.membershipStatus === 'pending';
+  const isActiveMember = club.membership?.status === 'active' || club.permissions?.membershipStatus === 'active';
+  const canAccessRestrictedContent = isActiveMember || club.privacy === 'open';
+  const isPrivateInvitePreview = !canAccessRestrictedContent;
+
+  const handleJoinCurrentClub = async () => {
+    if (!club) return;
+    setIsPosting(true);
+    try {
+      const updated = await apiJoinClub(club.id, auth.session?.token);
+      setClub(updated);
+      await loadClubData();
+      toast.success('You joined the club');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to join club');
+    } finally {
+      setIsPosting(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
@@ -267,11 +424,13 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
         <div className="animate-slide-in-down">
           <Card className="overflow-hidden border-0 shadow-xl">
             <div className="relative h-48 md:h-64 bg-gradient-to-r from-blue-500 to-purple-600">
-              <ImageWithFallback
-                src={club.coverImageUrl ?? club.avatarUrl ?? undefined}
-                alt={club.name}
-                className="w-full h-full object-cover opacity-40"
-              />
+              {club.coverImageUrl || club.avatarUrl ? (
+                <ImageWithFallback
+                  src={club.coverImageUrl ?? club.avatarUrl ?? undefined}
+                  alt={club.name}
+                  className="w-full h-full object-cover opacity-40"
+                />
+              ) : null}
               <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
               <div className="absolute top-4 left-4 right-4 flex items-center justify-between z-10">
                 <Button variant="ghost" onClick={onBack} className="bg-black/30 text-white hover:bg-black/45 hover:text-white transition-all">
@@ -296,29 +455,51 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
               <div className="absolute bottom-6 left-6 right-6">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="w-12 h-12 rounded-full border border-white/40 bg-white/15 overflow-hidden shrink-0">
-                    <ImageWithFallback
-                      src={club.avatarUrl ?? club.coverImageUrl ?? undefined}
-                      alt={`${club.name} logo`}
-                      className="w-full h-full object-cover"
-                    />
+                    {club.avatarUrl || club.coverImageUrl ? (
+                      <ImageWithFallback
+                        src={club.avatarUrl ?? club.coverImageUrl ?? undefined}
+                        alt={`${club.name} logo`}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : null}
                   </div>
                   <div className="min-w-0">
                     <h1 className="text-white truncate">{club.name}</h1>
                     <Badge className="mt-1 bg-white/15 text-white border-white/20">Sports</Badge>
                   </div>
+                  {!isActiveMember ? (
+                    <Button
+                      size="sm"
+                      onClick={() => void handleJoinCurrentClub()}
+                      disabled={isPendingMembership || isPosting}
+                      className="bg-white text-primary hover:bg-white/90 shrink-0"
+                    >
+                      {isPendingMembership
+                        ? 'Request Pending'
+                        : (isInvited ? 'Join Group' : (club.privacy === 'request' ? 'Request to Join' : 'Join Group'))}
+                    </Button>
+                  ) : null}
                   {club.privacy === 'private' ? <Lock className="w-4 h-4 text-white shrink-0" /> : null}
                 </div>
                 <p className="text-white/90 text-sm md:text-base mb-4">{club.description ?? club.shortDescription}</p>
-                <div className="flex flex-wrap items-center gap-4 text-white/90 text-sm">
-                  <div className="flex items-center gap-2">
-                    <Users className="w-4 h-4" />
-                    <span>{club.memberCount} members</span>
+                {canAccessRestrictedContent ? (
+                  <div className="flex flex-wrap items-center gap-4 text-white/90 text-sm">
+                    <div className="flex items-center gap-2">
+                      <Users className="w-4 h-4" />
+                      <span>{club.memberCount} members</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4" />
+                      <span>{club.postCount} posts</span>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <TrendingUp className="w-4 h-4" />
-                    <span>{club.postCount} posts</span>
+                ) : null}
+                {isInvited ? (
+                  <div className="mt-3 text-xs text-white/80 flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" />
+                    You are invited to this club
                   </div>
-                </div>
+                ) : null}
               </div>
             </div>
           </Card>
@@ -326,15 +507,26 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
 
         {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
+        {isPrivateInvitePreview ? (
+          <Card className="border border-primary/10 shadow-sm gap-0">
+            <CardContent className="px-5 py-4 !pb-4 md:px-6 md:py-4">
+              <p className="text-gray-700 leading-relaxed">
+                This is a restricted club. Join to view posts and member information.
+              </p>
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {!isPrivateInvitePreview ? (
         <Tabs defaultValue="feed" className="space-y-6">
-          <TabsList className={`grid w-full ${canManageClub ? 'grid-cols-3' : 'grid-cols-2'} bg-white shadow-sm border border-gray-200`}>
+          <TabsList className={`grid w-full ${canShowRequestsTab ? 'grid-cols-3' : 'grid-cols-2'} bg-white shadow-sm border border-gray-200`}>
             <TabsTrigger value="feed" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-secondary data-[state=active]:text-white">
               Feed
             </TabsTrigger>
             <TabsTrigger value="members" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-secondary data-[state=active]:text-white">
               Members
             </TabsTrigger>
-            {canManageClub ? (
+            {canShowRequestsTab ? (
               <TabsTrigger value="requests" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-secondary data-[state=active]:text-white">
                 Requests
               </TabsTrigger>
@@ -373,6 +565,22 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
           </TabsContent>
 
           <TabsContent value="members" className="space-y-4">
+            {club.privacy === 'private' && canInviteMembers ? (
+              <Card className="border border-primary/10 shadow-sm">
+                <CardContent className="p-4 md:p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-gray-900">Invite Members</p>
+                      <p className="text-sm text-gray-600">Invite-only club: add members directly.</p>
+                    </div>
+                    <Button onClick={() => setIsInviteOpen(true)} className="bg-gradient-to-r from-primary to-secondary">
+                      <UserPlus className="w-4 h-4 mr-2" />
+                      Invite
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {activeMembers.map((member) => {
                 const profile = memberLookup.get(member.userId);
@@ -415,9 +623,30 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
                 );
               })}
             </div>
+            {canModerateMembers && invitedMembers.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-sm text-gray-600">Invited (not joined yet)</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {invitedMembers.map((member) => (
+                    <Card key={member.clubMembershipId} className="border border-primary/10 shadow-sm">
+                      <CardContent className="p-4 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Avatar className="w-10 h-10">
+                            <AvatarImage src={member.profilePictureUrl ?? undefined} />
+                            <AvatarFallback>{member.username[0]}</AvatarFallback>
+                          </Avatar>
+                          <p className="text-sm text-gray-900 truncate">{member.username}</p>
+                        </div>
+                        <Badge variant="outline">Invited</Badge>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </TabsContent>
 
-          {canManageClub ? (
+          {canShowRequestsTab ? (
             <TabsContent value="requests" className="space-y-4">
               {pendingMembers.length === 0 ? <p className="text-sm text-gray-500">No pending requests.</p> : null}
               {pendingMembers.map((member) => (
@@ -453,6 +682,107 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
           ) : null}
 
         </Tabs>
+        ) : null}
+        <Dialog open={isInviteOpen} onOpenChange={(next) => !inviteBusyUserId && setIsInviteOpen(next)}>
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto max-w-[95vw]">
+            <DialogHeader>
+              <DialogTitle>Invite Members</DialogTitle>
+              <DialogDescription>
+                Connected users are shown first, then other users. Search finds users from the database.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="relative">
+                <Search className="pointer-events-none w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <Input
+                  value={inviteSearch}
+                  onChange={(event) => setInviteSearch(event.target.value)}
+                  placeholder="Search users by name or email"
+                  className="pl-11"
+                />
+              </div>
+
+              {isSearchingInviteUsers ? (
+                <div className="flex items-center gap-2 text-sm text-gray-500">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Searching users...
+                </div>
+              ) : null}
+
+              {inviteCandidates.connected.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-600">Connected users</p>
+                  <div className="space-y-2">
+                    {inviteCandidates.connected.map((user) => (
+                      <Card key={user.userId} className="border border-primary/10">
+                        <CardContent className="p-3 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <Avatar className="w-10 h-10">
+                              <AvatarImage src={user.profilePictureUrl ?? undefined} />
+                              <AvatarFallback>{user.username[0]}</AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <p className="text-sm text-gray-900 truncate">{user.username}</p>
+                              <p className="text-xs text-gray-500 truncate">
+                                {user.branch ?? 'Unknown branch'}{user.year ? ` · Year ${user.year}` : ''}
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            className="bg-gradient-to-r from-primary to-secondary"
+                            onClick={() => void handleInviteMember(user.userId)}
+                            disabled={inviteBusyUserId === user.userId}
+                          >
+                            {inviteBusyUserId === user.userId ? 'Inviting...' : 'Invite'}
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {inviteCandidates.others.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-600">Other users</p>
+                  <div className="space-y-2">
+                    {inviteCandidates.others.map((user) => (
+                      <Card key={user.userId} className="border border-primary/10">
+                        <CardContent className="p-3 flex items-center justify-between gap-3">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <Avatar className="w-10 h-10">
+                              <AvatarImage src={user.profilePictureUrl ?? undefined} />
+                              <AvatarFallback>{user.username[0]}</AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0">
+                              <p className="text-sm text-gray-900 truncate">{user.username}</p>
+                              <p className="text-xs text-gray-500 truncate">
+                                {user.branch ?? 'Unknown branch'}{user.year ? ` · Year ${user.year}` : ''}
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void handleInviteMember(user.userId)}
+                            disabled={inviteBusyUserId === user.userId}
+                          >
+                            {inviteBusyUserId === user.userId ? 'Inviting...' : 'Invite'}
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              {!isSearchingInviteUsers && inviteCandidates.connected.length === 0 && inviteCandidates.others.length === 0 ? (
+                <p className="text-sm text-gray-500">No users available to invite.</p>
+              ) : null}
+            </div>
+          </DialogContent>
+        </Dialog>
         {canManageClub ? (
           <Dialog open={isSettingsOpen} onOpenChange={(nextOpen) => !isSavingSettings && setIsSettingsOpen(nextOpen)}>
             <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto max-w-[95vw]">

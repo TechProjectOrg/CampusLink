@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Lock, UserPlus, Users } from 'lucide-react';
+import { Lock, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import type { Club, Student } from '../types';
 import { apiFetchClubs, apiJoinClub } from '../lib/clubsApi';
@@ -16,19 +16,26 @@ interface ClubsPageProps {
   clubs?: Club[];
   students: Student[];
   currentUserId: string;
+  initialClubSlug?: string | null;
   onJoinClub?: (clubId: string) => void;
   onLeaveClub?: (clubId: string) => void;
   onCreateClub?: (club: Club) => void;
   onViewProfile?: (studentId: string) => void;
 }
 
-export function ClubsPage({ students, currentUserId, onCreateClub, onViewProfile }: ClubsPageProps) {
+export function ClubsPage({ students, currentUserId, initialClubSlug = null, onCreateClub, onViewProfile }: ClubsPageProps) {
   const auth = useAuth();
   const [clubs, setClubs] = useState<Club[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedClubSlug, setSelectedClubSlug] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (initialClubSlug?.trim()) {
+      setSelectedClubSlug(initialClubSlug.trim());
+    }
+  }, [initialClubSlug]);
 
   useEffect(() => {
     let isMounted = true;
@@ -123,22 +130,34 @@ export function ClubsPage({ students, currentUserId, onCreateClub, onViewProfile
               const isPending = membershipStatus === 'pending' || membershipStatus === 'invited';
 
               return (
-                <Card key={club.id} className="overflow-hidden hover-lift transition-all duration-300 shadow-sm hover:shadow-xl border border-primary/10">
+                <Card
+                  key={club.id}
+                  className="overflow-hidden hover-lift transition-all duration-300 shadow-sm hover:shadow-xl border border-primary/10 cursor-pointer"
+                  onClick={() => setSelectedClubSlug(club.slug)}
+                >
                   <div className="relative h-32 md:h-40 bg-gradient-to-r from-blue-500 to-purple-600">
-                    <ImageWithFallback
-                      src={club.coverImageUrl ?? club.avatarUrl ?? undefined}
-                      alt={club.name}
-                      className="w-full h-full object-cover opacity-60"
-                    />
+                    {club.coverImageUrl || club.avatarUrl ? (
+                      <ImageWithFallback
+                        src={club.coverImageUrl ?? club.avatarUrl ?? undefined}
+                        alt={club.name}
+                        className="w-full h-full object-cover opacity-60"
+                      />
+                    ) : null}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
                     <div className="absolute bottom-3 md:bottom-4 left-3 md:left-4 right-3 md:right-4">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full border border-white/40 bg-white/15 overflow-hidden shrink-0">
-                          <ImageWithFallback
-                            src={club.avatarUrl ?? club.coverImageUrl ?? undefined}
-                            alt={`${club.name} logo`}
-                            className="w-full h-full object-cover"
-                          />
+                          {club.avatarUrl || club.coverImageUrl ? (
+                            <ImageWithFallback
+                              src={club.avatarUrl ?? club.coverImageUrl ?? undefined}
+                              alt={`${club.name} logo`}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-white">
+                              {club.name.trim().charAt(0).toUpperCase() || 'C'}
+                            </div>
+                          )}
                         </div>
                         <div className="min-w-0">
                           <h2 className="text-white text-lg md:text-xl truncate">{club.name}</h2>
@@ -164,7 +183,10 @@ export function ClubsPage({ students, currentUserId, onCreateClub, onViewProfile
 
                     {isMember ? (
                       <Button
-                        onClick={() => setSelectedClubSlug(club.slug)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSelectedClubSlug(club.slug);
+                        }}
                         variant="outline"
                         className="w-full mt-2 hover:bg-primary/5 hover:border-primary/30 transition-all"
                       >
@@ -172,11 +194,13 @@ export function ClubsPage({ students, currentUserId, onCreateClub, onViewProfile
                       </Button>
                     ) : (
                       <Button
-                        onClick={() => handleJoinClub(club)}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          void handleJoinClub(club);
+                        }}
                         disabled={isPending}
                         className="w-full mt-2 bg-gradient-to-r from-primary to-secondary hover:shadow-lg transition-all duration-300 hover:scale-105"
                       >
-                        <UserPlus className="w-4 h-4 mr-2" />
                         {isPending ? (membershipStatus === 'invited' ? 'Invited' : 'Request Pending') : club.privacy === 'request' ? 'Request to Join' : 'Join Club'}
                       </Button>
                     )}

@@ -119,8 +119,8 @@ export async function resolveOrCreateClubCategory(params: {
   const normalizedName = normalizeClubCategoryName(displayName);
 
   const rows = await prisma.$queryRaw<Array<{ club_category_id: string; display_name: string; normalized_name: string }>>`
-    INSERT INTO club_categories (display_name, normalized_name, is_system, created_by_user_id)
-    VALUES (${displayName}, ${normalizedName}, FALSE, ${params.createdByUserId})
+    INSERT INTO club_categories (display_name, normalized_name, is_system, created_by_user_id, created_at, updated_at)
+    VALUES (${displayName}, ${normalizedName}, FALSE, ${params.createdByUserId}, NOW(), NOW())
     ON CONFLICT (normalized_name)
     DO UPDATE SET display_name = club_categories.display_name
     RETURNING club_category_id, display_name, normalized_name
@@ -202,12 +202,13 @@ export async function getClubPermissionSnapshot(clubId: string, viewerUserId: st
   const restrictions = new Set(parseActiveRestrictions(row.active_restrictions));
   const isManager = membershipRole === 'owner' || membershipRole === 'admin';
   const isActiveMember = membershipStatus === 'active';
+  const isInvitedMember = membershipStatus === 'invited';
   const isCreator = row.created_by_user_id === viewerUserId;
-  const canViewClub = row.privacy !== 'private' || isActiveMember || isManager || isCreator;
+  const canViewClub = row.privacy !== 'private' || isActiveMember || isInvitedMember || isManager || isCreator;
 
   return {
     canViewClub,
-    canJoinClub: row.privacy === 'open' && !isActiveMember,
+    canJoinClub: !isActiveMember && (row.privacy === 'open' || isInvitedMember),
     canRequestJoin: row.privacy === 'request' && membershipStatus !== 'pending' && !isActiveMember,
     canManageClub: isManager || isCreator,
     canModerateMembers: isManager || isCreator,
