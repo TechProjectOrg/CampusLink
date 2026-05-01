@@ -2116,6 +2116,9 @@ export default function App() {
     if (tab !== 'feed') {
       setSelectedHashtag(null);
     }
+    if (tab === 'chat') {
+      appData.selectConversation(null);
+    }
     navigate(tab);
   };
 
@@ -2319,7 +2322,7 @@ export default function App() {
         <FloatingChat
           conversations={conversations}
           currentUserId={currentUserId}
-          onOpenFullChat={() => handleTabChange('chat')}
+          onOpenFullChat={() => navigate('chat')}
           onChatClick={handleChatClick}
           onChatRead={handleChatRead}
         />

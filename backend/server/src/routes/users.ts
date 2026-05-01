@@ -17,6 +17,7 @@ import {
   invalidateUserFeedCache,
   refreshPostCaches,
 } from '../lib/feedCache';
+import { invalidateConversationLists } from '../lib/chatCache';
 import { emitFeedEvent } from '../lib/realtime';
 import { incrementUserStat, patchUserSummary } from '../lib/userCache';
 import { getClubPermissionSnapshot, requireActiveClubMembership } from '../lib/clubs';
@@ -319,6 +320,22 @@ async function getFollowerUserIds(userId: string): Promise<string[]> {
   return rows.map((row) => row.user_id);
 }
 
+async function getConversationViewerUserIds(userId: string): Promise<string[]> {
+  const rows = await prisma.$queryRaw<Array<{ user_id: string }>>`
+    SELECT DISTINCT cp2.user_id
+    FROM chat_participants cp1
+    JOIN chat_participants cp2
+      ON cp2.chat_id = cp1.chat_id
+     AND cp2.left_at IS NULL
+    WHERE cp1.user_id = ${userId}
+      AND cp1.left_at IS NULL
+  `;
+
+  const unique = new Set<string>([userId]);
+  rows.forEach((row) => unique.add(row.user_id));
+  return Array.from(unique);
+}
+
 router.get('/:userId', async (req: Request<GetUserParams>, res: Response) => {
   const { userId } = req.params;
 
@@ -582,6 +599,8 @@ router.patch(
               },
       }));
 
+      await invalidateConversationLists(await getConversationViewerUserIds(userId));
+
       const updatedProfile = await getUserProfileById(userId);
       if (!updatedProfile) {
         return res.status(404).json({ message: 'User not found' });
@@ -650,6 +669,8 @@ router.patch(
         ...current,
         profilePictureUrl: nextPhoto,
       }));
+
+      await invalidateConversationLists(await getConversationViewerUserIds(userId));
 
       if (currentProfile.profilePictureUrl && currentProfile.profilePictureUrl !== nextPhoto) {
         try {

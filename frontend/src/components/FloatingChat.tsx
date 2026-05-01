@@ -76,8 +76,6 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
     hasMore: hasMoreMessages,
     nextCursor,
     onLoadOlder: handleLoadOlderMessages,
-    topThreshold: 160,
-    bottomThreshold: 100,
   });
 
   useEffect(() => {
@@ -255,7 +253,10 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
   if (!isOpen) {
     return (
       <button
-        onClick={() => setIsOpen(true)}
+        onClick={() => {
+          appData.selectConversation(null);
+          setIsOpen(true);
+        }}
         className="fixed bottom-24 md:bottom-6 right-6 z-40 w-14 h-14 bg-gradient-to-br from-primary to-secondary rounded-full shadow-2xl flex items-center justify-center hover:scale-110 transition-all duration-300 animate-float"
         aria-label="Open chat"
       >
@@ -378,15 +379,19 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                   </div>
                 </div>
               )}
-              <ScrollArea viewportRef={messagesViewportRef} className="h-full">
-              {!isChatReady && isLoadingMessages && chatMessages.length === 0 ? (
-                <div className="flex h-full items-center justify-center text-sm text-gray-500">
-                  Loading messages...
-                </div>
-              ) : (
-              <div className="space-y-3">
-                <div ref={topSentinelRef} className="h-px w-full" aria-hidden="true" />
-                {chatMessages.map((msg, index) => {
+              <div
+                ref={messagesViewportRef}
+                style={{ overflowAnchor: 'none' }}
+                className="h-full overflow-y-auto"
+              >
+                {!isChatReady && isLoadingMessages && chatMessages.length === 0 ? (
+                  <div className="flex h-full items-center justify-center text-sm text-gray-500">
+                    Loading messages...
+                  </div>
+                ) : (
+                <div className="space-y-3">
+                  <div ref={topSentinelRef} className="h-px w-full" aria-hidden="true" />
+                  {chatMessages.map((msg, index) => {
                   const prevMsg = chatMessages[index - 1];
                   const nextMsg = chatMessages[index + 1];
                   const startsNewDate = index === 0 || !isSameCalendarDay(msg.timestamp, prevMsg.timestamp);
@@ -528,10 +533,10 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                       )}
                     </div>
                   );
-                })}
+                  })}
+                </div>
+                )}
               </div>
-              )}
-            </ScrollArea>
           </div>
 
           {/* Message Input */}

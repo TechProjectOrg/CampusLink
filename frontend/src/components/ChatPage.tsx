@@ -69,7 +69,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   const appData = useAppDataStore();
   const auth = useAuth();
   const selectedConversationId = useAppDataSelector((state) => state.chat.selectedConversationId);
-  const selectedChat = selectedConversationId ?? conversations[0]?.id ?? null;
+  const selectedChat = selectedConversationId;
   const [message, setMessage] = useState('');
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
   const [viewingGroupInfo, setViewingGroupInfo] = useState<string | null>(null);
@@ -131,12 +131,6 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     onLoadOlder: handleLoadOlderMessages,
     bottomAnchorKey: Boolean(typingStatusLabel),
   });
-
-  useEffect(() => {
-    if (!selectedConversationId && conversations[0]?.id) {
-      appData.selectConversation(conversations[0].id);
-    }
-  }, [appData, selectedConversationId, conversations]);
 
   useEffect(() => {
     if (!selectedChat) return;

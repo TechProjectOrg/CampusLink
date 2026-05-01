@@ -1,11 +1,11 @@
 # Graph Report - final-year-project  (2026-05-01)
 
 ## Corpus Check
-- 142 files · ~121,219 words
+- 142 files · ~121,276 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 920 nodes · 1359 edges · 34 communities detected
+- 921 nodes · 1360 edges · 34 communities detected
 - Extraction: 87% EXTRACTED · 13% INFERRED · 0% AMBIGUOUS · INFERRED: 178 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
@@ -89,7 +89,7 @@ Nodes (31): apiCreateUserCertification(), apiDeleteUserCertification(), apiFetch
 
 ### Community 4 - "Community 4"
 Cohesion: 0.09
-Nodes (47): appendStreamMessage(), cacheDelete(), cacheExpire(), cacheHashDelete(), cacheHashIncrementBy(), cacheHashSet(), cacheHGetAll(), cacheIncrement() (+39 more)
+Nodes (45): appendStreamMessage(), cacheDelete(), cacheExpire(), cacheHashDelete(), cacheHashIncrementBy(), cacheHashSet(), cacheIncrement(), cacheSetJson() (+37 more)
 
 ### Community 5 - "Community 5"
 Cohesion: 0.11
@@ -105,7 +105,7 @@ Nodes (28): handleApproveRequest(), handleCreateClubPost(), handleDeleteClub(), 
 
 ### Community 8 - "Community 8"
 Cohesion: 0.11
-Nodes (20): hydrateOrderedUsers(), mapMinimalUserFromSummary(), searchUsers(), chatConversationListKey(), fetchUserStatsByIdsFromDb(), fetchUserSummariesByIdsFromDb(), getCachedConversationList(), getUserStatsById() (+12 more)
+Nodes (22): cacheHGetAll(), hydrateOrderedUsers(), mapMinimalUserFromSummary(), searchUsers(), chatConversationListKey(), fetchUserStatsByIdsFromDb(), fetchUserSummariesByIdsFromDb(), getCachedConversationList() (+14 more)
 
 ### Community 9 - "Community 9"
 Cohesion: 0.16
@@ -144,12 +144,12 @@ Cohesion: 0.4
 Nodes (10): handleMarkAllAsRead(), handleMarkAsRead(), apiDeletePushSubscription(), apiFetchNotifications(), apiFetchPushPublicKey(), apiMarkAllNotificationsRead(), apiMarkNotificationRead(), apiSavePushSubscription() (+2 more)
 
 ### Community 19 - "Community 19"
-Cohesion: 0.22
-Nodes (2): SidebarMenuButton(), useSidebar()
+Cohesion: 0.24
+Nodes (4): mapUserPostRow(), normalizeHashtag(), normalizeHashtags(), parseMediaValue()
 
 ### Community 20 - "Community 20"
-Cohesion: 0.28
-Nodes (4): mapUserPostRow(), normalizeHashtag(), normalizeHashtags(), parseMediaValue()
+Cohesion: 0.22
+Nodes (2): SidebarMenuButton(), useSidebar()
 
 ### Community 22 - "Community 22"
 Cohesion: 0.25
@@ -210,7 +210,7 @@ Nodes (1): Custom Guidelines Placeholder
 ## Knowledge Gaps
 - **14 isolated node(s):** `Fixed Sidebar Header`, `Pagination Prevents Large Conversation Performance Issues`, `Local Development Setup`, `Canonical Schema Direction`, `Teacher Role Removal` (+9 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **Thin community `Community 19`** (10 nodes): `sidebar.tsx`, `cn()`, `handleKeyDown()`, `SidebarFooter()`, `SidebarHeader()`, `SidebarMenu()`, `SidebarMenuButton()`, `SidebarMenuItem()`, `SidebarSeparator()`, `useSidebar()`
+- **Thin community `Community 20`** (10 nodes): `sidebar.tsx`, `cn()`, `handleKeyDown()`, `SidebarFooter()`, `SidebarHeader()`, `SidebarMenu()`, `SidebarMenuButton()`, `SidebarMenuItem()`, `SidebarSeparator()`, `useSidebar()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 22`** (9 nodes): `formatSeenTime()`, `mapRealtimeChatMessage()`, `mergeChatMessageList()`, `mergeConversationPresenceUpdate()`, `mergeConversationPreviewOnMessage()`, `mergeConversationReadUpdate()`, `sortConversationsByTimestamp()`, `summarizeReply()`, `chatUi.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
