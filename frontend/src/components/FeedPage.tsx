@@ -6,6 +6,7 @@ import { ProfileCard } from './ProfileCard';
 import { SuggestionsCard } from './SuggestionsCard';
 import { EmptyState } from './EmptyState';
 import { Button } from './ui/button';
+import { Badge } from './ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { CreateUnifiedPostModal } from './CreateUnifiedPostModal';
 import { LoadingState } from './LoadingState';

@@ -2252,6 +2252,7 @@ export default function App() {
             <div className="w-1/4 px-1 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)] hidden lg:block" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               <SuggestionsCard
                 students={students}
+                opportunities={opportunities}
                 currentUserId={currentUserId}
                 followGraph={followGraph}
                 onFollow={handleFollow}
