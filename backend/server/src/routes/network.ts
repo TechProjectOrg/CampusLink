@@ -4,6 +4,7 @@ import authenticateToken, { type AuthedRequest } from '../middleware/authenticat
 import { createNotification } from '../lib/notifications';
 import { invalidateUserFeedCache } from '../lib/feedCache';
 import { getUserSummariesByIds, getUserSummaryById, incrementUserStat, toCachedUserCard } from '../lib/userCache';
+import { getSuggestedUsersForApi, queueSuggestedUsersRecompute } from '../lib/socialInsights';
 
 const router = express.Router();
 
@@ -104,6 +105,20 @@ router.get('/graph', async (req: Request, res: Response) => {
   }
 });
 
+router.get('/suggestions', async (req: Request, res: Response) => {
+  const authed = req as unknown as AuthedRequest;
+  const userId = authed.auth!.userId;
+  const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 5, 5), 10);
+
+  try {
+    const suggestions = await getSuggestedUsersForApi(userId, limit);
+    return res.status(200).json(suggestions);
+  } catch (err) {
+    console.error('Error fetching suggested users:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 // ============================================================
 // POST /network/follow — Follow a user (or send request to private)
 // ============================================================
@@ -199,6 +214,8 @@ router.post('/follow', async (req: Request, res: Response) => {
       title: currentUsername,
       message: 'started following you',
     });
+    queueSuggestedUsersRecompute(currentUserId);
+    queueSuggestedUsersRecompute(targetUserId);
 
     return res.status(201).json({ status: 'following' });
   } catch (err) {
@@ -232,6 +249,8 @@ router.delete('/follow/:targetUserId', async (req: Request, res: Response) => {
         incrementUserStat(currentUserId, 'followingCount', -1),
         incrementUserStat(targetUserId, 'followerCount', -1),
       ]);
+      queueSuggestedUsersRecompute(currentUserId);
+      queueSuggestedUsersRecompute(targetUserId);
     }
 
     // Also clean up any accepted follow_request rows (per user preference)
@@ -273,6 +292,8 @@ router.delete('/followers/:followerUserId', async (req: Request, res: Response) 
         incrementUserStat(followerUserId, 'followingCount', -1),
         incrementUserStat(currentUserId, 'followerCount', -1),
       ]);
+      queueSuggestedUsersRecompute(followerUserId);
+      queueSuggestedUsersRecompute(currentUserId);
     }
 
     // Clean up accepted request row
@@ -414,6 +435,8 @@ router.post('/requests/:requestId/accept', async (req: Request, res: Response) =
         incrementUserStat(requesterId, 'followingCount', 1),
         incrementUserStat(currentUserId, 'followerCount', 1),
       ]);
+      queueSuggestedUsersRecompute(requesterId);
+      queueSuggestedUsersRecompute(currentUserId);
     }
 
     await createNotification({

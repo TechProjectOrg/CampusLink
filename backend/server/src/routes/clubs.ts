@@ -16,6 +16,7 @@ import {
 } from '../lib/objectStorage';
 import { createNotification } from '../lib/notifications';
 import { hydratePosts } from '../lib/feedCache';
+import { queueSuggestedUsersRecompute } from '../lib/socialInsights';
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -819,6 +820,9 @@ router.post('/:clubId/join', async (req: Request<{ clubId: string }>, res: Respo
         entityId: clubRow.club_id,
       });
     }
+    if (nextStatus === 'active') {
+      queueSuggestedUsersRecompute(viewerUserId);
+    }
 
     const updatedClub = await loadClubBySlugOrId(clubRow.club_id, viewerUserId);
     return res.status(200).json(mapClubRow(updatedClub!, await getClubPermissionSnapshot(clubRow.club_id, viewerUserId)));
@@ -861,6 +865,7 @@ router.post('/:clubId/approve', async (req: Request<{ clubId: string }>, res: Re
       entityType: 'club',
       entityId: req.params.clubId,
     });
+    queueSuggestedUsersRecompute(targetUserId);
 
     return res.status(204).send();
   } catch (err) {
@@ -931,6 +936,7 @@ router.post('/:clubId/leave', async (req: Request<{ clubId: string }>, res: Resp
           CAST('invited' AS "ClubMembershipStatus")
         )
     `;
+    queueSuggestedUsersRecompute(viewerUserId);
 
     return res.status(204).send();
   } catch (err) {
@@ -1020,6 +1026,7 @@ router.post('/:clubId/remove', async (req: Request<{ clubId: string }>, res: Res
       entityType: 'club',
       entityId: req.params.clubId,
     });
+    queueSuggestedUsersRecompute(targetUserId);
 
     return res.status(204).send();
   } catch (err) {

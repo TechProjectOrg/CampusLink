@@ -23,6 +23,11 @@ import {
 import { emitFeedEvent } from '../lib/realtime';
 import { incrementUserStat } from '../lib/userCache';
 import { canViewerAccessClubPost } from '../lib/clubs';
+import {
+  getTrendingHashtagsForApi,
+  queueSuggestedUsersRecompute,
+  trackPostEngagementForPost,
+} from '../lib/socialInsights';
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -558,6 +563,17 @@ router.get('/posts/hashtags/:hashtag', async (req: Request<{ hashtag: string }>,
   }
 });
 
+router.get('/posts/trending', async (req: Request, res: Response) => {
+  const limitPerCategory = Math.min(Math.max(parseInt(req.query.limitPerCategory as string, 10) || 5, 1), 20);
+  try {
+    const rows = await getTrendingHashtagsForApi(limitPerCategory);
+    return res.status(200).json(rows);
+  } catch (err) {
+    console.error('Error fetching trending hashtags:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 router.get('/posts/comments/:commentId/replies', async (req: Request<{ commentId: string }>, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const viewerUserId = authed.auth!.userId;
@@ -1034,12 +1050,14 @@ router.post('/posts/:postId/likes', async (req: Request<{ postId: string }>, res
     const changed = (insertedRows[0]?.count ?? 0) > 0;
     if (changed) {
       await incrementPostEngagement(postId, 'likeCount', 1);
+      await trackPostEngagementForPost(postId, viewerUserId, 1, 0);
       await setViewerLikedCache(postId, viewerUserId, true);
       const recipients = await getPostFeedRecipientIds(postId);
       emitFeedEvent(recipients, {
         type: 'feed:post_liked',
         payload: { postId, userId: viewerUserId, delta: 1, updatedAt: new Date().toISOString() },
       });
+      queueSuggestedUsersRecompute(viewerUserId);
     }
 
     await syncPostLikeNotification({ postId, actorUserId: viewerUserId });
@@ -1067,12 +1085,14 @@ router.delete('/posts/:postId/likes', async (req: Request<{ postId: string }>, r
     const changed = (deletedRows[0]?.count ?? 0) > 0;
     if (changed) {
       await incrementPostEngagement(postId, 'likeCount', -1);
+      await trackPostEngagementForPost(postId, viewerUserId, -1, 0);
       await setViewerLikedCache(postId, viewerUserId, false);
       const recipients = await getPostFeedRecipientIds(postId);
       emitFeedEvent(recipients, {
         type: 'feed:post_unliked',
         payload: { postId, userId: viewerUserId, delta: -1, updatedAt: new Date().toISOString() },
       });
+      queueSuggestedUsersRecompute(viewerUserId);
     }
     await syncPostLikeNotification({ postId, actorUserId: viewerUserId });
     return res.status(204).send();
@@ -1194,6 +1214,7 @@ router.post('/posts/:postId/comments', async (req: Request<{ postId: string }>, 
     }
 
     await incrementPostEngagement(postId, 'commentCount', 1);
+    await trackPostEngagementForPost(postId, viewerUserId, 0, 1);
     await invalidateRecentComments(postId);
     const recipients = await getPostFeedRecipientIds(postId);
     emitFeedEvent(recipients, {
@@ -1201,6 +1222,7 @@ router.post('/posts/:postId/comments', async (req: Request<{ postId: string }>, 
       payload: { postId, commentId: createdCommentId, userId: viewerUserId, updatedAt: new Date().toISOString() },
     });
     await notifyPostComment({ postId, commentId: createdCommentId, actorUserId: viewerUserId });
+    queueSuggestedUsersRecompute(viewerUserId);
 
     return res.status(201).json({ commentId: createdCommentId });
   } catch (err) {
@@ -1246,6 +1268,7 @@ router.post('/posts/comments/:commentId/replies', async (req: Request<{ commentI
     }
 
     await incrementPostEngagement(parent.post_id, 'commentCount', 1);
+    await trackPostEngagementForPost(parent.post_id, viewerUserId, 0, 1);
     const recipients = await getPostFeedRecipientIds(parent.post_id);
     emitFeedEvent(recipients, {
       type: 'feed:reply_created',
@@ -1262,6 +1285,7 @@ router.post('/posts/comments/:commentId/replies', async (req: Request<{ commentI
       replyCommentId: createdReplyId,
       actorUserId: viewerUserId,
     });
+    queueSuggestedUsersRecompute(viewerUserId);
     return res.status(201).json({ commentId: createdReplyId });
   } catch (err) {
     console.error('Error creating reply:', err);

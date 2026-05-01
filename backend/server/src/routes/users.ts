@@ -21,6 +21,7 @@ import { invalidateConversationLists } from '../lib/chatCache';
 import { emitFeedEvent } from '../lib/realtime';
 import { incrementUserStat, patchUserSummary } from '../lib/userCache';
 import { getClubPermissionSnapshot, requireActiveClubMembership } from '../lib/clubs';
+import { queueSuggestedUsersRecompute, trackPostCreatedHashtags } from '../lib/socialInsights';
 
 const router = express.Router();
 
@@ -1653,6 +1654,8 @@ router.post(
         });
       }
       await incrementUserStat(userId, 'postCount', 1);
+      await trackPostCreatedHashtags(userId, normalizedHashtags);
+      queueSuggestedUsersRecompute(userId);
 
       return res.status(201).json(mapUserPostRow(created));
     } catch (err) {

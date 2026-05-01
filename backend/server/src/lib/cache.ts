@@ -220,6 +220,22 @@ export async function cacheHashIncrementBy(
   return typeof result === 'number' ? result : null;
 }
 
+export async function cacheSetAdd(key: string, ...members: string[]): Promise<void> {
+  if (members.length === 0) return;
+  await runCommand(['SADD', key, ...members]);
+}
+
+export async function cacheSetMembers(key: string): Promise<string[]> {
+  const result = await runCommand<string[]>(['SMEMBERS', key]);
+  if (!Array.isArray(result)) return [];
+  return result.map((item) => String(item));
+}
+
+export async function cacheSetCardinality(key: string): Promise<number> {
+  const result = await runCommand<number>(['SCARD', key]);
+  return typeof result === 'number' ? result : 0;
+}
+
 async function appendStreamMessage(channel: string, payload: string): Promise<void> {
   await runCommand(['XADD', channel, '*', 'payload', payload]);
 }
