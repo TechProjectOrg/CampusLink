@@ -1,4 +1,4 @@
-import { Users, UserPlus } from 'lucide-react';
+import { Users } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { Student } from '../types';
 import type { FollowGraph } from '../App';
@@ -17,7 +17,6 @@ import {
   AlertDialogTitle,
 } from './ui/alert-dialog';
 
-import { RequestCard } from './network/RequestCard';
 import { UserCard } from './network/UserCard';
 
 interface NetworkPageProps {
@@ -30,9 +29,6 @@ interface NetworkPageProps {
   onCancelRequest: (targetUserId: string) => void;
 
   onRemoveFollower: (followerUserId: string) => void;
-  onAcceptRequest: (requesterUserId: string) => void;
-  onRejectRequest: (requesterUserId: string) => void;
-
   onViewProfile: (studentId: string) => void;
 }
 
@@ -53,17 +49,11 @@ export function NetworkPage({
   onUnfollow,
   onCancelRequest,
   onRemoveFollower,
-  onAcceptRequest,
-  onRejectRequest,
   onViewProfile,
 }: NetworkPageProps) {
-  const currentUser = students.find((s) => s.id === currentUserId);
-  const isPrivateAccount = currentUser?.accountType === 'private';
-
   const followersIds = followGraph.followersByUserId[currentUserId] ?? [];
   const followingIds = followGraph.followingByUserId[currentUserId] ?? [];
   const outgoingRequestIds = followGraph.outgoingRequestsByUserId[currentUserId] ?? [];
-  const incomingRequestIds = followGraph.incomingRequestsByUserId[currentUserId] ?? [];
 
   const followers = useMemo(() => {
     return followersIds
@@ -75,28 +65,13 @@ export function NetworkPage({
     return followingIds.map((id) => students.find((s) => s.id === id)).filter(Boolean) as Student[];
   }, [followingIds, students]);
 
-  const incomingRequests = useMemo(() => {
-    return incomingRequestIds
-      .map((id) => students.find((s) => s.id === id))
-      .filter(Boolean) as Student[];
-  }, [incomingRequestIds, students]);
-
-  const outgoingRequests = useMemo(() => {
-    return outgoingRequestIds
-      .map((id) => students.find((s) => s.id === id))
-      .filter(Boolean) as Student[];
-  }, [outgoingRequestIds, students]);
-
-  const [activeTab, setActiveTab] = useState<'followers' | 'following' | 'requests'>('followers');
-  const [requestLimit, setRequestLimit] = useState(3);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [activeTab, setActiveTab] = useState<'followers' | 'following'>('followers');
   const [removeFollowerId, setRemoveFollowerId] = useState<string | null>(null);
   const [unfollowUserId, setUnfollowUserId] = useState<string | null>(null);
   const [cancelRequestId, setCancelRequestId] = useState<string | null>(null);
 
   const followersCount = followersIds.length;
   const followingCount = followingIds.length;
-  const requestsCount = incomingRequestIds.length;
 
   const mutualFollowersCount = (otherUserId: string) => {
     // Future-ready: mutual followers = people who follow BOTH you and the other user.
@@ -108,9 +83,6 @@ export function NetworkPage({
     return mutual.length;
   };
 
-  const visibleRequests = incomingRequests.slice(0, requestLimit);
-  const canLoadMore = incomingRequests.length > visibleRequests.length;
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
@@ -118,7 +90,7 @@ export function NetworkPage({
           <h1 className="text-gray-900 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
             Network
           </h1>
-          <p className="text-gray-600">Followers, following, and requests — simple and student-first</p>
+          <p className="text-gray-600">Followers and following - simple and student-first</p>
         </div>
 
         <Tabs value={activeTab} onValueChange={(v: string) => setActiveTab(v as any)} className="space-y-6">
@@ -145,16 +117,6 @@ export function NetworkPage({
               <Badge className="bg-green-500 text-white ml-1">{followingCount}</Badge>
             </TabsTrigger>
 
-            <TabsTrigger
-              value="requests"
-              className={`flex items-center gap-2 rounded-xl data-[state=active]:gradient-primary data-[state=active]:text-white transition-all duration-300 ${
-                activeTab === 'requests' ? 'gradient-primary text-white' : ''
-              }`}
-            >
-              <UserPlus className="w-4 h-4" />
-              Requests
-              {requestsCount > 0 && <Badge className="bg-destructive text-white ml-1">{requestsCount}</Badge>}
-            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="followers" className="space-y-3">
@@ -261,91 +223,6 @@ export function NetworkPage({
             )}
           </TabsContent>
 
-          <TabsContent value="requests" className="space-y-3">
-            {(isPrivateAccount || incomingRequests.length > 0) && (
-              <>
-                <h2 className="text-xl font-semibold mb-4">Requests Received</h2>
-              {incomingRequests.length === 0 ? (
-                <Card className="border-primary/10 rounded-2xl shadow-lg">
-                  <CardContent className="p-10 text-center">
-                    <p className="text-gray-500">No incoming follow requests right now.</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="space-y-3">
-                  {visibleRequests.map((user) => {
-                    const mutual = mutualFollowersCount(user.id);
-
-                    return (
-                      <RequestCard
-                        key={user.id}
-                        user={user}
-                        mutualFollowersCount={mutual}
-                        onViewProfile={() => onViewProfile(user.id)}
-                        onAccept={() => onAcceptRequest(user.id)}
-                        onReject={() => onRejectRequest(user.id)}
-                      />
-                    );
-                  })}
-
-                  {canLoadMore && (
-                    <div className="pt-2">
-                      <Button
-                        variant="outline"
-                        className="w-full rounded-xl"
-                        disabled={isLoadingMore}
-                        onClick={() => {
-                          setIsLoadingMore(true);
-                          // Mimic an API call.
-                          window.setTimeout(() => {
-                            setRequestLimit(incomingRequests.length);
-                            setIsLoadingMore(false);
-                          }, 450);
-                        }}
-                      >
-                        {isLoadingMore ? 'Loading…' : 'Load More'}
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
-          )}
-
-          <h2 className="text-xl font-semibold mb-4 mt-8">Requests Sent</h2>
-              {outgoingRequests.length === 0 ? (
-                <Card className="border-primary/10 rounded-2xl shadow-lg">
-                  <CardContent className="p-10 text-center">
-                    <p className="text-gray-500">No outgoing follow requests right now.</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <div className="space-y-3">
-                  {outgoingRequests.map((user) => {
-                    const mutual = mutualFollowersCount(user.id);
-
-                    return (
-                      <UserCard
-                        key={user.id}
-                        user={user}
-                        onClick={() => onViewProfile(user.id)}
-                        mutualFollowersCount={mutual}
-                        action={
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="rounded-xl border-orange-500/30 text-orange-500 hover:bg-orange-500/10"
-                            onClick={() => setCancelRequestId(user.id)} // Will implement setCancelRequestId next
-                          >
-                            Cancel Request
-                          </Button>
-                        }
-                      />
-                    );
-                  })}
-                </div>
-              )}
-            </TabsContent>
         </Tabs>
       </div>
 
