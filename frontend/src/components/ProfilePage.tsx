@@ -44,6 +44,7 @@ import { DatePicker } from './ui/date-picker';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { ProfilePhotoUpload } from './ui/profile-photo-upload';
 import { apiUpdateUserProfilePicture, apiUploadUserProfilePicture } from '../lib/authApi';
+import { OpportunityCard } from './OpportunityCard';
 import { apiFetchProfilePosts, type UserPost } from '../lib/postsApi';
 import { LoadingIndicator } from './ui/LoadingIndicator';
 
@@ -127,6 +128,13 @@ export function ProfilePage({
   student,
   isOwnProfile,
   onEdit,
+  onLike,
+  onSave,
+  onComment,
+  onReply,
+  onLikeComment,
+  onDeleteComment,
+  onEditPost,
   onDeletePost,
   onOpenPost,
   onShowAllPosts,
@@ -674,6 +682,16 @@ export function ProfilePage({
   const featuredAchievement = achievements[0];
   const hasAbout = Boolean(student.bio?.trim());
   const clubCount = societies.length;
+  const hasFeaturedContent = Boolean(featuredProject || featuredPost || featuredAchievement);
+  const showFeaturedSection = isOwnProfile || hasFeaturedContent;
+  const showPostsSection = isOwnProfile || postsLoading || profilePosts.length > 0;
+  const showProjectsSection = isOwnProfile || projectsLoading || loadedProjects.length > 0;
+  const showExperienceSection = isOwnProfile || experiences.length > 0;
+  const showEducationSection = isOwnProfile || Boolean(student.branch || student.year);
+  const showSkillsSection = isOwnProfile || skillsLoading || displaySkills.length > 0;
+  const showCertificationsSection = isOwnProfile || certificationsLoading || loadedCertifications.length > 0;
+  const showClubsSection = isOwnProfile || societies.length > 0;
+  const showAchievementsSection = isOwnProfile || achievements.length > 0;
 
   const SectionHeader = ({
     title,
@@ -698,15 +716,9 @@ export function ProfilePage({
     </div>
   );
 
-  const EmptyState = ({ message, action, onAdd }: { message: string; action?: string; onAdd?: () => void }) => (
+  const EmptyState = ({ message }: { message: string }) => (
     <div className="rounded-2xl border border-dashed border-slate-300 bg-white/70 px-6 py-8 text-center shadow-sm">
       <p className="text-sm font-medium text-slate-600">{message}</p>
-      {isOwnProfile && onAdd && action ? (
-        <Button size="sm" onClick={onAdd} className="mt-4 rounded-full">
-          <Plus className="mr-1.5 h-4 w-4" />
-          {action}
-        </Button>
-      ) : null}
     </div>
   );
 
@@ -724,16 +736,36 @@ export function ProfilePage({
     ) : null
   );
 
+  const handleHorizontalWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    const container = event.currentTarget;
+    const nextDelta = Math.abs(event.deltaY) > Math.abs(event.deltaX) ? event.deltaY : event.deltaX;
+    const canScroll = container.scrollWidth > container.clientWidth;
+    if (!canScroll || nextDelta === 0) return;
+
+    container.scrollLeft += nextDelta;
+    event.preventDefault();
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 pb-24 md:pb-8">
       <div className="mx-auto max-w-5xl space-y-8 px-4 py-6 sm:px-6 lg:px-8">
-        <section className="overflow-hidden rounded-[1.75rem] bg-white shadow-xl shadow-slate-200/70 ring-1 ring-slate-200">
+        <section className="overflow-hidden rounded-[1.75rem] border border-slate-200/80 bg-white shadow-xl shadow-slate-200/70">
           <div className="relative h-48 bg-gradient-to-br from-sky-600 via-indigo-500 to-emerald-400 sm:h-60">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.35),transparent_28%),linear-gradient(to_top,rgba(15,23,42,0.72),rgba(15,23,42,0.12))]" />
             <div className="absolute bottom-6 left-6 hidden max-w-xl text-white sm:block">
               <p className="text-sm font-medium uppercase tracking-[0.18em] text-white/75">Campus profile</p>
               <h1 className="mt-2 text-3xl font-semibold tracking-tight">{student.name}</h1>
             </div>
+            {isOwnProfile ? (
+              <button
+                type="button"
+                onClick={() => setActiveModal('editProfile')}
+                className="absolute right-5 top-5 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/92 text-slate-700 shadow-lg transition hover:scale-[1.02] hover:bg-white"
+                aria-label="Edit profile"
+              >
+                <Edit2 className="h-4 w-4" />
+              </button>
+            ) : null}
           </div>
 
           <div className="px-5 pb-6 sm:px-8">
@@ -748,10 +780,10 @@ export function ProfilePage({
                 />
                 <div className="pt-2 sm:pb-1">
                   <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:hidden">{student.name}</h1>
-                  <p className="mt-2 max-w-2xl text-lg font-medium text-slate-800">
+                  <p className="mt-2 max-w-2xl text-base font-normal text-slate-700 sm:text-lg">
                     {student.headline || (isOwnProfile ? 'Add a headline that tells campus what you are building.' : 'Campus community member')}
                   </p>
-                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-slate-500">
+                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm font-normal text-slate-500">
                     <span className="inline-flex items-center gap-1.5">
                       <GraduationCap className="h-4 w-4" />
                       {student.branch || 'College'}
@@ -769,14 +801,10 @@ export function ProfilePage({
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {isOwnProfile ? (
-                  <Button onClick={() => setActiveModal('editProfile')} className="rounded-full shadow-sm">
-                    <Edit2 className="mr-2 h-4 w-4" />
-                    Edit Profile
-                  </Button>
-                ) : (
+                {!isOwnProfile ? (
                   <>
-                    <FollowButton
+                    <div className="rounded-full bg-white shadow-sm">
+                      <FollowButton
                       targetName={student.name}
                       accountType={student.accountType}
                       isFollowing={isFollowing}
@@ -785,80 +813,84 @@ export function ProfilePage({
                       onFollow={() => onFollow(student.id, student.accountType)}
                       onUnfollow={() => onUnfollow(student.id)}
                       onCancelRequest={() => onCancelRequest(student.id)}
-                    />
-                    <Button variant="outline" onClick={() => onMessage?.(student.id)} className="rounded-full bg-white">
+                      />
+                    </div>
+                    <Button variant="outline" onClick={() => onMessage?.(student.id)} className="rounded-full border-slate-200 bg-white shadow-sm hover:bg-slate-50">
                       <MessageCircle className="mr-2 h-4 w-4" />
                       Message
                     </Button>
                   </>
-                )}
+                ) : null}
               </div>
             </div>
 
-            <div className="mt-7 grid grid-cols-2 gap-3 border-t border-slate-100 pt-5 sm:grid-cols-4">
+            <div className="hide-scrollbar mt-4 flex flex-nowrap items-center gap-4 overflow-x-auto whitespace-nowrap border-t border-slate-100 pt-4 text-sm font-normal text-slate-500">
               {[
                 ['Followers', followersCount],
                 ['Following', followingCount],
                 ['Projects', loadedProjects.length],
                 ['Clubs', clubCount],
               ].map(([label, value]) => (
-                <div key={label} className="rounded-2xl bg-slate-50 px-4 py-3 text-center">
-                  <p className="text-2xl font-semibold text-slate-950">{value}</p>
-                  <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
+                <div key={label} className="inline-flex items-center gap-1.5">
+                  <span className="text-sm font-medium text-slate-900">{value}</span>
+                  <span>{label}</span>
                 </div>
               ))}
             </div>
+
+            {hasAbout || isOwnProfile ? (
+              <div className="mt-5 border-t border-slate-100 pt-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <h2 className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">About</h2>
+                    {hasAbout ? (
+                      <>
+                        <p className={`mt-3 max-w-3xl text-sm leading-7 text-slate-700 ${isAboutExpanded ? '' : 'line-clamp-3'}`}>{student.bio}</p>
+                        {student.bio && student.bio.length > 180 ? (
+                          <button
+                            type="button"
+                            onClick={() => setIsAboutExpanded((value) => !value)}
+                            className="mt-2 text-sm font-medium text-blue-600 hover:text-blue-700"
+                          >
+                            {isAboutExpanded ? 'See less' : 'See more'}
+                          </button>
+                        ) : null}
+                      </>
+                    ) : (
+                      <p className="mt-3 text-sm leading-7 text-slate-500">Add a short intro that makes the profile feel like you.</p>
+                    )}
+                  </div>
+                  {isOwnProfile ? (
+                    <button
+                      type="button"
+                      onClick={() => setActiveModal('editProfile')}
+                      className="rounded-full p-2 text-slate-400 transition hover:bg-blue-50 hover:text-blue-600"
+                      aria-label="Edit profile details"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
           </div>
         </section>
 
-        <section className="group relative">
-          <SectionHeader title="About" onAdd={!hasAbout ? () => setActiveModal('about') : undefined} />
-          {hasAbout ? (
-            <div className="relative pr-10">
-              <p className={`text-base leading-7 text-slate-700 ${isAboutExpanded ? '' : 'line-clamp-3'}`}>{student.bio}</p>
-              {student.bio && student.bio.length > 180 ? (
-                <button
-                  type="button"
-                  onClick={() => setIsAboutExpanded((value) => !value)}
-                  className="mt-2 text-sm font-medium text-blue-600 hover:text-blue-700"
-                >
-                  {isAboutExpanded ? 'See less' : 'See more'}
-                </button>
-              ) : null}
-              {isOwnProfile ? (
-                <button
-                  type="button"
-                  onClick={() => setActiveModal('about')}
-                  className="absolute right-0 top-0 rounded-full p-2 text-slate-400 transition hover:bg-blue-50 hover:text-blue-600"
-                  aria-label="Edit about"
-                >
-                  <Pencil className="h-4 w-4" />
-                </button>
-              ) : null}
-            </div>
-          ) : (
-            <EmptyState
-              message={isOwnProfile ? 'No about section yet. Add a quick intro that sounds like you.' : `${student.name} has not added an about section yet.`}
-              action="Add About"
-              onAdd={() => setActiveModal('about')}
-            />
-          )}
-        </section>
-
-        <section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
+        {showFeaturedSection ? (
+        <section className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
           <SectionHeader title="Featured" subtitle="A quick glimpse of recent work and wins" />
-          {featuredProject || featuredPost || featuredAchievement ? (
-            <div className="grid gap-4 md:grid-cols-[1.2fr_0.8fr]">
+          {hasFeaturedContent ? (
+            <div className="space-y-4">
               <button
                 type="button"
                 onClick={() => featuredPost && onOpenPost?.(featuredPost)}
-                className="group/highlight min-h-52 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 p-6 text-left text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl"
+                className="group/highlight block min-h-52 w-full overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 p-6 text-left text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl"
               >
                 <p className="text-sm font-medium text-blue-100">{featuredProject ? 'Featured project' : featuredPost ? 'Featured post' : 'Achievement'}</p>
                 <h3 className="mt-3 text-2xl font-semibold tracking-tight">
                   {featuredProject?.title || featuredPost?.title || featuredAchievement?.title}
                 </h3>
-                <p className="mt-3 line-clamp-3 max-w-2xl text-sm leading-6 text-white/75">
+                <p className="mt-3 line-clamp-3 max-w-3xl text-sm leading-6 text-white/75">
                   {featuredProject?.description || featuredPost?.description || featuredAchievement?.description || 'A highlighted milestone from this profile.'}
                 </p>
                 <span className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-white">
@@ -866,97 +898,86 @@ export function ProfilePage({
                   <ExternalLink className="h-4 w-4 transition group-hover/highlight:translate-x-0.5" />
                 </span>
               </button>
-              <div className="grid gap-4 sm:grid-cols-3 md:grid-cols-1">
-                <div className="rounded-2xl bg-sky-50 p-4">
-                  <p className="text-2xl font-semibold text-sky-700">{profilePosts.length}</p>
-                  <p className="text-sm text-sky-900/70">posts shared</p>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl bg-sky-50 px-4 py-3">
+                  <p className="text-base font-medium text-sky-800">{profilePosts.length} posts shared</p>
                 </div>
-                <div className="rounded-2xl bg-emerald-50 p-4">
-                  <p className="text-2xl font-semibold text-emerald-700">{displaySkills.length}</p>
-                  <p className="text-sm text-emerald-900/70">skills listed</p>
+                <div className="rounded-2xl bg-emerald-50 px-4 py-3">
+                  <p className="text-base font-medium text-emerald-800">{displaySkills.length} skills listed</p>
                 </div>
-                <div className="rounded-2xl bg-amber-50 p-4">
-                  <p className="text-2xl font-semibold text-amber-700">{achievements.length}</p>
-                  <p className="text-sm text-amber-900/70">achievements</p>
+                <div className="rounded-2xl bg-amber-50 px-4 py-3">
+                  <p className="text-base font-medium text-amber-800">{achievements.length} achievements</p>
                 </div>
               </div>
             </div>
           ) : (
-            <EmptyState message="Nothing featured yet. Pin a project, post, or achievement once you add one." action="Add Project" onAdd={() => setActiveModal('project')} />
+            <EmptyState message="Nothing featured yet. Add projects, posts, or achievements to bring this area to life." />
           )}
         </section>
+        ) : null}
 
+        {showPostsSection ? (
         <section className="space-y-4">
           <SectionHeader title="Activity" subtitle="Recent posts and campus updates" />
           {postsLoading ? (
             <LoadingIndicator label="Loading posts..." className="justify-start" size={20} />
           ) : profilePosts.length > 0 ? (
             <>
-              <div className="hide-scrollbar flex snap-x gap-4 overflow-x-auto scroll-smooth pb-2">
-                {profilePosts.slice(0, 8).map((post) => (
-                  <article key={post.id} className="group relative flex w-[18rem] shrink-0 snap-start flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-lg sm:w-[22rem]">
-                    {post.image ? (
-                      <ImageWithFallback src={post.image} alt={post.title || 'Post image'} className="h-36 w-full object-cover" />
-                    ) : (
-                      <div className="flex h-36 items-center justify-center bg-gradient-to-br from-blue-50 to-emerald-50">
-                        <MessageCircle className="h-10 w-10 text-blue-300" />
+              <div className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
+                <div
+                  className="hide-scrollbar w-full overflow-x-auto overscroll-x-contain pb-2"
+                  onWheel={handleHorizontalWheel}
+                >
+                  <div className="flex w-max snap-x snap-mandatory gap-5">
+                    {profilePosts.slice(0, 8).map((post) => (
+                      <div key={post.id} className="w-[22rem] shrink-0 snap-start">
+                        <OpportunityCard
+                          opportunity={post}
+                          currentUserId={currentUserId}
+                          showManagementControls={isOwnProfile}
+                          onLike={(id) => onLike?.(id)}
+                          onSave={(id) => onSave?.(id)}
+                          onComment={(id, comment) => onComment?.(id, comment)}
+                          onReply={(commentId, comment) => onReply?.(commentId, comment)}
+                          onLikeComment={(commentId, alreadyLiked) => onLikeComment?.(commentId, alreadyLiked)}
+                          onDeleteComment={(commentId) => onDeleteComment?.(commentId)}
+                          onEditPost={(postId, updates) => onEditPost?.(postId, updates)}
+                          onDeletePost={(postId) => onDeletePost?.(postId)}
+                          onOpenPost={onOpenPost}
+                          onViewProfile={() => undefined}
+                        />
                       </div>
-                    )}
-                    <div className="flex flex-1 flex-col p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <h3 className="line-clamp-2 font-semibold text-slate-950">{post.title || 'Campus update'}</h3>
-                        {isOwnProfile ? (
-                          <div className="flex gap-1">
-                            {post.canEdit ? (
-                              <button type="button" onClick={() => onOpenPost?.(post)} className="rounded-full p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600" aria-label="Open post to edit">
-                                <Pencil className="h-4 w-4" />
-                              </button>
-                            ) : null}
-                            {post.canDelete ? (
-                              <button type="button" onClick={() => onDeletePost?.(post.id)} className="rounded-full p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete post">
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            ) : null}
-                          </div>
-                        ) : null}
-                      </div>
-                      <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600">{post.description}</p>
-                      <button type="button" onClick={() => onOpenPost?.(post)} className="mt-4 text-left text-sm font-medium text-blue-600 hover:text-blue-700">
-                        Open post
-                      </button>
-                      <div className="mt-auto flex gap-4 border-t border-slate-100 pt-3 text-sm text-slate-500">
-                        <span className="inline-flex items-center gap-1"><Heart className="h-4 w-4" />{post.likeCount ?? 0}</span>
-                        <span className="inline-flex items-center gap-1"><MessageCircle className="h-4 w-4" />{post.commentCount ?? 0}</span>
-                        <span className="inline-flex items-center gap-1"><Bookmark className="h-4 w-4" />{post.saveCount ?? 0}</span>
-                      </div>
-                    </div>
-                  </article>
-                ))}
+                    ))}
+                  </div>
+                </div>
               </div>
-              <Button variant="outline" className="w-full rounded-2xl bg-white" onClick={() => onShowAllPosts?.(student.id)}>
+              <Button variant="outline" className="w-full rounded-2xl border-slate-200 bg-white shadow-sm hover:bg-slate-50" onClick={() => onShowAllPosts?.(student.id)}>
                 Show all posts
               </Button>
             </>
           ) : (
-            <EmptyState
-              message={isOwnProfile ? 'No posts yet. Share a campus update, project note, or opportunity.' : `${student.name} has not posted anything yet.`}
-              action="Add Post"
-              onAdd={() => onShowAllPosts?.(student.id)}
-            />
+            <EmptyState message="No posts yet. Share a campus update, project note, or opportunity." />
           )}
         </section>
+        ) : null}
 
+        {showProjectsSection ? (
         <section className="space-y-4">
           <SectionHeader title="Projects" subtitle="Selected builds, prototypes, and experiments" onAdd={() => setActiveModal('project')} />
           {projectsLoading ? (
             <LoadingIndicator label="Loading projects..." className="justify-start" size={20} />
           ) : loadedProjects.length > 0 ? (
             <>
-              <div className="hide-scrollbar flex snap-x gap-4 overflow-x-auto scroll-smooth pb-2">
+              <div className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
+                <div
+                  className="hide-scrollbar w-full overflow-x-auto overscroll-x-contain pb-2"
+                  onWheel={handleHorizontalWheel}
+                >
+                <div className="flex w-max snap-x snap-mandatory gap-4">
                 {loadedProjects.map((project) => {
                   const projectLink = project.liveUrl || project.githubUrl || (project as Project & { link?: string | null }).link;
                   return (
-                    <article key={project.id} className="group flex w-[19rem] shrink-0 snap-start flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-lg sm:w-[24rem]">
+                    <article key={project.id} className="group flex w-[20rem] shrink-0 snap-start flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg">
                       {project.imageUrl ? (
                         <ImageWithFallback src={project.imageUrl} alt={project.title} className="h-40 w-full object-cover" />
                       ) : (
@@ -973,7 +994,7 @@ export function ProfilePage({
                         {project.tags?.length ? (
                           <div className="mt-4 flex flex-wrap gap-1.5">
                             {project.tags.slice(0, 4).map((tag) => (
-                              <Badge key={tag} variant="outline" className="rounded-full border-slate-200 bg-slate-50 text-xs text-slate-600">{tag}</Badge>
+                              <Badge key={tag} className="rounded-full border border-slate-200 bg-slate-50 text-xs font-medium text-slate-600 shadow-none">{tag}</Badge>
                             ))}
                           </div>
                         ) : null}
@@ -987,18 +1008,23 @@ export function ProfilePage({
                     </article>
                   );
                 })}
+                </div>
+                </div>
               </div>
-              <Button variant="outline" className="w-full rounded-2xl bg-white" onClick={() => onShowAllProjects?.(student.id)}>
+              <Button variant="outline" className="w-full rounded-2xl border-slate-200 bg-white shadow-sm hover:bg-slate-50" onClick={() => onShowAllProjects?.(student.id)}>
                 Show all projects
               </Button>
             </>
           ) : (
-            <EmptyState message="No projects yet. Start a showcase for the work you are proud of." action="Add Project" onAdd={() => setActiveModal('project')} />
+            <EmptyState message="No projects yet. Start a showcase for the work you are proud of." />
           )}
         </section>
+        ) : null}
 
+        {showExperienceSection || showEducationSection ? (
         <section className="grid gap-8 lg:grid-cols-2">
-          <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
+          {showExperienceSection ? (
+          <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
             <SectionHeader title="Experience" onAdd={() => setActiveModal('experience')} />
             {experiences.length > 0 ? (
               <div className="space-y-5">
@@ -1020,11 +1046,13 @@ export function ProfilePage({
                 ))}
               </div>
             ) : (
-              <EmptyState message="No experience yet. Add internships, volunteer roles, or campus work." action="Add Experience" onAdd={() => setActiveModal('experience')} />
+              <EmptyState message="No experience yet. Add internships, volunteer roles, or campus work." />
             )}
           </div>
+          ) : null}
 
-          <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
+          {showEducationSection ? (
+          <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
             <SectionHeader title="Education" />
             <div className="relative border-l-2 border-emerald-100 pl-5">
               <span className="absolute -left-[9px] top-1 h-4 w-4 rounded-full border-4 border-white bg-emerald-500 shadow" />
@@ -1033,16 +1061,19 @@ export function ProfilePage({
               <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">Year {student.year || '-'}</p>
             </div>
           </div>
+          ) : null}
         </section>
+        ) : null}
 
-        <section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
+        {showSkillsSection ? (
+        <section className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
           <SectionHeader title="Skills" onAdd={() => setActiveModal('skill')} />
           {skillsLoading ? (
             <LoadingIndicator label="Loading skills..." className="justify-start" size={20} />
           ) : displaySkills.length > 0 ? (
             <div className="flex flex-wrap gap-2">
               {displaySkills.map((skill) => (
-                <Badge key={skill.id} className="group/skill rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700">
+                <Badge key={skill.id} className="group/skill rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 shadow-none">
                   {skill.name}
                   {isOwnProfile ? (
                     <button type="button" onClick={() => handleRemoveSkill(skill.id)} className="ml-2 opacity-70 transition hover:text-red-600 sm:opacity-0 sm:group-hover/skill:opacity-100" aria-label={`Remove ${skill.name}`}>
@@ -1053,12 +1084,15 @@ export function ProfilePage({
               ))}
             </div>
           ) : (
-            <EmptyState message="No skills yet. Add the tools and topics people should find you for." action="Add Skill" onAdd={() => setActiveModal('skill')} />
+            <EmptyState message="No skills yet. Add the tools and topics people should find you for." />
           )}
         </section>
+        ) : null}
 
+        {showCertificationsSection || showClubsSection ? (
         <section className="grid gap-8 lg:grid-cols-2">
-          <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
+          {showCertificationsSection ? (
+          <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
             <SectionHeader title="Certifications" onAdd={() => setActiveModal('certification')} />
             {certificationsLoading ? (
               <LoadingIndicator label="Loading certifications..." className="justify-start" size={20} />
@@ -1085,11 +1119,13 @@ export function ProfilePage({
                 ))}
               </div>
             ) : (
-              <EmptyState message="No certifications yet. Add credentials that back up your work." action="Add Certification" onAdd={() => setActiveModal('certification')} />
+              <EmptyState message="No certifications yet. Add credentials that back up your work." />
             )}
           </div>
+          ) : null}
 
-          <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
+          {showClubsSection ? (
+          <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
             <SectionHeader title="Clubs & Societies" onAdd={() => setActiveModal('society')} />
             {societies.length > 0 ? (
               <div className="grid gap-3 sm:grid-cols-2">
@@ -1111,12 +1147,15 @@ export function ProfilePage({
                 ))}
               </div>
             ) : (
-              <EmptyState message="No clubs yet. Add communities, cells, or societies you are part of." action="Add Club" onAdd={() => setActiveModal('society')} />
+              <EmptyState message="No clubs yet. Add communities, cells, or societies you are part of." />
             )}
           </div>
+          ) : null}
         </section>
+        ) : null}
 
-        <section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
+        {showAchievementsSection ? (
+        <section className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
           <SectionHeader title="Achievements" onAdd={() => setActiveModal('achievement')} />
           {achievements.length > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2">
@@ -1137,9 +1176,10 @@ export function ProfilePage({
               ))}
             </div>
           ) : (
-            <EmptyState message="No achievements yet. Add awards, hackathon wins, or milestones." action="Add Achievement" onAdd={() => setActiveModal('achievement')} />
+            <EmptyState message="No achievements yet. Add awards, hackathon wins, or milestones." />
           )}
         </section>
+        ) : null}
       </div>
 
       {/* ===== MODALS ===== */}
@@ -1161,6 +1201,17 @@ export function ProfilePage({
               onChange={(e) => setEditedStudent({ ...editedStudent, headline: e.target.value })}
               placeholder="e.g., Aspiring ML Engineer | Python Developer"
             />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">About</label>
+            <Textarea
+              value={editedStudent.bio || ''}
+              onChange={(e) => setEditedStudent({ ...editedStudent, bio: e.target.value })}
+              rows={5}
+              maxLength={500}
+              placeholder="Write a short introduction about yourself..."
+            />
+            <p className="text-xs text-gray-400 mt-1">{(editedStudent.bio || '').length}/500</p>
           </div>
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
