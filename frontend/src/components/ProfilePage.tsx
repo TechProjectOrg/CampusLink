@@ -1,30 +1,23 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import {
-  Mail,
   GraduationCap,
   Calendar,
   MapPin,
   Edit2,
-  Download,
   ExternalLink,
   Plus,
   X,
   Heart,
   MessageCircle,
-  Share2,
   Bookmark,
-  Briefcase,
   Award,
   Users,
   Trophy,
   Pencil,
   Trash2,
-  Github,
-  Globe,
   Upload,
-  Link as LinkIcon,
-  Check,
+  Eye,
 } from 'lucide-react';
 import { Student, Opportunity } from '../types';
 import type { FollowGraph } from '../App';
@@ -35,18 +28,14 @@ import {
   apiCreateUserCertification,
   apiFetchUserCertifications,
   apiDeleteUserCertification,
-  type UserCertification,
 } from '../lib/certificationsApi';
 import {
   apiCreateUserProject,
   apiDeleteUserProject,
   apiFetchUserProjects,
-  type UserProject,
 } from '../lib/projectsApi';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
-import { Card, CardContent } from './ui/card';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
 import { Checkbox } from './ui/checkbox';
@@ -55,7 +44,6 @@ import { DatePicker } from './ui/date-picker';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { ProfilePhotoUpload } from './ui/profile-photo-upload';
 import { apiUpdateUserProfilePicture, apiUploadUserProfilePicture } from '../lib/authApi';
-import { OpportunityCard } from './OpportunityCard';
 import { apiFetchProfilePosts, type UserPost } from '../lib/postsApi';
 import { LoadingIndicator } from './ui/LoadingIndicator';
 
@@ -78,6 +66,9 @@ interface ProfilePageProps {
   onEditPost?: (postId: string, updates: Partial<Opportunity>) => void;
   onDeletePost?: (postId: string) => void;
   onOpenPost?: (post: Opportunity) => void;
+  onShowAllPosts?: (userId: string) => void;
+  onShowAllProjects?: (userId: string) => void;
+  onMessage?: (userId: string) => void;
   postsRefreshToken?: number;
 }
 
@@ -136,16 +127,11 @@ export function ProfilePage({
   student,
   isOwnProfile,
   onEdit,
-  opportunities,
-  onLike,
-  onSave,
-  onComment,
-  onReply,
-  onLikeComment,
-  onDeleteComment,
-  onEditPost,
   onDeletePost,
   onOpenPost,
+  onShowAllPosts,
+  onShowAllProjects,
+  onMessage,
   postsRefreshToken = 0,
   currentUserId,
   followGraph,
@@ -157,6 +143,7 @@ export function ProfilePage({
 
   // Profile state
   const [editedStudent, setEditedStudent] = useState(student);
+  const [isAboutExpanded, setIsAboutExpanded] = useState(false);
 
   // Skills state
   const [skills, setSkills] = useState<UserSkill[]>([]);
@@ -310,7 +297,7 @@ export function ProfilePage({
         authorName: comment.authorUsername,
         authorAvatar:
           comment.authorProfilePictureUrl ??
-          undefined,
+          '',
         content: comment.content,
         timestamp: comment.createdAt,
         parentCommentId: comment.parentCommentId,
@@ -324,7 +311,7 @@ export function ProfilePage({
           authorName: reply.authorUsername,
           authorAvatar:
             reply.authorProfilePictureUrl ??
-            undefined,
+            '',
           content: reply.content,
           timestamp: reply.createdAt,
           parentCommentId: reply.parentCommentId,
@@ -403,54 +390,6 @@ export function ProfilePage({
     : 'none';
   const profilePosts = [...loadedPosts].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
-  const updateCommentLikeLocally = (comments: Opportunity['comments'], commentId: string, nextLiked: boolean): Opportunity['comments'] =>
-    comments.map((comment) => {
-      if (comment.id === commentId) {
-        const currentLikeCount = Math.max(comment.likeCount ?? 0, 0);
-        return {
-          ...comment,
-          isLikedByMe: nextLiked,
-          likeCount: Math.max(currentLikeCount + (nextLiked ? 1 : -1), 0),
-        };
-      }
-
-      if (!comment.replies || comment.replies.length === 0) {
-        return comment;
-      }
-
-      return {
-        ...comment,
-        replies: updateCommentLikeLocally(comment.replies, commentId, nextLiked),
-      };
-    });
-
-  const handleProfileLike = (postId: string) => {
-    setLoadedPosts((prev) =>
-      prev.map((post) => {
-        if (post.id !== postId) return post;
-        const isLiked = Boolean(post.isLikedByMe ?? post.likes.includes(currentUserId));
-        const nextLiked = !isLiked;
-        return {
-          ...post,
-          isLikedByMe: nextLiked,
-          likeCount: Math.max((post.likeCount ?? post.likes.length) + (nextLiked ? 1 : -1), 0),
-        };
-      }),
-    );
-    onLike?.(postId);
-  };
-
-  const handleProfileCommentLike = (commentId: string, alreadyLiked: boolean) => {
-    const nextLiked = !alreadyLiked;
-    setLoadedPosts((prev) =>
-      prev.map((post) => ({
-        ...post,
-        comments: updateCommentLikeLocally(post.comments, commentId, nextLiked),
-      })),
-    );
-    onLikeComment?.(commentId, alreadyLiked);
-  };
-
   // Handlers
   const closeModal = () => {
     setActiveModal(null);
@@ -485,7 +424,6 @@ export function ProfilePage({
 
     if (payload.remove) {
       await apiUpdateUserProfilePicture(authUserId, null, authToken);
-      const seed = encodeURIComponent(student.username || student.email || student.id);
       onEdit?.({ avatar: undefined });
       await auth.refreshProfile();
       return;
@@ -730,39 +668,56 @@ export function ProfilePage({
     setAchievements(achievements.filter(a => a.id !== id));
   };
 
-  // Section Header Component
-  const SectionHeader = ({ title, icon: Icon, onAdd }: { title: string; icon: React.ElementType; onAdd?: () => void }) => (
-    <div className="flex items-center justify-between mb-4">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
-          <Icon className="w-5 h-5 text-white" />
-        </div>
-        <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+  const displaySkills = isOwnProfile ? skills : student.skills.map((name, index) => ({ id: String(index), name }));
+  const featuredProject = loadedProjects[0];
+  const featuredPost = profilePosts[0];
+  const featuredAchievement = achievements[0];
+  const hasAbout = Boolean(student.bio?.trim());
+  const clubCount = societies.length;
+
+  const SectionHeader = ({
+    title,
+    subtitle,
+    onAdd,
+  }: {
+    title: string;
+    subtitle?: string;
+    onAdd?: () => void;
+  }) => (
+    <div className="mb-4 flex items-end justify-between gap-4">
+      <div>
+        <h2 className="text-xl font-semibold tracking-tight text-slate-950">{title}</h2>
+        {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
       </div>
-      {isOwnProfile && onAdd && (
-        <Button variant="ghost" size="sm" onClick={onAdd} className="text-blue-600 hover:text-blue-700 hover:bg-blue-50">
-          <Plus className="w-4 h-4 mr-1" />
+      {isOwnProfile && onAdd ? (
+        <Button variant="outline" size="sm" onClick={onAdd} className="shrink-0 rounded-full border-slate-200 bg-white shadow-sm hover:bg-slate-50">
+          <Plus className="mr-1.5 h-4 w-4" />
           Add
         </Button>
-      )}
+      ) : null}
     </div>
   );
 
-  // Empty State Component
-  const EmptyState = ({ message, onAdd }: { message: string; onAdd?: () => void }) => (
-    <div className="text-center py-8">
-      <p className="text-gray-400 text-sm mb-3">{message}</p>
+  const EmptyState = ({ message, action, onAdd }: { message: string; action?: string; onAdd?: () => void }) => (
+    <div className="rounded-2xl border border-dashed border-slate-300 bg-white/70 px-6 py-8 text-center shadow-sm">
+      <p className="text-sm font-medium text-slate-600">{message}</p>
+      {isOwnProfile && onAdd && action ? (
+        <Button size="sm" onClick={onAdd} className="mt-4 rounded-full">
+          <Plus className="mr-1.5 h-4 w-4" />
+          {action}
+        </Button>
+      ) : null}
     </div>
   );
 
   // Item Actions Component
   const ItemActions = ({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) => (
     isOwnProfile ? (
-      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-        <button onClick={onEdit} className="p-1.5 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-colors">
+      <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+        <button type="button" onClick={onEdit} className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-blue-50 hover:text-blue-600" aria-label="Edit item">
           <Pencil className="w-4 h-4" />
         </button>
-        <button onClick={onDelete} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors">
+        <button type="button" onClick={onDelete} className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600" aria-label="Delete item">
           <Trash2 className="w-4 h-4" />
         </button>
       </div>
@@ -770,18 +725,20 @@ export function ProfilePage({
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20 md:pb-0">
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
-        
-        {/* ===== PROFILE HEADER ===== */}
-        <Card className="overflow-hidden shadow-sm border-0">
-          {/* Blue Gradient Cover */}
-          <div className="h-32 bg-gradient-to-r from-blue-600 via-blue-500 to-blue-400" />
-          
-          <CardContent className="relative px-6 pb-6">
-            <div className="flex flex-col md:flex-row md:items-end gap-4 -mt-16">
-              {/* Profile Photo with Upload */}
-              <div className="relative">
+    <div className="min-h-screen bg-slate-50 pb-24 md:pb-8">
+      <div className="mx-auto max-w-5xl space-y-8 px-4 py-6 sm:px-6 lg:px-8">
+        <section className="overflow-hidden rounded-[1.75rem] bg-white shadow-xl shadow-slate-200/70 ring-1 ring-slate-200">
+          <div className="relative h-48 bg-gradient-to-br from-sky-600 via-indigo-500 to-emerald-400 sm:h-60">
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.35),transparent_28%),linear-gradient(to_top,rgba(15,23,42,0.72),rgba(15,23,42,0.12))]" />
+            <div className="absolute bottom-6 left-6 hidden max-w-xl text-white sm:block">
+              <p className="text-sm font-medium uppercase tracking-[0.18em] text-white/75">Campus profile</p>
+              <h1 className="mt-2 text-3xl font-semibold tracking-tight">{student.name}</h1>
+            </div>
+          </div>
+
+          <div className="px-5 pb-6 sm:px-8">
+            <div className="-mt-16 flex flex-col gap-5 sm:-mt-14 sm:flex-row sm:items-end sm:justify-between">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
                 <ProfilePhotoUpload
                   currentPhoto={displayedProfilePhoto}
                   hasCustomPhoto={hasCustomProfilePhoto}
@@ -789,379 +746,400 @@ export function ProfilePage({
                   editable={isOwnProfile}
                   onPhotoChange={handleProfilePhotoChange}
                 />
-              </div>
-
-              {/* Profile Info */}
-              <div className="flex-1 md:pb-2">
-                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
-                  <div>
-                    <h1 className="text-2xl font-bold text-gray-900">{student.name}</h1>
-                    {student.headline ? (
-                      <p className="text-gray-600 font-medium mt-1">{student.headline}</p>
-                    ) : isOwnProfile ? (
-                      <p className="text-gray-400 text-sm italic mt-1">Add a professional headline</p>
-                    ) : null}
-                    
-                    <div className="flex flex-wrap items-center gap-4 mt-3 text-sm text-gray-500">
-                      <span className="flex items-center gap-1">
-                        <GraduationCap className="w-4 h-4" />
-                        {student.branch}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-4 h-4" />
-                        Year {student.year}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Mail className="w-4 h-4" />
-                        {student.email}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-2">
-                    {isOwnProfile ? (
-                      <Button
-                        onClick={() => setActiveModal('editProfile')}
-                        className="bg-blue-600 hover:bg-blue-700 text-white"
-                      >
-                        <Edit2 className="w-4 h-4 mr-2" />
-                        Edit Profile
-                      </Button>
-                    ) : (
-                      <FollowButton
-                        targetName={student.name}
-                        accountType={student.accountType}
-                        isFollowing={isFollowing}
-                        isFollower={isFollower}
-                        requestStatus={requestStatus}
-                        onFollow={() => onFollow(student.id, student.accountType)}
-                        onUnfollow={() => onUnfollow(student.id)}
-                        onCancelRequest={() => onCancelRequest(student.id)}
-                      />
-                    )}
+                <div className="pt-2 sm:pb-1">
+                  <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:hidden">{student.name}</h1>
+                  <p className="mt-2 max-w-2xl text-lg font-medium text-slate-800">
+                    {student.headline || (isOwnProfile ? 'Add a headline that tells campus what you are building.' : 'Campus community member')}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm text-slate-500">
+                    <span className="inline-flex items-center gap-1.5">
+                      <GraduationCap className="h-4 w-4" />
+                      {student.branch || 'College'}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <Calendar className="h-4 w-4" />
+                      Year {student.year || '-'}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <MapPin className="h-4 w-4" />
+                      Campus
+                    </span>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Stats Bar */}
-            <div className="flex items-center gap-8 mt-6 pt-6 border-t border-gray-100">
-              <div className="text-center">
-                <p className="text-2xl font-bold text-gray-900">{followersCount}</p>
-                <p className="text-xs text-gray-500">Followers</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-gray-900">{followingCount}</p>
-                <p className="text-xs text-gray-500">Following</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-gray-900">{loadedProjects.length}</p>
-                <p className="text-xs text-gray-500">Projects</p>
-              </div>
-              <div className="text-center">
-                <p className="text-2xl font-bold text-gray-900">{loadedCertifications.length}</p>
-                <p className="text-xs text-gray-500">Certifications</p>
-              </div>
-              {student.resumeUrl && (
-                <Button variant="outline" size="sm" className="ml-auto">
-                  <Download className="w-4 h-4 mr-2" />
-                  Resume
-                </Button>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* ===== ABOUT SECTION ===== */}
-        <Card className="shadow-sm border-0">
-          <CardContent className="p-6">
-            <SectionHeader 
-              title="About" 
-              icon={Users} 
-              onAdd={!student.bio ? () => setActiveModal('about') : undefined} 
-            />
-            {student.bio ? (
-              <div className="group relative">
-                <p className="text-gray-700 leading-relaxed">{student.bio}</p>
-                {isOwnProfile && (
-                  <button
-                    onClick={() => setActiveModal('about')}
-                    className="absolute top-0 right-0 p-1.5 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-all"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </button>
+              <div className="flex flex-wrap gap-2">
+                {isOwnProfile ? (
+                  <Button onClick={() => setActiveModal('editProfile')} className="rounded-full shadow-sm">
+                    <Edit2 className="mr-2 h-4 w-4" />
+                    Edit Profile
+                  </Button>
+                ) : (
+                  <>
+                    <FollowButton
+                      targetName={student.name}
+                      accountType={student.accountType}
+                      isFollowing={isFollowing}
+                      isFollower={isFollower}
+                      requestStatus={requestStatus}
+                      onFollow={() => onFollow(student.id, student.accountType)}
+                      onUnfollow={() => onUnfollow(student.id)}
+                      onCancelRequest={() => onCancelRequest(student.id)}
+                    />
+                    <Button variant="outline" onClick={() => onMessage?.(student.id)} className="rounded-full bg-white">
+                      <MessageCircle className="mr-2 h-4 w-4" />
+                      Message
+                    </Button>
+                  </>
                 )}
               </div>
-            ) : (
-              <EmptyState message="Add a short bio to introduce yourself" onAdd={() => setActiveModal('about')} />
-            )}
-          </CardContent>
-        </Card>
+            </div>
 
-        {/* ===== POSTS SECTION ===== */}
-        <Card className="shadow-sm border-0">
-          <CardContent className="p-6 space-y-4">
-            <SectionHeader title="Posts" icon={MessageCircle} />
-            {isOwnProfile && postsLoading ? (
-              <LoadingIndicator label="Loading posts..." className="justify-start" size={20} />
-            ) : profilePosts.length > 0 ? (
-              <div className="space-y-4">
-                {profilePosts.map((post) => (
-                  <OpportunityCard
-                    key={post.id}
-                    opportunity={post}
-                    currentUserId={currentUserId}
-                    showManagementControls={isOwnProfile}
-                    onLike={handleProfileLike}
-                    onSave={(id) => onSave?.(id)}
-                    onComment={(id, comment) => onComment?.(id, comment)}
-                    onReply={(commentId, comment) => onReply?.(commentId, comment)}
-                    onLikeComment={handleProfileCommentLike}
-                    onDeleteComment={(commentId) => onDeleteComment?.(commentId)}
-                    onEditPost={(postId, updates) => onEditPost?.(postId, updates)}
-                    onDeletePost={(postId) => onDeletePost?.(postId)}
-                    onOpenPost={onOpenPost}
-                    onViewProfile={() => undefined}
-                  />
-                ))}
+            <div className="mt-7 grid grid-cols-2 gap-3 border-t border-slate-100 pt-5 sm:grid-cols-4">
+              {[
+                ['Followers', followersCount],
+                ['Following', followingCount],
+                ['Projects', loadedProjects.length],
+                ['Clubs', clubCount],
+              ].map(([label, value]) => (
+                <div key={label} className="rounded-2xl bg-slate-50 px-4 py-3 text-center">
+                  <p className="text-2xl font-semibold text-slate-950">{value}</p>
+                  <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="group relative">
+          <SectionHeader title="About" onAdd={!hasAbout ? () => setActiveModal('about') : undefined} />
+          {hasAbout ? (
+            <div className="relative pr-10">
+              <p className={`text-base leading-7 text-slate-700 ${isAboutExpanded ? '' : 'line-clamp-3'}`}>{student.bio}</p>
+              {student.bio && student.bio.length > 180 ? (
+                <button
+                  type="button"
+                  onClick={() => setIsAboutExpanded((value) => !value)}
+                  className="mt-2 text-sm font-medium text-blue-600 hover:text-blue-700"
+                >
+                  {isAboutExpanded ? 'See less' : 'See more'}
+                </button>
+              ) : null}
+              {isOwnProfile ? (
+                <button
+                  type="button"
+                  onClick={() => setActiveModal('about')}
+                  className="absolute right-0 top-0 rounded-full p-2 text-slate-400 transition hover:bg-blue-50 hover:text-blue-600"
+                  aria-label="Edit about"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <EmptyState
+              message={isOwnProfile ? 'No about section yet. Add a quick intro that sounds like you.' : `${student.name} has not added an about section yet.`}
+              action="Add About"
+              onAdd={() => setActiveModal('about')}
+            />
+          )}
+        </section>
+
+        <section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
+          <SectionHeader title="Featured" subtitle="A quick glimpse of recent work and wins" />
+          {featuredProject || featuredPost || featuredAchievement ? (
+            <div className="grid gap-4 md:grid-cols-[1.2fr_0.8fr]">
+              <button
+                type="button"
+                onClick={() => featuredPost && onOpenPost?.(featuredPost)}
+                className="group/highlight min-h-52 overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 p-6 text-left text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl"
+              >
+                <p className="text-sm font-medium text-blue-100">{featuredProject ? 'Featured project' : featuredPost ? 'Featured post' : 'Achievement'}</p>
+                <h3 className="mt-3 text-2xl font-semibold tracking-tight">
+                  {featuredProject?.title || featuredPost?.title || featuredAchievement?.title}
+                </h3>
+                <p className="mt-3 line-clamp-3 max-w-2xl text-sm leading-6 text-white/75">
+                  {featuredProject?.description || featuredPost?.description || featuredAchievement?.description || 'A highlighted milestone from this profile.'}
+                </p>
+                <span className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-white">
+                  View highlight
+                  <ExternalLink className="h-4 w-4 transition group-hover/highlight:translate-x-0.5" />
+                </span>
+              </button>
+              <div className="grid gap-4 sm:grid-cols-3 md:grid-cols-1">
+                <div className="rounded-2xl bg-sky-50 p-4">
+                  <p className="text-2xl font-semibold text-sky-700">{profilePosts.length}</p>
+                  <p className="text-sm text-sky-900/70">posts shared</p>
+                </div>
+                <div className="rounded-2xl bg-emerald-50 p-4">
+                  <p className="text-2xl font-semibold text-emerald-700">{displaySkills.length}</p>
+                  <p className="text-sm text-emerald-900/70">skills listed</p>
+                </div>
+                <div className="rounded-2xl bg-amber-50 p-4">
+                  <p className="text-2xl font-semibold text-amber-700">{achievements.length}</p>
+                  <p className="text-sm text-amber-900/70">achievements</p>
+                </div>
               </div>
-            ) : (
-              <EmptyState
-                message={
-                  isOwnProfile
-                    ? 'Create your first post to see it here'
-                    : `${student.name} has not posted anything yet`
-                }
-              />
-            )}
-          </CardContent>
-        </Card>
+            </div>
+          ) : (
+            <EmptyState message="Nothing featured yet. Pin a project, post, or achievement once you add one." action="Add Project" onAdd={() => setActiveModal('project')} />
+          )}
+        </section>
 
-        {/* ===== SKILLS SECTION ===== */}
-        <Card className="shadow-sm border-0">
-          <CardContent className="p-6">
-            <SectionHeader title="Skills" icon={Award} onAdd={() => setActiveModal('skill')} />
-            {skillsLoading ? (
-              <LoadingIndicator label="Loading skills..." className="justify-start" size={20} />
-            ) : (isOwnProfile ? skills : student.skills || []).length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {(isOwnProfile ? skills : student.skills.map((s, i) => ({ id: String(i), name: s }))).map((skill) => (
-                  <Badge
-                    key={skill.id}
-                    className="bg-blue-50 text-blue-700 border border-blue-200 px-3 py-1.5 text-sm group/skill"
-                  >
-                    {typeof skill === 'string' ? skill : skill.name}
-                    {isOwnProfile && (
-                      <button
-                        onClick={() => handleRemoveSkill(skill.id)}
-                        className="ml-2 opacity-0 group-hover/skill:opacity-100 hover:text-red-600 transition-opacity"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    )}
-                  </Badge>
-                ))}
-              </div>
-            ) : (
-              <EmptyState message="Add skills to showcase your expertise" onAdd={() => setActiveModal('skill')} />
-            )}
-          </CardContent>
-        </Card>
-
-        {/* ===== EXPERIENCE SECTION ===== */}
-        <Card className="shadow-sm border-0">
-          <CardContent className="p-6">
-            <SectionHeader title="Experience" icon={Briefcase} onAdd={() => setActiveModal('experience')} />
-            {experiences.length > 0 ? (
-              <div className="space-y-4">
-                {experiences.map((exp) => (
-                  <div key={exp.id} className="flex gap-4 p-4 rounded-xl hover:bg-gray-50 transition-colors group">
-                    <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center flex-shrink-0">
-                      <Briefcase className="w-6 h-6 text-blue-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h4 className="font-semibold text-gray-900">{exp.roleTitle}</h4>
-                          <p className="text-gray-600">{exp.organization}</p>
-                          <p className="text-sm text-gray-400 mt-1">
-                            {format(exp.startDate, 'MMM yyyy')} - {exp.isCurrentlyWorking ? 'Present' : exp.endDate ? format(exp.endDate, 'MMM yyyy') : 'Present'}
-                          </p>
-                        </div>
-                        <ItemActions onEdit={() => handleEditExperience(exp)} onDelete={() => handleDeleteExperience(exp.id)} />
-                      </div>
-                      {exp.description && <p className="text-gray-600 text-sm mt-2">{exp.description}</p>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyState message="Add your work experience" onAdd={() => setActiveModal('experience')} />
-            )}
-          </CardContent>
-        </Card>
-
-        {/* ===== PROJECTS SECTION ===== */}
-        <Card className="shadow-sm border-0">
-          <CardContent className="p-6">
-            <SectionHeader title="Projects" icon={ExternalLink} onAdd={() => setActiveModal('project')} />
-            {projectsLoading ? (
-              <LoadingIndicator label="Loading projects..." className="justify-start" size={20} />
-            ) : loadedProjects.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {loadedProjects.map((project) => (
-                  <div key={project.id} className="border rounded-xl overflow-hidden hover:shadow-md transition-shadow group">
-                    {project.imageUrl ? (
-                      <ImageWithFallback src={project.imageUrl} alt={project.title} className="w-full h-40 object-cover" />
+        <section className="space-y-4">
+          <SectionHeader title="Activity" subtitle="Recent posts and campus updates" />
+          {postsLoading ? (
+            <LoadingIndicator label="Loading posts..." className="justify-start" size={20} />
+          ) : profilePosts.length > 0 ? (
+            <>
+              <div className="hide-scrollbar flex snap-x gap-4 overflow-x-auto scroll-smooth pb-2">
+                {profilePosts.slice(0, 8).map((post) => (
+                  <article key={post.id} className="group relative flex w-[18rem] shrink-0 snap-start flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-lg sm:w-[22rem]">
+                    {post.image ? (
+                      <ImageWithFallback src={post.image} alt={post.title || 'Post image'} className="h-36 w-full object-cover" />
                     ) : (
-                      <div className="w-full h-40 bg-gradient-to-br from-blue-100 to-blue-50 flex items-center justify-center">
-                        <ExternalLink className="w-12 h-12 text-blue-300" />
+                      <div className="flex h-36 items-center justify-center bg-gradient-to-br from-blue-50 to-emerald-50">
+                        <MessageCircle className="h-10 w-10 text-blue-300" />
                       </div>
                     )}
-                    <div className="p-4">
-                      <div className="flex items-start justify-between">
-                        <h4 className="font-semibold text-gray-900">{project.title}</h4>
-                        <ItemActions onEdit={() => handleEditProject(project)} onDelete={() => handleDeleteProject(project.id)} />
+                    <div className="flex flex-1 flex-col p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <h3 className="line-clamp-2 font-semibold text-slate-950">{post.title || 'Campus update'}</h3>
+                        {isOwnProfile ? (
+                          <div className="flex gap-1">
+                            {post.canEdit ? (
+                              <button type="button" onClick={() => onOpenPost?.(post)} className="rounded-full p-1.5 text-slate-400 hover:bg-blue-50 hover:text-blue-600" aria-label="Open post to edit">
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                            ) : null}
+                            {post.canDelete ? (
+                              <button type="button" onClick={() => onDeletePost?.(post.id)} className="rounded-full p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete post">
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            ) : null}
+                          </div>
+                        ) : null}
                       </div>
-                      <p className="text-gray-600 text-sm mt-1 line-clamp-2">{project.description}</p>
-                      
-                      {project.tags && project.tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-3">
-                          {project.tags.slice(0, 4).map((tag) => (
-                            <Badge key={tag} variant="outline" className="text-xs">{tag}</Badge>
-                          ))}
+                      <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600">{post.description}</p>
+                      <button type="button" onClick={() => onOpenPost?.(post)} className="mt-4 text-left text-sm font-medium text-blue-600 hover:text-blue-700">
+                        Open post
+                      </button>
+                      <div className="mt-auto flex gap-4 border-t border-slate-100 pt-3 text-sm text-slate-500">
+                        <span className="inline-flex items-center gap-1"><Heart className="h-4 w-4" />{post.likeCount ?? 0}</span>
+                        <span className="inline-flex items-center gap-1"><MessageCircle className="h-4 w-4" />{post.commentCount ?? 0}</span>
+                        <span className="inline-flex items-center gap-1"><Bookmark className="h-4 w-4" />{post.saveCount ?? 0}</span>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              <Button variant="outline" className="w-full rounded-2xl bg-white" onClick={() => onShowAllPosts?.(student.id)}>
+                Show all posts
+              </Button>
+            </>
+          ) : (
+            <EmptyState
+              message={isOwnProfile ? 'No posts yet. Share a campus update, project note, or opportunity.' : `${student.name} has not posted anything yet.`}
+              action="Add Post"
+              onAdd={() => onShowAllPosts?.(student.id)}
+            />
+          )}
+        </section>
+
+        <section className="space-y-4">
+          <SectionHeader title="Projects" subtitle="Selected builds, prototypes, and experiments" onAdd={() => setActiveModal('project')} />
+          {projectsLoading ? (
+            <LoadingIndicator label="Loading projects..." className="justify-start" size={20} />
+          ) : loadedProjects.length > 0 ? (
+            <>
+              <div className="hide-scrollbar flex snap-x gap-4 overflow-x-auto scroll-smooth pb-2">
+                {loadedProjects.map((project) => {
+                  const projectLink = project.liveUrl || project.githubUrl || (project as Project & { link?: string | null }).link;
+                  return (
+                    <article key={project.id} className="group flex w-[19rem] shrink-0 snap-start flex-col overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-slate-200 transition hover:-translate-y-0.5 hover:shadow-lg sm:w-[24rem]">
+                      {project.imageUrl ? (
+                        <ImageWithFallback src={project.imageUrl} alt={project.title} className="h-40 w-full object-cover" />
+                      ) : (
+                        <div className="flex h-40 items-center justify-center bg-gradient-to-br from-indigo-50 via-sky-50 to-emerald-50">
+                          <ExternalLink className="h-10 w-10 text-indigo-300" />
                         </div>
                       )}
-                      
-                      <div className="flex gap-2 mt-3">
-                        {project.githubUrl && (
-                          <a href={project.githubUrl} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg hover:bg-gray-100 text-gray-600">
-                            <Github className="w-4 h-4" />
+                      <div className="flex flex-1 flex-col p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <h3 className="font-semibold text-slate-950">{project.title}</h3>
+                          <ItemActions onEdit={() => handleEditProject(project)} onDelete={() => handleDeleteProject(project.id)} />
+                        </div>
+                        <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600">{project.description}</p>
+                        {project.tags?.length ? (
+                          <div className="mt-4 flex flex-wrap gap-1.5">
+                            {project.tags.slice(0, 4).map((tag) => (
+                              <Badge key={tag} variant="outline" className="rounded-full border-slate-200 bg-slate-50 text-xs text-slate-600">{tag}</Badge>
+                            ))}
+                          </div>
+                        ) : null}
+                        {projectLink ? (
+                          <a href={projectLink} target="_blank" rel="noopener noreferrer" className="mt-auto inline-flex items-center gap-1 pt-4 text-sm font-medium text-blue-600 hover:text-blue-700">
+                            Visit project
+                            <ExternalLink className="h-3.5 w-3.5" />
                           </a>
-                        )}
-                        {project.liveUrl && (
-                          <a href={project.liveUrl} target="_blank" rel="noopener noreferrer" className="p-2 rounded-lg hover:bg-gray-100 text-gray-600">
-                            <Globe className="w-4 h-4" />
-                          </a>
-                        )}
+                        ) : null}
                       </div>
+                    </article>
+                  );
+                })}
+              </div>
+              <Button variant="outline" className="w-full rounded-2xl bg-white" onClick={() => onShowAllProjects?.(student.id)}>
+                Show all projects
+              </Button>
+            </>
+          ) : (
+            <EmptyState message="No projects yet. Start a showcase for the work you are proud of." action="Add Project" onAdd={() => setActiveModal('project')} />
+          )}
+        </section>
+
+        <section className="grid gap-8 lg:grid-cols-2">
+          <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
+            <SectionHeader title="Experience" onAdd={() => setActiveModal('experience')} />
+            {experiences.length > 0 ? (
+              <div className="space-y-5">
+                {experiences.map((exp) => (
+                  <div key={exp.id} className="group relative border-l-2 border-blue-100 pl-5">
+                    <span className="absolute -left-[9px] top-1 h-4 w-4 rounded-full border-4 border-white bg-blue-500 shadow" />
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="font-semibold text-slate-950">{exp.roleTitle}</h3>
+                        <p className="text-sm text-slate-600">{exp.organization}</p>
+                        <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                          {format(exp.startDate, 'MMM yyyy')} - {exp.isCurrentlyWorking ? 'Present' : exp.endDate ? format(exp.endDate, 'MMM yyyy') : 'Present'}
+                        </p>
+                      </div>
+                      <ItemActions onEdit={() => handleEditExperience(exp)} onDelete={() => handleDeleteExperience(exp.id)} />
                     </div>
+                    {exp.description ? <p className="mt-2 text-sm leading-6 text-slate-600">{exp.description}</p> : null}
                   </div>
                 ))}
               </div>
             ) : (
-              <EmptyState message="Showcase your projects" onAdd={() => setActiveModal('project')} />
+              <EmptyState message="No experience yet. Add internships, volunteer roles, or campus work." action="Add Experience" onAdd={() => setActiveModal('experience')} />
             )}
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* ===== CERTIFICATIONS SECTION ===== */}
-        <Card className="shadow-sm border-0">
-          <CardContent className="p-6">
-            <SectionHeader title="Certifications" icon={Trophy} onAdd={() => setActiveModal('certification')} />
+          <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
+            <SectionHeader title="Education" />
+            <div className="relative border-l-2 border-emerald-100 pl-5">
+              <span className="absolute -left-[9px] top-1 h-4 w-4 rounded-full border-4 border-white bg-emerald-500 shadow" />
+              <h3 className="font-semibold text-slate-950">{student.branch || 'Degree / Branch'}</h3>
+              <p className="text-sm text-slate-600">CampusLynk College</p>
+              <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">Year {student.year || '-'}</p>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
+          <SectionHeader title="Skills" onAdd={() => setActiveModal('skill')} />
+          {skillsLoading ? (
+            <LoadingIndicator label="Loading skills..." className="justify-start" size={20} />
+          ) : displaySkills.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {displaySkills.map((skill) => (
+                <Badge key={skill.id} className="group/skill rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700">
+                  {skill.name}
+                  {isOwnProfile ? (
+                    <button type="button" onClick={() => handleRemoveSkill(skill.id)} className="ml-2 opacity-70 transition hover:text-red-600 sm:opacity-0 sm:group-hover/skill:opacity-100" aria-label={`Remove ${skill.name}`}>
+                      <X className="h-3 w-3" />
+                    </button>
+                  ) : null}
+                </Badge>
+              ))}
+            </div>
+          ) : (
+            <EmptyState message="No skills yet. Add the tools and topics people should find you for." action="Add Skill" onAdd={() => setActiveModal('skill')} />
+          )}
+        </section>
+
+        <section className="grid gap-8 lg:grid-cols-2">
+          <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
+            <SectionHeader title="Certifications" onAdd={() => setActiveModal('certification')} />
             {certificationsLoading ? (
               <LoadingIndicator label="Loading certifications..." className="justify-start" size={20} />
             ) : loadedCertifications.length > 0 ? (
               <div className="space-y-3">
                 {loadedCertifications.map((cert) => (
-                  <div key={cert.id} className="flex items-center gap-4 p-4 rounded-xl hover:bg-gray-50 transition-colors group">
-                    {cert.imageUrl ? (
-                      <img src={cert.imageUrl} alt={cert.name} className="w-12 h-12 rounded-lg object-cover" />
-                    ) : (
-                      <div className="w-12 h-12 rounded-xl bg-yellow-100 flex items-center justify-center flex-shrink-0">
-                        <Trophy className="w-6 h-6 text-yellow-600" />
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h4 className="font-medium text-gray-900">{cert.name}</h4>
-                          {cert.issuer && <p className="text-sm text-gray-500">{cert.issuer}</p>}
-                          {cert.issueDate && (
-                            <p className="text-xs text-gray-400 mt-1">Issued {format(new Date(cert.issueDate), 'MMM yyyy')}</p>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {cert.certificateUrl && (
-                            <a href={cert.certificateUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline">
-                              View
-                            </a>
-                          )}
-                          <ItemActions onEdit={() => handleEditCertification(cert)} onDelete={() => handleDeleteCertification(cert.id)} />
-                        </div>
-                      </div>
+                  <div key={cert.id} className="group flex items-center gap-4 rounded-2xl p-3 transition hover:bg-slate-50">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+                      <Trophy className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate font-medium text-slate-950">{cert.name}</h3>
+                      <p className="text-sm text-slate-500">{cert.issuer || 'Certification issuer'}</p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {cert.certificateUrl ? (
+                        <a href={cert.certificateUrl} target="_blank" rel="noopener noreferrer" className="rounded-full p-2 text-slate-400 hover:bg-blue-50 hover:text-blue-600" aria-label="View certificate">
+                          <Eye className="h-4 w-4" />
+                        </a>
+                      ) : null}
+                      <ItemActions onEdit={() => handleEditCertification(cert)} onDelete={() => handleDeleteCertification(cert.id)} />
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <EmptyState message="Add your certifications" onAdd={() => setActiveModal('certification')} />
+              <EmptyState message="No certifications yet. Add credentials that back up your work." action="Add Certification" onAdd={() => setActiveModal('certification')} />
             )}
-          </CardContent>
-        </Card>
+          </div>
 
-        {/* ===== SOCIETIES & CLUBS SECTION ===== */}
-        <Card className="shadow-sm border-0">
-          <CardContent className="p-6">
-            <SectionHeader title="Societies & Clubs" icon={Users} onAdd={() => setActiveModal('society')} />
+          <div className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
+            <SectionHeader title="Clubs & Societies" onAdd={() => setActiveModal('society')} />
             {societies.length > 0 ? (
-              <div className="space-y-3">
+              <div className="grid gap-3 sm:grid-cols-2">
                 {societies.map((soc) => (
-                  <div key={soc.id} className="flex gap-4 p-4 rounded-xl hover:bg-gray-50 transition-colors group">
-                    <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center flex-shrink-0">
-                      <Users className="w-6 h-6 text-green-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h4 className="font-semibold text-gray-900">{soc.societyName}</h4>
-                          <p className="text-gray-600">{soc.role}</p>
-                          <p className="text-sm text-gray-400 mt-1">
-                            {format(soc.startDate, 'MMM yyyy')} - {soc.endDate ? format(soc.endDate, 'MMM yyyy') : 'Present'}
-                          </p>
+                  <div key={soc.id} className="group rounded-2xl border border-slate-100 bg-slate-50 p-4 transition hover:bg-white hover:shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700">
+                          <Users className="h-5 w-5" />
                         </div>
-                        <ItemActions onEdit={() => handleEditSociety(soc)} onDelete={() => handleDeleteSociety(soc.id)} />
+                        <div>
+                          <h3 className="font-medium text-slate-950">{soc.societyName}</h3>
+                          <p className="text-sm text-slate-500">{soc.role}</p>
+                        </div>
                       </div>
+                      <ItemActions onEdit={() => handleEditSociety(soc)} onDelete={() => handleDeleteSociety(soc.id)} />
                     </div>
                   </div>
                 ))}
               </div>
             ) : (
-              <EmptyState message="Add societies and clubs you're part of" onAdd={() => setActiveModal('society')} />
+              <EmptyState message="No clubs yet. Add communities, cells, or societies you are part of." action="Add Club" onAdd={() => setActiveModal('society')} />
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
-        {/* ===== ACHIEVEMENTS SECTION ===== */}
-        <Card className="shadow-sm border-0">
-          <CardContent className="p-6">
-            <SectionHeader title="Achievements" icon={Award} onAdd={() => setActiveModal('achievement')} />
-            {achievements.length > 0 ? (
-              <div className="space-y-3">
-                {achievements.map((ach) => (
-                  <div key={ach.id} className="flex gap-4 p-4 rounded-xl hover:bg-gray-50 transition-colors group">
-                    <div className="w-12 h-12 rounded-xl bg-orange-100 flex items-center justify-center flex-shrink-0">
-                      <Trophy className="w-6 h-6 text-orange-600" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <h4 className="font-semibold text-gray-900">{ach.title}</h4>
-                          <p className="text-sm text-gray-400">{ach.year}</p>
-                          {ach.description && <p className="text-gray-600 text-sm mt-1">{ach.description}</p>}
-                        </div>
-                        <ItemActions onEdit={() => handleEditAchievement(ach)} onDelete={() => handleDeleteAchievement(ach.id)} />
+        <section className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200 sm:p-6">
+          <SectionHeader title="Achievements" onAdd={() => setActiveModal('achievement')} />
+          {achievements.length > 0 ? (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {achievements.map((ach) => (
+                <div key={ach.id} className="group rounded-2xl border border-orange-100 bg-orange-50/70 p-4 transition hover:bg-white hover:shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-100 text-orange-700">
+                        <Award className="h-5 w-5" />
                       </div>
+                      <h3 className="font-semibold text-slate-950">{ach.title}</h3>
+                      <p className="text-sm text-slate-500">{ach.year}</p>
+                      {ach.description ? <p className="mt-2 text-sm leading-6 text-slate-600">{ach.description}</p> : null}
                     </div>
+                    <ItemActions onEdit={() => handleEditAchievement(ach)} onDelete={() => handleDeleteAchievement(ach.id)} />
                   </div>
-                ))}
-              </div>
-            ) : (
-              <EmptyState message="Add your achievements and awards" onAdd={() => setActiveModal('achievement')} />
-            )}
-          </CardContent>
-        </Card>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState message="No achievements yet. Add awards, hackathon wins, or milestones." action="Add Achievement" onAdd={() => setActiveModal('achievement')} />
+          )}
+        </section>
       </div>
 
       {/* ===== MODALS ===== */}
@@ -1275,7 +1253,7 @@ export function ProfilePage({
             <Checkbox
               id="currentlyWorking"
               checked={newExperience.isCurrentlyWorking}
-              onCheckedChange={(checked) => setNewExperience({ ...newExperience, isCurrentlyWorking: checked as boolean })}
+              onCheckedChange={(checked: boolean | 'indeterminate') => setNewExperience({ ...newExperience, isCurrentlyWorking: checked === true })}
             />
             <label htmlFor="currentlyWorking" className="text-sm text-gray-700">I currently work here</label>
           </div>

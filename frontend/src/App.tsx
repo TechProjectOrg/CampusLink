@@ -3,6 +3,8 @@ import { Navbar } from './components/Navbar';
 import { AuthPage } from './components/AuthPage';
 import { FeedPage } from './components/FeedPage';
 import { ProfilePage } from './components/ProfilePage';
+import { ProfilePostsPage } from './components/ProfilePostsPage';
+import { ProfileProjectsPage } from './components/ProfileProjectsPage';
 import { SearchPage } from './components/SearchPage';
 import { NetworkPage } from './components/NetworkPage';
 import { ChatPage } from './components/ChatPage';
@@ -638,6 +640,7 @@ export default function App() {
   });
   const [requestIdMap, setRequestIdMap] = useState<RequestIdMap>({});
   const [viewingProfileId, setViewingProfileId] = useState<string | null>(null);
+  const [profileSubpage, setProfileSubpage] = useState<'posts' | 'projects' | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedHashtag, setSelectedHashtag] = useState<string | null>(null);
   const [postsRefreshToken, setPostsRefreshToken] = useState(0);
@@ -665,6 +668,7 @@ export default function App() {
     });
     setRequestIdMap({});
     setViewingProfileId(null);
+    setProfileSubpage(null);
     setOpenedPost(null);
     setOpenedPostId(null);
     setOpenedPostComments(createInitialDiscussionPageState<Comment>());
@@ -707,6 +711,7 @@ export default function App() {
 
         if (mainPath === 'profile' && pathParts[1]) {
             setViewingProfileId(pathParts[1]);
+            setProfileSubpage(pathParts[2] === 'posts' || pathParts[2] === 'projects' ? pathParts[2] : null);
             setOpenedPostId(null);
             setOpenedPost(null);
             setOpenedPostComments(createInitialDiscussionPageState<Comment>());
@@ -715,6 +720,7 @@ export default function App() {
             setHashtagPageTag(null);
             setClubPageSlug(null);
         } else if (mainPath === 'post' && pathParts[1]) {
+            setProfileSubpage(null);
             setOpenedPostId(pathParts[1]);
             const matched = opportunities.find((item) => item.id === pathParts[1]) ?? null;
             setOpenedPost(matched);
@@ -725,6 +731,7 @@ export default function App() {
             setHashtagPageTag(null);
             setClubPageSlug(null);
         } else if (mainPath === 'hashtag' && pathParts[1]) {
+            setProfileSubpage(null);
             const decodedTag = decodeURIComponent(pathParts[1]).trim().replace(/^#+/, '');
             setHashtagPageTag(decodedTag || null);
             setViewingProfileId(null);
@@ -735,6 +742,7 @@ export default function App() {
             setFocusedCommentId(null);
             setClubPageSlug(null);
         } else if (mainPath === 'clubs' && pathParts[1]) {
+            setProfileSubpage(null);
             const decodedClubSlug = decodeURIComponent(pathParts[1]).trim();
             setClubPageSlug(decodedClubSlug || null);
             setViewingProfileId(null);
@@ -746,6 +754,7 @@ export default function App() {
             setHashtagPageTag(null);
         } else {
             setViewingProfileId(null);
+            setProfileSubpage(null);
             setOpenedPostId(null);
             setOpenedPost(null);
             setOpenedPostComments(createInitialDiscussionPageState<Comment>());
@@ -773,14 +782,19 @@ export default function App() {
     tab: string,
     profileId?: string,
     postId?: string,
-    options?: { commentId?: string; hashtag?: string; clubSlug?: string }
+    options?: { commentId?: string; hashtag?: string; clubSlug?: string; profileSubpage?: 'posts' | 'projects' }
   ) => {
     let path = `/${tab}`;
-    const state: { tab: string; profileId?: string; postId?: string; commentId?: string; hashtag?: string; clubSlug?: string } = { tab };
+    const state: { tab: string; profileId?: string; postId?: string; commentId?: string; hashtag?: string; clubSlug?: string; profileSubpage?: 'posts' | 'projects' } = { tab };
     if (tab === 'profile' && profileId) {
         path += `/${profileId}`;
+        if (options?.profileSubpage) {
+          path += `/${options.profileSubpage}`;
+          state.profileSubpage = options.profileSubpage;
+        }
         state.profileId = profileId;
         setViewingProfileId(profileId);
+        setProfileSubpage(options?.profileSubpage ?? null);
         setOpenedPost(null);
         setOpenedPostId(null);
         setOpenedPostComments(createInitialDiscussionPageState<Comment>());
@@ -788,6 +802,7 @@ export default function App() {
         setFocusedCommentId(null);
         setHashtagPageTag(null);
     } else if (tab === 'post' && postId) {
+        setProfileSubpage(null);
         path += `/${postId}`;
         if (options?.commentId) {
           path += `?commentId=${encodeURIComponent(options.commentId)}`;
@@ -801,6 +816,7 @@ export default function App() {
         setFocusedCommentId(options?.commentId?.trim() || null);
         setHashtagPageTag(null);
     } else if (tab === 'hashtag' && options?.hashtag) {
+        setProfileSubpage(null);
         const normalized = options.hashtag.trim().replace(/^#+/, '');
         path += `/${encodeURIComponent(normalized)}`;
         state.hashtag = normalized;
@@ -813,6 +829,7 @@ export default function App() {
         setFocusedCommentId(null);
         setClubPageSlug(null);
     } else if (tab === 'clubs' && options?.clubSlug) {
+        setProfileSubpage(null);
         const normalizedClubSlug = options.clubSlug.trim();
         path += `/${encodeURIComponent(normalizedClubSlug)}`;
         state.clubSlug = normalizedClubSlug;
@@ -826,6 +843,7 @@ export default function App() {
         setHashtagPageTag(null);
     } else if (tab !== 'profile') {
         setViewingProfileId(null);
+        setProfileSubpage(null);
         if (tab !== 'post') {
           setOpenedPost(null);
           setOpenedPostId(null);
@@ -2021,6 +2039,16 @@ export default function App() {
     navigate('profile', studentId);
   };
 
+  const handleViewProfilePosts = (studentId: string) => {
+    if (!studentId || typeof studentId !== 'string') return;
+    navigate('profile', studentId, undefined, { profileSubpage: 'posts' });
+  };
+
+  const handleViewProfileProjects = (studentId: string) => {
+    if (!studentId || typeof studentId !== 'string') return;
+    navigate('profile', studentId, undefined, { profileSubpage: 'projects' });
+  };
+
   useEffect(() => {
     if (!authToken) return;
     if (activeTab !== 'profile') return;
@@ -2178,6 +2206,7 @@ export default function App() {
   // Reset viewing profile when switching tabs from Navbar
   const handleTabChange = (tab: string) => {
     setViewingProfileId(null);
+    setProfileSubpage(null);
     setOpenedPost(null);
     setFocusedCommentId(null);
     setHashtagPageTag(null);
@@ -2328,27 +2357,54 @@ export default function App() {
           />
           ) : activeTab === 'profile' ? (
           displayedStudent ? (
-            <ProfilePage
-              student={displayedStudent}
-              currentUserId={currentUserId}
-              isOwnProfile={displayedStudent.id === currentUserId}
-              followGraph={followGraph}
-              onFollow={handleFollow}
-              onUnfollow={handleUnfollow}
-              onCancelRequest={handleCancelRequest}
-              onEdit={handleEditProfile}
-              opportunities={opportunities}
-              onLike={handleLike}
-              onSave={handleSave}
-              onComment={handleComment}
-              onReply={handleReply}
-              onLikeComment={handleLikeComment}
-              onDeleteComment={handleDeleteComment}
-              onEditPost={handleEditPost}
-              onDeletePost={handleDeletePost}
-              onOpenPost={handleOpenPost}
-              postsRefreshToken={postsRefreshToken}
-            />
+            profileSubpage === 'posts' ? (
+              <ProfilePostsPage
+                student={displayedStudent}
+                currentUserId={currentUserId}
+                isOwnProfile={displayedStudent.id === currentUserId}
+                onBack={() => navigate('profile', displayedStudent.id)}
+                onLike={handleLike}
+                onSave={handleSave}
+                onComment={handleComment}
+                onReply={handleReply}
+                onLikeComment={handleLikeComment}
+                onDeleteComment={handleDeleteComment}
+                onEditPost={handleEditPost}
+                onDeletePost={handleDeletePost}
+                onOpenPost={handleOpenPost}
+                onViewProfile={handleViewProfile}
+              />
+            ) : profileSubpage === 'projects' ? (
+              <ProfileProjectsPage
+                student={displayedStudent}
+                onBack={() => navigate('profile', displayedStudent.id)}
+              />
+            ) : (
+              <ProfilePage
+                student={displayedStudent}
+                currentUserId={currentUserId}
+                isOwnProfile={displayedStudent.id === currentUserId}
+                followGraph={followGraph}
+                onFollow={handleFollow}
+                onUnfollow={handleUnfollow}
+                onCancelRequest={handleCancelRequest}
+                onEdit={handleEditProfile}
+                opportunities={opportunities}
+                onLike={handleLike}
+                onSave={handleSave}
+                onComment={handleComment}
+                onReply={handleReply}
+                onLikeComment={handleLikeComment}
+                onDeleteComment={handleDeleteComment}
+                onEditPost={handleEditPost}
+                onDeletePost={handleDeletePost}
+                onOpenPost={handleOpenPost}
+                onShowAllPosts={handleViewProfilePosts}
+                onShowAllProjects={handleViewProfileProjects}
+                onMessage={handleMessage}
+                postsRefreshToken={postsRefreshToken}
+              />
+            )
           ) : (
             <LoadingState type="profile" />
           )
