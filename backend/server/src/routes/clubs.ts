@@ -5,11 +5,20 @@ import prisma from '../prisma';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
 import {
   ensureUniqueClubSlug,
-  getClubPermissionSnapshot,
   normalizeClubCategoryName,
   resolveOrCreateClubCategory,
   upsertClubTags,
 } from '../lib/clubs';
+import {
+  getCachedClubFeedPostIds,
+  getCachedClubPermissionSnapshot,
+  getCachedClubView,
+  incrementClubStat,
+  invalidateClubMembershipCache,
+  invalidateClubMetaCache,
+  invalidateClubStatsCache,
+  purgeClubCaches,
+} from '../lib/clubCache';
 import {
   deleteManagedClubMediaByUrl,
   uploadClubMediaToStorage,
@@ -83,7 +92,7 @@ function isUniqueConstraintError(err: unknown, constraintName: string): boolean 
   return metaText.includes(constraintName);
 }
 
-function mapClubRow(row: ClubListRow, permissionSnapshot?: Awaited<ReturnType<typeof getClubPermissionSnapshot>>) {
+function mapClubRow(row: ClubListRow, permissionSnapshot?: Awaited<ReturnType<typeof getCachedClubPermissionSnapshot>>) {
   return {
     id: row.club_id,
     name: row.name,
@@ -111,6 +120,18 @@ function mapClubRow(row: ClubListRow, permissionSnapshot?: Awaited<ReturnType<ty
     },
     permissions: permissionSnapshot,
   };
+}
+
+async function loadClubIdentityBySlugOrId(clubIdOrSlug: string): Promise<{ club_id: string } | null> {
+  const rows = await prisma.$queryRaw<Array<{ club_id: string }>>`
+    SELECT club_id
+    FROM clubs
+    WHERE club_id::text = ${clubIdOrSlug}
+       OR slug = ${clubIdOrSlug}
+    LIMIT 1
+  `;
+
+  return rows[0] ?? null;
 }
 
 async function loadClubBySlugOrId(clubIdOrSlug: string, viewerUserId: string): Promise<ClubListRow | null> {
@@ -292,7 +313,7 @@ router.get('/', async (req: Request, res: Response) => {
     `;
 
     const clubs = await Promise.all(
-      rows.map(async (row) => mapClubRow(row, await getClubPermissionSnapshot(row.club_id, viewerUserId)))
+      rows.map(async (row) => mapClubRow(row, await getCachedClubPermissionSnapshot(row.club_id, viewerUserId)))
     );
 
     return res.status(200).json(clubs);
@@ -425,7 +446,7 @@ router.post(
         return res.status(201).json({ id: createdClubRows.clubId });
       }
 
-      return res.status(201).json(mapClubRow(clubRow, await getClubPermissionSnapshot(clubRow.club_id, viewerUserId)));
+      return res.status(201).json(mapClubRow(clubRow, await getCachedClubPermissionSnapshot(clubRow.club_id, viewerUserId)));
     } catch (err) {
       await Promise.allSettled([
         deleteManagedClubMediaByUrl(avatarUrl),
@@ -453,22 +474,26 @@ router.post(
 
 router.get('/:clubIdOrSlug', async (req: Request<{ clubIdOrSlug: string }>, res: Response) => {
   const viewerUserId = getAuthedUserId(req);
-  const clubRow = await loadClubBySlugOrId(req.params.clubIdOrSlug, viewerUserId);
-  if (!clubRow) {
+  const clubIdentity = await loadClubIdentityBySlugOrId(req.params.clubIdOrSlug);
+  if (!clubIdentity) {
     return res.status(404).json({ message: 'Club not found' });
   }
 
-  const permissions = await getClubPermissionSnapshot(clubRow.club_id, viewerUserId);
-  if (!permissions?.canViewClub) {
+  const club = await getCachedClubView(clubIdentity.club_id, viewerUserId);
+  if (!club) {
+    return res.status(404).json({ message: 'Club not found' });
+  }
+
+  if (!club.permissions?.canViewClub) {
     return res.status(403).json({ message: 'You are not allowed to view this club' });
   }
 
-  return res.status(200).json(mapClubRow(clubRow, permissions));
+  return res.status(200).json(club);
 });
 
 router.get('/:clubId/members', async (req: Request<{ clubId: string }>, res: Response) => {
   const viewerUserId = getAuthedUserId(req);
-  const permissions = await getClubPermissionSnapshot(req.params.clubId, viewerUserId);
+  const permissions = await getCachedClubPermissionSnapshot(req.params.clubId, viewerUserId);
   if (!permissions?.canViewClub) {
     return res.status(403).json({ message: 'You are not allowed to view club members' });
   }
@@ -518,25 +543,23 @@ router.get('/:clubId/members', async (req: Request<{ clubId: string }>, res: Res
 
 router.get('/:clubId/posts', async (req: Request<{ clubId: string }>, res: Response) => {
   const viewerUserId = getAuthedUserId(req);
-  const permissions = await getClubPermissionSnapshot(req.params.clubId, viewerUserId);
+  const permissions = await getCachedClubPermissionSnapshot(req.params.clubId, viewerUserId);
   if (!permissions?.canViewClub) {
     return res.status(403).json({ message: 'You are not allowed to view club posts' });
   }
 
   const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 20, 1), 100);
   const offset = parsePaging(req.query.offset as string | undefined, 0, 5000);
+  const sort = String(req.query.sort ?? 'latest').trim().toLowerCase() === 'trending' ? 'trending' : 'latest';
 
   try {
-    const rows = await prisma.$queryRaw<Array<{ post_id: string }>>`
-      SELECT p.post_id
-      FROM posts p
-      WHERE p.club_id = ${req.params.clubId}
-      ORDER BY p.created_at DESC
-      LIMIT ${limit}
-      OFFSET ${offset}
-    `;
-
-    const posts = await hydratePosts(viewerUserId, rows.map((row) => row.post_id));
+    const postIds = await getCachedClubFeedPostIds({
+      clubId: req.params.clubId,
+      sort,
+      limit,
+      offset,
+    });
+    const posts = await hydratePosts(viewerUserId, postIds);
     return res.status(200).json(posts.filter((post) => post.clubId === req.params.clubId));
   } catch (err) {
     console.error('Error loading club posts:', err);
@@ -552,7 +575,7 @@ router.patch(
   ]),
   async (req: Request<{ clubId: string }>, res: Response) => {
     const viewerUserId = getAuthedUserId(req);
-    const permissions = await getClubPermissionSnapshot(req.params.clubId, viewerUserId);
+    const permissions = await getCachedClubPermissionSnapshot(req.params.clubId, viewerUserId);
     if (!permissions?.canManageClub) {
       return res.status(403).json({ message: 'You are not allowed to update this club' });
     }
@@ -674,7 +697,8 @@ router.patch(
         return res.status(404).json({ message: 'Club not found after update' });
       }
 
-      return res.status(200).json(mapClubRow(updatedClub, await getClubPermissionSnapshot(updatedClub.club_id, viewerUserId)));
+      await invalidateClubMetaCache(req.params.clubId);
+      return res.status(200).json(mapClubRow(updatedClub, await getCachedClubPermissionSnapshot(updatedClub.club_id, viewerUserId)));
     } catch (err) {
       await Promise.allSettled([
         deleteManagedClubMediaByUrl(uploadedAvatarUrl),
@@ -693,7 +717,7 @@ router.patch(
 
 router.patch('/:clubId/members/:userId/role', async (req: Request<{ clubId: string; userId: string }>, res: Response) => {
   const viewerUserId = getAuthedUserId(req);
-  const permissions = await getClubPermissionSnapshot(req.params.clubId, viewerUserId);
+  const permissions = await getCachedClubPermissionSnapshot(req.params.clubId, viewerUserId);
   if (permissions?.membershipRole !== 'owner') {
     return res.status(403).json({ message: 'Only the club owner can edit admin roles' });
   }
@@ -729,6 +753,7 @@ router.patch('/:clubId/members/:userId/role', async (req: Request<{ clubId: stri
         AND status = CAST('active' AS "ClubMembershipStatus")
     `;
 
+    await invalidateClubMembershipCache(req.params.clubId, req.params.userId);
     return res.status(204).send();
   } catch (err) {
     console.error('Error updating club role:', err);
@@ -738,17 +763,17 @@ router.patch('/:clubId/members/:userId/role', async (req: Request<{ clubId: stri
 
 router.delete('/:clubId', async (req: Request<{ clubId: string }>, res: Response) => {
   const viewerUserId = getAuthedUserId(req);
-  const permissions = await getClubPermissionSnapshot(req.params.clubId, viewerUserId);
+  const permissions = await getCachedClubPermissionSnapshot(req.params.clubId, viewerUserId);
   if (permissions?.membershipRole !== 'owner') {
     return res.status(403).json({ message: 'Only the club owner can delete this club' });
   }
 
   try {
-    const rows = await prisma.$queryRaw<Array<{ avatar_url: string | null; cover_image_url: string | null }>>`
-      SELECT avatar_url, cover_image_url
-      FROM clubs
-      WHERE club_id = ${req.params.clubId}
-      LIMIT 1
+    const rows = await prisma.$queryRaw<Array<{ avatar_url: string | null; cover_image_url: string | null; user_id: string | null }>>`
+      SELECT c.avatar_url, c.cover_image_url, cm.user_id
+      FROM clubs c
+      LEFT JOIN club_memberships cm ON cm.club_id = c.club_id
+      WHERE c.club_id = ${req.params.clubId}
     `;
 
     const row = rows[0];
@@ -765,6 +790,12 @@ router.delete('/:clubId', async (req: Request<{ clubId: string }>, res: Response
       deleteManagedClubMediaByUrl(row.avatar_url),
       deleteManagedClubMediaByUrl(row.cover_image_url),
     ]);
+    await purgeClubCaches(
+      req.params.clubId,
+      rows
+        .map((item) => item.user_id)
+        .filter((userId): userId is string => Boolean(userId)),
+    );
 
     return res.status(204).send();
   } catch (err) {
@@ -820,12 +851,15 @@ router.post('/:clubId/join', async (req: Request<{ clubId: string }>, res: Respo
         entityId: clubRow.club_id,
       });
     }
-    if (nextStatus === 'active') {
+    if (nextStatus === 'active' && clubRow.membership_status !== 'active') {
       queueSuggestedUsersRecompute(viewerUserId);
+      await incrementClubStat(clubRow.club_id, 'memberCount', 1);
+      await invalidateClubStatsCache(clubRow.club_id);
     }
+    await invalidateClubMembershipCache(clubRow.club_id, viewerUserId);
 
     const updatedClub = await loadClubBySlugOrId(clubRow.club_id, viewerUserId);
-    return res.status(200).json(mapClubRow(updatedClub!, await getClubPermissionSnapshot(clubRow.club_id, viewerUserId)));
+    return res.status(200).json(mapClubRow(updatedClub!, await getCachedClubPermissionSnapshot(clubRow.club_id, viewerUserId)));
   } catch (err) {
     console.error('Error joining club:', err);
     return res.status(500).json({ message: 'Internal server error' });
@@ -834,7 +868,7 @@ router.post('/:clubId/join', async (req: Request<{ clubId: string }>, res: Respo
 
 router.post('/:clubId/approve', async (req: Request<{ clubId: string }>, res: Response) => {
   const viewerUserId = getAuthedUserId(req);
-  const permissions = await getClubPermissionSnapshot(req.params.clubId, viewerUserId);
+  const permissions = await getCachedClubPermissionSnapshot(req.params.clubId, viewerUserId);
   if (!permissions?.canModerateMembers) {
     return res.status(403).json({ message: 'You are not allowed to approve members' });
   }
@@ -845,15 +879,19 @@ router.post('/:clubId/approve', async (req: Request<{ clubId: string }>, res: Re
   }
 
   try {
-    await prisma.$queryRaw`
-      UPDATE club_memberships
-      SET
-        status = CAST('active' AS "ClubMembershipStatus"),
-        joined_at = NOW(),
-        updated_at = NOW()
-      WHERE club_id = ${req.params.clubId}
-        AND user_id = ${targetUserId}
-        AND status IN (CAST('pending' AS "ClubMembershipStatus"), CAST('invited' AS "ClubMembershipStatus"))
+    const updatedRows = await prisma.$queryRaw<Array<{ count: number }>>`
+      WITH updated AS (
+        UPDATE club_memberships
+        SET
+          status = CAST('active' AS "ClubMembershipStatus"),
+          joined_at = NOW(),
+          updated_at = NOW()
+        WHERE club_id = ${req.params.clubId}
+          AND user_id = ${targetUserId}
+          AND status IN (CAST('pending' AS "ClubMembershipStatus"), CAST('invited' AS "ClubMembershipStatus"))
+        RETURNING 1
+      )
+      SELECT COUNT(*)::int AS count FROM updated
     `;
 
     await createNotification({
@@ -866,6 +904,11 @@ router.post('/:clubId/approve', async (req: Request<{ clubId: string }>, res: Re
       entityId: req.params.clubId,
     });
     queueSuggestedUsersRecompute(targetUserId);
+    await invalidateClubMembershipCache(req.params.clubId, targetUserId);
+    if ((updatedRows[0]?.count ?? 0) > 0) {
+      await incrementClubStat(req.params.clubId, 'memberCount', 1);
+      await invalidateClubStatsCache(req.params.clubId);
+    }
 
     return res.status(204).send();
   } catch (err) {
@@ -876,7 +919,7 @@ router.post('/:clubId/approve', async (req: Request<{ clubId: string }>, res: Re
 
 router.post('/:clubId/invite', async (req: Request<{ clubId: string }>, res: Response) => {
   const viewerUserId = getAuthedUserId(req);
-  const permissions = await getClubPermissionSnapshot(req.params.clubId, viewerUserId);
+  const permissions = await getCachedClubPermissionSnapshot(req.params.clubId, viewerUserId);
   if (!permissions?.canInviteMembers) {
     return res.status(403).json({ message: 'You are not allowed to invite members' });
   }
@@ -913,6 +956,7 @@ router.post('/:clubId/invite', async (req: Request<{ clubId: string }>, res: Res
       entityType: 'club',
       entityId: req.params.clubId,
     });
+    await invalidateClubMembershipCache(req.params.clubId, targetUserId);
 
     return res.status(204).send();
   } catch (err) {
@@ -925,6 +969,14 @@ router.post('/:clubId/leave', async (req: Request<{ clubId: string }>, res: Resp
   const viewerUserId = getAuthedUserId(req);
 
   try {
+    const membershipRows = await prisma.$queryRaw<Array<{ status: 'active' | 'pending' | 'invited' | 'removed' | 'left' }>>`
+      SELECT status
+      FROM club_memberships
+      WHERE club_id = ${req.params.clubId}
+        AND user_id = ${viewerUserId}
+      LIMIT 1
+    `;
+
     await prisma.$queryRaw`
       UPDATE club_memberships
       SET status = CAST('left' AS "ClubMembershipStatus"), updated_at = NOW()
@@ -936,6 +988,11 @@ router.post('/:clubId/leave', async (req: Request<{ clubId: string }>, res: Resp
           CAST('invited' AS "ClubMembershipStatus")
         )
     `;
+    await invalidateClubMembershipCache(req.params.clubId, viewerUserId);
+    if (membershipRows[0]?.status === 'active') {
+      await incrementClubStat(req.params.clubId, 'memberCount', -1);
+      await invalidateClubStatsCache(req.params.clubId);
+    }
     queueSuggestedUsersRecompute(viewerUserId);
 
     return res.status(204).send();
@@ -947,7 +1004,7 @@ router.post('/:clubId/leave', async (req: Request<{ clubId: string }>, res: Resp
 
 router.post('/:clubId/remove', async (req: Request<{ clubId: string }>, res: Response) => {
   const viewerUserId = getAuthedUserId(req);
-  const permissions = await getClubPermissionSnapshot(req.params.clubId, viewerUserId);
+  const permissions = await getCachedClubPermissionSnapshot(req.params.clubId, viewerUserId);
   if (!permissions?.canModerateMembers) {
     return res.status(403).json({ message: 'You are not allowed to remove members' });
   }
@@ -1027,6 +1084,11 @@ router.post('/:clubId/remove', async (req: Request<{ clubId: string }>, res: Res
       entityId: req.params.clubId,
     });
     queueSuggestedUsersRecompute(targetUserId);
+    await invalidateClubMembershipCache(req.params.clubId, targetUserId);
+    if (membership.status === 'active') {
+      await incrementClubStat(req.params.clubId, 'memberCount', -1);
+      await invalidateClubStatsCache(req.params.clubId);
+    }
 
     return res.status(204).send();
   } catch (err) {

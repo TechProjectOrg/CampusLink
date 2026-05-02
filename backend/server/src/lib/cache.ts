@@ -123,6 +123,17 @@ export async function cacheSetJson(key: string, value: unknown, ttlSeconds?: num
   await runCommand(command);
 }
 
+export async function cacheSetJsonIfNotExists(key: string, value: unknown, ttlSeconds?: number): Promise<boolean> {
+  const serialized = JSON.stringify(value);
+  const command: Array<string | number> =
+    ttlSeconds && ttlSeconds > 0
+      ? ['SET', key, serialized, 'EX', ttlSeconds, 'NX']
+      : ['SET', key, serialized, 'NX'];
+
+  const result = await runCommand<string>(command);
+  return result === 'OK';
+}
+
 export async function cacheExpire(key: string, ttlSeconds: number): Promise<void> {
   if (!ttlSeconds || ttlSeconds <= 0) return;
   await runCommand(['EXPIRE', key, ttlSeconds]);

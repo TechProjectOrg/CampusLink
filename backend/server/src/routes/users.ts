@@ -17,10 +17,15 @@ import {
   invalidateUserFeedCache,
   refreshPostCaches,
 } from '../lib/feedCache';
+import {
+  getCachedClubPermissionSnapshot,
+  incrementClubStat,
+  invalidateClubFeedCaches,
+} from '../lib/clubCache';
 import { invalidateConversationLists } from '../lib/chatCache';
 import { emitFeedEvent } from '../lib/realtime';
 import { incrementUserStat, patchUserSummary } from '../lib/userCache';
-import { getClubPermissionSnapshot, requireActiveClubMembership } from '../lib/clubs';
+import { requireActiveClubMembership } from '../lib/clubs';
 import { queueSuggestedUsersRecompute, trackPostCreatedHashtags } from '../lib/socialInsights';
 
 const router = express.Router();
@@ -1469,7 +1474,7 @@ router.post(
           return res.status(400).json({ message: 'clubId does not exist' });
         }
 
-        const clubPermissions = await getClubPermissionSnapshot(clubIdValue, userId);
+        const clubPermissions = await getCachedClubPermissionSnapshot(clubIdValue, userId);
         if (!clubPermissions?.canViewClub) {
           return res.status(403).json({ message: 'You are not allowed to post in this club' });
         }
@@ -1631,6 +1636,10 @@ router.post(
       const recipients = await getPostFeedRecipientIds(created.post_id);
       await refreshPostCaches(created.post_id, userId);
       await addPostToFeedCaches(created.post_id, created.created_at, recipients);
+      if (created.club_id) {
+        await invalidateClubFeedCaches(created.club_id);
+        await incrementClubStat(created.club_id, 'postCount', 1);
+      }
       emitFeedEvent(recipients, {
         type: 'feed:post_created',
         payload: {

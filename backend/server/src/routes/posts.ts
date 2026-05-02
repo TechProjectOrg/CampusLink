@@ -20,6 +20,7 @@ import {
   removePostFromCaches,
   setViewerLikedCache,
 } from '../lib/feedCache';
+import { invalidateClubFeedCaches, incrementClubStat } from '../lib/clubCache';
 import { emitFeedEvent } from '../lib/realtime';
 import { incrementUserStat } from '../lib/userCache';
 import { canViewerAccessClubPost } from '../lib/clubs';
@@ -889,8 +890,8 @@ router.patch('/posts/:postId', async (req: Request<{ postId: string }>, res: Res
   };
 
   try {
-    const postRows = await prisma.$queryRaw<{ author_user_id: string }[]>`
-      SELECT author_user_id
+    const postRows = await prisma.$queryRaw<Array<{ author_user_id: string; club_id: string | null }>>`
+      SELECT author_user_id, club_id
       FROM posts
       WHERE post_id = ${postId}
       LIMIT 1
@@ -966,6 +967,9 @@ router.patch('/posts/:postId', async (req: Request<{ postId: string }>, res: Res
     });
 
     await refreshPostCaches(postId, viewerUserId);
+    if (post.club_id) {
+      await invalidateClubFeedCaches(post.club_id);
+    }
     const recipients = await getPostFeedRecipientIds(postId);
     emitFeedEvent(recipients, {
       type: 'feed:post_updated',
@@ -985,8 +989,8 @@ router.delete('/posts/:postId', async (req: Request<{ postId: string }>, res: Re
   const { postId } = req.params;
 
   try {
-    const postRows = await prisma.$queryRaw<{ author_user_id: string }[]>`
-      SELECT author_user_id
+    const postRows = await prisma.$queryRaw<Array<{ author_user_id: string; club_id: string | null }>>`
+      SELECT author_user_id, club_id
       FROM posts
       WHERE post_id = ${postId}
       LIMIT 1
@@ -1009,6 +1013,10 @@ router.delete('/posts/:postId', async (req: Request<{ postId: string }>, res: Re
       WHERE post_id = ${postId}
     `;
     await removePostFromCaches(postId, recipients);
+    if (post.club_id) {
+      await invalidateClubFeedCaches(post.club_id);
+      await incrementClubStat(post.club_id, 'postCount', -1);
+    }
     emitFeedEvent(recipients, {
       type: 'feed:post_deleted',
       payload: { postId, deletedAt: new Date().toISOString() },
