@@ -749,7 +749,7 @@ export function ProfilePage({
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24 md:pb-8">
-      <div className="mx-auto grid w-full grid-cols-1 gap-4 px-3 py-4 sm:px-5 sm:py-5 lg:max-w-[1000px] lg:px-6 lg:py-6">
+      <div className="mx-auto grid w-full [grid-template-columns:1fr] gap-4 px-3 py-4 sm:px-5 sm:py-5 lg:max-w-[1000px] lg:px-6 lg:py-6">
         <section className="box-border w-full overflow-hidden rounded-[1.75rem] border border-slate-200/80 bg-white shadow-xl shadow-slate-200/70">
           <div className="relative h-48 bg-gradient-to-br from-sky-600 via-indigo-500 to-emerald-400 sm:h-60">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.35),transparent_28%),linear-gradient(to_top,rgba(15,23,42,0.72),rgba(15,23,42,0.12))]" />
@@ -770,8 +770,8 @@ export function ProfilePage({
           </div>
 
           <div className="px-4 pb-5 sm:px-6 sm:pb-6 lg:px-8">
-            <div className="-mt-16 flex flex-col gap-5 sm:-mt-14 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-center sm:gap-6 sm:text-left">
+            <div className="-mt-16 flex flex-col gap-5 sm:-mt-14 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-col items-center gap-4 text-center lg:flex-row lg:items-center lg:gap-6 lg:text-left">
                 <ProfilePhotoUpload
                   currentPhoto={displayedProfilePhoto}
                   hasCustomPhoto={hasCustomProfilePhoto}
@@ -1023,7 +1023,7 @@ export function ProfilePage({
         ) : null}
 
         {showExperienceSection || showEducationSection ? (
-        <section className="grid w-full grid-cols-1 gap-4">
+        <section className="grid w-full [grid-template-columns:1fr] gap-4">
           {showExperienceSection ? (
           <div className={profileSectionCardClass}>
             <SectionHeader title="Experience" onAdd={() => setActiveModal('experience')} />
@@ -1091,7 +1091,7 @@ export function ProfilePage({
         ) : null}
 
         {showCertificationsSection || showClubsSection ? (
-        <section className="grid w-full grid-cols-1 gap-4">
+        <section className="grid w-full [grid-template-columns:1fr] gap-4">
           {showCertificationsSection ? (
           <div className={profileSectionCardClass}>
             <SectionHeader title="Certifications" onAdd={() => setActiveModal('certification')} />
