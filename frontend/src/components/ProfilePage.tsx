@@ -692,7 +692,7 @@ export function ProfilePage({
   const showCertificationsSection = isOwnProfile || certificationsLoading || loadedCertifications.length > 0;
   const showClubsSection = isOwnProfile || societies.length > 0;
   const showAchievementsSection = isOwnProfile || achievements.length > 0;
-  const profileSectionCardClass = 'flex w-full flex-col gap-4 rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6';
+  const profileSectionCardClass = 'box-border flex w-full flex-col gap-4 rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5 lg:p-6';
 
   const SectionHeader = ({
     title,
@@ -703,13 +703,13 @@ export function ProfilePage({
     subtitle?: string;
     onAdd?: () => void;
   }) => (
-    <div className="flex items-end justify-between gap-4">
-      <div>
+    <div className="flex w-full items-center justify-between gap-4">
+      <div className="min-w-0">
         <h2 className="text-xl font-semibold tracking-tight text-slate-950">{title}</h2>
         {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
       </div>
       {isOwnProfile && onAdd ? (
-        <Button variant="outline" size="sm" onClick={onAdd} className="shrink-0 rounded-full border-slate-200 bg-white shadow-sm hover:bg-slate-50">
+        <Button variant="outline" size="sm" onClick={onAdd} className="ml-auto shrink-0 rounded-full border-slate-200 bg-white shadow-sm hover:bg-slate-50">
           <Plus className="mr-1.5 h-4 w-4" />
           Add
         </Button>
@@ -749,8 +749,8 @@ export function ProfilePage({
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24 md:pb-8">
-      <div className="mx-auto flex max-w-[1000px] flex-col gap-5 p-5">
-        <section className="overflow-hidden rounded-[1.75rem] border border-slate-200/80 bg-white shadow-xl shadow-slate-200/70">
+      <div className="mx-auto grid w-full grid-cols-1 gap-4 px-3 py-4 sm:px-5 sm:py-5 lg:max-w-[1000px] lg:px-6 lg:py-6">
+        <section className="box-border w-full overflow-hidden rounded-[1.75rem] border border-slate-200/80 bg-white shadow-xl shadow-slate-200/70">
           <div className="relative h-48 bg-gradient-to-br from-sky-600 via-indigo-500 to-emerald-400 sm:h-60">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.35),transparent_28%),linear-gradient(to_top,rgba(15,23,42,0.72),rgba(15,23,42,0.12))]" />
             <div className="absolute bottom-6 left-6 hidden max-w-xl text-white sm:block">
@@ -769,7 +769,7 @@ export function ProfilePage({
             ) : null}
           </div>
 
-          <div className="px-5 pb-6 sm:px-8">
+          <div className="px-4 pb-5 sm:px-6 sm:pb-6 lg:px-8">
             <div className="-mt-16 flex flex-col gap-5 sm:-mt-14 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-center sm:gap-6 sm:text-left">
                 <ProfilePhotoUpload
@@ -1023,7 +1023,7 @@ export function ProfilePage({
         ) : null}
 
         {showExperienceSection || showEducationSection ? (
-        <section className="grid gap-5 lg:grid-cols-2 lg:items-start">
+        <section className="grid w-full grid-cols-1 gap-4">
           {showExperienceSection ? (
           <div className={profileSectionCardClass}>
             <SectionHeader title="Experience" onAdd={() => setActiveModal('experience')} />
@@ -1091,7 +1091,7 @@ export function ProfilePage({
         ) : null}
 
         {showCertificationsSection || showClubsSection ? (
-        <section className="grid gap-5 lg:grid-cols-2 lg:items-start">
+        <section className="grid w-full grid-cols-1 gap-4">
           {showCertificationsSection ? (
           <div className={profileSectionCardClass}>
             <SectionHeader title="Certifications" onAdd={() => setActiveModal('certification')} />
