@@ -754,10 +754,6 @@ export function ProfilePage({
         <section className="box-border w-full overflow-hidden rounded-[1.75rem] border border-slate-200/80 bg-white shadow-xl shadow-slate-200/70">
           <div className="relative h-48 bg-gradient-to-br from-sky-600 via-indigo-500 to-emerald-400 sm:h-60">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.35),transparent_28%),linear-gradient(to_top,rgba(15,23,42,0.72),rgba(15,23,42,0.12))]" />
-            <div className="absolute bottom-6 left-6 hidden max-w-xl text-white sm:block">
-              <p className="text-sm font-medium uppercase tracking-[0.18em] text-white/75">Campus profile</p>
-              <h1 className="mt-2 break-words text-2xl font-semibold tracking-tight sm:text-3xl">{student.name}</h1>
-            </div>
             {isOwnProfile ? (
               <button
                 type="button"
@@ -770,9 +766,9 @@ export function ProfilePage({
             ) : null}
           </div>
 
-          <div className="px-4 pb-5 sm:px-6 sm:pb-6 lg:px-8">
-            <div className="-mt-16 flex flex-col gap-5 sm:-mt-14 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex flex-col items-center gap-4 text-center lg:flex-row lg:items-center lg:gap-6 lg:text-left">
+          <div className="px-5 pb-8 sm:px-8 sm:pb-9 lg:px-10">
+            <div className="-mt-16 flex flex-col items-center gap-5 text-center sm:-mt-14">
+              <div className="flex flex-col items-center gap-5 text-center">
                 <ProfilePhotoUpload
                   currentPhoto={displayedProfilePhoto}
                   hasCustomPhoto={hasCustomProfilePhoto}
@@ -780,29 +776,31 @@ export function ProfilePage({
                   editable={isOwnProfile}
                   onPhotoChange={handleProfilePhotoChange}
                 />
-                <div className="flex min-w-0 flex-col justify-center">
-                  <h1 className="break-words text-2xl font-semibold tracking-tight text-slate-950 sm:hidden">{student.name}</h1>
-                  <p className="mt-2 max-w-2xl break-words text-sm font-normal text-slate-700 sm:text-base lg:text-lg">
+                <div className="flex min-w-0 flex-col items-center justify-center">
+                  <h1 className="mb-2 break-words text-[26px] font-bold leading-tight text-slate-950 sm:text-[28px]">
+                    {student.name}
+                  </h1>
+                  <p className="max-w-2xl break-words text-sm font-normal leading-6 text-slate-700">
                     {student.headline || (isOwnProfile ? 'Add a headline that tells campus what you are building.' : 'Campus community member')}
                   </p>
-                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm font-normal text-slate-500">
-                    <span className="inline-flex items-center gap-1.5">
-                      <GraduationCap className="h-4 w-4" />
+                  <div className="mt-4 flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs font-normal leading-5 text-slate-500 sm:text-[13px]">
+                    <span className="inline-flex items-center gap-2">
+                      <GraduationCap className="h-4 w-4 shrink-0 text-slate-400" />
                       {student.branch || 'College'}
                     </span>
-                    <span className="inline-flex items-center gap-1.5">
-                      <Calendar className="h-4 w-4" />
+                    <span className="inline-flex items-center gap-2">
+                      <Calendar className="h-4 w-4 shrink-0 text-slate-400" />
                       Year {student.year || '-'}
                     </span>
-                    <span className="inline-flex items-center gap-1.5">
-                      <MapPin className="h-4 w-4" />
+                    <span className="inline-flex items-center gap-2">
+                      <MapPin className="h-4 w-4 shrink-0 text-slate-400" />
                       Campus
                     </span>
                   </div>
                 </div>
               </div>
 
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap justify-center gap-2">
                 {!isOwnProfile ? (
                   <>
                     <div className="rounded-full bg-white shadow-sm">
@@ -826,25 +824,25 @@ export function ProfilePage({
               </div>
             </div>
 
-            <div className="hide-scrollbar mt-4 flex flex-nowrap items-center gap-4 overflow-x-auto whitespace-nowrap border-t border-slate-100 pt-4 text-sm font-normal text-slate-500">
+            <div className="hide-scrollbar mt-7 flex flex-nowrap items-center justify-center gap-8 overflow-x-auto whitespace-nowrap border-t border-slate-100 pt-6 text-sm font-normal text-slate-500">
               {[
                 ['Followers', followersCount],
                 ['Following', followingCount],
                 ['Projects', loadedProjects.length],
                 ['Clubs', clubCount],
               ].map(([label, value]) => (
-                <div key={label} className="inline-flex items-center gap-1.5">
-                  <span className="text-sm font-medium text-slate-900">{value}</span>
-                  <span>{label}</span>
+                <div key={label} className="inline-flex flex-col items-center gap-1">
+                  <span className="text-base font-semibold leading-none text-slate-900">{value}</span>
+                  <span className="text-xs leading-none text-slate-500">{label}</span>
                 </div>
               ))}
             </div>
 
             {hasAbout || isOwnProfile ? (
-              <div className="mt-5 border-t border-slate-100 pt-5">
+              <div className="mt-8 border-t border-slate-200 pt-6">
                 <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <h2 className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">About</h2>
+                  <div className="min-w-0 flex-1 text-left">
+                    <h2 className="text-[17px] font-semibold leading-6 text-slate-950 sm:text-lg">About</h2>
                     {hasAbout ? (
                       <>
                         <p className={`mt-3 max-w-3xl text-sm leading-7 text-slate-700 ${isAboutExpanded ? '' : 'line-clamp-3'}`}>{student.bio}</p>
