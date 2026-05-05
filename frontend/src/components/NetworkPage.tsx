@@ -16,6 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from './ui/alert-dialog';
+import { PageLayout } from './PageLayout';
 
 import { UserCard } from './network/UserCard';
 
@@ -84,8 +85,7 @@ export function NetworkPage({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+    <PageLayout maxWidth="4xl" contentClassName="py-6 space-y-6">
         <div className="animate-slide-in-down">
           <h1 className="text-gray-900 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
             Network
@@ -224,7 +224,6 @@ export function NetworkPage({
           </TabsContent>
 
         </Tabs>
-      </div>
 
       <AlertDialog
         open={removeFollowerId !== null || unfollowUserId !== null || cancelRequestId !== null}
@@ -275,6 +274,6 @@ export function NetworkPage({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageLayout>
   );
 }

@@ -47,6 +47,7 @@ import { apiUpdateUserProfilePicture, apiUploadUserProfilePicture } from '../lib
 import { OpportunityCard } from './OpportunityCard';
 import { apiFetchProfilePosts, type UserPost } from '../lib/postsApi';
 import { LoadingIndicator } from './ui/LoadingIndicator';
+import { PageLayout } from './PageLayout';
 
 interface ProfilePageProps {
   student: Student;
@@ -748,8 +749,8 @@ export function ProfilePage({
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-24 md:pb-8">
-      <div className="mx-auto grid w-full [grid-template-columns:1fr] gap-4 px-3 py-4 sm:px-5 sm:py-5 lg:max-w-[1000px] lg:px-6 lg:py-6">
+    <PageLayout className="bg-slate-50 pb-24 md:pb-8" contentClassName="py-4 sm:py-5 lg:py-6">
+      <div className="mx-auto grid w-full max-w-[1000px] [grid-template-columns:1fr] gap-4">
         <section className="box-border w-full overflow-hidden rounded-[1.75rem] border border-slate-200/80 bg-white shadow-xl shadow-slate-200/70">
           <div className="relative h-48 bg-gradient-to-br from-sky-600 via-indigo-500 to-emerald-400 sm:h-60">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.35),transparent_28%),linear-gradient(to_top,rgba(15,23,42,0.72),rgba(15,23,42,0.12))]" />
@@ -1588,6 +1589,6 @@ export function ProfilePage({
           </div>
         </div>
       </Modal>
-    </div>
+    </PageLayout>
   );
 }

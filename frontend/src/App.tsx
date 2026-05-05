@@ -2234,7 +2234,7 @@ export default function App() {
       <div className="flex flex-1 min-w-0">
         <div className="w-full min-w-0">
           {activeTab === 'feed' ? (
-          <div className="flex w-full xl:max-w-7xl">
+          <div className="mx-auto flex w-full xl:max-w-7xl">
             {/* Profile Section (Left) - Visible on XL screens and up */}
              <div className="hide-scrollbar w-[280px] min-w-[280px] px-1 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)] hidden xl:block flex-shrink-0" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               <ProfileCard
