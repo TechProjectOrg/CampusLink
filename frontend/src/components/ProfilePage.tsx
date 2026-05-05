@@ -885,7 +885,7 @@ export function ProfilePage({
               <button
                 type="button"
                 onClick={() => featuredPost && onOpenPost?.(featuredPost)}
-                className="group/highlight block min-h-52 w-full overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 p-6 text-left text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl"
+                className="group/highlight block w-full overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 p-5 text-left text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl sm:p-6"
               >
                 <p className="text-sm font-medium text-blue-100">{featuredProject ? 'Featured project' : featuredPost ? 'Featured post' : 'Achievement'}</p>
                 <h3 className="mt-3 text-2xl font-semibold tracking-tight">
@@ -929,9 +929,9 @@ export function ProfilePage({
                   className="hide-scrollbar w-full overflow-x-auto overscroll-x-contain pb-2"
                   onWheel={handleHorizontalWheel}
                 >
-                  <div className="flex w-max snap-x snap-mandatory gap-5">
+                  <div className="flex w-full snap-x snap-mandatory gap-4 sm:w-max sm:gap-5">
                     {profilePosts.slice(0, 8).map((post) => (
-                      <div key={post.id} className="w-[22rem] shrink-0 snap-start">
+                      <div key={post.id} className="w-full shrink-0 snap-start sm:w-[22rem]">
                         <OpportunityCard
                           opportunity={post}
                           currentUserId={currentUserId}
@@ -974,15 +974,15 @@ export function ProfilePage({
                   className="hide-scrollbar w-full overflow-x-auto overscroll-x-contain pb-2"
                   onWheel={handleHorizontalWheel}
                 >
-                <div className="flex w-max snap-x snap-mandatory gap-4">
+                <div className="flex w-full snap-x snap-mandatory gap-4 sm:w-max">
                 {loadedProjects.map((project) => {
                   const projectLink = project.liveUrl || project.githubUrl || (project as Project & { link?: string | null }).link;
                   return (
-                    <article key={project.id} className="group flex w-[20rem] shrink-0 snap-start flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg">
+                    <article key={project.id} className="group flex w-full shrink-0 snap-start flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg sm:w-[20rem]">
                       {project.imageUrl ? (
-                        <ImageWithFallback src={project.imageUrl} alt={project.title} className="h-40 w-full object-cover" />
+                        <ImageWithFallback src={project.imageUrl} alt={project.title} className="aspect-video w-full object-cover" />
                       ) : (
-                        <div className="flex h-40 items-center justify-center bg-gradient-to-br from-indigo-50 via-sky-50 to-emerald-50">
+                        <div className="flex aspect-video w-full items-center justify-center bg-gradient-to-br from-indigo-50 via-sky-50 to-emerald-50">
                           <ExternalLink className="h-10 w-10 text-indigo-300" />
                         </div>
                       )}
