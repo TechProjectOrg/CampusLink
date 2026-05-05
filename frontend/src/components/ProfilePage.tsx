@@ -692,7 +692,7 @@ export function ProfilePage({
   const showCertificationsSection = isOwnProfile || certificationsLoading || loadedCertifications.length > 0;
   const showClubsSection = isOwnProfile || societies.length > 0;
   const showAchievementsSection = isOwnProfile || achievements.length > 0;
-  const profileSectionCardClass = 'rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6';
+  const profileSectionCardClass = 'flex w-full flex-col gap-4 rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6';
 
   const SectionHeader = ({
     title,
@@ -703,7 +703,7 @@ export function ProfilePage({
     subtitle?: string;
     onAdd?: () => void;
   }) => (
-    <div className="mb-4 flex items-end justify-between gap-4">
+    <div className="flex items-end justify-between gap-4">
       <div>
         <h2 className="text-xl font-semibold tracking-tight text-slate-950">{title}</h2>
         {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
@@ -749,7 +749,7 @@ export function ProfilePage({
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24 md:pb-8">
-      <div className="mx-auto max-w-[1000px] space-y-5 p-5">
+      <div className="mx-auto flex max-w-[1000px] flex-col gap-5 p-5">
         <section className="overflow-hidden rounded-[1.75rem] border border-slate-200/80 bg-white shadow-xl shadow-slate-200/70">
           <div className="relative h-48 bg-gradient-to-br from-sky-600 via-indigo-500 to-emerald-400 sm:h-60">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.35),transparent_28%),linear-gradient(to_top,rgba(15,23,42,0.72),rgba(15,23,42,0.12))]" />
@@ -881,7 +881,7 @@ export function ProfilePage({
         <section className={profileSectionCardClass}>
           <SectionHeader title="Featured" subtitle="A quick glimpse of recent work and wins" />
           {hasFeaturedContent ? (
-            <div className="space-y-4">
+            <div className="flex flex-col gap-4">
               <button
                 type="button"
                 onClick={() => featuredPost && onOpenPost?.(featuredPost)}
@@ -918,7 +918,7 @@ export function ProfilePage({
         ) : null}
 
         {showPostsSection ? (
-        <section className={`${profileSectionCardClass} space-y-4`}>
+        <section className={profileSectionCardClass}>
           <SectionHeader title="Activity" subtitle="Recent posts and campus updates" />
           {postsLoading ? (
             <LoadingIndicator label="Loading posts..." className="justify-start" size={20} />
@@ -963,7 +963,7 @@ export function ProfilePage({
         ) : null}
 
         {showProjectsSection ? (
-        <section className={`${profileSectionCardClass} space-y-4`}>
+        <section className={profileSectionCardClass}>
           <SectionHeader title="Projects" subtitle="Selected builds, prototypes, and experiments" onAdd={() => setActiveModal('project')} />
           {projectsLoading ? (
             <LoadingIndicator label="Loading projects..." className="justify-start" size={20} />
@@ -1023,12 +1023,12 @@ export function ProfilePage({
         ) : null}
 
         {showExperienceSection || showEducationSection ? (
-        <section className="grid gap-5 lg:grid-cols-2">
+        <section className="grid gap-5 lg:grid-cols-2 lg:items-start">
           {showExperienceSection ? (
           <div className={profileSectionCardClass}>
             <SectionHeader title="Experience" onAdd={() => setActiveModal('experience')} />
             {experiences.length > 0 ? (
-              <div className="space-y-5">
+              <div className="flex flex-col gap-5">
                 {experiences.map((exp) => (
                   <div key={exp.id} className="group relative border-l-2 border-blue-100 pl-5">
                     <span className="absolute -left-[9px] top-1 h-4 w-4 rounded-full border-4 border-white bg-blue-500 shadow" />
@@ -1091,14 +1091,14 @@ export function ProfilePage({
         ) : null}
 
         {showCertificationsSection || showClubsSection ? (
-        <section className="grid gap-5 lg:grid-cols-2">
+        <section className="grid gap-5 lg:grid-cols-2 lg:items-start">
           {showCertificationsSection ? (
           <div className={profileSectionCardClass}>
             <SectionHeader title="Certifications" onAdd={() => setActiveModal('certification')} />
             {certificationsLoading ? (
               <LoadingIndicator label="Loading certifications..." className="justify-start" size={20} />
             ) : loadedCertifications.length > 0 ? (
-              <div className="space-y-3">
+              <div className="flex flex-col gap-3">
                 {loadedCertifications.map((cert) => (
                   <div key={cert.id} className="group flex items-center gap-4 rounded-2xl p-3 transition hover:bg-slate-50">
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
