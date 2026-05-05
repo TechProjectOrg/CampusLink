@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Home, Search, Users, MessageCircle, BookOpen, User, Bell, Settings, LogOut } from 'lucide-react';
+import { Home, Search, Users, MessageCircle, BookOpen, User, Bell, Settings, LogOut, Menu } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
 import {
@@ -171,6 +171,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
           {/* Notifications - Mobile */}
           <button 
             onClick={() => onTabChange('notifications')}
+            aria-label="Notifications"
             className={`md:hidden p-2 rounded-xl relative transition-all duration-300 hover:scale-110 ${
               activeTab === 'notifications' ? 'bg-white/20' : 'hover:bg-white/10'
             }`}
@@ -182,6 +183,36 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
               </Badge>
             )}
           </button>
+
+          {/* More Menu - Mobile */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                aria-label="Open navigation menu"
+                className="md:hidden p-2 rounded-xl text-white transition-all duration-300 hover:scale-110 hover:bg-white/10"
+              >
+                <Menu className="w-5 h-5" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-52" align="end">
+              <DropdownMenuItem onClick={() => onTabChange('profile')}>
+                <User className="mr-2 h-4 w-4" />
+                <span>Profile</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onTabChange('settings')}>
+                <Settings className="mr-2 h-4 w-4" />
+                <span>Settings</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={logout}
+                className="text-red-600 focus:text-red-600 focus:bg-red-50"
+              >
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>Sign Out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
 
         {/* Mobile Search Bar */}
@@ -210,14 +241,16 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
               <button
                 key={item.id}
                 onClick={() => onTabChange(item.id)}
-                className={`relative flex flex-col items-center justify-center gap-1 flex-1 max-w-[80px] px-3 py-3 rounded-2xl transition-all duration-300 ${
+                aria-label={item.label}
+                title={item.label}
+                className={`relative flex h-12 flex-1 max-w-[72px] items-center justify-center rounded-2xl transition-all duration-300 ${
                   isActive 
                     ? 'text-white bg-white/25 scale-105 shadow-xl border border-white/40 backdrop-blur-sm' 
                     : 'text-white/70 hover:text-white hover:bg-white/10 active:scale-95'
                 }`}
               >
-                <Icon className="w-6 h-6 mb-0.5" />
-                <span className="text-[10px] font-medium leading-none whitespace-nowrap">{item.label}</span>
+                <Icon className="w-6 h-6" />
+                <span className="sr-only">{item.label}</span>
                 {(item.badge ?? 0) > 0 && (
                   <Badge className="absolute -top-1 -right-1 bg-destructive text-white px-1 py-0 min-w-4 h-4 flex items-center justify-center text-xs animate-pulse">
                     {item.badge}
