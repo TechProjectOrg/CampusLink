@@ -692,7 +692,7 @@ export function ProfilePage({
   const showCertificationsSection = isOwnProfile || certificationsLoading || loadedCertifications.length > 0;
   const showClubsSection = isOwnProfile || societies.length > 0;
   const showAchievementsSection = isOwnProfile || achievements.length > 0;
-  const profileSectionCardClass = 'box-border flex w-full flex-col gap-4 rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5 lg:p-6';
+  const profileSectionCardClass = 'box-border flex w-full min-w-0 flex-col gap-4 overflow-hidden break-words rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5 lg:p-6';
 
   const SectionHeader = ({
     title,
@@ -705,7 +705,7 @@ export function ProfilePage({
   }) => (
     <div className="flex w-full items-center justify-between gap-4">
       <div className="min-w-0">
-        <h2 className="text-xl font-semibold tracking-tight text-slate-950">{title}</h2>
+        <h2 className="break-words text-lg font-semibold tracking-tight text-slate-950 sm:text-xl">{title}</h2>
         {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
       </div>
       {isOwnProfile && onAdd ? (
@@ -755,7 +755,7 @@ export function ProfilePage({
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.35),transparent_28%),linear-gradient(to_top,rgba(15,23,42,0.72),rgba(15,23,42,0.12))]" />
             <div className="absolute bottom-6 left-6 hidden max-w-xl text-white sm:block">
               <p className="text-sm font-medium uppercase tracking-[0.18em] text-white/75">Campus profile</p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight">{student.name}</h1>
+              <h1 className="mt-2 break-words text-2xl font-semibold tracking-tight sm:text-3xl">{student.name}</h1>
             </div>
             {isOwnProfile ? (
               <button
@@ -780,8 +780,8 @@ export function ProfilePage({
                   onPhotoChange={handleProfilePhotoChange}
                 />
                 <div className="flex min-w-0 flex-col justify-center">
-                  <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:hidden">{student.name}</h1>
-                  <p className="mt-2 max-w-2xl text-base font-normal text-slate-700 sm:text-lg">
+                  <h1 className="break-words text-2xl font-semibold tracking-tight text-slate-950 sm:hidden">{student.name}</h1>
+                  <p className="mt-2 max-w-2xl break-words text-sm font-normal text-slate-700 sm:text-base lg:text-lg">
                     {student.headline || (isOwnProfile ? 'Add a headline that tells campus what you are building.' : 'Campus community member')}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm font-normal text-slate-500">
@@ -888,7 +888,7 @@ export function ProfilePage({
                 className="group/highlight block w-full overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 p-5 text-left text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl sm:p-6"
               >
                 <p className="text-sm font-medium text-blue-100">{featuredProject ? 'Featured project' : featuredPost ? 'Featured post' : 'Achievement'}</p>
-                <h3 className="mt-3 text-2xl font-semibold tracking-tight">
+                <h3 className="mt-3 break-words text-xl font-semibold tracking-tight sm:text-2xl">
                   {featuredProject?.title || featuredPost?.title || featuredAchievement?.title}
                 </h3>
                 <p className="mt-3 line-clamp-3 max-w-3xl text-sm leading-6 text-white/75">
@@ -988,7 +988,7 @@ export function ProfilePage({
                       )}
                       <div className="flex flex-1 flex-col p-4">
                         <div className="flex items-start justify-between gap-3">
-                          <h3 className="font-semibold text-slate-950">{project.title}</h3>
+                          <h3 className="break-words text-base font-semibold text-slate-950">{project.title}</h3>
                           <ItemActions onEdit={() => handleEditProject(project)} onDelete={() => handleDeleteProject(project.id)} />
                         </div>
                         <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600">{project.description}</p>
@@ -1034,7 +1034,7 @@ export function ProfilePage({
                     <span className="absolute -left-[9px] top-1 h-4 w-4 rounded-full border-4 border-white bg-blue-500 shadow" />
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <h3 className="font-semibold text-slate-950">{exp.roleTitle}</h3>
+                        <h3 className="break-words font-semibold text-slate-950">{exp.roleTitle}</h3>
                         <p className="text-sm text-slate-600">{exp.organization}</p>
                         <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">
                           {format(exp.startDate, 'MMM yyyy')} - {exp.isCurrentlyWorking ? 'Present' : exp.endDate ? format(exp.endDate, 'MMM yyyy') : 'Present'}
@@ -1057,7 +1057,7 @@ export function ProfilePage({
             <SectionHeader title="Education" />
             <div className="relative border-l-2 border-emerald-100 pl-5">
               <span className="absolute -left-[9px] top-1 h-4 w-4 rounded-full border-4 border-white bg-emerald-500 shadow" />
-              <h3 className="font-semibold text-slate-950">{student.branch || 'Degree / Branch'}</h3>
+              <h3 className="break-words font-semibold text-slate-950">{student.branch || 'Degree / Branch'}</h3>
               <p className="text-sm text-slate-600">CampusLynk College</p>
               <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">Year {student.year || '-'}</p>
             </div>
@@ -1105,7 +1105,7 @@ export function ProfilePage({
                       <Trophy className="h-5 w-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <h3 className="truncate font-medium text-slate-950">{cert.name}</h3>
+                      <h3 className="break-words font-medium text-slate-950">{cert.name}</h3>
                       <p className="text-sm text-slate-500">{cert.issuer || 'Certification issuer'}</p>
                     </div>
                     <div className="flex items-center gap-1">
@@ -1138,7 +1138,7 @@ export function ProfilePage({
                           <Users className="h-5 w-5" />
                         </div>
                         <div>
-                          <h3 className="font-medium text-slate-950">{soc.societyName}</h3>
+                          <h3 className="break-words font-medium text-slate-950">{soc.societyName}</h3>
                           <p className="text-sm text-slate-500">{soc.role}</p>
                         </div>
                       </div>
@@ -1167,7 +1167,7 @@ export function ProfilePage({
                       <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-100 text-orange-700">
                         <Award className="h-5 w-5" />
                       </div>
-                      <h3 className="font-semibold text-slate-950">{ach.title}</h3>
+                      <h3 className="break-words font-semibold text-slate-950">{ach.title}</h3>
                       <p className="text-sm text-slate-500">{ach.year}</p>
                       {ach.description ? <p className="mt-2 text-sm leading-6 text-slate-600">{ach.description}</p> : null}
                     </div>
