@@ -692,6 +692,7 @@ export function ProfilePage({
   const showCertificationsSection = isOwnProfile || certificationsLoading || loadedCertifications.length > 0;
   const showClubsSection = isOwnProfile || societies.length > 0;
   const showAchievementsSection = isOwnProfile || achievements.length > 0;
+  const profileSectionCardClass = 'rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6';
 
   const SectionHeader = ({
     title,
@@ -748,7 +749,7 @@ export function ProfilePage({
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24 md:pb-8">
-      <div className="mx-auto max-w-5xl space-y-8 px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto max-w-[1000px] space-y-5 p-5">
         <section className="overflow-hidden rounded-[1.75rem] border border-slate-200/80 bg-white shadow-xl shadow-slate-200/70">
           <div className="relative h-48 bg-gradient-to-br from-sky-600 via-indigo-500 to-emerald-400 sm:h-60">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.35),transparent_28%),linear-gradient(to_top,rgba(15,23,42,0.72),rgba(15,23,42,0.12))]" />
@@ -877,7 +878,7 @@ export function ProfilePage({
         </section>
 
         {showFeaturedSection ? (
-        <section className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+        <section className={profileSectionCardClass}>
           <SectionHeader title="Featured" subtitle="A quick glimpse of recent work and wins" />
           {hasFeaturedContent ? (
             <div className="space-y-4">
@@ -917,13 +918,13 @@ export function ProfilePage({
         ) : null}
 
         {showPostsSection ? (
-        <section className="space-y-4">
+        <section className={`${profileSectionCardClass} space-y-4`}>
           <SectionHeader title="Activity" subtitle="Recent posts and campus updates" />
           {postsLoading ? (
             <LoadingIndicator label="Loading posts..." className="justify-start" size={20} />
           ) : profilePosts.length > 0 ? (
             <>
-              <div className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
+              <div className="overflow-hidden">
                 <div
                   className="hide-scrollbar w-full overflow-x-auto overscroll-x-contain pb-2"
                   onWheel={handleHorizontalWheel}
@@ -962,13 +963,13 @@ export function ProfilePage({
         ) : null}
 
         {showProjectsSection ? (
-        <section className="space-y-4">
+        <section className={`${profileSectionCardClass} space-y-4`}>
           <SectionHeader title="Projects" subtitle="Selected builds, prototypes, and experiments" onAdd={() => setActiveModal('project')} />
           {projectsLoading ? (
             <LoadingIndicator label="Loading projects..." className="justify-start" size={20} />
           ) : loadedProjects.length > 0 ? (
             <>
-              <div className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
+              <div className="overflow-hidden">
                 <div
                   className="hide-scrollbar w-full overflow-x-auto overscroll-x-contain pb-2"
                   onWheel={handleHorizontalWheel}
@@ -1022,9 +1023,9 @@ export function ProfilePage({
         ) : null}
 
         {showExperienceSection || showEducationSection ? (
-        <section className="grid gap-8 lg:grid-cols-2">
+        <section className="grid gap-5 lg:grid-cols-2">
           {showExperienceSection ? (
-          <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+          <div className={profileSectionCardClass}>
             <SectionHeader title="Experience" onAdd={() => setActiveModal('experience')} />
             {experiences.length > 0 ? (
               <div className="space-y-5">
@@ -1052,7 +1053,7 @@ export function ProfilePage({
           ) : null}
 
           {showEducationSection ? (
-          <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+          <div className={profileSectionCardClass}>
             <SectionHeader title="Education" />
             <div className="relative border-l-2 border-emerald-100 pl-5">
               <span className="absolute -left-[9px] top-1 h-4 w-4 rounded-full border-4 border-white bg-emerald-500 shadow" />
@@ -1066,7 +1067,7 @@ export function ProfilePage({
         ) : null}
 
         {showSkillsSection ? (
-        <section className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+        <section className={profileSectionCardClass}>
           <SectionHeader title="Skills" onAdd={() => setActiveModal('skill')} />
           {skillsLoading ? (
             <LoadingIndicator label="Loading skills..." className="justify-start" size={20} />
@@ -1090,9 +1091,9 @@ export function ProfilePage({
         ) : null}
 
         {showCertificationsSection || showClubsSection ? (
-        <section className="grid gap-8 lg:grid-cols-2">
+        <section className="grid gap-5 lg:grid-cols-2">
           {showCertificationsSection ? (
-          <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+          <div className={profileSectionCardClass}>
             <SectionHeader title="Certifications" onAdd={() => setActiveModal('certification')} />
             {certificationsLoading ? (
               <LoadingIndicator label="Loading certifications..." className="justify-start" size={20} />
@@ -1125,7 +1126,7 @@ export function ProfilePage({
           ) : null}
 
           {showClubsSection ? (
-          <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+          <div className={profileSectionCardClass}>
             <SectionHeader title="Clubs & Societies" onAdd={() => setActiveModal('society')} />
             {societies.length > 0 ? (
               <div className="grid gap-3 sm:grid-cols-2">
@@ -1155,7 +1156,7 @@ export function ProfilePage({
         ) : null}
 
         {showAchievementsSection ? (
-        <section className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+        <section className={profileSectionCardClass}>
           <SectionHeader title="Achievements" onAdd={() => setActiveModal('achievement')} />
           {achievements.length > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2">
