@@ -770,8 +770,8 @@ export function ProfilePage({
           </div>
 
           <div className="px-5 pb-6 sm:px-8">
-            <div className="-mt-16 flex flex-col gap-5 sm:-mt-14 sm:flex-row sm:items-end sm:justify-between">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+            <div className="-mt-16 flex flex-col gap-5 sm:-mt-14 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-col items-center gap-4 text-center sm:flex-row sm:items-center sm:gap-6 sm:text-left">
                 <ProfilePhotoUpload
                   currentPhoto={displayedProfilePhoto}
                   hasCustomPhoto={hasCustomProfilePhoto}
@@ -779,7 +779,7 @@ export function ProfilePage({
                   editable={isOwnProfile}
                   onPhotoChange={handleProfilePhotoChange}
                 />
-                <div className="pt-2 sm:pb-1">
+                <div className="flex min-w-0 flex-col justify-center">
                   <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:hidden">{student.name}</h1>
                   <p className="mt-2 max-w-2xl text-base font-normal text-slate-700 sm:text-lg">
                     {student.headline || (isOwnProfile ? 'Add a headline that tells campus what you are building.' : 'Campus community member')}
