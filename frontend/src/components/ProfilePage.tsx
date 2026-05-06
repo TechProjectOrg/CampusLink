@@ -769,10 +769,10 @@ export function ProfilePage({
           </div>
 
           <div className="cl-header-content px-6 sm:px-10 pb-8">
-            <div className="cl-avatar-actions-row relative flex flex-col md:flex-row md:items-end justify-between -mt-16 sm:-mt-20 mb-6 gap-6">
-              {/* Avatar - Large circular image with white border */}
-              <div className="cl-avatar-container relative shrink-0">
-                <div className="cl-avatar-frame w-[140px] h-[140px] sm:w-[160px] sm:h-[160px] rounded-full border-[6px] border-white shadow-lg overflow-hidden bg-white">
+            {/* Avatar Section - Strictly above the name section */}
+            <div className="cl-avatar-outer-container relative -mt-20 sm:-mt-24 mb-6 flex justify-start">
+              <div className="cl-avatar-circle-frame relative w-[130px] h-[130px] sm:w-[150px] sm:h-[150px] shrink-0">
+                <div className="cl-avatar-mask w-full h-full rounded-full border-[6px] border-white shadow-2xl overflow-hidden bg-white">
                   <ProfilePhotoUpload
                     currentPhoto={displayedProfilePhoto}
                     hasCustomPhoto={hasCustomProfilePhoto}
@@ -783,9 +783,50 @@ export function ProfilePage({
                   />
                 </div>
               </div>
+            </div>
+
+            <div className="cl-identity-and-actions flex flex-col md:flex-row md:items-start justify-between gap-6">
+              {/* Student Name and Headline */}
+              <div className="cl-identity-info flex-1 space-y-4">
+                <div className="cl-name-headline space-y-2">
+                  <h1 className="cl-student-name text-3xl sm:text-[42px] font-bold text-slate-900 tracking-tight leading-tight">
+                    {student.name}
+                  </h1>
+                  <p className="cl-student-headline text-lg sm:text-xl text-slate-600 font-medium leading-relaxed max-w-4xl">
+                    {student.headline || (isOwnProfile ? 'Add a headline that tells campus what you are building.' : 'Campus community member')}
+                  </p>
+                </div>
+
+                {/* Education and Contact Info Row */}
+                <div className="cl-meta-info-row flex flex-wrap items-center gap-x-6 gap-y-3 pt-1">
+                  <div className="cl-meta-item flex items-center gap-2 text-slate-500 font-semibold text-sm">
+                    <GraduationCap className="w-5 h-5 text-slate-400" />
+                    <span>{student.branch || 'College Student'}</span>
+                  </div>
+                  <div className="cl-meta-item flex items-center gap-2 text-slate-500 font-semibold text-sm">
+                    <Calendar className="w-5 h-5 text-slate-400" />
+                    <span>Year {student.year || '-'}</span>
+                  </div>
+                  <div className="cl-meta-item flex items-center gap-2 text-slate-500 font-semibold text-sm">
+                    <Mail className="w-5 h-5 text-slate-400" />
+                    <span>{student.email}</span>
+                  </div>
+                </div>
+
+                {/* Network Stats Link */}
+                <div className="cl-network-stats flex flex-wrap items-center gap-6 pt-2">
+                  <button className="cl-stat-link text-sm font-bold text-blue-600 hover:underline transition-all">
+                    {followersCount + followingCount} connections
+                  </button>
+                  <div className="cl-stat-counts flex items-center gap-4 text-sm text-slate-500 font-bold">
+                     <span>{followersCount} followers</span>
+                     <span>{followingCount} following</span>
+                  </div>
+                </div>
+              </div>
 
               {/* Header Action Buttons */}
-              <div className="cl-header-actions flex flex-wrap gap-3 mb-2">
+              <div className="cl-header-actions flex flex-wrap gap-3 md:pt-2">
                 {!isOwnProfile ? (
                   <>
                     <FollowButton
@@ -817,45 +858,6 @@ export function ProfilePage({
                     Edit Profile
                   </Button>
                 )}
-              </div>
-            </div>
-
-            {/* Student Name and Headline */}
-            <div className="cl-identity-info space-y-4">
-              <div className="cl-name-headline space-y-1.5">
-                <h1 className="cl-student-name text-3xl sm:text-[40px] font-bold text-slate-900 tracking-tight leading-tight">
-                  {student.name}
-                </h1>
-                <p className="cl-student-headline text-lg sm:text-xl text-slate-600 font-medium leading-relaxed max-w-4xl">
-                  {student.headline || (isOwnProfile ? 'Add a headline that tells campus what you are building.' : 'Campus community member')}
-                </p>
-              </div>
-
-              {/* Education and Contact Info Row */}
-              <div className="cl-meta-info-row flex flex-wrap items-center gap-x-6 gap-y-3 pt-2">
-                <div className="cl-meta-item flex items-center gap-2 text-slate-500 font-semibold text-sm">
-                  <GraduationCap className="w-5 h-5 text-slate-400" />
-                  <span>{student.branch || 'College Student'}</span>
-                </div>
-                <div className="cl-meta-item flex items-center gap-2 text-slate-500 font-semibold text-sm">
-                  <Calendar className="w-5 h-5 text-slate-400" />
-                  <span>Year {student.year || '-'}</span>
-                </div>
-                <div className="cl-meta-item flex items-center gap-2 text-slate-500 font-semibold text-sm">
-                  <Mail className="w-5 h-5 text-slate-400" />
-                  <span>{student.email}</span>
-                </div>
-              </div>
-
-              {/* Network Stats Link */}
-              <div className="cl-network-stats flex flex-wrap items-center gap-6 pt-4">
-                <button className="cl-stat-link text-sm font-bold text-blue-600 hover:underline transition-all">
-                  {followersCount + followingCount} connections
-                </button>
-                <div className="cl-stat-counts flex items-center gap-4 text-sm text-slate-500 font-bold">
-                   <span>{followersCount} followers</span>
-                   <span>{followingCount} following</span>
-                </div>
               </div>
             </div>
 
