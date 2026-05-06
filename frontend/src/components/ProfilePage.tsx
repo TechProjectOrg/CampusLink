@@ -17,7 +17,8 @@ import {
   Pencil,
   Trash2,
   Upload,
-  Eye,
+  Mail,
+  Link2,
 } from 'lucide-react';
 import { Student, Opportunity } from '../types';
 import type { FollowGraph } from '../App';
@@ -751,24 +752,24 @@ export function ProfilePage({
   return (
     <PageLayout className="bg-slate-50 pb-24 md:pb-8" contentClassName="py-4 sm:py-5 lg:py-6">
       <div className="mx-auto grid w-full max-w-[1000px] [grid-template-columns:1fr] gap-4">
-        <section className="box-border w-full overflow-hidden rounded-[1.75rem] border border-slate-200/80 bg-white shadow-xl shadow-slate-200/70">
-          <div className="relative h-48 bg-gradient-to-br from-sky-600 via-indigo-500 to-emerald-400 sm:h-60">
+        <section className="box-border w-full overflow-hidden rounded-[2rem] border border-slate-200/80 bg-white shadow-2xl shadow-slate-200/50">
+          <div className="relative h-48 bg-gradient-to-br from-sky-600 via-indigo-500 to-emerald-400 sm:h-64">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.35),transparent_28%),linear-gradient(to_top,rgba(15,23,42,0.72),rgba(15,23,42,0.12))]" />
             {isOwnProfile ? (
               <button
                 type="button"
                 onClick={() => setActiveModal('editProfile')}
-                className="absolute right-5 top-5 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/92 text-slate-700 shadow-lg transition hover:scale-[1.02] hover:bg-white"
-                aria-label="Edit profile"
+                className="absolute right-6 top-6 inline-flex items-center gap-2 rounded-xl bg-white/95 px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-xl transition-all hover:scale-[1.02] hover:bg-white"
               >
                 <Edit2 className="h-4 w-4" />
+                Edit Profile
               </button>
             ) : null}
           </div>
 
-          <div className="px-5 pb-8 sm:px-20 sm:pb-9 lg:px-24">
+          <div className="px-5 pb-10 sm:px-20 lg:px-24">
             <div className="-mt-16 flex flex-col items-start gap-10 text-left sm:-mt-48">
-              <div className="flex flex-col items-start gap-10 text-left">
+              <div className="flex flex-col items-start gap-10 text-left w-full">
                 <ProfilePhotoUpload
                   currentPhoto={displayedProfilePhoto}
                   hasCustomPhoto={hasCustomProfilePhoto}
@@ -777,64 +778,71 @@ export function ProfilePage({
                   onPhotoChange={handleProfilePhotoChange}
                   size="3xl"
                 />
-                <div className="flex min-w-0 flex-col items-start justify-start">
-                  <h1 className="mb-3 break-words text-[40px] font-extrabold leading-tight text-slate-950 sm:text-[64px]">
-                    {student.name}
-                  </h1>
-                  <p className="max-w-2xl break-words text-base font-normal leading-6 text-slate-700">
-                    {student.headline || (isOwnProfile ? 'Add a headline that tells campus what you are building.' : 'Campus community member')}
-                  </p>
-                  <div className="mt-3 flex flex-wrap justify-start gap-x-5 gap-y-2 text-sm font-normal leading-5 text-slate-500">
-                    <span className="inline-flex items-center gap-2">
-                      <GraduationCap className="h-4 w-4 shrink-0 text-slate-400" />
-                      {student.branch || 'College'}
-                    </span>
-                    <span className="inline-flex items-center gap-2">
-                      <Calendar className="h-4 w-4 shrink-0 text-slate-400" />
-                      Year {student.year || '-'}
-                    </span>
-                    <span className="inline-flex items-center gap-2">
-                      <MapPin className="h-4 w-4 shrink-0 text-slate-400" />
-                      Campus
-                    </span>
+                
+                <div className="flex w-full flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+                  <div className="flex min-w-0 flex-col items-start justify-start">
+                    <h1 className="mb-2 break-words text-[40px] font-extrabold leading-tight text-slate-950 sm:text-[64px]">
+                      {student.name}
+                    </h1>
+                    <p className="max-w-2xl break-words text-lg font-medium leading-7 text-slate-700 sm:text-xl">
+                      {student.headline || (isOwnProfile ? 'Add a headline that tells campus what you are building.' : 'Campus community member')}
+                    </p>
+                    
+                    <div className="mt-6 grid grid-cols-1 gap-x-8 gap-y-3 text-sm font-medium text-slate-500 sm:grid-cols-2 lg:flex lg:flex-wrap">
+                      <span className="inline-flex items-center gap-2.5">
+                        <GraduationCap className="h-5 w-5 shrink-0 text-slate-400" />
+                        {student.branch || 'College'}
+                      </span>
+                      <span className="inline-flex items-center gap-2.5">
+                        <Calendar className="h-5 w-5 shrink-0 text-slate-400" />
+                        Year {student.year || '-'}
+                      </span>
+                      <span className="inline-flex items-center gap-2.5">
+                        <Mail className="h-5 w-5 shrink-0 text-slate-400" />
+                        {student.email}
+                      </span>
+                      <span className="inline-flex items-center gap-2.5">
+                        <MapPin className="h-5 w-5 shrink-0 text-slate-400" />
+                        Campus
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex shrink-0 flex-wrap justify-start gap-3 pb-2 sm:justify-end">
+                    {!isOwnProfile ? (
+                      <>
+                        <FollowButton
+                          targetName={student.name}
+                          accountType={student.accountType}
+                          isFollowing={isFollowing}
+                          isFollower={isFollower}
+                          requestStatus={requestStatus}
+                          onFollow={() => onFollow(student.id, student.accountType)}
+                          onUnfollow={() => onUnfollow(student.id)}
+                          onCancelRequest={() => onCancelRequest(student.id)}
+                        />
+                        <Button variant="outline" onClick={() => onMessage?.(student.id)} className="rounded-xl border-slate-200 bg-white px-6 py-6 shadow-sm hover:bg-slate-50">
+                          <MessageCircle className="mr-2 h-5 w-5" />
+                          Message
+                        </Button>
+                      </>
+                    ) : null}
                   </div>
                 </div>
               </div>
-
-              <div className="flex flex-wrap justify-start gap-2">
-                {!isOwnProfile ? (
-                  <>
-                    <div className="rounded-full bg-white shadow-sm">
-                      <FollowButton
-                      targetName={student.name}
-                      accountType={student.accountType}
-                      isFollowing={isFollowing}
-                      isFollower={isFollower}
-                      requestStatus={requestStatus}
-                      onFollow={() => onFollow(student.id, student.accountType)}
-                      onUnfollow={() => onUnfollow(student.id)}
-                      onCancelRequest={() => onCancelRequest(student.id)}
-                      />
-                    </div>
-                    <Button variant="outline" onClick={() => onMessage?.(student.id)} className="rounded-full border-slate-200 bg-white shadow-sm hover:bg-slate-50">
-                      <MessageCircle className="mr-2 h-4 w-4" />
-                      Message
-                    </Button>
-                  </>
-                ) : null}
-              </div>
             </div>
 
-            <div className="hide-scrollbar mt-7 flex flex-nowrap items-center justify-start gap-8 overflow-x-auto whitespace-nowrap border-t border-slate-100 pt-6 text-sm font-normal text-slate-500">
+            <div className="hide-scrollbar mt-10 flex flex-nowrap items-center justify-start gap-12 overflow-x-auto whitespace-nowrap border-t border-slate-100 pt-8 text-sm font-normal text-slate-500">
               {[
                 ['Followers', followersCount],
                 ['Following', followingCount],
+                ['Connections', followersCount + followingCount],
                 ['Projects', loadedProjects.length],
                 ['Clubs', clubCount],
               ].map(([label, value]) => (
-                <div key={label} className="inline-flex flex-col items-center gap-1">
-                  <span className="text-base font-semibold leading-none text-slate-900">{value}</span>
-                  <span className="text-xs leading-none text-slate-500">{label}</span>
+                <div key={label} className="inline-flex flex-col items-start gap-1.5">
+                  <span className="text-xl font-bold leading-none text-slate-900">{value}</span>
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{label}</span>
                 </div>
               ))}
             </div>
