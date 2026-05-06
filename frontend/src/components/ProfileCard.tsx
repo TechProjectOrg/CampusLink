@@ -26,16 +26,16 @@ export function ProfileCard({ student, followerCount, followingCount, onViewProf
         
         <CardContent className="relative px-6 pb-6">
           {/* Avatar */}
-          <div className="flex justify-start -mt-12 mb-4">
-            <Avatar className="w-24 h-24 ring-4 ring-white shadow-xl">
+          <div className="flex justify-start -mt-20 mb-4">
+            <Avatar className="w-40 h-40 ring-4 ring-white shadow-xl">
               <AvatarImage src={student.avatar} />
-              <AvatarFallback className="text-2xl">{student.name[0]}</AvatarFallback>
+              <AvatarFallback className="text-4xl">{student.name[0]}</AvatarFallback>
             </Avatar>
           </div>
 
           {/* Name & Info */}
           <div className="text-left space-y-1 mb-4">
-            <h3 className="text-gray-900 font-bold">{student.name}</h3>
+            <h3 className="text-gray-900 text-3xl font-bold">{student.name}</h3>
             <p className="text-sm text-gray-600">{student.branch}</p>
             <p className="text-sm text-secondary">Year {student.year}</p>
           </div>

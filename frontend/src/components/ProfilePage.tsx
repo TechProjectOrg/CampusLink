@@ -766,19 +766,19 @@ export function ProfilePage({
             ) : null}
           </div>
 
-          <div className="px-5 pb-8 sm:px-8 sm:pb-9 lg:px-10">
-            <div className="-mt-16 flex flex-col items-start gap-5 text-left sm:-mt-24">
-              <div className="flex flex-col items-start gap-5 text-left">
+          <div className="px-5 pb-8 sm:px-12 sm:pb-9 lg:px-12">
+            <div className="-mt-16 flex flex-col items-start gap-8 text-left sm:-mt-40">
+              <div className="flex flex-col items-start gap-8 text-left">
                 <ProfilePhotoUpload
                   currentPhoto={displayedProfilePhoto}
                   hasCustomPhoto={hasCustomProfilePhoto}
                   name={student.name}
                   editable={isOwnProfile}
                   onPhotoChange={handleProfilePhotoChange}
-                  size="xl"
+                  size="3xl"
                 />
                 <div className="flex min-w-0 flex-col items-start justify-start">
-                  <h1 className="mb-1 break-words text-[28px] font-bold leading-tight text-slate-950 sm:text-[32px]">
+                  <h1 className="mb-2 break-words text-[40px] font-extrabold leading-tight text-slate-950 sm:text-[56px]">
                     {student.name}
                   </h1>
                   <p className="max-w-2xl break-words text-base font-normal leading-6 text-slate-700">

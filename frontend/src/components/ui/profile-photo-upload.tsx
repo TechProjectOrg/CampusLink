@@ -47,6 +47,8 @@ export function ProfilePhotoUpload({
     md: 'w-24 h-24',
     lg: 'w-32 h-32',
     xl: 'w-40 h-40',
+    '2xl': 'w-52 h-52',
+    '3xl': 'w-[240px] h-[240px]',
   };
 
   const iconSizes = {
@@ -54,6 +56,8 @@ export function ProfilePhotoUpload({
     md: 'w-5 h-5',
     lg: 'w-6 h-6',
     xl: 'w-8 h-8',
+    '2xl': 'w-12 h-12',
+    '3xl': 'w-16 h-16',
   };
 
   useEffect(() => {
