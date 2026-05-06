@@ -752,7 +752,7 @@ export function ProfilePage({
   return (
     <PageLayout className="bg-slate-50 pb-24 md:pb-8" contentClassName="py-4 sm:py-5 lg:py-6">
       <div className="mx-auto grid w-full max-w-[1000px] [grid-template-columns:1fr] gap-4">
-        <section className="box-border w-full overflow-hidden rounded-[2rem] border border-slate-200/80 bg-white shadow-2xl shadow-slate-200/50">
+        <section className="box-border w-full overflow-hidden rounded-[2rem] border border-slate-200/80 bg-white shadow-xl shadow-slate-200/60">
           <div className="relative h-48 bg-gradient-to-br from-sky-600 via-indigo-500 to-emerald-400 sm:h-64">
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.35),transparent_28%),linear-gradient(to_top,rgba(15,23,42,0.72),rgba(15,23,42,0.12))]" />
             {isOwnProfile ? (
@@ -767,8 +767,8 @@ export function ProfilePage({
             ) : null}
           </div>
 
-          <div className="px-5 pb-10 sm:px-12 lg:px-16">
-            <div className="-mt-16 flex flex-col items-start gap-6 text-left sm:-mt-24">
+          <div className="px-6 pb-12 sm:px-10 sm:pb-14 lg:px-12">
+            <div className="-mt-16 flex flex-col items-start gap-8 text-left sm:-mt-24 sm:gap-10">
               <div className="shrink-0">
                 <ProfilePhotoUpload
                   currentPhoto={displayedProfilePhoto}
@@ -780,16 +780,16 @@ export function ProfilePage({
                 />
               </div>
               
-              <div className="flex w-full flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+              <div className="flex w-full flex-col gap-8 lg:flex-row lg:items-start lg:justify-between lg:gap-10">
                 <div className="min-w-0 flex-1">
-                  <h1 className="mb-1 break-words text-[32px] font-extrabold leading-tight text-slate-950 sm:text-[48px]">
+                  <h1 className="break-words text-[32px] font-extrabold leading-tight text-slate-950 sm:text-[48px]">
                     {student.name}
                   </h1>
-                  <p className="max-w-2xl break-words text-lg font-medium leading-7 text-slate-700 sm:text-xl">
+                  <p className="mt-4 max-w-2xl break-words text-lg font-medium leading-7 text-slate-700 sm:text-xl sm:leading-8">
                     {student.headline || (isOwnProfile ? 'Add a headline that tells campus what you are building.' : 'Campus community member')}
                   </p>
                   
-                  <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-[15px] font-medium text-slate-500">
+                  <div className="mt-7 flex flex-wrap items-center gap-x-7 gap-y-3 text-[15px] font-medium text-slate-500">
                     <span className="inline-flex items-center gap-2">
                       <GraduationCap className="h-4.5 w-4.5 shrink-0 text-slate-400" />
                       {student.branch || 'College'}
@@ -805,7 +805,7 @@ export function ProfilePage({
                   </div>
                 </div>
 
-                <div className="flex shrink-0 flex-wrap justify-start gap-3 pb-1 lg:justify-end">
+                <div className="flex shrink-0 flex-wrap justify-start gap-3 pt-1 lg:justify-end lg:pt-3">
                   {!isOwnProfile ? (
                     <>
                       <FollowButton
@@ -833,7 +833,7 @@ export function ProfilePage({
               </div>
             </div>
 
-            <div className="hide-scrollbar mt-10 flex flex-nowrap items-center justify-start gap-10 overflow-x-auto whitespace-nowrap border-t border-slate-100 pt-8 text-sm font-normal text-slate-500">
+            <div className="hide-scrollbar mt-12 flex flex-nowrap items-center justify-start gap-8 overflow-x-auto whitespace-nowrap rounded-3xl border border-slate-100 bg-slate-50/80 px-6 py-5 text-sm font-normal text-slate-500 sm:gap-10 sm:px-8">
               {[
                 ['Followers', followersCount],
                 ['Following', followingCount],
@@ -841,7 +841,7 @@ export function ProfilePage({
                 ['Projects', loadedProjects.length],
                 ['Clubs', clubCount],
               ].map(([label, value]) => (
-                <div key={label} className="inline-flex flex-col items-start gap-1">
+                <div key={label} className="inline-flex flex-col items-start gap-2">
                   <span className="text-xl font-bold leading-none text-slate-900">{value}</span>
                   <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{label}</span>
                 </div>
@@ -849,7 +849,7 @@ export function ProfilePage({
             </div>
 
             {hasAbout || isOwnProfile ? (
-              <div className="mt-8 border-t border-slate-200 pt-6">
+              <div className="mt-10 border-t border-slate-200 pt-7">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0 flex-1 text-left">
                     <h2 className="text-[17px] font-semibold leading-6 text-slate-950 sm:text-lg">About</h2>
