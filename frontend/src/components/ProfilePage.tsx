@@ -752,137 +752,165 @@ export function ProfilePage({
   return (
     <PageLayout className="bg-slate-50 pb-24 md:pb-8" contentClassName="py-4 sm:py-5 lg:py-6">
       <div className="mx-auto grid w-full max-w-[1000px] [grid-template-columns:1fr] gap-4">
-        <section className="box-border w-full overflow-hidden rounded-[2rem] border border-slate-200/80 bg-white shadow-xl shadow-slate-200/60">
-          <div className="relative h-48 bg-gradient-to-br from-sky-600 via-indigo-500 to-emerald-400 sm:h-64">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.35),transparent_28%),linear-gradient(to_top,rgba(15,23,42,0.72),rgba(15,23,42,0.12))]" />
-            {isOwnProfile ? (
-              <button
-                type="button"
+        {/* Profile Identity Section - Rebuilt from scratch */}
+        <section className="cl-profile-header-card relative overflow-hidden bg-white border border-slate-200 rounded-3xl shadow-sm mb-6">
+          {/* Banner area */}
+          <div className="cl-banner-area h-40 sm:h-60 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-700 relative">
+            <div className="absolute inset-0 bg-black/10" />
+            {isOwnProfile && (
+              <button 
                 onClick={() => setActiveModal('editProfile')}
-                className="absolute right-6 top-6 inline-flex items-center gap-2 rounded-xl bg-white/95 px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-xl transition-all hover:scale-[1.02] hover:bg-white"
+                className="cl-edit-banner-btn absolute top-4 right-4 p-2.5 bg-black/20 hover:bg-black/40 text-white rounded-full transition-all"
+                title="Edit Banner"
               >
-                <Edit2 className="h-4 w-4" />
-                Edit Profile
+                <Edit2 className="w-5 h-5" />
               </button>
-            ) : null}
+            )}
           </div>
 
-          <div className="px-6 pb-12 sm:px-10 sm:pb-14 lg:px-12">
-            <div className="-mt-16 flex flex-col items-start gap-8 text-left sm:-mt-24 sm:gap-10">
-              <div className="shrink-0">
-                <ProfilePhotoUpload
-                  currentPhoto={displayedProfilePhoto}
-                  hasCustomPhoto={hasCustomProfilePhoto}
-                  name={student.name}
-                  editable={isOwnProfile}
-                  onPhotoChange={handleProfilePhotoChange}
-                  size="xl"
-                />
-              </div>
-              
-              <div className="flex w-full flex-col gap-8 lg:flex-row lg:items-start lg:justify-between lg:gap-10">
-                <div className="min-w-0 flex-1">
-                  <h1 className="break-words text-[40px] font-black leading-tight text-slate-950 sm:text-[56px]">
-                    {student.name}
-                  </h1>
-                  <p className="mt-4 max-w-2xl break-words text-lg font-medium leading-7 text-slate-700 sm:text-xl sm:leading-8">
-                    {student.headline || (isOwnProfile ? 'Add a headline that tells campus what you are building.' : 'Campus community member')}
-                  </p>
-                  
-                  <div className="mt-7 flex flex-wrap items-center gap-x-8 gap-y-3 text-[15px] font-medium leading-6 text-slate-500 sm:gap-x-10">
-                    <span className="inline-flex items-center gap-3 whitespace-nowrap">
-                      <GraduationCap className="h-4.5 w-4.5 shrink-0 text-slate-400" />
-                      <span>{student.branch || 'College'}</span>
-                    </span>
-                    <span className="inline-flex items-center gap-3 whitespace-nowrap">
-                      <Calendar className="h-4.5 w-4.5 shrink-0 text-slate-400" />
-                      <span>Year {student.year || '-'}</span>
-                    </span>
-                    <span className="inline-flex min-w-0 items-center gap-3">
-                      <Mail className="h-4.5 w-4.5 shrink-0 text-slate-400" />
-                      <span className="min-w-0 break-all sm:break-normal">{student.email}</span>
-                    </span>
-                  </div>
+          <div className="cl-header-content px-6 sm:px-10 pb-8">
+            <div className="cl-avatar-actions-row relative flex flex-col md:flex-row md:items-end justify-between -mt-16 sm:-mt-20 mb-6 gap-6">
+              {/* Avatar - Large circular image with white border */}
+              <div className="cl-avatar-container relative shrink-0">
+                <div className="cl-avatar-frame w-[140px] h-[140px] sm:w-[160px] sm:h-[160px] rounded-full border-[6px] border-white shadow-lg overflow-hidden bg-white">
+                  <ProfilePhotoUpload
+                    currentPhoto={displayedProfilePhoto}
+                    hasCustomPhoto={hasCustomProfilePhoto}
+                    name={student.name}
+                    editable={isOwnProfile}
+                    onPhotoChange={handleProfilePhotoChange}
+                    size="xl" 
+                  />
                 </div>
+              </div>
 
-                <div className="flex shrink-0 flex-wrap justify-start gap-3 pt-1 lg:justify-end lg:pt-3">
-                  {!isOwnProfile ? (
-                    <>
-                      <FollowButton
-                        targetName={student.name}
-                        accountType={student.accountType}
-                        isFollowing={isFollowing}
-                        isFollower={isFollower}
-                        requestStatus={requestStatus}
-                        onFollow={() => onFollow(student.id, student.accountType)}
-                        onUnfollow={() => onUnfollow(student.id)}
-                        onCancelRequest={() => onCancelRequest(student.id)}
-                      />
-                      <Button variant="outline" onClick={() => onMessage?.(student.id)} className="rounded-xl border-slate-200 bg-white px-5 py-5 shadow-sm hover:bg-slate-50">
-                        <MessageCircle className="mr-2 h-5 w-5" />
-                        Message
-                      </Button>
-                    </>
-                  ) : (
-                    <Button variant="outline" onClick={() => setActiveModal('editProfile')} className="rounded-xl border-slate-200 bg-white px-5 py-5 shadow-sm hover:bg-slate-50">
-                      <Edit2 className="mr-2 h-4 w-4" />
-                      Edit Profile
+              {/* Header Action Buttons */}
+              <div className="cl-header-actions flex flex-wrap gap-3 mb-2">
+                {!isOwnProfile ? (
+                  <>
+                    <FollowButton
+                      targetName={student.name}
+                      accountType={student.accountType}
+                      isFollowing={isFollowing}
+                      isFollower={isFollower}
+                      requestStatus={requestStatus}
+                      onFollow={() => onFollow(student.id, student.accountType)}
+                      onUnfollow={() => onUnfollow(student.id)}
+                      onCancelRequest={() => onCancelRequest(student.id)}
+                    />
+                    <Button 
+                      variant="outline" 
+                      onClick={() => onMessage?.(student.id)}
+                      className="cl-action-btn rounded-full border-slate-200 px-6 h-11 font-semibold text-slate-700 hover:bg-slate-50 shadow-sm transition-all"
+                    >
+                      <MessageCircle className="mr-2 h-4 w-4" />
+                      Message
                     </Button>
-                  )}
+                  </>
+                ) : (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setActiveModal('editProfile')}
+                    className="cl-action-btn rounded-full border-slate-200 px-6 h-11 font-semibold text-slate-700 hover:bg-slate-50 shadow-sm transition-all"
+                  >
+                    <Edit2 className="mr-2 h-4 w-4" />
+                    Edit Profile
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Student Name and Headline */}
+            <div className="cl-identity-info space-y-4">
+              <div className="cl-name-headline space-y-1.5">
+                <h1 className="cl-student-name text-3xl sm:text-[40px] font-bold text-slate-900 tracking-tight leading-tight">
+                  {student.name}
+                </h1>
+                <p className="cl-student-headline text-lg sm:text-xl text-slate-600 font-medium leading-relaxed max-w-4xl">
+                  {student.headline || (isOwnProfile ? 'Add a headline that tells campus what you are building.' : 'Campus community member')}
+                </p>
+              </div>
+
+              {/* Education and Contact Info Row */}
+              <div className="cl-meta-info-row flex flex-wrap items-center gap-x-6 gap-y-3 pt-2">
+                <div className="cl-meta-item flex items-center gap-2 text-slate-500 font-semibold text-sm">
+                  <GraduationCap className="w-5 h-5 text-slate-400" />
+                  <span>{student.branch || 'College Student'}</span>
+                </div>
+                <div className="cl-meta-item flex items-center gap-2 text-slate-500 font-semibold text-sm">
+                  <Calendar className="w-5 h-5 text-slate-400" />
+                  <span>Year {student.year || '-'}</span>
+                </div>
+                <div className="cl-meta-item flex items-center gap-2 text-slate-500 font-semibold text-sm">
+                  <Mail className="w-5 h-5 text-slate-400" />
+                  <span>{student.email}</span>
+                </div>
+              </div>
+
+              {/* Network Stats Link */}
+              <div className="cl-network-stats flex flex-wrap items-center gap-6 pt-4">
+                <button className="cl-stat-link text-sm font-bold text-blue-600 hover:underline transition-all">
+                  {followersCount + followingCount} connections
+                </button>
+                <div className="cl-stat-counts flex items-center gap-4 text-sm text-slate-500 font-bold">
+                   <span>{followersCount} followers</span>
+                   <span>{followingCount} following</span>
                 </div>
               </div>
             </div>
 
-            <div className="hide-scrollbar mt-12 flex flex-nowrap items-center justify-start gap-8 overflow-x-auto whitespace-nowrap rounded-3xl border border-slate-100 bg-slate-50/80 px-6 py-5 text-sm font-normal text-slate-500 sm:gap-10 sm:px-8">
+            {/* Quick Stats Grid */}
+            <div className="cl-stats-grid mt-8 grid grid-cols-3 sm:grid-cols-5 gap-4 py-6 border-t border-slate-100">
               {[
-                ['Followers', followersCount],
-                ['Following', followingCount],
-                ['Connections', followersCount + followingCount],
                 ['Projects', loadedProjects.length],
                 ['Clubs', clubCount],
+                ['Skills', displaySkills.length],
+                ['Posts', profilePosts.length],
+                ['Wins', achievements.length],
               ].map(([label, value]) => (
-                <div key={label} className="inline-flex flex-col items-start gap-2">
-                  <span className="text-xl font-bold leading-none text-slate-900">{value}</span>
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{label}</span>
+                <div key={label} className="cl-stat-box flex flex-col">
+                  <span className="cl-stat-value text-xl font-bold text-slate-900">{value}</span>
+                  <span className="cl-stat-label text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</span>
                 </div>
               ))}
             </div>
 
-            {hasAbout || isOwnProfile ? (
-              <div className="mt-10 border-t border-slate-200 pt-7">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0 flex-1 text-left">
-                    <h2 className="text-[17px] font-semibold leading-6 text-slate-950 sm:text-lg">About</h2>
-                    {hasAbout ? (
-                      <>
-                        <p className={`mt-3 max-w-3xl text-sm leading-7 text-slate-700 ${isAboutExpanded ? '' : 'line-clamp-3'}`}>{student.bio}</p>
-                        {student.bio && student.bio.length > 180 ? (
-                          <button
-                            type="button"
-                            onClick={() => setIsAboutExpanded((value) => !value)}
-                            className="mt-2 text-sm font-medium text-blue-600 hover:text-blue-700"
-                          >
-                            {isAboutExpanded ? 'See less' : 'See more'}
-                          </button>
-                        ) : null}
-                      </>
-                    ) : (
-                      <p className="mt-3 text-sm leading-7 text-slate-500">Add a short intro that makes the profile feel like you.</p>
-                    )}
-                  </div>
-                  {isOwnProfile ? (
-                    <button
-                      type="button"
+            {/* About Section - LinkedIn Style */}
+            {(hasAbout || isOwnProfile) && (
+              <div className="cl-about-section mt-2 pt-8 border-t border-slate-100">
+                <div className="cl-about-header flex items-center justify-between mb-4">
+                  <h2 className="cl-about-title text-xl font-bold text-slate-900">About</h2>
+                  {isOwnProfile && (
+                    <button 
                       onClick={() => setActiveModal('editProfile')}
-                      className="rounded-full p-2 text-slate-400 transition hover:bg-blue-50 hover:text-blue-600"
-                      aria-label="Edit profile details"
+                      className="cl-edit-about-btn p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                      title="Edit About"
                     >
-                      <Pencil className="h-4 w-4" />
+                      <Pencil className="w-4 h-4" />
                     </button>
-                  ) : null}
+                  )}
+                </div>
+                <div className="cl-about-content text-slate-700 leading-relaxed text-[15px] sm:text-base">
+                  {hasAbout ? (
+                    <div className="cl-about-text-wrapper relative">
+                      <p className={`cl-about-text ${isAboutExpanded ? '' : 'line-clamp-4'}`}>
+                        {student.bio}
+                      </p>
+                      {student.bio && student.bio.length > 250 && (
+                        <button
+                          onClick={() => setIsAboutExpanded(!isAboutExpanded)}
+                          className="cl-see-more-btn mt-2 text-sm font-bold text-blue-600 hover:underline"
+                        >
+                          {isAboutExpanded ? 'See less' : '...see more'}
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="cl-about-empty text-slate-500 italic">No bio available yet.</p>
+                  )}
                 </div>
               </div>
-            ) : null}
+            )}
           </div>
         </section>
 
