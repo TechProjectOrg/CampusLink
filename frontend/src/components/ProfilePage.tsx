@@ -789,18 +789,18 @@ export function ProfilePage({
                     {student.headline || (isOwnProfile ? 'Add a headline that tells campus what you are building.' : 'Campus community member')}
                   </p>
                   
-                  <div className="mt-7 flex flex-wrap items-center gap-x-7 gap-y-3 text-[15px] font-medium text-slate-500">
-                    <span className="inline-flex items-center gap-2">
+                  <div className="mt-7 flex flex-wrap items-center gap-x-8 gap-y-3 text-[15px] font-medium leading-6 text-slate-500 sm:gap-x-10">
+                    <span className="inline-flex items-center gap-3 whitespace-nowrap">
                       <GraduationCap className="h-4.5 w-4.5 shrink-0 text-slate-400" />
-                      {student.branch || 'College'}
+                      <span>{student.branch || 'College'}</span>
                     </span>
-                    <span className="inline-flex items-center gap-2">
+                    <span className="inline-flex items-center gap-3 whitespace-nowrap">
                       <Calendar className="h-4.5 w-4.5 shrink-0 text-slate-400" />
-                      Year {student.year || '-'}
+                      <span>Year {student.year || '-'}</span>
                     </span>
-                    <span className="inline-flex items-center gap-2">
+                    <span className="inline-flex min-w-0 items-center gap-3">
                       <Mail className="h-4.5 w-4.5 shrink-0 text-slate-400" />
-                      {student.email}
+                      <span className="min-w-0 break-all sm:break-normal">{student.email}</span>
                     </span>
                   </div>
                 </div>
