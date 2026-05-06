@@ -768,7 +768,7 @@ export function ProfilePage({
           </div>
 
           <div className="px-5 pb-10 sm:px-12 lg:px-16">
-            <div className="-mt-16 flex flex-col items-start gap-8 text-left sm:-mt-32 sm:flex-row sm:items-end sm:gap-10">
+            <div className="-mt-16 flex flex-col items-start gap-6 text-left sm:-mt-24">
               <div className="shrink-0">
                 <ProfilePhotoUpload
                   currentPhoto={displayedProfilePhoto}
@@ -776,56 +776,59 @@ export function ProfilePage({
                   name={student.name}
                   editable={isOwnProfile}
                   onPhotoChange={handleProfilePhotoChange}
-                  size="3xl"
+                  size="xl"
                 />
               </div>
               
-              <div className="flex min-w-0 flex-1 flex-col items-start justify-end pb-2">
-                <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-                  <div className="min-w-0 flex-1">
-                    <h1 className="mb-1 break-words text-[36px] font-extrabold leading-tight text-slate-950 sm:text-[52px]">
-                      {student.name}
-                    </h1>
-                    <p className="max-w-2xl break-words text-lg font-medium leading-7 text-slate-700 sm:text-xl">
-                      {student.headline || (isOwnProfile ? 'Add a headline that tells campus what you are building.' : 'Campus community member')}
-                    </p>
-                    
-                    <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-[15px] font-medium text-slate-500">
-                      <span className="inline-flex items-center gap-2">
-                        <GraduationCap className="h-4.5 w-4.5 shrink-0 text-slate-400" />
-                        {student.branch || 'College'}
-                      </span>
-                      <span className="inline-flex items-center gap-2">
-                        <Calendar className="h-4.5 w-4.5 shrink-0 text-slate-400" />
-                        Year {student.year || '-'}
-                      </span>
-                      <span className="inline-flex items-center gap-2">
-                        <Mail className="h-4.5 w-4.5 shrink-0 text-slate-400" />
-                        {student.email}
-                      </span>
-                    </div>
+              <div className="flex w-full flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                <div className="min-w-0 flex-1">
+                  <h1 className="mb-1 break-words text-[32px] font-extrabold leading-tight text-slate-950 sm:text-[48px]">
+                    {student.name}
+                  </h1>
+                  <p className="max-w-2xl break-words text-lg font-medium leading-7 text-slate-700 sm:text-xl">
+                    {student.headline || (isOwnProfile ? 'Add a headline that tells campus what you are building.' : 'Campus community member')}
+                  </p>
+                  
+                  <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-[15px] font-medium text-slate-500">
+                    <span className="inline-flex items-center gap-2">
+                      <GraduationCap className="h-4.5 w-4.5 shrink-0 text-slate-400" />
+                      {student.branch || 'College'}
+                    </span>
+                    <span className="inline-flex items-center gap-2">
+                      <Calendar className="h-4.5 w-4.5 shrink-0 text-slate-400" />
+                      Year {student.year || '-'}
+                    </span>
+                    <span className="inline-flex items-center gap-2">
+                      <Mail className="h-4.5 w-4.5 shrink-0 text-slate-400" />
+                      {student.email}
+                    </span>
                   </div>
+                </div>
 
-                  <div className="flex shrink-0 flex-wrap justify-start gap-3 pb-1 lg:justify-end">
-                    {!isOwnProfile ? (
-                      <>
-                        <FollowButton
-                          targetName={student.name}
-                          accountType={student.accountType}
-                          isFollowing={isFollowing}
-                          isFollower={isFollower}
-                          requestStatus={requestStatus}
-                          onFollow={() => onFollow(student.id, student.accountType)}
-                          onUnfollow={() => onUnfollow(student.id)}
-                          onCancelRequest={() => onCancelRequest(student.id)}
-                        />
-                        <Button variant="outline" onClick={() => onMessage?.(student.id)} className="rounded-xl border-slate-200 bg-white px-5 py-5 shadow-sm hover:bg-slate-50">
-                          <MessageCircle className="mr-2 h-5 w-5" />
-                          Message
-                        </Button>
-                      </>
-                    ) : null}
-                  </div>
+                <div className="flex shrink-0 flex-wrap justify-start gap-3 pb-1 lg:justify-end">
+                  {!isOwnProfile ? (
+                    <>
+                      <FollowButton
+                        targetName={student.name}
+                        accountType={student.accountType}
+                        isFollowing={isFollowing}
+                        isFollower={isFollower}
+                        requestStatus={requestStatus}
+                        onFollow={() => onFollow(student.id, student.accountType)}
+                        onUnfollow={() => onUnfollow(student.id)}
+                        onCancelRequest={() => onCancelRequest(student.id)}
+                      />
+                      <Button variant="outline" onClick={() => onMessage?.(student.id)} className="rounded-xl border-slate-200 bg-white px-5 py-5 shadow-sm hover:bg-slate-50">
+                        <MessageCircle className="mr-2 h-5 w-5" />
+                        Message
+                      </Button>
+                    </>
+                  ) : (
+                    <Button variant="outline" onClick={() => setActiveModal('editProfile')} className="rounded-xl border-slate-200 bg-white px-5 py-5 shadow-sm hover:bg-slate-50">
+                      <Edit2 className="mr-2 h-4 w-4" />
+                      Edit Profile
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>
