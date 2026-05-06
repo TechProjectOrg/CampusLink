@@ -767,9 +767,9 @@ export function ProfilePage({
             ) : null}
           </div>
 
-          <div className="px-5 pb-10 sm:px-20 lg:px-24">
-            <div className="-mt-16 flex flex-col items-start gap-10 text-left sm:-mt-48">
-              <div className="flex flex-col items-start gap-10 text-left w-full">
+          <div className="px-5 pb-10 sm:px-12 lg:px-16">
+            <div className="-mt-16 flex flex-col items-start gap-8 text-left sm:-mt-32 sm:flex-row sm:items-end sm:gap-10">
+              <div className="shrink-0">
                 <ProfilePhotoUpload
                   currentPhoto={displayedProfilePhoto}
                   hasCustomPhoto={hasCustomProfilePhoto}
@@ -778,37 +778,35 @@ export function ProfilePage({
                   onPhotoChange={handleProfilePhotoChange}
                   size="3xl"
                 />
-                
-                <div className="flex w-full flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-                  <div className="flex min-w-0 flex-col items-start justify-start">
-                    <h1 className="mb-2 break-words text-[40px] font-extrabold leading-tight text-slate-950 sm:text-[64px]">
+              </div>
+              
+              <div className="flex min-w-0 flex-1 flex-col items-start justify-end pb-2">
+                <div className="flex w-full flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <h1 className="mb-1 break-words text-[36px] font-extrabold leading-tight text-slate-950 sm:text-[52px]">
                       {student.name}
                     </h1>
                     <p className="max-w-2xl break-words text-lg font-medium leading-7 text-slate-700 sm:text-xl">
                       {student.headline || (isOwnProfile ? 'Add a headline that tells campus what you are building.' : 'Campus community member')}
                     </p>
                     
-                    <div className="mt-6 grid grid-cols-1 gap-x-8 gap-y-3 text-sm font-medium text-slate-500 sm:grid-cols-2 lg:flex lg:flex-wrap">
-                      <span className="inline-flex items-center gap-2.5">
-                        <GraduationCap className="h-5 w-5 shrink-0 text-slate-400" />
+                    <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-[15px] font-medium text-slate-500">
+                      <span className="inline-flex items-center gap-2">
+                        <GraduationCap className="h-4.5 w-4.5 shrink-0 text-slate-400" />
                         {student.branch || 'College'}
                       </span>
-                      <span className="inline-flex items-center gap-2.5">
-                        <Calendar className="h-5 w-5 shrink-0 text-slate-400" />
+                      <span className="inline-flex items-center gap-2">
+                        <Calendar className="h-4.5 w-4.5 shrink-0 text-slate-400" />
                         Year {student.year || '-'}
                       </span>
-                      <span className="inline-flex items-center gap-2.5">
-                        <Mail className="h-5 w-5 shrink-0 text-slate-400" />
+                      <span className="inline-flex items-center gap-2">
+                        <Mail className="h-4.5 w-4.5 shrink-0 text-slate-400" />
                         {student.email}
-                      </span>
-                      <span className="inline-flex items-center gap-2.5">
-                        <MapPin className="h-5 w-5 shrink-0 text-slate-400" />
-                        Campus
                       </span>
                     </div>
                   </div>
 
-                  <div className="flex shrink-0 flex-wrap justify-start gap-3 pb-2 sm:justify-end">
+                  <div className="flex shrink-0 flex-wrap justify-start gap-3 pb-1 lg:justify-end">
                     {!isOwnProfile ? (
                       <>
                         <FollowButton
@@ -821,7 +819,7 @@ export function ProfilePage({
                           onUnfollow={() => onUnfollow(student.id)}
                           onCancelRequest={() => onCancelRequest(student.id)}
                         />
-                        <Button variant="outline" onClick={() => onMessage?.(student.id)} className="rounded-xl border-slate-200 bg-white px-6 py-6 shadow-sm hover:bg-slate-50">
+                        <Button variant="outline" onClick={() => onMessage?.(student.id)} className="rounded-xl border-slate-200 bg-white px-5 py-5 shadow-sm hover:bg-slate-50">
                           <MessageCircle className="mr-2 h-5 w-5" />
                           Message
                         </Button>
@@ -832,7 +830,7 @@ export function ProfilePage({
               </div>
             </div>
 
-            <div className="hide-scrollbar mt-10 flex flex-nowrap items-center justify-start gap-12 overflow-x-auto whitespace-nowrap border-t border-slate-100 pt-8 text-sm font-normal text-slate-500">
+            <div className="hide-scrollbar mt-10 flex flex-nowrap items-center justify-start gap-10 overflow-x-auto whitespace-nowrap border-t border-slate-100 pt-8 text-sm font-normal text-slate-500">
               {[
                 ['Followers', followersCount],
                 ['Following', followingCount],
@@ -840,9 +838,9 @@ export function ProfilePage({
                 ['Projects', loadedProjects.length],
                 ['Clubs', clubCount],
               ].map(([label, value]) => (
-                <div key={label} className="inline-flex flex-col items-start gap-1.5">
+                <div key={label} className="inline-flex flex-col items-start gap-1">
                   <span className="text-xl font-bold leading-none text-slate-900">{value}</span>
-                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{label}</span>
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{label}</span>
                 </div>
               ))}
             </div>
