@@ -767,23 +767,24 @@ export function ProfilePage({
           </div>
 
           <div className="px-5 pb-8 sm:px-8 sm:pb-9 lg:px-10">
-            <div className="-mt-16 flex flex-col items-center gap-5 text-center sm:-mt-14">
-              <div className="flex flex-col items-center gap-5 text-center">
+            <div className="-mt-16 flex flex-col items-start gap-5 text-left sm:-mt-24">
+              <div className="flex flex-col items-start gap-5 text-left">
                 <ProfilePhotoUpload
                   currentPhoto={displayedProfilePhoto}
                   hasCustomPhoto={hasCustomProfilePhoto}
                   name={student.name}
                   editable={isOwnProfile}
                   onPhotoChange={handleProfilePhotoChange}
+                  size="xl"
                 />
-                <div className="flex min-w-0 flex-col items-center justify-center">
-                  <h1 className="mb-2 break-words text-[26px] font-bold leading-tight text-slate-950 sm:text-[28px]">
+                <div className="flex min-w-0 flex-col items-start justify-start">
+                  <h1 className="mb-1 break-words text-[28px] font-bold leading-tight text-slate-950 sm:text-[32px]">
                     {student.name}
                   </h1>
-                  <p className="max-w-2xl break-words text-sm font-normal leading-6 text-slate-700">
+                  <p className="max-w-2xl break-words text-base font-normal leading-6 text-slate-700">
                     {student.headline || (isOwnProfile ? 'Add a headline that tells campus what you are building.' : 'Campus community member')}
                   </p>
-                  <div className="mt-4 flex flex-wrap justify-center gap-x-5 gap-y-2 text-xs font-normal leading-5 text-slate-500 sm:text-[13px]">
+                  <div className="mt-3 flex flex-wrap justify-start gap-x-5 gap-y-2 text-sm font-normal leading-5 text-slate-500">
                     <span className="inline-flex items-center gap-2">
                       <GraduationCap className="h-4 w-4 shrink-0 text-slate-400" />
                       {student.branch || 'College'}
@@ -800,7 +801,7 @@ export function ProfilePage({
                 </div>
               </div>
 
-              <div className="flex flex-wrap justify-center gap-2">
+              <div className="flex flex-wrap justify-start gap-2">
                 {!isOwnProfile ? (
                   <>
                     <div className="rounded-full bg-white shadow-sm">
@@ -824,7 +825,7 @@ export function ProfilePage({
               </div>
             </div>
 
-            <div className="hide-scrollbar mt-7 flex flex-nowrap items-center justify-center gap-8 overflow-x-auto whitespace-nowrap border-t border-slate-100 pt-6 text-sm font-normal text-slate-500">
+            <div className="hide-scrollbar mt-7 flex flex-nowrap items-center justify-start gap-8 overflow-x-auto whitespace-nowrap border-t border-slate-100 pt-6 text-sm font-normal text-slate-500">
               {[
                 ['Followers', followersCount],
                 ['Following', followingCount],

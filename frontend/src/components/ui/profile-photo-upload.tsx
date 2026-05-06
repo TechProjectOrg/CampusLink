@@ -46,12 +46,14 @@ export function ProfilePhotoUpload({
     sm: 'w-16 h-16',
     md: 'w-24 h-24',
     lg: 'w-32 h-32',
+    xl: 'w-40 h-40',
   };
 
   const iconSizes = {
     sm: 'w-4 h-4',
     md: 'w-5 h-5',
     lg: 'w-6 h-6',
+    xl: 'w-8 h-8',
   };
 
   useEffect(() => {

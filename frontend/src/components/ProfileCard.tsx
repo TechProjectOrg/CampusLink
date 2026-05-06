@@ -26,7 +26,7 @@ export function ProfileCard({ student, followerCount, followingCount, onViewProf
         
         <CardContent className="relative px-6 pb-6">
           {/* Avatar */}
-          <div className="flex justify-center -mt-12 mb-4">
+          <div className="flex justify-start -mt-12 mb-4">
             <Avatar className="w-24 h-24 ring-4 ring-white shadow-xl">
               <AvatarImage src={student.avatar} />
               <AvatarFallback className="text-2xl">{student.name[0]}</AvatarFallback>
@@ -34,14 +34,14 @@ export function ProfileCard({ student, followerCount, followingCount, onViewProf
           </div>
 
           {/* Name & Info */}
-          <div className="text-center space-y-1 mb-4">
-            <h3 className="text-gray-900">{student.name}</h3>
+          <div className="text-left space-y-1 mb-4">
+            <h3 className="text-gray-900 font-bold">{student.name}</h3>
             <p className="text-sm text-gray-600">{student.branch}</p>
             <p className="text-sm text-secondary">Year {student.year}</p>
           </div>
 
           {/* Bio */}
-          <p className="text-sm text-gray-600 text-center mb-4 line-clamp-3">
+          <p className="text-sm text-gray-600 text-left mb-4 line-clamp-3">
             {student.bio}
           </p>
 
