@@ -766,9 +766,9 @@ export function ProfilePage({
             ) : null}
           </div>
 
-          <div className="px-5 pb-8 sm:px-12 sm:pb-9 lg:px-12">
-            <div className="-mt-16 flex flex-col items-start gap-8 text-left sm:-mt-40">
-              <div className="flex flex-col items-start gap-8 text-left">
+          <div className="px-5 pb-8 sm:px-20 sm:pb-9 lg:px-24">
+            <div className="-mt-16 flex flex-col items-start gap-10 text-left sm:-mt-48">
+              <div className="flex flex-col items-start gap-10 text-left">
                 <ProfilePhotoUpload
                   currentPhoto={displayedProfilePhoto}
                   hasCustomPhoto={hasCustomProfilePhoto}
@@ -778,7 +778,7 @@ export function ProfilePage({
                   size="3xl"
                 />
                 <div className="flex min-w-0 flex-col items-start justify-start">
-                  <h1 className="mb-2 break-words text-[40px] font-extrabold leading-tight text-slate-950 sm:text-[56px]">
+                  <h1 className="mb-3 break-words text-[40px] font-extrabold leading-tight text-slate-950 sm:text-[64px]">
                     {student.name}
                   </h1>
                   <p className="max-w-2xl break-words text-base font-normal leading-6 text-slate-700">
