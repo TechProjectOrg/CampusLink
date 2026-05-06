@@ -782,7 +782,7 @@ export function ProfilePage({
               
               <div className="flex w-full flex-col gap-8 lg:flex-row lg:items-start lg:justify-between lg:gap-10">
                 <div className="min-w-0 flex-1">
-                  <h1 className="break-words text-[32px] font-extrabold leading-tight text-slate-950 sm:text-[48px]">
+                  <h1 className="break-words text-[40px] font-black leading-tight text-slate-950 sm:text-[56px]">
                     {student.name}
                   </h1>
                   <p className="mt-4 max-w-2xl break-words text-lg font-medium leading-7 text-slate-700 sm:text-xl sm:leading-8">
