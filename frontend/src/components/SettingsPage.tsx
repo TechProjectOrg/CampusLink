@@ -21,6 +21,17 @@ const PASSWORD_REQUIREMENTS = [
   'At least one special character (!@#$%^&*)',
 ];
 
+const BRANCH_OPTIONS = [
+  'Computer Engineering',
+  'Information Technology',
+  'Electronics and Communication Engineering',
+  'Electrical Engineering',
+  'Mechanical Engineering',
+  'Industrial and Production Engineering',
+  'Civil Engineering',
+  'Agriculture Engineering',
+];
+
 function meetsPasswordRequirements(password: string): boolean {
   return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/.test(password);
 }
@@ -53,16 +64,6 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
     : auth.profile?.details?.year ?? accountStudent.year;
   const currentCalendarYear = new Date().getFullYear();
   const passingYearOptions = Array.from({ length: 41 }, (_, index) => currentCalendarYear - 20 + index);
-  const branchOptions = Array.from(
-    new Set([
-      'Computer Science',
-      'Information Technology',
-      'Electronics',
-      'Mechanical',
-      'Civil',
-      accountStudent.branch,
-    ].filter(Boolean))
-  );
 
   const [isEditingAccount, setIsEditingAccount] = useState(false);
   const [isSavingAccount, setIsSavingAccount] = useState(false);
@@ -672,7 +673,7 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                         onChange={(e) => setAccountData({ ...accountData, branch: e.target.value })}
                         className="w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50"
                       >
-                        {branchOptions.map((branch) => (
+                        {BRANCH_OPTIONS.map((branch) => (
                           <option key={branch} value={branch}>
                             {branch}
                           </option>

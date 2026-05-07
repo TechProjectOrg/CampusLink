@@ -11,6 +11,17 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { validatePassword, getPasswordValidationMessage } from '../lib/validation';
 import { useAuth } from '../context/AuthContext';
 
+const BRANCH_OPTIONS = [
+  'Computer Engineering',
+  'Information Technology',
+  'Electronics and Communication Engineering',
+  'Electrical Engineering',
+  'Mechanical Engineering',
+  'Industrial and Production Engineering',
+  'Civil Engineering',
+  'Agriculture Engineering',
+];
+
 export function AuthPage() {
   const auth = useAuth();
 
@@ -364,12 +375,13 @@ export function AuthPage() {
                       <Input
                         id="signup-name"
                         type="text"
-                        placeholder="John Doe"
+                        placeholder="Riya Choudhary"
                         value={signupData.name}
                         onChange={(e) => setSignupData({ ...signupData, name: e.target.value })}
                         className="border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
                         required
                       />
+                      <p className="text-xs text-gray-500">Enter your full name</p>
                     </div>
 
                     <div className="space-y-2">
@@ -402,11 +414,11 @@ export function AuthPage() {
                             required
                           >
                             <option value="">Select</option>
-                            <option value="Computer Science">Computer Science</option>
-                            <option value="Information Technology">Information Technology</option>
-                            <option value="Electronics">Electronics</option>
-                            <option value="Mechanical">Mechanical</option>
-                            <option value="Civil">Civil</option>
+                            {BRANCH_OPTIONS.map((branch) => (
+                              <option key={branch} value={branch}>
+                                {branch}
+                              </option>
+                            ))}
                           </select>
                         </div>
                       </div>
@@ -499,12 +511,13 @@ export function AuthPage() {
                         <Input
                           id="alumni-name"
                           type="text"
-                          placeholder="John Doe"
+                          placeholder="Riya Choudhary"
                           value={alumniSignupData.name}
                           onChange={(e) => setAlumniSignupData({ ...alumniSignupData, name: e.target.value })}
                           className="border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
                           required
                         />
+                        <p className="text-xs text-gray-500">Enter your full name</p>
                       </div>
 
                       <div className="space-y-2">
@@ -549,11 +562,11 @@ export function AuthPage() {
                               required
                             >
                               <option value="">Select</option>
-                              <option value="Computer Science">Computer Science</option>
-                              <option value="Information Technology">Information Technology</option>
-                              <option value="Electronics">Electronics</option>
-                              <option value="Mechanical">Mechanical</option>
-                              <option value="Civil">Civil</option>
+                              {BRANCH_OPTIONS.map((branch) => (
+                                <option key={branch} value={branch}>
+                                  {branch}
+                                </option>
+                              ))}
                             </select>
                           </div>
                         </div>
