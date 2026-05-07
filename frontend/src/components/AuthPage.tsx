@@ -375,13 +375,12 @@ export function AuthPage() {
                       <Input
                         id="signup-name"
                         type="text"
-                        placeholder="Riya Choudhary"
+                        placeholder="Enter your full name"
                         value={signupData.name}
                         onChange={(e) => setSignupData({ ...signupData, name: e.target.value })}
                         className="border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
                         required
                       />
-                      <p className="text-xs text-gray-500">Enter your full name</p>
                     </div>
 
                     <div className="space-y-2">
@@ -511,13 +510,12 @@ export function AuthPage() {
                         <Input
                           id="alumni-name"
                           type="text"
-                          placeholder="Riya Choudhary"
+                          placeholder="Enter your full name"
                           value={alumniSignupData.name}
                           onChange={(e) => setAlumniSignupData({ ...alumniSignupData, name: e.target.value })}
                           className="border-primary/20 focus:border-primary rounded-xl transition-all duration-300"
                           required
                         />
-                        <p className="text-xs text-gray-500">Enter your full name</p>
                       </div>
 
                       <div className="space-y-2">
