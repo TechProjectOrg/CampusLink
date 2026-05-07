@@ -834,17 +834,17 @@ export function ProfilePage({
                   </p>
 
                   {/* 3. Info Row: Location, Year, Email */}
-                  <div className="flex flex-wrap items-center gap-x-6 gap-y-3 mt-4">
-                    <div className="flex items-center gap-2 text-slate-500 text-sm font-semibold">
-                      <MapPin className="w-4 h-4 text-slate-400" />
+                  <div className="flex flex-wrap items-center gap-8 mt-4">
+                    <div className="flex items-center gap-1.5 text-slate-500 text-sm font-semibold">
+                      <MapPin className="h-4 w-4 shrink-0 text-slate-400" />
                       <span>{hasKnownBranch ? profileBranch : 'Branch not added'}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-slate-500 text-sm font-semibold">
-                      <Calendar className="w-4 h-4 text-slate-400" />
+                    <div className="flex items-center gap-1.5 text-slate-500 text-sm font-semibold">
+                      <Calendar className="h-4 w-4 shrink-0 text-slate-400" />
                       <span>{hasKnownYear ? `Year ${student.year}` : 'Year not added'}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-slate-500 text-sm font-semibold">
-                      <Mail className="w-4 h-4 text-slate-400" />
+                    <div className="flex items-center gap-1.5 text-slate-500 text-sm font-semibold">
+                      <Mail className="h-4 w-4 shrink-0 text-slate-400" />
                       <span>{student.email}</span>
                     </div>
                   </div>
