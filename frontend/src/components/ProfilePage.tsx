@@ -769,112 +769,106 @@ export function ProfilePage({
           </div>
 
           <div className="cl-header-content px-6 sm:px-10 pb-8">
-            {/* Avatar Section - Strictly above the name section */}
-            <div className="cl-avatar-outer-container relative -mt-20 sm:-mt-24 mb-6 flex justify-start">
-              <div className="cl-avatar-circle-frame relative w-[130px] h-[130px] sm:w-[150px] sm:h-[150px] shrink-0">
-                <div className="cl-avatar-mask w-full h-full rounded-full border-[6px] border-white shadow-2xl overflow-hidden bg-white">
+            <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12 -mt-20 sm:-mt-24 mb-8">
+              {/* Left Side: Avatar */}
+              <div className="cl-avatar-circle-frame relative w-[160px] h-[160px] sm:w-[208px] sm:h-[208px] shrink-0">
+                <div className="cl-avatar-mask w-full h-full rounded-full border-[6px] border-white shadow-xl overflow-hidden bg-white">
                   <ProfilePhotoUpload
                     currentPhoto={displayedProfilePhoto}
                     hasCustomPhoto={hasCustomProfilePhoto}
                     name={student.name}
                     editable={isOwnProfile}
                     onPhotoChange={handleProfilePhotoChange}
-                    size="3xl" 
+                    size="2xl" 
                   />
                 </div>
               </div>
-            </div>
 
-            <div className="cl-identity-and-actions flex flex-col md:flex-row md:items-start justify-between gap-6">
-              {/* Student Name and Headline */}
-              <div className="cl-identity-info flex-1 space-y-4">
-                <div className="cl-name-headline space-y-2">
-                  <h1 className="cl-student-name text-3xl sm:text-[42px] font-bold text-slate-900 tracking-tight leading-tight">
-                    {student.name}
-                  </h1>
-                  <p className="cl-student-headline text-lg sm:text-xl text-slate-600 font-medium leading-relaxed max-w-4xl">
-                    {student.headline || (isOwnProfile ? 'Add a headline that tells campus what you are building.' : 'Campus community member')}
-                  </p>
+              {/* Right Side: Details and Actions */}
+              <div className="flex-1 flex flex-col lg:flex-row justify-between items-center lg:items-center gap-6 w-full pt-4 md:pt-16">
+                <div className="flex-1 space-y-4 text-center md:text-left">
+                  {/* Name and Headline */}
+                  <div className="space-y-1">
+                    <h1 className="text-3xl sm:text-[42px] font-bold text-slate-900 tracking-tight leading-tight">
+                      {student.name}
+                    </h1>
+                    <p className="text-lg sm:text-xl text-slate-600 font-medium leading-relaxed max-w-2xl">
+                      {student.headline || (isOwnProfile ? 'Add a headline that tells campus what you are building.' : 'Campus community member')}
+                    </p>
+                  </div>
+
+                  {/* Info Row: Location, Year, Email */}
+                  <div className="flex flex-wrap justify-center md:justify-start items-center gap-x-6 gap-y-2">
+                    <div className="flex items-center gap-2 text-slate-500 text-sm font-semibold">
+                      <MapPin className="w-4 h-4 text-slate-400" />
+                      <span>{student.branch || 'Unknown'}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-500 text-sm font-semibold">
+                      <Calendar className="w-4 h-4 text-slate-400" />
+                      <span>Year {student.year || '-'}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-500 text-sm font-semibold">
+                      <Mail className="w-4 h-4 text-slate-400" />
+                      <span>{student.email}</span>
+                    </div>
+                  </div>
+
+                  {/* Combined Stats Row: Followers/Following/Projects/Clubs */}
+                  <div className="flex flex-wrap justify-center md:justify-start items-center gap-6 pt-2">
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <span className="font-bold text-slate-900">{followersCount}</span>
+                      <span className="text-slate-500 font-medium">Followers</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <span className="font-bold text-slate-900">{followingCount}</span>
+                      <span className="text-slate-500 font-medium">Following</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <span className="font-bold text-slate-900">{loadedProjects.length}</span>
+                      <span className="text-slate-500 font-medium">Projects</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <span className="font-bold text-slate-900">{clubCount}</span>
+                      <span className="text-slate-500 font-medium">Clubs</span>
+                    </div>
+                  </div>
                 </div>
 
-                {/* Education and Contact Info Row */}
-                <div className="cl-meta-info-row flex flex-wrap items-center gap-x-6 gap-y-3 pt-1">
-                  <div className="cl-meta-item flex items-center gap-2 text-slate-500 font-semibold text-sm">
-                    <GraduationCap className="w-5 h-5 text-slate-400" />
-                    <span>{student.branch || 'College Student'}</span>
-                  </div>
-                  <div className="cl-meta-item flex items-center gap-2 text-slate-500 font-semibold text-sm">
-                    <Calendar className="w-5 h-5 text-slate-400" />
-                    <span>Year {student.year || '-'}</span>
-                  </div>
-                  <div className="cl-meta-item flex items-center gap-2 text-slate-500 font-semibold text-sm">
-                    <Mail className="w-5 h-5 text-slate-400" />
-                    <span>{student.email}</span>
-                  </div>
-                </div>
-
-                {/* Network Stats Link */}
-                <div className="cl-network-stats flex flex-wrap items-center gap-6 pt-2">
-                  <button className="cl-stat-link text-sm font-bold text-blue-600 hover:underline transition-all">
-                    {followersCount + followingCount} connections
-                  </button>
-                  <div className="cl-stat-counts flex items-center gap-4 text-sm text-slate-500 font-bold">
-                     <span>{followersCount} followers</span>
-                     <span>{followingCount} following</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Header Action Buttons */}
-              <div className="cl-header-actions flex flex-wrap gap-3 md:pt-2">
-                {!isOwnProfile ? (
-                  <>
-                    <FollowButton
-                      targetName={student.name}
-                      accountType={student.accountType}
-                      isFollowing={isFollowing}
-                      isFollower={isFollower}
-                      requestStatus={requestStatus}
-                      onFollow={() => onFollow(student.id, student.accountType)}
-                      onUnfollow={() => onUnfollow(student.id)}
-                      onCancelRequest={() => onCancelRequest(student.id)}
-                    />
+                {/* Action Buttons */}
+                <div className="flex flex-wrap justify-center md:justify-end gap-3 shrink-0">
+                  {!isOwnProfile ? (
+                    <>
+                      <FollowButton
+                        targetName={student.name}
+                        accountType={student.accountType}
+                        isFollowing={isFollowing}
+                        isFollower={isFollower}
+                        requestStatus={requestStatus}
+                        onFollow={() => onFollow(student.id, student.accountType)}
+                        onUnfollow={() => onUnfollow(student.id)}
+                        onCancelRequest={() => onCancelRequest(student.id)}
+                      />
+                      <Button 
+                        variant="outline" 
+                        onClick={() => onMessage?.(student.id)}
+                        className="rounded-full border-slate-200 px-6 h-11 font-semibold text-slate-700 hover:bg-slate-50 shadow-sm transition-all"
+                      >
+                        <MessageCircle className="mr-2 h-4 w-4" />
+                        Message
+                      </Button>
+                    </>
+                  ) : (
                     <Button 
                       variant="outline" 
-                      onClick={() => onMessage?.(student.id)}
-                      className="cl-action-btn rounded-full border-slate-200 px-6 h-11 font-semibold text-slate-700 hover:bg-slate-50 shadow-sm transition-all"
+                      onClick={() => setActiveModal('editProfile')}
+                      className="rounded-full border-slate-200 px-6 h-11 font-semibold text-slate-700 hover:bg-slate-50 shadow-sm transition-all"
                     >
-                      <MessageCircle className="mr-2 h-4 w-4" />
-                      Message
+                      <Edit2 className="mr-2 h-4 w-4" />
+                      Edit Profile
                     </Button>
-                  </>
-                ) : (
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setActiveModal('editProfile')}
-                    className="cl-action-btn rounded-full border-slate-200 px-6 h-11 font-semibold text-slate-700 hover:bg-slate-50 shadow-sm transition-all"
-                  >
-                    <Edit2 className="mr-2 h-4 w-4" />
-                    Edit Profile
-                  </Button>
-                )}
-              </div>
-            </div>
-
-            {/* Quick Stats Grid */}
-            <div className="cl-stats-grid mt-8 grid grid-cols-3 sm:grid-cols-5 gap-4 py-6 border-t border-slate-100">
-              {[
-                ['Projects', loadedProjects.length],
-                ['Clubs', clubCount],
-                ['Skills', displaySkills.length],
-                ['Posts', profilePosts.length],
-                ['Wins', achievements.length],
-              ].map(([label, value]) => (
-                <div key={label} className="cl-stat-box flex flex-col">
-                  <span className="cl-stat-value text-xl font-bold text-slate-900">{value}</span>
-                  <span className="cl-stat-label text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</span>
+                  )}
                 </div>
-              ))}
+              </div>
             </div>
 
             {/* About Section - LinkedIn Style */}
