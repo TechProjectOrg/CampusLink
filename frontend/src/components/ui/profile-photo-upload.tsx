@@ -12,7 +12,7 @@ interface ProfilePhotoUploadProps {
   name: string;
   hasCustomPhoto: boolean;
   onPhotoChange: (payload: { file?: File; previewUrl?: string; remove?: boolean }) => Promise<void> | void;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' |'xl' | '2xl' | '3xl' ;
   editable?: boolean;
 }
 
@@ -144,8 +144,8 @@ export function ProfilePhotoUpload({
           }
         }}
       >
-        <Avatar className={`${sizeClasses[size]} ring-4 ring-white shadow-xl`}>
-          <AvatarImage src={displayImage} className="object-cover" />
+        <Avatar className={`${sizeClasses[size]} w-full h-full ring-4 ring-white shadow-xl rounded-full overflow-hidden`}>
+          <AvatarImage src={displayImage} className="w-full h-full object-cover rounded-full" />
           <AvatarFallback className="text-3xl bg-gradient-to-br from-blue-500 to-blue-600 text-white">
             {name ? name[0].toUpperCase() : <User className={iconSizes[size]} />}
           </AvatarFallback>

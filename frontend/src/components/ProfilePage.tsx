@@ -779,7 +779,7 @@ export function ProfilePage({
                     name={student.name}
                     editable={isOwnProfile}
                     onPhotoChange={handleProfilePhotoChange}
-                    size="xl" 
+                    size="3xl" 
                   />
                 </div>
               </div>
