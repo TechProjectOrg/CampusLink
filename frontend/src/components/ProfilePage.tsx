@@ -711,7 +711,7 @@ export function ProfilePage({
         {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
       </div>
       {isOwnProfile && onAdd ? (
-        <Button variant="outline" size="sm" onClick={onAdd} className="ml-auto shrink-0 rounded-full border-slate-200 bg-white shadow-sm hover:bg-slate-50">
+        <Button size="sm" onClick={onAdd} className="ml-auto shrink-0 rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none px-5 h-9 font-bold">
           <Plus className="mr-1.5 h-4 w-4" />
           Add
         </Button>
@@ -784,9 +784,8 @@ export function ProfilePage({
                     onCancelRequest={() => onCancelRequest(student.id)}
                   />
                   <Button 
-                    variant="outline" 
                     onClick={() => onMessage?.(student.id)}
-                    className="rounded-full border-slate-200 px-6 h-11 font-semibold text-slate-700 hover:bg-slate-50 shadow-sm transition-all"
+                    className="rounded-full gradient-primary px-6 h-11 font-bold text-white shadow-md hover:shadow-lg transition-all border-none"
                   >
                     <MessageCircle className="mr-2 h-4 w-4" />
                     Message
@@ -794,9 +793,8 @@ export function ProfilePage({
                 </>
               ) : (
                 <Button 
-                  variant="outline" 
                   onClick={() => setActiveModal('editProfile')}
-                  className="rounded-full border-slate-200 px-6 h-11 font-semibold text-slate-700 hover:bg-slate-50 shadow-sm transition-all"
+                  className="rounded-full gradient-primary px-6 h-11 font-bold text-white shadow-md hover:shadow-lg transition-all border-none"
                 >
                   <Edit2 className="mr-2 h-4 w-4" />
                   Edit Profile
@@ -1042,7 +1040,7 @@ export function ProfilePage({
                 <h2 className="break-words text-lg font-semibold tracking-tight text-slate-950 sm:text-xl">Education</h2>
               </div>
               {isOwnProfile && (
-                <Button variant="outline" size="sm" onClick={() => setActiveModal('education')} className="rounded-full border-slate-200 bg-white shadow-sm hover:bg-slate-50">
+                <Button size="sm" onClick={() => setActiveModal('education')} className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none px-5 h-9 font-bold">
                   <Plus className="mr-1.5 h-4 w-4" />
                   Add
                 </Button>
@@ -1209,7 +1207,7 @@ export function ProfilePage({
           </div>
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
-            <Button variant="outline" onClick={handleSaveProfile}>Save Changes</Button>
+            <Button onClick={handleSaveProfile} className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold">Save Changes</Button>
           </div>
         </div>
       </Modal>
@@ -1230,7 +1228,7 @@ export function ProfilePage({
           </div>
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
-            <Button variant="outline" onClick={handleSaveProfile}>Save</Button>
+            <Button onClick={handleSaveProfile} className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold">Save</Button>
           </div>
         </div>
       </Modal>
@@ -1249,7 +1247,7 @@ export function ProfilePage({
           </div>
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
-            <Button variant="outline" onClick={handleAddSkill} disabled={!newSkillName.trim()}>
+            <Button onClick={handleAddSkill} disabled={!newSkillName.trim()} className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold">
               Add Skill
             </Button>
           </div>
@@ -1314,9 +1312,9 @@ export function ProfilePage({
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button
-              variant="outline"
               onClick={handleAddExperience}
               disabled={!newExperience.roleTitle?.trim() || !newExperience.organization?.trim()}
+              className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold"
             >
               {editingItem ? 'Update' : 'Add'} Experience
             </Button>
@@ -1375,7 +1373,7 @@ export function ProfilePage({
                 placeholder="Add technology"
                 onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddProjectTag())}
               />
-              <Button type="button" variant="outline" onClick={handleAddProjectTag}>Add</Button>
+              <Button type="button" onClick={handleAddProjectTag} className="rounded-full gradient-primary text-white shadow-sm hover:shadow-md transition-all border-none font-bold px-4">Add</Button>
             </div>
             {newProject.tags && newProject.tags.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-2">
@@ -1409,9 +1407,9 @@ export function ProfilePage({
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button
-              variant="outline"
               onClick={handleAddProject}
               disabled={!newProject.title?.trim() || !newProject.description?.trim()}
+              className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold"
             >
               {editingItem ? 'Update' : 'Add'} Project
             </Button>
@@ -1478,9 +1476,9 @@ export function ProfilePage({
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button
-              variant="outline"
               onClick={handleAddCertification}
               disabled={!newCertification.name?.trim()}
+              className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold"
             >
               {editingItem ? 'Update' : 'Add'} Certification
             </Button>
@@ -1528,9 +1526,9 @@ export function ProfilePage({
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button
-              variant="outline"
               onClick={handleAddSociety}
               disabled={!newSociety.societyName?.trim() || !newSociety.role?.trim()}
+              className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold"
             >
               {editingItem ? 'Update' : 'Add'} Society
             </Button>
@@ -1572,9 +1570,9 @@ export function ProfilePage({
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button
-              variant="outline"
               onClick={handleAddAchievement}
               disabled={!newAchievement.title?.trim() || !newAchievement.year}
+              className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold"
             >
               {editingItem ? 'Update' : 'Add'} Achievement
             </Button>
