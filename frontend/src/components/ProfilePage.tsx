@@ -871,84 +871,47 @@ export function ProfilePage({
               </div>
             </div>
 
-            {/* About Section - LinkedIn Style */}
-            {(hasAbout || isOwnProfile) && (
-              <div className="cl-about-section mt-2 pt-8 border-t border-slate-100">
-                <div className="cl-about-header flex items-center justify-between mb-4">
-                  <h2 className="cl-about-title text-xl font-bold text-slate-900">About</h2>
-                  {isOwnProfile && (
-                    <button 
-                      onClick={() => setActiveModal('editProfile')}
-                      className="cl-edit-about-btn p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
-                      title="Edit About"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-                <div className="cl-about-content text-slate-700 leading-relaxed text-[15px] sm:text-base">
-                  {hasAbout ? (
-                    <div className="cl-about-text-wrapper relative">
-                      <p className={`cl-about-text ${isAboutExpanded ? '' : 'line-clamp-4'}`}>
-                        {student.bio}
-                      </p>
-                      {student.bio && student.bio.length > 250 && (
-                        <button
-                          onClick={() => setIsAboutExpanded(!isAboutExpanded)}
-                          className="cl-see-more-btn mt-2 text-sm font-bold text-blue-600 hover:underline"
-                        >
-                          {isAboutExpanded ? 'See less' : '...see more'}
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="cl-about-empty text-slate-500 italic">No bio available yet.</p>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
         </section>
 
-        {showFeaturedSection ? (
-        <section className={profileSectionCardClass}>
-          <SectionHeader title="Featured" subtitle="A quick glimpse of recent work and wins" />
-          {hasFeaturedContent ? (
-            <div className="flex flex-col gap-4">
-              <button
-                type="button"
-                onClick={() => featuredPost && onOpenPost?.(featuredPost)}
-                className="group/highlight block w-full overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 p-5 text-left text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl sm:p-6"
-              >
-                <p className="text-sm font-medium text-blue-100">{featuredProject ? 'Featured project' : featuredPost ? 'Featured post' : 'Achievement'}</p>
-                <h3 className="mt-3 break-words text-xl font-semibold tracking-tight sm:text-2xl">
-                  {featuredProject?.title || featuredPost?.title || featuredAchievement?.title}
-                </h3>
-                <p className="mt-3 line-clamp-3 max-w-3xl text-sm leading-6 text-white/75">
-                  {featuredProject?.description || featuredPost?.description || featuredAchievement?.description || 'A highlighted milestone from this profile.'}
-                </p>
-                <span className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-white">
-                  View highlight
-                  <ExternalLink className="h-4 w-4 transition group-hover/highlight:translate-x-0.5" />
-                </span>
-              </button>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl bg-sky-50 px-4 py-3">
-                  <p className="text-base font-medium text-sky-800">{profilePosts.length} posts shared</p>
-                </div>
-                <div className="rounded-2xl bg-emerald-50 px-4 py-3">
-                  <p className="text-base font-medium text-emerald-800">{displaySkills.length} skills listed</p>
-                </div>
-                <div className="rounded-2xl bg-amber-50 px-4 py-3">
-                  <p className="text-base font-medium text-amber-800">{achievements.length} achievements</p>
-                </div>
+        {/* About Section - Visual Consistency with other sections */}
+        {(hasAbout || isOwnProfile) && (
+          <section className={profileSectionCardClass}>
+            <div className="flex w-full items-center justify-between gap-4">
+              <div className="min-w-0">
+                <h2 className="break-words text-lg font-semibold tracking-tight text-slate-950 sm:text-xl">About</h2>
               </div>
+              {isOwnProfile && (
+                <button 
+                  onClick={() => setActiveModal('editProfile')}
+                  className="ml-auto shrink-0 rounded-full p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                  title="Edit About"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+              )}
             </div>
-          ) : (
-            <EmptyState message="Nothing featured yet. Add projects, posts, or achievements to bring this area to life." />
-          )}
-        </section>
-        ) : null}
+            <div className="cl-about-content text-slate-700 leading-relaxed text-[15px] sm:text-base">
+              {hasAbout ? (
+                <div className="cl-about-text-wrapper relative">
+                  <p className={`cl-about-text ${isAboutExpanded ? '' : 'line-clamp-4'}`}>
+                    {student.bio}
+                  </p>
+                  {student.bio && student.bio.length > 250 && (
+                    <button
+                      onClick={() => setIsAboutExpanded(!isAboutExpanded)}
+                      className="cl-see-more-btn mt-2 text-sm font-bold text-blue-600 hover:underline"
+                    >
+                      {isAboutExpanded ? 'See less' : '...see more'}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <p className="cl-about-empty text-slate-500 italic">No bio available yet.</p>
+              )}
+            </div>
+          </section>
+        )}
 
         {showPostsSection ? (
         <section className={profileSectionCardClass}>
