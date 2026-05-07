@@ -820,20 +820,20 @@ export function ProfilePage({
               </div>
 
               {/* Right Side: Centered Details */}
-              <div className="flex-1 flex flex-col justify-center w-full pt-4 md:pt-24">
+              <div className="flex-1 flex flex-col justify-center w-full pt-8 md:pt-32">
                 <div className="space-y-4 text-center md:text-left">
-                  {/* Name and Headline */}
-                  <div className="space-y-1">
-                    <h1 className="text-3xl sm:text-[42px] font-bold text-slate-900 tracking-tight leading-tight">
-                      {student.name}
-                    </h1>
-                    <p className="text-lg sm:text-xl text-slate-600 font-medium leading-relaxed max-w-2xl">
-                      {student.headline || (isOwnProfile ? 'Add a headline that tells campus what you are building.' : 'Campus community member')}
-                    </p>
-                  </div>
+                  {/* 1. Student Name */}
+                  <h1 className="text-3xl sm:text-[42px] font-bold text-slate-900 tracking-tight leading-tight">
+                    {student.name}
+                  </h1>
 
-                  {/* Info Row: Location, Year, Email */}
-                  <div className="flex flex-wrap justify-center md:justify-start items-center gap-x-6 gap-y-2">
+                  {/* 2. Headline Text */}
+                  <p className="text-lg sm:text-xl text-slate-600 font-medium leading-relaxed max-w-2xl">
+                    {student.headline || (isOwnProfile ? 'Add a headline that tells campus what you are building.' : 'Campus community member')}
+                  </p>
+
+                  {/* 3. Info Row: Location, Year, Email */}
+                  <div className="flex flex-wrap items-center gap-x-6 gap-y-3 mt-4">
                     <div className="flex items-center gap-2 text-slate-500 text-sm font-semibold">
                       <MapPin className="w-4 h-4 text-slate-400" />
                       <span>{student.branch || 'Unknown'}</span>
@@ -848,8 +848,8 @@ export function ProfilePage({
                     </div>
                   </div>
 
-                  {/* Combined Stats Row: Followers/Following/Projects/Clubs */}
-                  <div className="flex flex-wrap justify-center md:justify-start items-center gap-6 pt-1">
+                  {/* 4. Stats Row: Followers/Following/Projects/Clubs */}
+                  <div className="flex flex-wrap items-center gap-8 mt-4">
                     <div className="flex items-center gap-1.5 text-sm">
                       <span className="font-bold text-slate-900">{followersCount}</span>
                       <span className="text-slate-500 font-medium">Followers</span>
