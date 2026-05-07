@@ -1035,23 +1035,22 @@ export function ProfilePage({
 
           {showEducationSection ? (
           <div className={profileSectionCardClass}>
-            <div className="flex w-full items-center justify-between gap-4">
-              <div className="min-w-0">
-                <h2 className="break-words text-lg font-semibold tracking-tight text-slate-950 sm:text-xl">Education</h2>
+            <SectionHeader 
+              title="Education" 
+              subtitle="Highlight your academic background." 
+              onAdd={() => setActiveModal('education')} 
+            />
+            {student.branch || student.year ? (
+              <div className="relative border-l-2 border-emerald-100 pl-5">
+                <span className="absolute -left-[9px] top-1 h-4 w-4 rounded-full border-4 border-white bg-emerald-500 shadow" />
+                {student.branch && <h3 className="break-words font-semibold text-slate-950">{student.branch}</h3>}
+                <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                  {student.year ? `Year ${student.year}` : ''}
+                </p>
               </div>
-              {isOwnProfile && (
-                <Button size="sm" onClick={() => setActiveModal('education')} className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none px-5 h-9 font-bold">
-                  <Plus className="mr-1.5 h-4 w-4" />
-                  Add
-                </Button>
-              )}
-            </div>
-            <div className="relative border-l-2 border-emerald-100 pl-5">
-              <span className="absolute -left-[9px] top-1 h-4 w-4 rounded-full border-4 border-white bg-emerald-500 shadow" />
-              <h3 className="break-words font-semibold text-slate-950">{student.branch || 'Highlight your academic background.'}</h3>
-              <p className="text-sm text-slate-600">CampusLynk College</p>
-              <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">Year {student.year || '-'}</p>
-            </div>
+            ) : (
+              <EmptyState message="No education added yet." />
+            )}
           </div>
           ) : null}
         </section>
