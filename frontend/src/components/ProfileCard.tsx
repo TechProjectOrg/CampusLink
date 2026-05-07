@@ -25,19 +25,23 @@ export function ProfileCard({ student, followerCount, followingCount, onViewProf
         </div>
         
         <CardContent className="relative px-6 pb-6">
-          {/* Avatar */}
-          <div className="flex justify-start -mt-20 mb-4">
-            <Avatar className="w-40 h-40 ring-4 ring-white shadow-xl">
-              <AvatarImage src={student.avatar} />
-              <AvatarFallback className="text-4xl">{student.name[0]}</AvatarFallback>
+          {/* Avatar - Centered & Much Bigger */}
+          <div className="flex justify-center -mt-20 mb-6">
+            <Avatar className="w-48 h-48 ring-8 ring-white shadow-2xl">
+              <AvatarImage src={student.avatar} className="object-cover" />
+              <AvatarFallback className="text-5xl font-bold bg-slate-100 text-primary">
+                {student.name[0]}
+              </AvatarFallback>
             </Avatar>
           </div>
 
-          {/* Name & Info */}
-          <div className="text-left space-y-1 mb-4">
-            <h3 className="text-gray-900 text-3xl font-bold">{student.name}</h3>
-            <p className="text-sm text-gray-600">{student.branch}</p>
-            <p className="text-sm text-secondary">Year {student.year}</p>
+          {/* Name & Info - Centered & Bold */}
+          <div className="text-center space-y-2 mb-6">
+            <h3 className="text-gray-900 text-4xl font-extrabold tracking-tight">{student.name}</h3>
+            <div className="space-y-1">
+              <p className="text-base text-gray-600 font-medium">{student.branch}</p>
+              <p className="text-sm text-secondary font-semibold italic">Year {student.year}</p>
+            </div>
           </div>
 
           {/* Bio */}
