@@ -682,6 +682,9 @@ export function ProfilePage({
   const featuredProject = loadedProjects[0];
   const featuredPost = profilePosts[0];
   const featuredAchievement = achievements[0];
+  const profileBranch = student.branch?.trim() || '';
+  const hasKnownBranch = Boolean(profileBranch && profileBranch.toLowerCase() !== 'unknown');
+  const hasKnownYear = student.year > 0;
   const hasAbout = Boolean(student.bio?.trim());
   const clubCount = societies.length;
   const hasFeaturedContent = Boolean(featuredProject || featuredPost || featuredAchievement);
@@ -689,7 +692,7 @@ export function ProfilePage({
   const showPostsSection = isOwnProfile || postsLoading || profilePosts.length > 0;
   const showProjectsSection = isOwnProfile || projectsLoading || loadedProjects.length > 0;
   const showExperienceSection = isOwnProfile || experiences.length > 0;
-  const showEducationSection = isOwnProfile || Boolean(student.branch || student.year);
+  const showEducationSection = isOwnProfile || hasKnownBranch || hasKnownYear;
   const showSkillsSection = isOwnProfile || skillsLoading || displaySkills.length > 0;
   const showCertificationsSection = isOwnProfile || certificationsLoading || loadedCertifications.length > 0;
   const showClubsSection = isOwnProfile || societies.length > 0;
@@ -834,11 +837,11 @@ export function ProfilePage({
                   <div className="flex flex-wrap items-center gap-x-6 gap-y-3 mt-4">
                     <div className="flex items-center gap-2 text-slate-500 text-sm font-semibold">
                       <MapPin className="w-4 h-4 text-slate-400" />
-                      <span>{student.branch || 'Unknown'}</span>
+                      <span>{hasKnownBranch ? profileBranch : 'Branch not added'}</span>
                     </div>
                     <div className="flex items-center gap-2 text-slate-500 text-sm font-semibold">
                       <Calendar className="w-4 h-4 text-slate-400" />
-                      <span>Year {student.year || '-'}</span>
+                      <span>{hasKnownYear ? `Year ${student.year}` : 'Year not added'}</span>
                     </div>
                     <div className="flex items-center gap-2 text-slate-500 text-sm font-semibold">
                       <Mail className="w-4 h-4 text-slate-400" />
@@ -1040,16 +1043,16 @@ export function ProfilePage({
               subtitle="Highlight your academic background." 
               onAdd={() => setActiveModal('education')} 
             />
-            {student.branch || student.year ? (
+            {hasKnownBranch || hasKnownYear ? (
               <div className="relative border-l-2 border-emerald-100 pl-5">
                 <span className="absolute -left-[9px] top-1 h-4 w-4 rounded-full border-4 border-white bg-emerald-500 shadow" />
-                {student.branch && <h3 className="break-words font-semibold text-slate-950">{student.branch}</h3>}
+                {hasKnownBranch && <h3 className="break-words font-semibold text-slate-950">{profileBranch}</h3>}
                 <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">
-                  {student.year ? `Year ${student.year}` : ''}
+                  {hasKnownYear ? `Year ${student.year}` : ''}
                 </p>
               </div>
             ) : (
-              <EmptyState message="No education added yet." />
+              <EmptyState message="Highlight your academic background." />
             )}
           </div>
           ) : null}
