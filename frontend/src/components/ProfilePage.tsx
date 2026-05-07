@@ -768,9 +768,9 @@ export function ProfilePage({
             )}
           </div>
 
-          <div className="cl-header-content relative px-6 sm:px-10 pb-8">
-            {/* Header Action Buttons - Moved to absolute top-right of the white area */}
-            <div className="cl-header-actions absolute top-6 right-6 sm:top-8 sm:right-10 flex flex-wrap gap-3 z-10">
+          <div className="cl-header-content relative px-6 sm:px-10 pt-4 pb-8">
+            {/* Header Action Buttons - Comfortable top margin from the card border */}
+            <div className="cl-header-actions absolute top-10 right-6 sm:top-12 sm:right-10 flex flex-wrap gap-3 z-10">
               {!isOwnProfile ? (
                 <>
                   <FollowButton
