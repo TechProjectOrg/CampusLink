@@ -915,7 +915,7 @@ export function ProfilePage({
 
         {showPostsSection ? (
         <section className={profileSectionCardClass}>
-          <SectionHeader title="Activity" subtitle="Recent posts and campus updates" />
+          <SectionHeader title="Activity" subtitle="Recent posts and campus updates" onAdd={() => setActiveModal('newPost')} />
           {postsLoading ? (
             <LoadingIndicator label="Loading posts..." className="justify-start" size={20} />
           ) : profilePosts.length > 0 ? (
@@ -1050,7 +1050,17 @@ export function ProfilePage({
 
           {showEducationSection ? (
           <div className={profileSectionCardClass}>
-            <SectionHeader title="Education" />
+            <div className="flex w-full items-center justify-between gap-4">
+              <div className="min-w-0">
+                <h2 className="break-words text-lg font-semibold tracking-tight text-slate-950 sm:text-xl">Education</h2>
+              </div>
+              {isOwnProfile && (
+                <Button variant="outline" size="sm" onClick={() => setActiveModal('education')} className="rounded-full border-slate-200 bg-white shadow-sm hover:bg-slate-50">
+                  <Plus className="mr-1.5 h-4 w-4" />
+                  Add
+                </Button>
+              )}
+            </div>
             <div className="relative border-l-2 border-emerald-100 pl-5">
               <span className="absolute -left-[9px] top-1 h-4 w-4 rounded-full border-4 border-white bg-emerald-500 shadow" />
               <h3 className="break-words font-semibold text-slate-950">{student.branch || 'Degree / Branch'}</h3>
