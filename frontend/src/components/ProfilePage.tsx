@@ -894,7 +894,7 @@ export function ProfilePage({
                   )}
                 </div>
               ) : (
-                <p className="cl-about-empty text-slate-500">No information added yet.</p>
+                <p className="cl-about-empty text-slate-500">Add a short introduction about yourself.</p>
               )}
             </div>
           </section>
@@ -902,7 +902,7 @@ export function ProfilePage({
 
         {showPostsSection ? (
         <section className={profileSectionCardClass}>
-          <SectionHeader title="Activity" subtitle="Recent posts and campus updates" onAdd={() => setActiveModal('newPost')} />
+          <SectionHeader title="Activity" subtitle="Share updates, posts, and campus activity." onAdd={() => setActiveModal('newPost')} />
           {postsLoading ? (
             <LoadingIndicator label="Loading posts..." className="justify-start" size={20} />
           ) : profilePosts.length > 0 ? (
@@ -940,14 +940,14 @@ export function ProfilePage({
               </Button>
             </>
           ) : (
-            <EmptyState message="No information added yet." />
+            <EmptyState message="Share updates, posts, and campus activity." />
           )}
         </section>
         ) : null}
 
         {showProjectsSection ? (
         <section className={profileSectionCardClass}>
-          <SectionHeader title="Projects" subtitle="Selected builds, prototypes, and experiments" onAdd={() => setActiveModal('project')} />
+          <SectionHeader title="Projects" subtitle="Showcase your projects and work." onAdd={() => setActiveModal('project')} />
           {projectsLoading ? (
             <LoadingIndicator label="Loading projects..." className="justify-start" size={20} />
           ) : loadedProjects.length > 0 ? (
@@ -1000,7 +1000,7 @@ export function ProfilePage({
               </Button>
             </>
           ) : (
-            <EmptyState message="No information added yet." />
+            <EmptyState message="Showcase your projects and work." />
           )}
         </section>
         ) : null}
@@ -1030,7 +1030,7 @@ export function ProfilePage({
                 ))}
               </div>
             ) : (
-              <EmptyState message="No information added yet." />
+              <EmptyState message="Add your work and internship experience." />
             )}
           </div>
           ) : null}
@@ -1050,7 +1050,7 @@ export function ProfilePage({
             </div>
             <div className="relative border-l-2 border-emerald-100 pl-5">
               <span className="absolute -left-[9px] top-1 h-4 w-4 rounded-full border-4 border-white bg-emerald-500 shadow" />
-              <h3 className="break-words font-semibold text-slate-950">{student.branch || 'Degree / Branch'}</h3>
+              <h3 className="break-words font-semibold text-slate-950">{student.branch || 'Highlight your academic background.'}</h3>
               <p className="text-sm text-slate-600">CampusLynk College</p>
               <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">Year {student.year || '-'}</p>
             </div>
@@ -1078,7 +1078,7 @@ export function ProfilePage({
               ))}
             </div>
           ) : (
-            <EmptyState message="No information added yet." />
+            <EmptyState message="Add your skills to showcase your strengths." />
           )}
         </section>
         ) : null}
@@ -1113,7 +1113,7 @@ export function ProfilePage({
                 ))}
               </div>
             ) : (
-              <EmptyState message="No information added yet." />
+              <EmptyState message="Add certifications and credentials." />
             )}
           </div>
           ) : null}
@@ -1141,7 +1141,7 @@ export function ProfilePage({
                 ))}
               </div>
             ) : (
-              <EmptyState message="No information added yet." />
+              <EmptyState message="Show your communities and campus involvement." />
             )}
           </div>
           ) : null}
@@ -1170,7 +1170,7 @@ export function ProfilePage({
               ))}
             </div>
           ) : (
-            <EmptyState message="No information added yet." />
+            <EmptyState message="Highlight awards and accomplishments." />
           )}
         </section>
         ) : null}
