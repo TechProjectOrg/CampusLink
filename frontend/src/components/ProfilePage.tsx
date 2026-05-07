@@ -768,7 +768,7 @@ export function ProfilePage({
             )}
           </div>
 
-          <div className="cl-header-content relative px-6 sm:px-10 pt-4 pb-8">
+          <div className="cl-header-content relative px-6 sm:px-10 pt-6 pb-20">
             {/* Header Action Buttons - Comfortable top margin from the card border */}
             <div className="cl-header-actions absolute top-10 right-6 sm:top-12 sm:right-10 flex flex-wrap gap-3 z-10">
               {!isOwnProfile ? (
@@ -804,7 +804,7 @@ export function ProfilePage({
               )}
             </div>
 
-            <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12 -mt-20 sm:-mt-24 mb-8">
+            <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12 -mt-20 sm:-mt-24 mb-0">
               {/* Left Side: Avatar */}
               <div className="cl-avatar-circle-frame relative w-[160px] h-[160px] sm:w-[208px] sm:h-[208px] shrink-0">
                 <div className="cl-avatar-mask w-full h-full rounded-full border-[6px] border-white shadow-xl overflow-hidden bg-white">
@@ -894,7 +894,7 @@ export function ProfilePage({
                   )}
                 </div>
               ) : (
-                <p className="cl-about-empty text-slate-500 italic">No bio available yet.</p>
+                <p className="cl-about-empty text-slate-500">No information added yet.</p>
               )}
             </div>
           </section>
@@ -940,7 +940,7 @@ export function ProfilePage({
               </Button>
             </>
           ) : (
-            <EmptyState message="No posts yet. Share a campus update, project note, or opportunity." />
+            <EmptyState message="No information added yet." />
           )}
         </section>
         ) : null}
@@ -1000,7 +1000,7 @@ export function ProfilePage({
               </Button>
             </>
           ) : (
-            <EmptyState message="No projects yet. Start a showcase for the work you are proud of." />
+            <EmptyState message="No information added yet." />
           )}
         </section>
         ) : null}
@@ -1030,7 +1030,7 @@ export function ProfilePage({
                 ))}
               </div>
             ) : (
-              <EmptyState message="No experience yet. Add internships, volunteer roles, or campus work." />
+              <EmptyState message="No information added yet." />
             )}
           </div>
           ) : null}
@@ -1078,7 +1078,7 @@ export function ProfilePage({
               ))}
             </div>
           ) : (
-            <EmptyState message="No skills yet. Add the tools and topics people should find you for." />
+            <EmptyState message="No information added yet." />
           )}
         </section>
         ) : null}
@@ -1113,7 +1113,7 @@ export function ProfilePage({
                 ))}
               </div>
             ) : (
-              <EmptyState message="No certifications yet. Add credentials that back up your work." />
+              <EmptyState message="No information added yet." />
             )}
           </div>
           ) : null}
@@ -1141,7 +1141,7 @@ export function ProfilePage({
                 ))}
               </div>
             ) : (
-              <EmptyState message="No clubs yet. Add communities, cells, or societies you are part of." />
+              <EmptyState message="No information added yet." />
             )}
           </div>
           ) : null}
@@ -1170,7 +1170,7 @@ export function ProfilePage({
               ))}
             </div>
           ) : (
-            <EmptyState message="No achievements yet. Add awards, hackathon wins, or milestones." />
+            <EmptyState message="No information added yet." />
           )}
         </section>
         ) : null}
