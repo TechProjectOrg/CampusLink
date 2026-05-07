@@ -877,20 +877,7 @@ export function ProfilePage({
         {/* About Section - Visual Consistency with other sections */}
         {(hasAbout || isOwnProfile) && (
           <section className={profileSectionCardClass}>
-            <div className="flex w-full items-center justify-between gap-4">
-              <div className="min-w-0">
-                <h2 className="break-words text-lg font-semibold tracking-tight text-slate-950 sm:text-xl">About</h2>
-              </div>
-              {isOwnProfile && (
-                <button 
-                  onClick={() => setActiveModal('editProfile')}
-                  className="ml-auto shrink-0 rounded-full p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                  title="Edit About"
-                >
-                  <Pencil className="w-4 h-4" />
-                </button>
-              )}
-            </div>
+            <SectionHeader title="About" onAdd={() => setActiveModal('editProfile')} />
             <div className="cl-about-content text-slate-700 leading-relaxed text-[15px] sm:text-base">
               {hasAbout ? (
                 <div className="cl-about-text-wrapper relative">
