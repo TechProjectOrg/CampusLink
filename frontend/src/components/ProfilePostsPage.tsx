@@ -197,7 +197,7 @@ export function ProfilePostsPage({
           <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
             <MessageCircle className="mx-auto h-10 w-10 text-blue-300" />
             <p className="mt-4 font-medium text-slate-700">
-              {isOwnProfile ? 'No posts yet. Share your first campus update from the feed.' : `${student.name} has not posted yet.`}
+              {isOwnProfile ? 'Share updates, posts, and campus activity.' : `${student.name} has not posted yet.`}
             </p>
           </div>
         )}
