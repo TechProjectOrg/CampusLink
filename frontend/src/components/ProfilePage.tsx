@@ -768,7 +768,42 @@ export function ProfilePage({
             )}
           </div>
 
-          <div className="cl-header-content px-6 sm:px-10 pb-8">
+          <div className="cl-header-content relative px-6 sm:px-10 pb-8">
+            {/* Header Action Buttons - Moved to absolute top-right of the white area */}
+            <div className="cl-header-actions absolute top-6 right-6 sm:top-8 sm:right-10 flex flex-wrap gap-3 z-10">
+              {!isOwnProfile ? (
+                <>
+                  <FollowButton
+                    targetName={student.name}
+                    accountType={student.accountType}
+                    isFollowing={isFollowing}
+                    isFollower={isFollower}
+                    requestStatus={requestStatus}
+                    onFollow={() => onFollow(student.id, student.accountType)}
+                    onUnfollow={() => onUnfollow(student.id)}
+                    onCancelRequest={() => onCancelRequest(student.id)}
+                  />
+                  <Button 
+                    variant="outline" 
+                    onClick={() => onMessage?.(student.id)}
+                    className="rounded-full border-slate-200 px-6 h-11 font-semibold text-slate-700 hover:bg-slate-50 shadow-sm transition-all"
+                  >
+                    <MessageCircle className="mr-2 h-4 w-4" />
+                    Message
+                  </Button>
+                </>
+              ) : (
+                <Button 
+                  variant="outline" 
+                  onClick={() => setActiveModal('editProfile')}
+                  className="rounded-full border-slate-200 px-6 h-11 font-semibold text-slate-700 hover:bg-slate-50 shadow-sm transition-all"
+                >
+                  <Edit2 className="mr-2 h-4 w-4" />
+                  Edit Profile
+                </Button>
+              )}
+            </div>
+
             <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12 -mt-20 sm:-mt-24 mb-8">
               {/* Left Side: Avatar */}
               <div className="cl-avatar-circle-frame relative w-[160px] h-[160px] sm:w-[208px] sm:h-[208px] shrink-0">
@@ -784,9 +819,9 @@ export function ProfilePage({
                 </div>
               </div>
 
-              {/* Right Side: Details and Actions */}
-              <div className="flex-1 flex flex-col lg:flex-row justify-between items-center lg:items-center gap-6 w-full pt-4 md:pt-16">
-                <div className="flex-1 space-y-4 text-center md:text-left">
+              {/* Right Side: Centered Details */}
+              <div className="flex-1 flex flex-col justify-center w-full pt-4 md:pt-24">
+                <div className="space-y-4 text-center md:text-left">
                   {/* Name and Headline */}
                   <div className="space-y-1">
                     <h1 className="text-3xl sm:text-[42px] font-bold text-slate-900 tracking-tight leading-tight">
@@ -814,7 +849,7 @@ export function ProfilePage({
                   </div>
 
                   {/* Combined Stats Row: Followers/Following/Projects/Clubs */}
-                  <div className="flex flex-wrap justify-center md:justify-start items-center gap-6 pt-2">
+                  <div className="flex flex-wrap justify-center md:justify-start items-center gap-6 pt-1">
                     <div className="flex items-center gap-1.5 text-sm">
                       <span className="font-bold text-slate-900">{followersCount}</span>
                       <span className="text-slate-500 font-medium">Followers</span>
@@ -832,41 +867,6 @@ export function ProfilePage({
                       <span className="text-slate-500 font-medium">Clubs</span>
                     </div>
                   </div>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex flex-wrap justify-center md:justify-end gap-3 shrink-0">
-                  {!isOwnProfile ? (
-                    <>
-                      <FollowButton
-                        targetName={student.name}
-                        accountType={student.accountType}
-                        isFollowing={isFollowing}
-                        isFollower={isFollower}
-                        requestStatus={requestStatus}
-                        onFollow={() => onFollow(student.id, student.accountType)}
-                        onUnfollow={() => onUnfollow(student.id)}
-                        onCancelRequest={() => onCancelRequest(student.id)}
-                      />
-                      <Button 
-                        variant="outline" 
-                        onClick={() => onMessage?.(student.id)}
-                        className="rounded-full border-slate-200 px-6 h-11 font-semibold text-slate-700 hover:bg-slate-50 shadow-sm transition-all"
-                      >
-                        <MessageCircle className="mr-2 h-4 w-4" />
-                        Message
-                      </Button>
-                    </>
-                  ) : (
-                    <Button 
-                      variant="outline" 
-                      onClick={() => setActiveModal('editProfile')}
-                      className="rounded-full border-slate-200 px-6 h-11 font-semibold text-slate-700 hover:bg-slate-50 shadow-sm transition-all"
-                    >
-                      <Edit2 className="mr-2 h-4 w-4" />
-                      Edit Profile
-                    </Button>
-                  )}
                 </div>
               </div>
             </div>
