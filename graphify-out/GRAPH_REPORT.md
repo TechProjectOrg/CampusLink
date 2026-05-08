@@ -1,11 +1,11 @@
 # Graph Report - final-year-project  (2026-05-08)
 
 ## Corpus Check
-- 156 files · ~136,774 words
+- 157 files · ~137,028 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1066 nodes · 1651 edges · 37 communities detected
+- 1067 nodes · 1651 edges · 37 communities detected
 - Extraction: 86% EXTRACTED · 14% INFERRED · 0% AMBIGUOUS · INFERRED: 238 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
@@ -45,8 +45,8 @@
 - [[_COMMUNITY_Community 53|Community 53]]
 - [[_COMMUNITY_Community 66|Community 66]]
 - [[_COMMUNITY_Community 96|Community 96]]
-- [[_COMMUNITY_Community 126|Community 126]]
 - [[_COMMUNITY_Community 127|Community 127]]
+- [[_COMMUNITY_Community 128|Community 128]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `cacheSetJson()` - 21 edges
@@ -214,11 +214,11 @@ Nodes (3): shadcn/ui MIT Attribution, Unsplash License Attribution, Figma Design
 Cohesion: 1.0
 Nodes (2): Mock Data Architecture, Tab-Based SPA Navigation
 
-### Community 126 - "Community 126"
+### Community 127 - "Community 127"
 Cohesion: 1.0
 Nodes (1): Local Development Setup
 
-### Community 127 - "Community 127"
+### Community 128 - "Community 128"
 Cohesion: 1.0
 Nodes (1): Custom Guidelines Placeholder
 
@@ -237,18 +237,18 @@ Nodes (1): Custom Guidelines Placeholder
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 96`** (2 nodes): `Mock Data Architecture`, `Tab-Based SPA Navigation`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 126`** (1 nodes): `Local Development Setup`
+- **Thin community `Community 127`** (1 nodes): `Local Development Setup`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 127`** (1 nodes): `Custom Guidelines Placeholder`
+- **Thin community `Community 128`** (1 nodes): `Custom Guidelines Placeholder`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `handleMessage()` connect `Community 1` to `Community 0`?**
-  _High betweenness centrality (0.048) - this node is a cross-community bridge._
+  _High betweenness centrality (0.046) - this node is a cross-community bridge._
 - **Why does `loadPosts()` connect `Community 2` to `Community 13`, `Community 5`?**
-  _High betweenness centrality (0.037) - this node is a cross-community bridge._
+  _High betweenness centrality (0.039) - this node is a cross-community bridge._
 - **Are the 19 inferred relationships involving `cacheSetJson()` (e.g. with `setCachedRecentMessages()` and `setConversationMeta()`) actually correct?**
   _`cacheSetJson()` has 19 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 16 inferred relationships involving `cacheDelete()` (e.g. with `invalidateConversationLists()` and `reconcileConversationMeta()`) actually correct?**
