@@ -903,7 +903,7 @@ export function ProfilePage({
 
         {showPostsSection ? (
         <section className={profileSectionCardClass}>
-          <SectionHeader title="Activity" subtitle="Share updates, posts, and campus activity." onAdd={() => setActiveModal('newPost')} />
+          <SectionHeader title="Activity" onAdd={() => setActiveModal('newPost')} />
           {postsLoading ? (
             <LoadingIndicator label="Loading posts..." className="justify-start" size={20} />
           ) : profilePosts.length > 0 ? (
@@ -948,7 +948,7 @@ export function ProfilePage({
 
         {showProjectsSection ? (
         <section className={profileSectionCardClass}>
-          <SectionHeader title="Projects" subtitle="Showcase your projects and work." onAdd={() => setActiveModal('project')} />
+          <SectionHeader title="Projects" onAdd={() => setActiveModal('project')} />
           {projectsLoading ? (
             <LoadingIndicator label="Loading projects..." className="justify-start" size={20} />
           ) : loadedProjects.length > 0 ? (
@@ -1010,7 +1010,7 @@ export function ProfilePage({
         <section className="grid w-full [grid-template-columns:1fr] gap-4">
           {showExperienceSection ? (
           <div className={profileSectionCardClass}>
-            <SectionHeader title="Experience" subtitle="Add your work and internship experience." onAdd={() => setActiveModal('experience')} />
+            <SectionHeader title="Experience" onAdd={() => setActiveModal('experience')} />
             {experiences.length > 0 ? (
               <div className="flex flex-col gap-5">
                 {experiences.map((exp) => (
@@ -1040,7 +1040,6 @@ export function ProfilePage({
           <div className={profileSectionCardClass}>
             <SectionHeader 
               title="Education" 
-              subtitle="Highlight your academic background." 
               onAdd={() => setActiveModal('education')} 
             />
             {hasKnownBranch || hasKnownYear ? (
@@ -1061,7 +1060,7 @@ export function ProfilePage({
 
         {showSkillsSection ? (
         <section className={profileSectionCardClass}>
-          <SectionHeader title="Skills" subtitle="Add your skills to showcase your strengths." onAdd={() => setActiveModal('skill')} />
+          <SectionHeader title="Skills" onAdd={() => setActiveModal('skill')} />
           {skillsLoading ? (
             <LoadingIndicator label="Loading skills..." className="justify-start" size={20} />
           ) : displaySkills.length > 0 ? (
@@ -1087,7 +1086,7 @@ export function ProfilePage({
         <section className="grid w-full [grid-template-columns:1fr] gap-4">
           {showCertificationsSection ? (
           <div className={profileSectionCardClass}>
-            <SectionHeader title="Certifications" subtitle="Add certifications and credentials." onAdd={() => setActiveModal('certification')} />
+            <SectionHeader title="Certifications" onAdd={() => setActiveModal('certification')} />
             {certificationsLoading ? (
               <LoadingIndicator label="Loading certifications..." className="justify-start" size={20} />
             ) : loadedCertifications.length > 0 ? (
@@ -1120,7 +1119,7 @@ export function ProfilePage({
 
           {showClubsSection ? (
           <div className={profileSectionCardClass}>
-            <SectionHeader title="Clubs & Societies" subtitle="Show your communities and campus involvement." onAdd={() => setActiveModal('society')} />
+            <SectionHeader title="Clubs & Societies" onAdd={() => setActiveModal('society')} />
             {societies.length > 0 ? (
               <div className="grid gap-3 sm:grid-cols-2">
                 {societies.map((soc) => (
@@ -1150,7 +1149,7 @@ export function ProfilePage({
 
         {showAchievementsSection ? (
         <section className={profileSectionCardClass}>
-          <SectionHeader title="Achievements" subtitle="Highlight awards and accomplishments." onAdd={() => setActiveModal('achievement')} />
+          <SectionHeader title="Achievements" onAdd={() => setActiveModal('achievement')} />
           {achievements.length > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2">
               {achievements.map((ach) => (
