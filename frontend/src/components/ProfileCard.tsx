@@ -37,7 +37,13 @@ export function ProfileCard({ student, followerCount, followingCount, onViewProf
 
           {/* Name & Info - Centered & Bold */}
           <div className="text-center space-y-2 mb-6">
-            <h3 className="text-gray-900 text-4xl font-extrabold tracking-tight">{student.name}</h3>
+            <h3
+  className="text-gray-900 font-extrabold tracking-tight leading-none"
+  style={{ fontSize: '2rem' }}
+>
+  {student.name}
+</h3>
+      
             <div className="space-y-1">
               <p className="text-base text-gray-600 font-medium">{student.branch}</p>
               <p className="text-sm text-secondary font-semibold italic">Year {student.year}</p>
