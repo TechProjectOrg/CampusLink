@@ -168,14 +168,16 @@ export function SuggestionsCard({
                   {/* Content column */}
                   <div className="flex min-w-0 flex-1 flex-col">
                     {/* Top row: Name & X */}
-                    <div className="flex items-start justify-between gap-2">
-                      <p
-                        className="cursor-pointer truncate flex-1 min-w-0 text-sm text-slate-800 transition-colors group-hover:text-primary"
-                        onClick={() => onViewProfile(student.id)}
-                        title={student.name}
-                      >
-                        {student.name}
-                      </p>
+                    <div className="flex items-start justify-between gap-2 w-full">
+                      <div className="flex-1 min-w-0">
+                        <p
+                          className="cursor-pointer truncate text-sm text-slate-800 transition-colors group-hover:text-primary"
+                          onClick={() => onViewProfile(student.id)}
+                          title={student.name}
+                        >
+                          {student.name}
+                        </p>
+                      </div>
                       <button
                         type="button"
                         aria-label={`Dismiss ${student.name}`}
@@ -189,10 +191,10 @@ export function SuggestionsCard({
                     {/* Bottom section: Subtext & Follow Button */}
                     <div className="mt-0.5 flex items-end justify-between gap-2">
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs text-slate-500">
-                          {student.branch} · Y{student.year}
+                        <p className="truncate text-xs text-gray-600">
+                          {student.branch} <span className="text-gray-400 mx-0.5">·</span> <span className="text-secondary">Y{student.year}</span>
                         </p>
-                        <p className="truncate text-xs text-slate-400" title={socialProof}>
+                        <p className="truncate text-xs text-gray-500" title={socialProof}>
                           {socialProof}
                         </p>
                       </div>
@@ -241,7 +243,7 @@ export function SuggestionsCard({
                 className="px-4 py-2.5 transition-colors hover:bg-slate-50/80 cursor-default"
               >
                 <p className="truncate text-sm text-slate-700">#{topic.hashtag}</p>
-                <p className="text-xs text-slate-400 mt-0.5">{topic.postCount} {topic.postCount === 1 ? 'post' : 'posts'}</p>
+                <p className="text-xs text-gray-500 mt-0.5">{topic.postCount} {topic.postCount === 1 ? 'post' : 'posts'}</p>
               </div>
             ))
           ) : (
