@@ -106,8 +106,7 @@ export function ClubsPage({ students, currentUserId, initialClubSlug = null, onC
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
-      <div className="max-w-6xl mx-auto px-4 md:px-6 py-6 md:py-8 space-y-6 md:space-y-8">
+    <PageLayout maxWidth="6xl" contentClassName="px-4 py-6 md:px-6 md:py-8 space-y-6 md:space-y-8">
         <div className="animate-slide-in-down flex items-end justify-between gap-3">
           <div>
             <h1 className="text-3xl md:text-4xl text-gray-900 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">Campus Clubs</h1>
@@ -218,7 +217,6 @@ export function ClubsPage({ students, currentUserId, initialClubSlug = null, onC
           onClose={() => setIsCreateModalOpen(false)}
           onCreateClub={handleClubCreate}
         />
-      </div>
-    </div>
+    </PageLayout>
   );
 }

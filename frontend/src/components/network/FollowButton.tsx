@@ -40,7 +40,7 @@ export function FollowButton({
   const [confirmMode, setConfirmMode] = useState<'unfollow' | 'cancel-request' | null>(null);
 
   const label = useMemo(() => {
-    if (isFollowing) return 'Following';
+    if (isFollowing) return 'Unfollow';
     if (requestStatus === 'requested') return 'Requested';
     if (isFollower) return 'Follow Back';
     return 'Follow';
@@ -85,7 +85,7 @@ export function FollowButton({
                 : 'w-full gradient-primary shadow-lg hover:shadow-xl rounded-xl'
             )
         }
-        variant="default"
+        variant="ghost"
         title={helperText ?? undefined}
       >
         {label}
@@ -103,18 +103,20 @@ export function FollowButton({
                 : 'Your follow request will be cancelled.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep</AlertDialogCancel>
+          <AlertDialogFooter className="flex items-center justify-center gap-4 mt-6 sm:justify-center">
             <AlertDialogAction
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 hover:text-red-700 hover:border-red-300 focus:outline-none focus:ring-0 active:bg-red-100 transition-none rounded-full h-10 px-4 font-semibold flex items-center justify-center shadow-none"
               onClick={() => {
                 if (confirmMode === 'unfollow') onUnfollow();
                 if (confirmMode === 'cancel-request') onCancelRequest();
                 setConfirmMode(null);
               }}
             >
-              {confirmMode === 'unfollow' ? 'Unfollow' : 'Cancel Request'}
+              Remove
             </AlertDialogAction>
+            <AlertDialogCancel className="bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 rounded-full px-4 h-10 transition-all duration-200 mt-0 flex items-center justify-center">
+              Cancel
+            </AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

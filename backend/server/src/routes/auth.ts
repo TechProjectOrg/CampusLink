@@ -287,8 +287,16 @@ router.post('/signup/student', validatePassword, async (req: Request, res: Respo
     const createdUsers = await prisma.$queryRaw<
       { user_id: string; username: string; email: string; created_at: Date }[]
     >`
-      INSERT INTO users (username, email, password_hash, user_type, profile_photo_url, is_private)
-      VALUES (${username}, ${email}, ${passwordHash}, 'student'::"UserType", NULL, FALSE)
+      INSERT INTO users (
+        username,
+        email,
+        password_hash,
+        user_type,
+        profile_photo_url,
+        is_private,
+        updated_at
+      )
+      VALUES (${username}, ${email}, ${passwordHash}, 'student'::"UserType", NULL, FALSE, NOW())
       RETURNING user_id, username, email, created_at
     `;
 
@@ -337,9 +345,18 @@ router.post('/signup/student', validatePassword, async (req: Request, res: Respo
         sessionId: session.session_id,
       }),
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error('Error during student signup:', err);
-    return res.status(500).json({ message: 'Internal server error' });
+    return res.status(500).json({
+      message: 'Internal server error',
+      error: {
+        name: err?.name,
+        message: err?.message,
+        code: err?.code,
+        meta: err?.meta,
+        stack: err?.stack,
+      },
+    });
   }
 });
 
@@ -365,8 +382,16 @@ router.post('/signup/alumni', validatePassword, async (req: Request, res: Respon
     const createdUsers = await prisma.$queryRaw<
       { user_id: string; username: string; email: string; created_at: Date }[]
     >`
-      INSERT INTO users (username, email, password_hash, user_type, profile_photo_url, is_private)
-      VALUES (${username}, ${email}, ${passwordHash}, 'alumni'::"UserType", NULL, FALSE)
+      INSERT INTO users (
+        username,
+        email,
+        password_hash,
+        user_type,
+        profile_photo_url,
+        is_private,
+        updated_at
+      )
+      VALUES (${username}, ${email}, ${passwordHash}, 'alumni'::"UserType", NULL, FALSE, NOW())
       RETURNING user_id, username, email, created_at
     `;
 
@@ -415,9 +440,18 @@ router.post('/signup/alumni', validatePassword, async (req: Request, res: Respon
         sessionId: session.session_id,
       }),
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error('Error during alumni signup:', err);
-    return res.status(500).json({ message: 'Internal server error' });
+    return res.status(500).json({
+      message: 'Internal server error',
+      error: {
+        name: err?.name,
+        message: err?.message,
+        code: err?.code,
+        meta: err?.meta,
+        stack: err?.stack,
+      },
+    });
   }
 });
 

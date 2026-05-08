@@ -12,7 +12,7 @@ interface ProfilePhotoUploadProps {
   name: string;
   hasCustomPhoto: boolean;
   onPhotoChange: (payload: { file?: File; previewUrl?: string; remove?: boolean }) => Promise<void> | void;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'sm' | 'md' | 'lg' |'xl' | '2xl' | '3xl' ;
   editable?: boolean;
 }
 
@@ -46,12 +46,18 @@ export function ProfilePhotoUpload({
     sm: 'w-16 h-16',
     md: 'w-24 h-24',
     lg: 'w-32 h-32',
+    xl: 'w-40 h-40',
+    '2xl': 'w-52 h-52',
+    '3xl': 'w-[240px] h-[240px]',
   };
 
   const iconSizes = {
     sm: 'w-4 h-4',
     md: 'w-5 h-5',
     lg: 'w-6 h-6',
+    xl: 'w-8 h-8',
+    '2xl': 'w-12 h-12',
+    '3xl': 'w-16 h-16',
   };
 
   useEffect(() => {
@@ -138,8 +144,8 @@ export function ProfilePhotoUpload({
           }
         }}
       >
-        <Avatar className={`${sizeClasses[size]} ring-4 ring-white shadow-xl`}>
-          <AvatarImage src={displayImage} className="object-cover" />
+        <Avatar className={`${sizeClasses[size]} w-full h-full ring-4 ring-white shadow-xl rounded-full overflow-hidden`}>
+          <AvatarImage src={displayImage} className="w-full h-full object-cover rounded-full" />
           <AvatarFallback className="text-3xl bg-gradient-to-br from-blue-500 to-blue-600 text-white">
             {name ? name[0].toUpperCase() : <User className={iconSizes[size]} />}
           </AvatarFallback>

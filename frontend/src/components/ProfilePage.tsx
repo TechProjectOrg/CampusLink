@@ -17,7 +17,8 @@ import {
   Pencil,
   Trash2,
   Upload,
-  Eye,
+  Mail,
+  Link2,
 } from 'lucide-react';
 import { Student, Opportunity } from '../types';
 import type { FollowGraph } from '../App';
@@ -48,6 +49,7 @@ import { OpportunityCard } from './OpportunityCard';
 import { apiFetchProfilePosts, type UserPost } from '../lib/postsApi';
 import { LoadingIndicator } from './ui/LoadingIndicator';
 import { cacheProfilePosts, readCachedProfilePosts } from '../cache/socialCache';
+import { PageLayout } from './PageLayout';
 
 interface ProfilePageProps {
   student: Student;
@@ -688,6 +690,9 @@ export function ProfilePage({
   const featuredProject = loadedProjects[0];
   const featuredPost = profilePosts[0];
   const featuredAchievement = achievements[0];
+  const profileBranch = student.branch?.trim() || '';
+  const hasKnownBranch = Boolean(profileBranch && profileBranch.toLowerCase() !== 'unknown');
+  const hasKnownYear = student.year > 0;
   const hasAbout = Boolean(student.bio?.trim());
   const clubCount = societies.length;
   const hasFeaturedContent = Boolean(featuredProject || featuredPost || featuredAchievement);
@@ -695,11 +700,12 @@ export function ProfilePage({
   const showPostsSection = isOwnProfile || postsLoading || profilePosts.length > 0;
   const showProjectsSection = isOwnProfile || projectsLoading || loadedProjects.length > 0;
   const showExperienceSection = isOwnProfile || experiences.length > 0;
-  const showEducationSection = isOwnProfile || Boolean(student.branch || student.year);
+  const showEducationSection = isOwnProfile || hasKnownBranch || hasKnownYear;
   const showSkillsSection = isOwnProfile || skillsLoading || displaySkills.length > 0;
   const showCertificationsSection = isOwnProfile || certificationsLoading || loadedCertifications.length > 0;
   const showClubsSection = isOwnProfile || societies.length > 0;
   const showAchievementsSection = isOwnProfile || achievements.length > 0;
+  const profileSectionCardClass = 'box-border flex w-full min-w-0 flex-col gap-4 overflow-hidden break-words rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5 lg:p-6';
 
   const SectionHeader = ({
     title,
@@ -710,13 +716,13 @@ export function ProfilePage({
     subtitle?: string;
     onAdd?: () => void;
   }) => (
-    <div className="mb-4 flex items-end justify-between gap-4">
-      <div>
-        <h2 className="text-xl font-semibold tracking-tight text-slate-950">{title}</h2>
+    <div className="flex w-full items-center justify-between gap-4">
+      <div className="min-w-0">
+        <h2 className="break-words text-lg font-semibold tracking-tight text-slate-950 sm:text-xl">{title}</h2>
         {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
       </div>
       {isOwnProfile && onAdd ? (
-        <Button variant="outline" size="sm" onClick={onAdd} className="shrink-0 rounded-full border-slate-200 bg-white shadow-sm hover:bg-slate-50">
+        <Button size="sm" onClick={onAdd} className="ml-auto shrink-0 rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none px-5 h-9 font-bold">
           <Plus className="mr-1.5 h-4 w-4" />
           Add
         </Button>
@@ -755,190 +761,169 @@ export function ProfilePage({
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-24 md:pb-8">
-      <div className="mx-auto max-w-5xl space-y-8 px-4 py-6 sm:px-6 lg:px-8">
-        <section className="overflow-hidden rounded-[1.75rem] border border-slate-200/80 bg-white shadow-xl shadow-slate-200/70">
-          <div className="relative h-48 bg-gradient-to-br from-sky-600 via-indigo-500 to-emerald-400 sm:h-60">
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.35),transparent_28%),linear-gradient(to_top,rgba(15,23,42,0.72),rgba(15,23,42,0.12))]" />
-            <div className="absolute bottom-6 left-6 hidden max-w-xl text-white sm:block">
-              <p className="text-sm font-medium uppercase tracking-[0.18em] text-white/75">Campus profile</p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight">{student.name}</h1>
-            </div>
-            {isOwnProfile ? (
-              <button
-                type="button"
+    <PageLayout className="bg-slate-50 pb-24 md:pb-8" contentClassName="py-4 sm:py-5 lg:py-6">
+      <div className="mx-auto grid w-full max-w-[1000px] [grid-template-columns:1fr] gap-4">
+        {/* Profile Identity Section - Rebuilt from scratch */}
+        <section className="cl-profile-header-card relative overflow-hidden bg-white border border-slate-200 rounded-3xl shadow-sm mb-6">
+          {/* Banner area */}
+          <div className="cl-banner-area h-40 sm:h-60 w-full bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-700 relative">
+            <div className="absolute inset-0 bg-black/10" />
+            {isOwnProfile && (
+              <button 
                 onClick={() => setActiveModal('editProfile')}
-                className="absolute right-5 top-5 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/92 text-slate-700 shadow-lg transition hover:scale-[1.02] hover:bg-white"
-                aria-label="Edit profile"
+                className="cl-edit-banner-btn absolute top-4 right-4 p-2.5 bg-black/20 hover:bg-black/40 text-white rounded-full transition-all"
+                title="Edit Banner"
               >
-                <Edit2 className="h-4 w-4" />
+                <Edit2 className="w-5 h-5" />
               </button>
-            ) : null}
+            )}
           </div>
 
-          <div className="px-5 pb-6 sm:px-8">
-            <div className="-mt-16 flex flex-col gap-5 sm:-mt-14 sm:flex-row sm:items-end sm:justify-between">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-                <ProfilePhotoUpload
-                  currentPhoto={displayedProfilePhoto}
-                  hasCustomPhoto={hasCustomProfilePhoto}
-                  name={student.name}
-                  editable={isOwnProfile}
-                  onPhotoChange={handleProfilePhotoChange}
-                />
-                <div className="pt-2 sm:pb-1">
-                  <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:hidden">{student.name}</h1>
-                  <p className="mt-2 max-w-2xl text-base font-normal text-slate-700 sm:text-lg">
+          <div className="cl-header-content relative px-6 sm:px-10 pt-6 pb-20">
+            {/* Header Action Buttons - Comfortable top margin from the card border */}
+            <div className="cl-header-actions absolute top-10 right-6 sm:top-12 sm:right-10 flex flex-wrap gap-3 z-10">
+              {!isOwnProfile ? (
+                <>
+                  <FollowButton
+                    targetName={student.name}
+                    accountType={student.accountType}
+                    isFollowing={isFollowing}
+                    isFollower={isFollower}
+                    requestStatus={requestStatus}
+                    onFollow={() => onFollow(student.id, student.accountType)}
+                    onUnfollow={() => onUnfollow(student.id)}
+                    onCancelRequest={() => onCancelRequest(student.id)}
+                  />
+                  <Button 
+                    onClick={() => onMessage?.(student.id)}
+                    className="rounded-full gradient-primary px-6 h-11 font-bold text-white shadow-md hover:shadow-lg transition-all border-none"
+                  >
+                    <MessageCircle className="mr-2 h-4 w-4" />
+                    Message
+                  </Button>
+                </>
+              ) : (
+                <Button 
+                  onClick={() => setActiveModal('editProfile')}
+                  className="rounded-full gradient-primary px-6 h-11 font-bold text-white shadow-md hover:shadow-lg transition-all border-none"
+                >
+                  <Edit2 className="mr-2 h-4 w-4" />
+                  Edit Profile
+                </Button>
+              )}
+            </div>
+
+            <div className="flex flex-col md:flex-row items-center gap-8 md:gap-12 -mt-20 sm:-mt-24 mb-0">
+              {/* Left Side: Avatar */}
+              <div className="cl-avatar-circle-frame relative w-[160px] h-[160px] sm:w-[208px] sm:h-[208px] shrink-0">
+                <div className="cl-avatar-mask w-full h-full rounded-full border-[6px] border-white shadow-xl overflow-hidden bg-white">
+                  <ProfilePhotoUpload
+                    currentPhoto={displayedProfilePhoto}
+                    hasCustomPhoto={hasCustomProfilePhoto}
+                    name={student.name}
+                    editable={isOwnProfile}
+                    onPhotoChange={handleProfilePhotoChange}
+                    size="2xl" 
+                  />
+                </div>
+              </div>
+
+              {/* Right Side: Centered Details */}
+              <div className="flex-1 flex flex-col justify-center w-full pt-8 md:pt-32">
+                <div className="space-y-4 text-center md:text-left">
+                  {/* 1. Student Name */}
+                  <h1 className="text-3xl sm:text-[42px] font-bold text-slate-900 tracking-tight leading-tight">
+                    {student.name}
+                  </h1>
+
+                  {/* 2. Headline Text */}
+                  <p className="text-lg sm:text-xl text-slate-600 font-medium leading-relaxed max-w-2xl">
                     {student.headline || (isOwnProfile ? 'Add a headline that tells campus what you are building.' : 'Campus community member')}
                   </p>
-                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-sm font-normal text-slate-500">
-                    <span className="inline-flex items-center gap-1.5">
-                      <GraduationCap className="h-4 w-4" />
-                      {student.branch || 'College'}
-                    </span>
-                    <span className="inline-flex items-center gap-1.5">
-                      <Calendar className="h-4 w-4" />
-                      Year {student.year || '-'}
-                    </span>
-                    <span className="inline-flex items-center gap-1.5">
-                      <MapPin className="h-4 w-4" />
-                      Campus
-                    </span>
-                  </div>
-                </div>
-              </div>
 
-              <div className="flex flex-wrap gap-2">
-                {!isOwnProfile ? (
-                  <>
-                    <div className="rounded-full bg-white shadow-sm">
-                      <FollowButton
-                      targetName={student.name}
-                      accountType={student.accountType}
-                      isFollowing={isFollowing}
-                      isFollower={isFollower}
-                      requestStatus={requestStatus}
-                      onFollow={() => onFollow(student.id, student.accountType)}
-                      onUnfollow={() => onUnfollow(student.id)}
-                      onCancelRequest={() => onCancelRequest(student.id)}
-                      />
+                  {/* 3. Info Row: Location, Year, Email */}
+                  <div className="flex flex-wrap items-center gap-8 mt-4">
+                    <div className="flex items-center gap-1.5 text-slate-500 text-sm font-semibold">
+                      <MapPin className="h-4 w-4 shrink-0 text-slate-400" />
+                      <span>{hasKnownBranch ? profileBranch : 'Branch not added'}</span>
                     </div>
-                    <Button variant="outline" onClick={() => onMessage?.(student.id)} className="rounded-full border-slate-200 bg-white shadow-sm hover:bg-slate-50">
-                      <MessageCircle className="mr-2 h-4 w-4" />
-                      Message
-                    </Button>
-                  </>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="hide-scrollbar mt-4 flex flex-nowrap items-center gap-4 overflow-x-auto whitespace-nowrap border-t border-slate-100 pt-4 text-sm font-normal text-slate-500">
-              {[
-                ['Followers', followersCount],
-                ['Following', followingCount],
-                ['Projects', loadedProjects.length],
-                ['Clubs', clubCount],
-              ].map(([label, value]) => (
-                <div key={label} className="inline-flex items-center gap-1.5">
-                  <span className="text-sm font-medium text-slate-900">{value}</span>
-                  <span>{label}</span>
-                </div>
-              ))}
-            </div>
-
-            {hasAbout || isOwnProfile ? (
-              <div className="mt-5 border-t border-slate-100 pt-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <h2 className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">About</h2>
-                    {hasAbout ? (
-                      <>
-                        <p className={`mt-3 max-w-3xl text-sm leading-7 text-slate-700 ${isAboutExpanded ? '' : 'line-clamp-3'}`}>{student.bio}</p>
-                        {student.bio && student.bio.length > 180 ? (
-                          <button
-                            type="button"
-                            onClick={() => setIsAboutExpanded((value) => !value)}
-                            className="mt-2 text-sm font-medium text-blue-600 hover:text-blue-700"
-                          >
-                            {isAboutExpanded ? 'See less' : 'See more'}
-                          </button>
-                        ) : null}
-                      </>
-                    ) : (
-                      <p className="mt-3 text-sm leading-7 text-slate-500">Add a short intro that makes the profile feel like you.</p>
-                    )}
+                    <div className="flex items-center gap-1.5 text-slate-500 text-sm font-semibold">
+                      <Calendar className="h-4 w-4 shrink-0 text-slate-400" />
+                      <span>{hasKnownYear ? `Year ${student.year}` : 'Year not added'}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-slate-500 text-sm font-semibold">
+                      <Mail className="h-4 w-4 shrink-0 text-slate-400" />
+                      <span>{student.email}</span>
+                    </div>
                   </div>
-                  {isOwnProfile ? (
-                    <button
-                      type="button"
-                      onClick={() => setActiveModal('editProfile')}
-                      className="rounded-full p-2 text-slate-400 transition hover:bg-blue-50 hover:text-blue-600"
-                      aria-label="Edit profile details"
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </button>
-                  ) : null}
+
+                  {/* 4. Stats Row: Followers/Following/Projects/Clubs */}
+                  <div className="flex flex-wrap items-center gap-8 mt-4">
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <span className="font-bold text-slate-900">{followersCount}</span>
+                      <span className="text-slate-500 font-medium">Followers</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <span className="font-bold text-slate-900">{followingCount}</span>
+                      <span className="text-slate-500 font-medium">Following</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <span className="font-bold text-slate-900">{loadedProjects.length}</span>
+                      <span className="text-slate-500 font-medium">Projects</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <span className="font-bold text-slate-900">{clubCount}</span>
+                      <span className="text-slate-500 font-medium">Clubs</span>
+                    </div>
+                  </div>
                 </div>
               </div>
-            ) : null}
+            </div>
+
           </div>
         </section>
 
-        {showFeaturedSection ? (
-        <section className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
-          <SectionHeader title="Featured" subtitle="A quick glimpse of recent work and wins" />
-          {hasFeaturedContent ? (
-            <div className="space-y-4">
-              <button
-                type="button"
-                onClick={() => featuredPost && onOpenPost?.(featuredPost)}
-                className="group/highlight block min-h-52 w-full overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-800 to-blue-900 p-6 text-left text-white shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl"
-              >
-                <p className="text-sm font-medium text-blue-100">{featuredProject ? 'Featured project' : featuredPost ? 'Featured post' : 'Achievement'}</p>
-                <h3 className="mt-3 text-2xl font-semibold tracking-tight">
-                  {featuredProject?.title || featuredPost?.title || featuredAchievement?.title}
-                </h3>
-                <p className="mt-3 line-clamp-3 max-w-3xl text-sm leading-6 text-white/75">
-                  {featuredProject?.description || featuredPost?.description || featuredAchievement?.description || 'A highlighted milestone from this profile.'}
-                </p>
-                <span className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-white">
-                  View highlight
-                  <ExternalLink className="h-4 w-4 transition group-hover/highlight:translate-x-0.5" />
-                </span>
-              </button>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl bg-sky-50 px-4 py-3">
-                  <p className="text-base font-medium text-sky-800">{profilePosts.length} posts shared</p>
-                </div>
-                <div className="rounded-2xl bg-emerald-50 px-4 py-3">
-                  <p className="text-base font-medium text-emerald-800">{displaySkills.length} skills listed</p>
-                </div>
-                <div className="rounded-2xl bg-amber-50 px-4 py-3">
-                  <p className="text-base font-medium text-amber-800">{achievements.length} achievements</p>
+        {/* About Section - Visual Consistency with other sections */}
+        {(hasAbout || isOwnProfile) && (
+          <section className={profileSectionCardClass}>
+            <SectionHeader title="About" onAdd={() => setActiveModal('editProfile')} />
+            {hasAbout ? (
+              <div className="cl-about-content text-slate-700 leading-relaxed text-[15px] sm:text-base">
+                <div className="cl-about-text-wrapper relative">
+                  <p className={`cl-about-text ${isAboutExpanded ? '' : 'line-clamp-4'}`}>
+                    {student.bio}
+                  </p>
+                  {student.bio && student.bio.length > 250 && (
+                    <button
+                      onClick={() => setIsAboutExpanded(!isAboutExpanded)}
+                      className="cl-see-more-btn mt-2 text-sm font-bold text-blue-600 hover:underline"
+                    >
+                      {isAboutExpanded ? 'See less' : '...see more'}
+                    </button>
+                  )}
                 </div>
               </div>
-            </div>
-          ) : (
-            <EmptyState message="Nothing featured yet. Add projects, posts, or achievements to bring this area to life." />
-          )}
-        </section>
-        ) : null}
+            ) : (
+              <EmptyState message="Add a short introduction about yourself." />
+            )}
+          </section>
+        )}
 
         {showPostsSection ? (
-        <section className="space-y-4">
-          <SectionHeader title="Activity" subtitle="Recent posts and campus updates" />
+        <section className={profileSectionCardClass}>
+          <SectionHeader title="Activity" onAdd={() => setActiveModal('newPost')} />
           {postsLoading ? (
             <LoadingIndicator label="Loading posts..." className="justify-start" size={20} />
           ) : profilePosts.length > 0 ? (
             <>
-              <div className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
+              <div className="overflow-hidden">
                 <div
                   className="hide-scrollbar w-full overflow-x-auto overscroll-x-contain pb-2"
                   onWheel={handleHorizontalWheel}
                 >
-                  <div className="flex w-max snap-x snap-mandatory gap-5">
+                  <div className="flex w-full snap-x snap-mandatory gap-4 sm:w-max sm:gap-5">
                     {profilePosts.slice(0, 8).map((post) => (
-                      <div key={post.id} className="w-[22rem] shrink-0 snap-start">
+                      <div key={post.id} className="w-full shrink-0 snap-start sm:w-[22rem]">
                         <OpportunityCard
                           opportunity={post}
                           currentUserId={currentUserId}
@@ -964,38 +949,38 @@ export function ProfilePage({
               </Button>
             </>
           ) : (
-            <EmptyState message="No posts yet. Share a campus update, project note, or opportunity." />
+            <EmptyState message="Share updates, posts, and campus activity." />
           )}
         </section>
         ) : null}
 
         {showProjectsSection ? (
-        <section className="space-y-4">
-          <SectionHeader title="Projects" subtitle="Selected builds, prototypes, and experiments" onAdd={() => setActiveModal('project')} />
+        <section className={profileSectionCardClass}>
+          <SectionHeader title="Projects" onAdd={() => setActiveModal('project')} />
           {projectsLoading ? (
             <LoadingIndicator label="Loading projects..." className="justify-start" size={20} />
           ) : loadedProjects.length > 0 ? (
             <>
-              <div className="overflow-hidden rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5">
+              <div className="overflow-hidden">
                 <div
                   className="hide-scrollbar w-full overflow-x-auto overscroll-x-contain pb-2"
                   onWheel={handleHorizontalWheel}
                 >
-                <div className="flex w-max snap-x snap-mandatory gap-4">
+                <div className="flex w-full snap-x snap-mandatory gap-4 sm:w-max">
                 {loadedProjects.map((project) => {
                   const projectLink = project.liveUrl || project.githubUrl || (project as Project & { link?: string | null }).link;
                   return (
-                    <article key={project.id} className="group flex w-[20rem] shrink-0 snap-start flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg">
+                    <article key={project.id} className="group flex w-full shrink-0 snap-start flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg sm:w-[20rem]">
                       {project.imageUrl ? (
-                        <ImageWithFallback src={project.imageUrl} alt={project.title} className="h-40 w-full object-cover" />
+                        <ImageWithFallback src={project.imageUrl} alt={project.title} className="aspect-video w-full object-cover" />
                       ) : (
-                        <div className="flex h-40 items-center justify-center bg-gradient-to-br from-indigo-50 via-sky-50 to-emerald-50">
+                        <div className="flex aspect-video w-full items-center justify-center bg-gradient-to-br from-indigo-50 via-sky-50 to-emerald-50">
                           <ExternalLink className="h-10 w-10 text-indigo-300" />
                         </div>
                       )}
                       <div className="flex flex-1 flex-col p-4">
                         <div className="flex items-start justify-between gap-3">
-                          <h3 className="font-semibold text-slate-950">{project.title}</h3>
+                          <h3 className="break-words text-base font-semibold text-slate-950">{project.title}</h3>
                           <ItemActions onEdit={() => handleEditProject(project)} onDelete={() => handleDeleteProject(project.id)} />
                         </div>
                         <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600">{project.description}</p>
@@ -1024,24 +1009,24 @@ export function ProfilePage({
               </Button>
             </>
           ) : (
-            <EmptyState message="No projects yet. Start a showcase for the work you are proud of." />
+            <EmptyState message="Showcase your projects and work." />
           )}
         </section>
         ) : null}
 
         {showExperienceSection || showEducationSection ? (
-        <section className="grid gap-8 lg:grid-cols-2">
+        <section className="grid w-full [grid-template-columns:1fr] gap-4">
           {showExperienceSection ? (
-          <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+          <div className={profileSectionCardClass}>
             <SectionHeader title="Experience" onAdd={() => setActiveModal('experience')} />
             {experiences.length > 0 ? (
-              <div className="space-y-5">
+              <div className="flex flex-col gap-5">
                 {experiences.map((exp) => (
                   <div key={exp.id} className="group relative border-l-2 border-blue-100 pl-5">
                     <span className="absolute -left-[9px] top-1 h-4 w-4 rounded-full border-4 border-white bg-blue-500 shadow" />
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <h3 className="font-semibold text-slate-950">{exp.roleTitle}</h3>
+                        <h3 className="break-words font-semibold text-slate-950">{exp.roleTitle}</h3>
                         <p className="text-sm text-slate-600">{exp.organization}</p>
                         <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">
                           {format(exp.startDate, 'MMM yyyy')} - {exp.isCurrentlyWorking ? 'Present' : exp.endDate ? format(exp.endDate, 'MMM yyyy') : 'Present'}
@@ -1054,27 +1039,35 @@ export function ProfilePage({
                 ))}
               </div>
             ) : (
-              <EmptyState message="No experience yet. Add internships, volunteer roles, or campus work." />
+              <EmptyState message="Add your work and internship experience." />
             )}
           </div>
           ) : null}
 
           {showEducationSection ? (
-          <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
-            <SectionHeader title="Education" />
-            <div className="relative border-l-2 border-emerald-100 pl-5">
-              <span className="absolute -left-[9px] top-1 h-4 w-4 rounded-full border-4 border-white bg-emerald-500 shadow" />
-              <h3 className="font-semibold text-slate-950">{student.branch || 'Degree / Branch'}</h3>
-              <p className="text-sm text-slate-600">CampusLynk College</p>
-              <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">Year {student.year || '-'}</p>
-            </div>
+          <div className={profileSectionCardClass}>
+            <SectionHeader 
+              title="Education" 
+              onAdd={() => setActiveModal('education')} 
+            />
+            {hasKnownBranch || hasKnownYear ? (
+              <div className="relative border-l-2 border-emerald-100 pl-5">
+                <span className="absolute -left-[9px] top-1 h-4 w-4 rounded-full border-4 border-white bg-emerald-500 shadow" />
+                {hasKnownBranch && <h3 className="break-words font-semibold text-slate-950">{profileBranch}</h3>}
+                <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                  {hasKnownYear ? `Year ${student.year}` : ''}
+                </p>
+              </div>
+            ) : (
+              <EmptyState message="Highlight your academic background." />
+            )}
           </div>
           ) : null}
         </section>
         ) : null}
 
         {showSkillsSection ? (
-        <section className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+        <section className={profileSectionCardClass}>
           <SectionHeader title="Skills" onAdd={() => setActiveModal('skill')} />
           {skillsLoading ? (
             <LoadingIndicator label="Loading skills..." className="justify-start" size={20} />
@@ -1092,27 +1085,27 @@ export function ProfilePage({
               ))}
             </div>
           ) : (
-            <EmptyState message="No skills yet. Add the tools and topics people should find you for." />
+            <EmptyState message="Add your skills to showcase your strengths." />
           )}
         </section>
         ) : null}
 
         {showCertificationsSection || showClubsSection ? (
-        <section className="grid gap-8 lg:grid-cols-2">
+        <section className="grid w-full [grid-template-columns:1fr] gap-4">
           {showCertificationsSection ? (
-          <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+          <div className={profileSectionCardClass}>
             <SectionHeader title="Certifications" onAdd={() => setActiveModal('certification')} />
             {certificationsLoading ? (
               <LoadingIndicator label="Loading certifications..." className="justify-start" size={20} />
             ) : loadedCertifications.length > 0 ? (
-              <div className="space-y-3">
+              <div className="flex flex-col gap-3">
                 {loadedCertifications.map((cert) => (
                   <div key={cert.id} className="group flex items-center gap-4 rounded-2xl p-3 transition hover:bg-slate-50">
                     <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
                       <Trophy className="h-5 w-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <h3 className="truncate font-medium text-slate-950">{cert.name}</h3>
+                      <h3 className="break-words font-medium text-slate-950">{cert.name}</h3>
                       <p className="text-sm text-slate-500">{cert.issuer || 'Certification issuer'}</p>
                     </div>
                     <div className="flex items-center gap-1">
@@ -1127,13 +1120,13 @@ export function ProfilePage({
                 ))}
               </div>
             ) : (
-              <EmptyState message="No certifications yet. Add credentials that back up your work." />
+              <EmptyState message="Add certifications and credentials." />
             )}
           </div>
           ) : null}
 
           {showClubsSection ? (
-          <div className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+          <div className={profileSectionCardClass}>
             <SectionHeader title="Clubs & Societies" onAdd={() => setActiveModal('society')} />
             {societies.length > 0 ? (
               <div className="grid gap-3 sm:grid-cols-2">
@@ -1145,7 +1138,7 @@ export function ProfilePage({
                           <Users className="h-5 w-5" />
                         </div>
                         <div>
-                          <h3 className="font-medium text-slate-950">{soc.societyName}</h3>
+                          <h3 className="break-words font-medium text-slate-950">{soc.societyName}</h3>
                           <p className="text-sm text-slate-500">{soc.role}</p>
                         </div>
                       </div>
@@ -1155,7 +1148,7 @@ export function ProfilePage({
                 ))}
               </div>
             ) : (
-              <EmptyState message="No clubs yet. Add communities, cells, or societies you are part of." />
+              <EmptyState message="Show your communities and campus involvement." />
             )}
           </div>
           ) : null}
@@ -1163,7 +1156,7 @@ export function ProfilePage({
         ) : null}
 
         {showAchievementsSection ? (
-        <section className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm sm:p-6">
+        <section className={profileSectionCardClass}>
           <SectionHeader title="Achievements" onAdd={() => setActiveModal('achievement')} />
           {achievements.length > 0 ? (
             <div className="grid gap-3 sm:grid-cols-2">
@@ -1174,7 +1167,7 @@ export function ProfilePage({
                       <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-100 text-orange-700">
                         <Award className="h-5 w-5" />
                       </div>
-                      <h3 className="font-semibold text-slate-950">{ach.title}</h3>
+                      <h3 className="break-words font-semibold text-slate-950">{ach.title}</h3>
                       <p className="text-sm text-slate-500">{ach.year}</p>
                       {ach.description ? <p className="mt-2 text-sm leading-6 text-slate-600">{ach.description}</p> : null}
                     </div>
@@ -1184,7 +1177,7 @@ export function ProfilePage({
               ))}
             </div>
           ) : (
-            <EmptyState message="No achievements yet. Add awards, hackathon wins, or milestones." />
+            <EmptyState message="Highlight awards and accomplishments." />
           )}
         </section>
         ) : null}
@@ -1223,7 +1216,7 @@ export function ProfilePage({
           </div>
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
-            <Button variant="outline" onClick={handleSaveProfile}>Save Changes</Button>
+            <Button onClick={handleSaveProfile} className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold">Save Changes</Button>
           </div>
         </div>
       </Modal>
@@ -1244,7 +1237,7 @@ export function ProfilePage({
           </div>
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
-            <Button variant="outline" onClick={handleSaveProfile}>Save</Button>
+            <Button onClick={handleSaveProfile} className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold">Save</Button>
           </div>
         </div>
       </Modal>
@@ -1263,7 +1256,7 @@ export function ProfilePage({
           </div>
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
-            <Button variant="outline" onClick={handleAddSkill} disabled={!newSkillName.trim()}>
+            <Button onClick={handleAddSkill} disabled={!newSkillName.trim()} className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold">
               Add Skill
             </Button>
           </div>
@@ -1328,9 +1321,9 @@ export function ProfilePage({
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button
-              variant="outline"
               onClick={handleAddExperience}
               disabled={!newExperience.roleTitle?.trim() || !newExperience.organization?.trim()}
+              className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold"
             >
               {editingItem ? 'Update' : 'Add'} Experience
             </Button>
@@ -1389,7 +1382,7 @@ export function ProfilePage({
                 placeholder="Add technology"
                 onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddProjectTag())}
               />
-              <Button type="button" variant="outline" onClick={handleAddProjectTag}>Add</Button>
+              <Button type="button" onClick={handleAddProjectTag} className="rounded-full gradient-primary text-white shadow-sm hover:shadow-md transition-all border-none font-bold px-4">Add</Button>
             </div>
             {newProject.tags && newProject.tags.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-2">
@@ -1423,9 +1416,9 @@ export function ProfilePage({
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button
-              variant="outline"
               onClick={handleAddProject}
               disabled={!newProject.title?.trim() || !newProject.description?.trim()}
+              className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold"
             >
               {editingItem ? 'Update' : 'Add'} Project
             </Button>
@@ -1492,9 +1485,9 @@ export function ProfilePage({
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button
-              variant="outline"
               onClick={handleAddCertification}
               disabled={!newCertification.name?.trim()}
+              className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold"
             >
               {editingItem ? 'Update' : 'Add'} Certification
             </Button>
@@ -1542,9 +1535,9 @@ export function ProfilePage({
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button
-              variant="outline"
               onClick={handleAddSociety}
               disabled={!newSociety.societyName?.trim() || !newSociety.role?.trim()}
+              className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold"
             >
               {editingItem ? 'Update' : 'Add'} Society
             </Button>
@@ -1586,15 +1579,15 @@ export function ProfilePage({
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button
-              variant="outline"
               onClick={handleAddAchievement}
               disabled={!newAchievement.title?.trim() || !newAchievement.year}
+              className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold"
             >
               {editingItem ? 'Update' : 'Add'} Achievement
             </Button>
           </div>
         </div>
       </Modal>
-    </div>
+    </PageLayout>
   );
 }

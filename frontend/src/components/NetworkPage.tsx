@@ -16,6 +16,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from './ui/alert-dialog';
+import { PageLayout } from './PageLayout';
 
 import { UserCard } from './network/UserCard';
 
@@ -84,8 +85,7 @@ export function NetworkPage({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+    <PageLayout maxWidth="4xl" contentClassName="py-6 space-y-6">
         <div className="animate-slide-in-down">
           <h1 className="text-gray-900 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
             Network
@@ -206,8 +206,7 @@ export function NetworkPage({
                        ) : (
                        <Button
                          size="sm"
-                         variant="outline"
-                         className="rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10"
+                         className="rounded-xl bg-red-50 text-red-600 border border-red-200 hover:bg-red-600 hover:text-white transition-all duration-200 shadow-none"
                         
                          onClick={() => setUnfollowUserId(user.id)}
                          >
@@ -224,7 +223,6 @@ export function NetworkPage({
           </TabsContent>
 
         </Tabs>
-      </div>
 
       <AlertDialog
         open={removeFollowerId !== null || unfollowUserId !== null || cancelRequestId !== null}
@@ -253,9 +251,9 @@ export function NetworkPage({
                 : 'You will no longer be sending a follow request.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogFooter className="flex items-center justify-center gap-4 mt-6 sm:justify-center">
             <AlertDialogAction
+              className="bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 hover:text-red-700 hover:border-red-300 focus:outline-none focus:ring-0 active:bg-red-100 transition-none rounded-full h-10 px-4 font-semibold flex items-center justify-center shadow-none"
               onClick={() => {
                 if (removeFollowerId !== null) {
                   onRemoveFollower(removeFollowerId);
@@ -268,13 +266,15 @@ export function NetworkPage({
                   setCancelRequestId(null);
                 }
               }}
-              variant="destructive"
             >
-              {removeFollowerId !== null ? 'Remove' : unfollowUserId !== null ? 'Unfollow' : 'Cancel Request'}
+              Remove
             </AlertDialogAction>
+            <AlertDialogCancel className="bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 rounded-full px-4 h-10 transition-all duration-200 mt-0 flex items-center justify-center">
+              Cancel
+            </AlertDialogCancel>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </PageLayout>
   );
 }

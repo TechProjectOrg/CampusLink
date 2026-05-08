@@ -120,7 +120,7 @@ export function ProfileProjectsPage({ student, onBack }: ProfileProjectsPageProp
         ) : (
           <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
             <ExternalLink className="mx-auto h-10 w-10 text-indigo-300" />
-            <p className="mt-4 font-medium text-slate-700">{student.name} has not added projects yet.</p>
+            <p className="mt-4 font-medium text-slate-700">Showcase your projects and work.</p>
           </div>
         )}
       </div>

@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { CreateUnifiedPostModal } from './CreateUnifiedPostModal';
 import { LoadingState } from './LoadingState';
 import { LoadingIndicator } from './ui/LoadingIndicator';
+import { PageLayout } from './PageLayout';
 
 interface FeedPageProps {
   opportunities: Opportunity[];
@@ -68,8 +69,8 @@ export function FeedPage({
   const filteredOpportunities = opportunities;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
-      <div className="max-w-7xl mx-auto px-4 pb-6 pt-0">
+    <>
+      <PageLayout contentClassName="pb-6 pt-0">
         <div className="space-y-6">
           {/* Main Feed */}
           <div className="space-y-6">
@@ -191,7 +192,7 @@ export function FeedPage({
             </div>
           </div>
         </div>
-      </div>
+      </PageLayout>
       <CreateUnifiedPostModal
         isOpen={isCreateUnifiedModalOpen}
         onClose={() => setIsCreateUnifiedModalOpen(false)}
@@ -201,6 +202,6 @@ export function FeedPage({
         currentUser={currentUser}
         initialTab={createTab}
       />
-    </div>
+    </>
   );
 }
