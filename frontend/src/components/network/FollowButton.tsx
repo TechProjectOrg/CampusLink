@@ -72,12 +72,12 @@ export function FollowButton({
         size="sm"
         className={
           isFollowing
-            ? 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-600 hover:text-white hover:border-red-600 rounded-full px-6 h-11 font-medium transition-all duration-200 shadow-none flex items-center justify-center'
+            ? 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-50 hover:text-red-600 hover:border-red-200 active:bg-red-50 active:text-red-600 focus:bg-red-50 focus:text-red-600 focus:outline-none focus:ring-0 disabled:opacity-100 rounded-full px-6 h-11 font-medium transition-none shadow-none flex items-center justify-center'
             : label === 'Requested'
             ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl rounded-full px-6 h-11 font-medium flex items-center justify-center'
             : 'gradient-primary shadow-lg hover:shadow-xl rounded-full px-6 h-11 font-medium flex items-center justify-center'
         }
-        variant="default"
+        variant="ghost"
         title={helperText ?? undefined}
       >
         {label}
