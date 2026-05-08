@@ -2408,9 +2408,9 @@ export default function App() {
       <div className="flex flex-1 min-w-0">
         <div className="w-full min-w-0">
           {activeTab === 'feed' ? (
-          <div className="flex w-full xl:max-w-7xl">
+          <div className="mx-auto flex w-full max-w-[1400px] justify-center">
             {/* Profile Section (Left) - Visible on XL screens and up */}
-             <div className="hide-scrollbar w-[280px] min-w-[280px] px-1 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)] hidden xl:block flex-shrink-0" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <div className="hide-scrollbar hidden xl:block flex-shrink-0 w-[280px] px-2 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)]" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               <ProfileCard
                 student={currentUser}
                 followerCount={currentFollowerCount}
@@ -2423,7 +2423,7 @@ export default function App() {
             {/* Feed Section (Center) - Expands to fill space */}
             <div
               ref={feedViewportRef}
-              className="px-1 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)] w-full lg:w-3/4 xl:w-1/2"
+              className="flex-1 min-w-0 max-w-[720px] px-2 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)]"
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               onScroll={handleFeedScroll}
             >
@@ -2454,7 +2454,7 @@ export default function App() {
               <div ref={feedLoadMoreTriggerRef} className="h-1 w-full" aria-hidden="true" />
             </div>
             {/* Suggestions Section (Right) - Visible on LG screens and up */}
-            <div className="w-1/4 px-1 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)] hidden lg:block" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <div className="hide-scrollbar hidden lg:block flex-shrink-0 w-[280px] px-2 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)]" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               <SuggestionsCard
                 students={students}
                 opportunities={opportunities}

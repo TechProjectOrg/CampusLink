@@ -19,6 +19,7 @@ interface FollowButtonProps {
   isFollowing: boolean;
   isFollower: boolean;
   requestStatus: RequestStatus;
+  compact?: boolean;
 
   onFollow: () => void;
   onUnfollow: () => void;
@@ -31,6 +32,7 @@ export function FollowButton({
   isFollowing,
   isFollower,
   requestStatus,
+  compact = false,
   onFollow,
   onUnfollow,
   onCancelRequest,
@@ -71,9 +73,17 @@ export function FollowButton({
         onClick={handleClick}
         size="sm"
         className={
-          label === 'Following' || label === 'Requested'
-            ? 'w-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl rounded-xl'
-            : 'w-full gradient-primary shadow-lg hover:shadow-xl rounded-xl'
+          compact
+            ? (
+              label === 'Following' || label === 'Requested'
+                ? 'h-7 rounded-full bg-slate-100 border border-slate-200 px-3 text-xs font-medium text-slate-600 shadow-none transition-all hover:bg-slate-200 hover:text-slate-800'
+                : 'h-7 rounded-full bg-primary/10 border border-primary/20 px-3 text-xs font-semibold text-primary shadow-none transition-all hover:bg-primary hover:text-white hover:border-primary'
+            )
+            : (
+              label === 'Following' || label === 'Requested'
+                ? 'w-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl rounded-xl'
+                : 'w-full gradient-primary shadow-lg hover:shadow-xl rounded-xl'
+            )
         }
         variant="default"
         title={helperText ?? undefined}
