@@ -74,6 +74,13 @@ export interface UnifiedSearchResult {
   clubs: SearchClubResult[];
 }
 
+export interface SuggestedUserResult {
+  id: string;
+  name: string;
+  mutual_count: number;
+  common_club: string | null;
+}
+
 // ============================================================
 // Search
 // ============================================================
@@ -135,6 +142,32 @@ export async function apiGetFollowGraph(token?: string): Promise<FollowGraphResp
   }
 
   return (await response.json()) as FollowGraphResponse;
+}
+
+export async function apiGetSuggestedUsers(token?: string, limit = 5): Promise<SuggestedUserResult[]> {
+  const params = new URLSearchParams({ limit: String(limit) });
+  const response = await safeFetch(`${API_BASE}/network/suggestions?${params}`, {
+    headers: { ...authHeaders(token) },
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Failed to fetch suggested users');
+  }
+
+  return (await response.json()) as SuggestedUserResult[];
+}
+
+export async function apiDismissSuggestedUser(targetUserId: string, token?: string): Promise<void> {
+  const response = await safeFetch(`${API_BASE}/network/suggestions/${encodeURIComponent(targetUserId)}/dismiss`, {
+    method: 'POST',
+    headers: { ...authHeaders(token) },
+  });
+
+  if (!response.ok && response.status !== 204) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Failed to dismiss suggested user');
+  }
 }
 
 // ============================================================

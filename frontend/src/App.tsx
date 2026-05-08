@@ -32,6 +32,8 @@ import {
 } from './context/AppDataContext';
 import {
   apiGetFollowGraph,
+  apiGetSuggestedUsers,
+  apiDismissSuggestedUser,
   apiFollow,
   apiUnfollow,
   apiCancelFollowRequest,
@@ -41,6 +43,7 @@ import {
   type FollowGraphResponse,
   type NetworkUser,
   type NetworkUserWithRequest,
+  type SuggestedUserResult,
 } from './lib/networkApi';
 import {
   apiFetchNotifications,
@@ -652,6 +655,7 @@ export default function App() {
     outgoingRequestsByUserId: {},
   });
   const [requestIdMap, setRequestIdMap] = useState<RequestIdMap>({});
+  const [suggestedUserIds, setSuggestedUserIds] = useState<string[]>([]);
   const [viewingProfileId, setViewingProfileId] = useState<string | null>(null);
   const [profileSubpage, setProfileSubpage] = useState<'posts' | 'projects' | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -680,6 +684,7 @@ export default function App() {
       outgoingRequestsByUserId: {},
     });
     setRequestIdMap({});
+    setSuggestedUserIds([]);
     setViewingProfileId(null);
     setProfileSubpage(null);
     setOpenedPost(null);
@@ -954,6 +959,35 @@ export default function App() {
     }
   }, [appData, authToken, currentUserId]);
 
+  const refreshSuggestedUsers = useCallback(async () => {
+    if (!authToken) return;
+    try {
+      const suggestions = await apiGetSuggestedUsers(authToken, 10);
+      const ids = suggestions.map((item) => item.id);
+      setSuggestedUserIds(ids);
+
+      const existingUsers = appData.getSnapshot().usersById;
+      const missingUsers: NetworkUser[] = suggestions
+        .filter((item) => !existingUsers[item.id])
+        .map((item: SuggestedUserResult) => ({
+          userId: item.id,
+          username: item.name,
+          profilePictureUrl: null,
+          isPrivate: false,
+          type: 'student',
+          branch: null,
+          year: null,
+        }));
+
+      if (missingUsers.length > 0) {
+        appData.mergeUsers(networkUsersToStudents(missingUsers));
+      }
+    } catch (err) {
+      console.error('Failed to fetch suggested users:', err);
+      setSuggestedUserIds([]);
+    }
+  }, [appData, authToken]);
+
   const refreshNotifications = useCallback(async () => {
     if (!authToken) return;
     const cached = await readCachedNotifications();
@@ -1059,11 +1093,12 @@ export default function App() {
   useEffect(() => {
     if (auth.isAuthenticated && authToken) {
       refreshFollowGraph();
+      refreshSuggestedUsers();
       refreshNotifications();
       refreshFeedPosts();
       refreshConversations();
     }
-  }, [auth.isAuthenticated, authToken, refreshFollowGraph, refreshNotifications, refreshFeedPosts, refreshConversations]);
+  }, [auth.isAuthenticated, authToken, refreshFollowGraph, refreshSuggestedUsers, refreshNotifications, refreshFeedPosts, refreshConversations]);
 
   useEffect(() => {
     if (!auth.isAuthenticated || !authToken) return;
@@ -1192,8 +1227,9 @@ export default function App() {
     }
     if (activeTab === 'network') {
       refreshFollowGraph();
+      refreshSuggestedUsers();
     }
-  }, [activeTab, refreshNotifications, refreshFollowGraph]);
+  }, [activeTab, refreshNotifications, refreshFollowGraph, refreshSuggestedUsers]);
 
   const pendingIncomingRequestIds = useMemo(
     () => Object.values(requestIdMap).map((r) => r.requestId),
@@ -1972,9 +2008,11 @@ export default function App() {
     try {
       await apiFollow(targetUserId, authToken);
       void refreshFollowGraph();
+      void refreshSuggestedUsers();
     } catch (err: any) {
       toast.error(err?.message || 'Follow failed');
       refreshFollowGraph(); // Revert to server state
+      refreshSuggestedUsers();
     }
   };
 
@@ -1995,9 +2033,11 @@ export default function App() {
     try {
       await apiUnfollow(targetUserId, authToken);
       void refreshFollowGraph();
+      void refreshSuggestedUsers();
     } catch (err: any) {
       toast.error(err?.message || 'Unfollow failed');
       refreshFollowGraph();
+      refreshSuggestedUsers();
     }
   };
 
@@ -2018,9 +2058,11 @@ export default function App() {
     try {
       await apiCancelFollowRequest(targetUserId, authToken);
       void refreshFollowGraph();
+      void refreshSuggestedUsers();
     } catch (err: any) {
       toast.error(err?.message || 'Cancel request failed');
       refreshFollowGraph();
+      refreshSuggestedUsers();
     }
   };
 
@@ -2041,9 +2083,11 @@ export default function App() {
     try {
       await apiRemoveFollower(followerUserId, authToken);
       void refreshFollowGraph();
+      void refreshSuggestedUsers();
     } catch (err: any) {
       toast.error(err?.message || 'Remove follower failed');
       refreshFollowGraph();
+      refreshSuggestedUsers();
     }
   };
 
@@ -2074,9 +2118,11 @@ export default function App() {
     try {
       await apiAcceptFollowRequest(requestIdentifier, authToken);
       void refreshFollowGraph();
+      void refreshSuggestedUsers();
     } catch (err: any) {
       toast.error(err?.message || 'Accept request failed');
       refreshFollowGraph();
+      refreshSuggestedUsers();
     }
   };
 
@@ -2099,9 +2145,22 @@ export default function App() {
     try {
       await apiRejectFollowRequest(requestIdentifier, authToken);
       void refreshFollowGraph();
+      void refreshSuggestedUsers();
     } catch (err: any) {
       toast.error(err?.message || 'Reject request failed');
       refreshFollowGraph();
+      refreshSuggestedUsers();
+    }
+  };
+
+  const handleDismissSuggestedUser = async (targetUserId: string) => {
+    setSuggestedUserIds((prev) => prev.filter((id) => id !== targetUserId));
+    try {
+      await apiDismissSuggestedUser(targetUserId, authToken);
+      void refreshSuggestedUsers();
+    } catch (err: any) {
+      toast.error(err?.message || 'Unable to dismiss suggestion');
+      refreshSuggestedUsers();
     }
   };
 
@@ -2401,9 +2460,11 @@ export default function App() {
                 opportunities={opportunities}
                 currentUserId={currentUserId}
                 followGraph={followGraph}
+                suggestedUserIds={suggestedUserIds}
                 onFollow={handleFollow}
                 onUnfollow={handleUnfollow}
                 onCancelRequest={handleCancelRequest}
+                onDismissSuggestion={handleDismissSuggestedUser}
                 onViewProfile={handleViewProfile}
               />
             </div>

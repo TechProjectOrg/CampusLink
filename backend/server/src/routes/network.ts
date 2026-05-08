@@ -4,7 +4,7 @@ import authenticateToken, { type AuthedRequest } from '../middleware/authenticat
 import { createNotification } from '../lib/notifications';
 import { invalidateUserFeedCache } from '../lib/feedCache';
 import { getUserSummariesByIds, getUserSummaryById, incrementUserStat, toCachedUserCard } from '../lib/userCache';
-import { getSuggestedUsersForApi, queueSuggestedUsersRecompute } from '../lib/socialInsights';
+import { dismissSuggestedUser, getSuggestedUsersForApi, queueSuggestedUsersRecompute } from '../lib/socialInsights';
 
 const router = express.Router();
 
@@ -115,6 +115,28 @@ router.get('/suggestions', async (req: Request, res: Response) => {
     return res.status(200).json(suggestions);
   } catch (err) {
     console.error('Error fetching suggested users:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.post('/suggestions/:targetUserId/dismiss', async (req: Request, res: Response) => {
+  const authed = req as unknown as AuthedRequest;
+  const userId = authed.auth!.userId;
+  const targetUserId = String(req.params.targetUserId);
+
+  if (!targetUserId) {
+    return res.status(400).json({ message: 'targetUserId is required' });
+  }
+  if (targetUserId === userId) {
+    return res.status(400).json({ message: 'Cannot dismiss yourself' });
+  }
+
+  try {
+    await dismissSuggestedUser(userId, targetUserId);
+    queueSuggestedUsersRecompute(userId);
+    return res.status(204).send();
+  } catch (err) {
+    console.error('Error dismissing suggested user:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });

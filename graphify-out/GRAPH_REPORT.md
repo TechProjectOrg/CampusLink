@@ -1,12 +1,12 @@
 # Graph Report - final-year-project  (2026-05-08)
 
 ## Corpus Check
-- 156 files · ~136,200 words
+- 156 files · ~136,663 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1063 nodes · 1644 edges · 37 communities detected
-- Extraction: 86% EXTRACTED · 14% INFERRED · 0% AMBIGUOUS · INFERRED: 237 edges (avg confidence: 0.8)
+- 1066 nodes · 1651 edges · 37 communities detected
+- Extraction: 86% EXTRACTED · 14% INFERRED · 0% AMBIGUOUS · INFERRED: 238 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
@@ -63,72 +63,72 @@
 ## Surprising Connections (you probably didn't know these)
 - `cacheDelete()` --calls--> `invalidateConversationLists()`  [INFERRED]
   backend\server\src\lib\cache.ts → backend\server\src\lib\chatCache.ts
-- `cacheZRevRange()` --calls--> `fetchPostIdsByQuery()`  [INFERRED]
-  backend\server\src\lib\cache.ts → backend\server\src\lib\feedCache.ts
 - `getUserSummariesByIds()` --calls--> `formatMessagesForResponse()`  [INFERRED]
   backend\server\src\lib\userCache.ts → backend\server\src\routes\chat.ts
-- `apiCreateUserPost()` --calls--> `handleCreateClubPostFromModal()`  [INFERRED]
-  frontend\src\lib\postsApi.ts → frontend\src\components\ClubActivityPage.tsx
 - `Legacy SQL Social Schema` --semantically_similar_to--> `Frontend Copy of Legacy SQL Social Schema`  [INFERRED] [semantically similar]
   database/DATABASE_README.md → frontend/database/DATABASE_README.md
+- `Legacy Database Bootstrap` --semantically_similar_to--> `Frontend Copy of Legacy Database Bootstrap`  [INFERRED] [semantically similar]
+  database/QUICKSTART.md → frontend/database/QUICKSTART.md
+- `verifyAuthToken()` --calls--> `authenticateSocket()`  [INFERRED]
+  backend\server\src\lib\auth.ts → backend\server\src\lib\realtime.ts
 
 ## Communities
 
 ### Community 0 - "Community 0"
-Cohesion: 0.05
-Nodes (73): appendStreamMessage(), cacheExpire(), cacheGetJson(), cacheHashDelete(), cacheHashGet(), cacheHashIncrementBy(), cacheHashMultiGet(), cacheHashSet() (+65 more)
+Cohesion: 0.04
+Nodes (42): areStringArraysEqual(), buildCreatePostPayloadFromDraft(), createInitialDiscussionPageState(), findCommentInTree(), findCommentStateById(), findOpportunityIdByCommentId(), getAccountType(), handleAcceptFollowRequest() (+34 more)
 
 ### Community 1 - "Community 1"
-Cohesion: 0.04
-Nodes (39): areStringArraysEqual(), buildCreatePostPayloadFromDraft(), createInitialDiscussionPageState(), findCommentInTree(), findCommentStateById(), findOpportunityIdByCommentId(), getAccountType(), handleAcceptFollowRequest() (+31 more)
-
-### Community 2 - "Community 2"
 Cohesion: 0.03
 Nodes (24): Alert(), handleMessage(), handleForgotPassword(), handleSignup(), apiCreateGroupConversation(), apiStartConversation(), ChatPage(), formatDate() (+16 more)
 
-### Community 3 - "Community 3"
+### Community 2 - "Community 2"
 Cohesion: 0.06
 Nodes (48): handleMarkAllAsRead(), compareVersions(), createCacheEntry(), createPageEntry(), enforcePolicyLimit(), estimateByteSize(), incrementCacheRevalidations(), invalidateCache() (+40 more)
 
-### Community 4 - "Community 4"
+### Community 3 - "Community 3"
 Cohesion: 0.06
-Nodes (30): apiCreateUserCertification(), apiDeleteUserCertification(), apiFetchUserCertifications(), authHeaders(), parseErrorMessage(), closeModal(), handleAddAchievement(), handleAddCertification() (+22 more)
+Nodes (54): cacheGetJson(), cacheHashGet(), cacheHashMultiGet(), parseJson(), buildConversationListEntries(), cacheAndEmitMessage(), fetchConversationBaseRows(), fetchConversationUnreadRows() (+46 more)
+
+### Community 4 - "Community 4"
+Cohesion: 0.08
+Nodes (46): appendStreamMessage(), cacheExpire(), cacheHashDelete(), cacheHashIncrementBy(), cacheHashSet(), cacheIncrement(), cacheSetJson(), cacheZAdd() (+38 more)
 
 ### Community 5 - "Community 5"
-Cohesion: 0.08
-Nodes (25): PollingRedisSubscriber, areUsersMutuallyFollowing(), emitChatDelete(), emitChatMessage(), emitChatReaction(), emitChatRead(), emitChatRequestAccepted(), emitTypingIndicator() (+17 more)
+Cohesion: 0.06
+Nodes (30): apiCreateUserCertification(), apiDeleteUserCertification(), apiFetchUserCertifications(), authHeaders(), parseErrorMessage(), closeModal(), handleAddAchievement(), handleAddCertification() (+22 more)
 
 ### Community 6 - "Community 6"
 Cohesion: 0.11
 Nodes (32): getChatParticipantIds(), checkCanAddUserToChat(), checkChatPermission(), getUserChatRole(), getUserClubRole(), isGroupChatOwner(), validateRoleChange(), createSystemEvent() (+24 more)
 
 ### Community 7 - "Community 7"
-Cohesion: 0.16
-Nodes (30): handleApproveRequest(), handleCreateClubPostFromModal(), handleDeleteClub(), handleInviteMember(), handleJoinCurrentClub(), handleRejectRequest(), handleSaveSettings(), handleToggleAdminRole() (+22 more)
+Cohesion: 0.17
+Nodes (29): handleApproveRequest(), handleDeleteClub(), handleInviteMember(), handleJoinCurrentClub(), handleRejectRequest(), handleSaveSettings(), handleToggleAdminRole(), loadClubData() (+21 more)
 
 ### Community 8 - "Community 8"
-Cohesion: 0.15
-Nodes (29): cacheDelete(), acquireCacheLock(), buildEnvelope(), buildPermissionSnapshot(), cacheLockKey(), clubFeedKey(), clubMembershipKey(), clubMetaKey() (+21 more)
+Cohesion: 0.14
+Nodes (30): cacheDelete(), cacheSetJsonIfNotExists(), acquireCacheLock(), buildEnvelope(), buildPermissionSnapshot(), cacheLockKey(), clubFeedKey(), clubMembershipKey() (+22 more)
 
 ### Community 9 - "Community 9"
-Cohesion: 0.15
-Nodes (27): cacheSetJson(), engagementKey(), feedKey(), feedWarmedKey(), fetchFeedIdRowsFromDb(), fetchFeedPosts(), fetchPostIdsByQuery(), fetchPostRowsByIds() (+19 more)
+Cohesion: 0.11
+Nodes (23): areUsersMutuallyFollowing(), emitChatDelete(), emitChatMessage(), emitChatReaction(), emitChatRead(), emitChatRequestAccepted(), emitTypingIndicator(), getOrCreateDirectChat() (+15 more)
 
 ### Community 10 - "Community 10"
 Cohesion: 0.11
 Nodes (21): cacheHGetAll(), hydrateOrderedUsers(), mapMinimalUserFromSummary(), searchUsers(), chatConversationListKey(), fetchUserStatsByIdsFromDb(), fetchUserSummariesByIdsFromDb(), getCachedConversationList() (+13 more)
 
 ### Community 11 - "Community 11"
-Cohesion: 0.16
-Nodes (22): apiChangePassword(), apiDeleteAccount(), apiFetchUserProfile(), apiFetchUserSessions(), apiFetchUserSettings(), apiLogin(), apiRevokeUserSession(), apiSignupAlumni() (+14 more)
+Cohesion: 0.15
+Nodes (21): cacheSetAdd(), cacheSetCardinality(), cacheSetMembers(), applyDiversity(), dismissedKey(), dismissSuggestedUser(), getSuggestedUsersForApi(), getVectorMap() (+13 more)
 
 ### Community 12 - "Community 12"
 Cohesion: 0.16
-Nodes (21): cacheSetCardinality(), cacheSetMembers(), applyDiversity(), getSuggestedUsersForApi(), getVectorMap(), hashtagEngagementBucketKey(), hashtagPostBucketKey(), hashtagUsersBucketKey() (+13 more)
+Nodes (22): apiChangePassword(), apiDeleteAccount(), apiFetchUserProfile(), apiFetchUserSessions(), apiFetchUserSettings(), apiLogin(), apiRevokeUserSession(), apiSignupAlumni() (+14 more)
 
 ### Community 13 - "Community 13"
-Cohesion: 0.2
-Nodes (20): apiAddComment(), apiAddReply(), apiCreateUserPost(), apiDeleteComment(), apiDeletePost(), apiFetchCommentContext(), apiFetchHashtagPosts(), apiFetchPostById() (+12 more)
+Cohesion: 0.18
+Nodes (21): handleCreateClubPostFromModal(), apiAddComment(), apiAddReply(), apiCreateUserPost(), apiDeleteComment(), apiDeletePost(), apiFetchCommentContext(), apiFetchHashtagPosts() (+13 more)
 
 ### Community 14 - "Community 14"
 Cohesion: 0.12
@@ -245,9 +245,9 @@ Nodes (1): Custom Guidelines Placeholder
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `handleMessage()` connect `Community 2` to `Community 1`?**
-  _High betweenness centrality (0.047) - this node is a cross-community bridge._
-- **Why does `loadPosts()` connect `Community 3` to `Community 4`, `Community 13`?**
+- **Why does `handleMessage()` connect `Community 1` to `Community 0`?**
+  _High betweenness centrality (0.048) - this node is a cross-community bridge._
+- **Why does `loadPosts()` connect `Community 2` to `Community 13`, `Community 5`?**
   _High betweenness centrality (0.037) - this node is a cross-community bridge._
 - **Are the 19 inferred relationships involving `cacheSetJson()` (e.g. with `setCachedRecentMessages()` and `setConversationMeta()`) actually correct?**
   _`cacheSetJson()` has 19 INFERRED edges - model-reasoned connections that need verification._
@@ -258,4 +258,4 @@ _Questions this graph is uniquely positioned to answer:_
 - **What connects `Fixed Sidebar Header`, `Pagination Prevents Large Conversation Performance Issues`, `Local Development Setup` to the rest of the system?**
   _14 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Community 0` be split into smaller, more focused modules?**
-  _Cohesion score 0.05 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.04 - nodes in this community are weakly interconnected._

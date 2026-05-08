@@ -61,8 +61,8 @@ function suggestedKey(userId: string): string {
   return `suggested_users:${userId}`;
 }
 
-function seenKey(userId: string): string {
-  return `suggested_users:seen:${userId}`;
+function dismissedKey(userId: string): string {
+  return `suggested_users:dismissed:${userId}`;
 }
 
 function hashtagPostBucketKey(tag: string, bucket: string): string {
@@ -173,11 +173,12 @@ async function getVectorMap(userIds: string[]): Promise<Map<string, Map<string, 
   return vectors;
 }
 
-export async function recordSuggestionsSeen(userId: string, suggestedIds: string[]): Promise<void> {
-  const key = seenKey(userId);
+export async function dismissSuggestedUser(userId: string, suggestedUserId: string): Promise<void> {
+  if (!userId || !suggestedUserId || userId === suggestedUserId) return;
+  const key = dismissedKey(userId);
   const existing = (await cacheGetJson<string[]>(key)) ?? [];
-  const next = Array.from(new Set([...existing, ...suggestedIds])).slice(-300);
-  await cacheSetJson(key, next, 24 * 60 * 60);
+  const next = Array.from(new Set([...existing, suggestedUserId])).slice(-500);
+  await cacheSetJson(key, next, 30 * 24 * 60 * 60);
 }
 
 export function queueSuggestedUsersRecompute(userId: string): void {
@@ -198,8 +199,8 @@ export async function recomputeSuggestedUsers(userId: string): Promise<void> {
       AND status = CAST('pending' AS "FollowRequestStatus")
   `;
   const exclude = new Set<string>([userId, ...followedRows.map((row) => row.user_id), ...pendingRows.map((row) => row.user_id)]);
-  const seen = (await cacheGetJson<string[]>(seenKey(userId))) ?? [];
-  for (const id of seen) exclude.add(id);
+  const dismissed = (await cacheGetJson<string[]>(dismissedKey(userId))) ?? [];
+  for (const id of dismissed) exclude.add(id);
 
   const candidateRows = await prisma.$queryRaw<Array<{ candidate_id: string }>>`
     (
@@ -344,10 +345,10 @@ export async function recomputeSuggestedUsers(userId: string): Promise<void> {
 }
 
 export async function getSuggestedUsersForApi(userId: string, limit: number): Promise<Array<{ id: string; name: string; mutual_count: number; common_club: string | null }>> {
-  const cached = await cacheGetJson<SuggestedUserCacheRow[]>(suggestedKey(userId));
+  let cached = await cacheGetJson<SuggestedUserCacheRow[]>(suggestedKey(userId));
   if (!cached) {
-    queueSuggestedUsersRecompute(userId);
-    return [];
+    await recomputeSuggestedUsers(userId);
+    cached = (await cacheGetJson<SuggestedUserCacheRow[]>(suggestedKey(userId))) ?? [];
   }
   const rows = cached.slice(0, limit).map((row) => ({
     id: row.id,
@@ -355,7 +356,6 @@ export async function getSuggestedUsersForApi(userId: string, limit: number): Pr
     mutual_count: row.mutual_count,
     common_club: row.common_club ?? null,
   }));
-  void recordSuggestionsSeen(userId, rows.map((row) => row.id));
   return rows;
 }
 

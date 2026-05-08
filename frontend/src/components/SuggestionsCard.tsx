@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { TrendingUp, Users } from 'lucide-react';
+import { TrendingUp, Users, X } from 'lucide-react';
 import type { Opportunity, Student } from '../types';
 import type { FollowGraph } from '../App';
 import { FollowButton } from './network/FollowButton';
@@ -12,9 +12,11 @@ interface SuggestionsCardProps {
   opportunities: Opportunity[];
   currentUserId: string;
   followGraph: FollowGraph;
+  suggestedUserIds?: string[];
   onFollow: (targetUserId: string) => void;
   onUnfollow: (targetUserId: string) => void;
   onCancelRequest: (targetUserId: string) => void;
+  onDismissSuggestion: (targetUserId: string) => void;
   onViewProfile: (studentId: string) => void;
 }
 
@@ -23,9 +25,11 @@ export function SuggestionsCard({
   opportunities,
   currentUserId,
   followGraph,
+  suggestedUserIds = [],
   onFollow,
   onUnfollow,
   onCancelRequest,
+  onDismissSuggestion,
   onViewProfile,
 }: SuggestionsCardProps) {
   const currentUser = students.find((student) => student.id === currentUserId);
@@ -38,6 +42,27 @@ export function SuggestionsCard({
 
   const suggestedStudents = useMemo(() => {
     if (!currentUser) return [];
+
+    if (suggestedUserIds.length > 0) {
+      const fromApi = suggestedUserIds
+        .map((id) => students.find((student) => student.id === id))
+        .filter((student): student is Student => Boolean(student))
+        .filter((student) => {
+          if (student.id === currentUserId) return false;
+          const isFollowing = (followGraph.followingByUserId[currentUserId] ?? []).includes(student.id);
+          const isRequested = (followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id);
+          return !isFollowing && !isRequested;
+        })
+        .map((student) => ({
+          student,
+          sharedSkills: student.skills.filter((skill) => currentUser.skills.includes(skill)),
+          sharedInterests: student.interests.filter((interest) => currentUser.interests.includes(interest)),
+        }));
+
+      if (fromApi.length > 0) {
+        return fromApi.slice(0, 3);
+      }
+    }
 
     const candidates = students
       .filter((student) => {
@@ -88,7 +113,7 @@ export function SuggestionsCard({
     }
 
     return candidates.slice(0, 3);
-  }, [currentUser, currentUserId, followGraph.followingByUserId, followGraph.outgoingRequestsByUserId, students]);
+  }, [currentUser, currentUserId, followGraph.followingByUserId, followGraph.outgoingRequestsByUserId, students, suggestedUserIds]);
 
   const trendingTopics = useMemo(() => {
     const counts = new Map<string, number>();
@@ -130,6 +155,16 @@ export function SuggestionsCard({
           <div className="space-y-4">
             {suggestedStudents.length > 0 ? suggestedStudents.map(({ student, sharedSkills, sharedInterests }) => (
               <div key={student.id} className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 transition-colors hover:text-slate-700"
+                    aria-label={`Dismiss ${student.name}`}
+                    onClick={() => onDismissSuggestion(student.id)}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
                 <div className="flex flex-col items-center gap-3 text-center">
                   <Avatar
                     className="h-16 w-16 flex-shrink-0 cursor-pointer ring-2 ring-primary/10 transition-all duration-300 hover:ring-primary/30"
