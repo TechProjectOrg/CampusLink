@@ -97,7 +97,7 @@ export function FollowButton({
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-row justify-end gap-3 sm:gap-3">
             <AlertDialogAction
-              className="bg-red-500 text-white hover:bg-red-600 rounded-full px-5 h-10 font-medium transition-all duration-200 border-none opacity-100"
+              className="text-red-600 font-semibold hover:text-red-700 bg-transparent opacity-100 transition-all duration-200 border-none shadow-none h-10 px-5 flex items-center justify-center"
               onClick={() => {
                 if (confirmMode === 'unfollow') onUnfollow();
                 if (confirmMode === 'cancel-request') onCancelRequest();
