@@ -20,6 +20,7 @@ interface FollowButtonProps {
   isFollower: boolean;
   requestStatus: RequestStatus;
   compact?: boolean;
+  className?: string;
 
   onFollow: () => void;
   onUnfollow: () => void;
@@ -33,6 +34,7 @@ export function FollowButton({
   isFollower,
   requestStatus,
   compact = false,
+  className,
   onFollow,
   onUnfollow,
   onCancelRequest,
@@ -72,26 +74,26 @@ export function FollowButton({
       <Button
         onClick={handleClick}
         size="sm"
-        className={
+        className={`${
           compact
             ? (
-              label === 'Following' || label === 'Requested'
+              label === 'Unfollow' || label === 'Requested'
                 ? 'h-7 rounded-full bg-slate-100 border border-slate-200 px-3 text-xs font-medium text-slate-600 shadow-none transition-all hover:bg-slate-200 hover:text-slate-800'
                 : 'h-7 rounded-full bg-primary/10 border border-primary/20 px-3 text-xs font-semibold text-primary shadow-none transition-all hover:bg-primary hover:text-white hover:border-primary'
             )
             : (
-              label === 'Following' || label === 'Requested'
+              label === 'Unfollow' || label === 'Requested'
                 ? 'w-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl rounded-xl'
                 : 'w-full gradient-primary shadow-lg hover:shadow-xl rounded-xl'
             )
-        }
+        } ${className ?? ''}`}
         variant="ghost"
         title={helperText ?? undefined}
       >
         {label}
       </Button>
 
-      <AlertDialog open={confirmMode !== null} onOpenChange={(open) => !open && setConfirmMode(null)}>
+      <AlertDialog open={confirmMode !== null} onOpenChange={(open: boolean) => !open && setConfirmMode(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>

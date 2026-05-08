@@ -705,9 +705,12 @@ export function ProfilePage({
   const featuredProject = loadedProjects[0];
   const featuredPost = profilePosts[0];
   const featuredAchievement = achievements[0];
+  const profileEmail = student.email?.trim() || '';
   const profileBranch = student.branch?.trim() || '';
   const hasKnownBranch = Boolean(profileBranch && profileBranch.toLowerCase() !== 'unknown');
   const hasKnownYear = student.year > 0;
+  const yearLabel = hasKnownYear ? `Year ${student.year}` : 'Year not added';
+  const branchLabel = hasKnownBranch ? profileBranch : 'Branch not added';
   const hasAbout = Boolean(student.bio?.trim());
   const clubCount = societies.length;
   const hasFeaturedContent = Boolean(featuredProject || featuredPost || featuredAchievement);
@@ -776,18 +779,21 @@ export function ProfilePage({
   };
 
   return (
-    <PageLayout className="bg-slate-50 pb-24 md:pb-8" contentClassName="py-4 sm:py-5 lg:py-6">
-      <div className="mx-auto grid w-full max-w-[1000px] [grid-template-columns:1fr] gap-4">
+    <PageLayout maxWidth="4xl" className="bg-slate-50 pb-24 md:pb-8" contentClassName="py-4 sm:py-5 lg:py-6 max-w-[720px]">
+      <div className="mx-auto grid w-full [grid-template-columns:1fr] gap-4" style={{ maxWidth: '720px' }}>
         {/* Modern Profile Header: Cover + Overlapping Avatar + Stacked Content */}
         <section className="cl-profile-header relative bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+          <div className="mx-auto w-full max-w-[720px]">
           
           {/* Banner/Cover Section */}
-          <div 
-            className="cl-cover-section relative h-48 sm:h-64 md:h-72 w-full flex-shrink-0 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 bg-cover bg-center"
-            style={{
-              backgroundImage: bannerImage ? `url(${bannerImage})` : undefined,
-            }}
-          >
+          <div className="cl-cover-section relative h-48 sm:h-64 md:h-72 w-full flex-shrink-0 overflow-hidden bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 bg-cover bg-center">
+            {bannerImage ? (
+              <img
+                src={bannerImage}
+                alt="Profile banner"
+                className="absolute inset-0 h-full w-full object-contain object-center"
+              />
+            ) : null}
             <div className="absolute inset-0 bg-black/5" />
             
             {/* Banner Edit Button (Owner Only) */}
@@ -816,13 +822,14 @@ export function ProfilePage({
               {/* Action Buttons Aligned to Bottom of Avatar */}
               <div className="cl-actions-beside-avatar flex flex-col gap-2 flex-shrink-0">
                 {!isOwnProfile ? (
-                  <>
+                  <div className="flex items-center gap-2 sm:gap-3">
                     <FollowButton
                       targetName={student.name}
                       accountType={student.accountType}
                       isFollowing={isFollowing}
                       isFollower={isFollower}
                       requestStatus={requestStatus}
+                      className="w-auto rounded-full gradient-primary px-4 sm:px-6 h-10 sm:h-11 font-semibold text-white shadow-md hover:shadow-lg transition-all border-none text-sm sm:text-base"
                       onFollow={() => onFollow(student.id, student.accountType)}
                       onUnfollow={() => onUnfollow(student.id)}
                       onCancelRequest={() => onCancelRequest(student.id)}
@@ -834,7 +841,7 @@ export function ProfilePage({
                       <MessageCircle className="mr-2 h-4 w-4" />
                       Message
                     </Button>
-                  </>
+                  </div>
                 ) : (
                   <Button 
                     onClick={() => setActiveModal('editProfile')}
@@ -857,30 +864,26 @@ export function ProfilePage({
                 </h1>
               </div>
 
-              {/* Headline/Bio Row */}
-              <div className="cl-headline-section">
+              {/* About Preview Row */}
+              <div className="cl-about-preview-section">
                 <p className="text-base sm:text-lg text-slate-600 font-medium leading-relaxed max-w-2xl">
-                  {student.headline || (isOwnProfile ? 'Add a headline that tells campus what you are building.' : 'Campus community member')}
+                  {student.bio || (isOwnProfile ? 'Add an about section so people can know you better.' : 'Campus community member')}
                 </p>
               </div>
 
               {/* Location, Year, Email Row */}
               <div className="cl-metadata-row flex flex-wrap items-center gap-4 sm:gap-6 text-sm">
-                {hasKnownBranch && (
-                  <div className="flex items-center gap-2 text-slate-600">
-                    <MapPin className="w-4 h-4 flex-shrink-0 text-slate-400" />
-                    <span className="font-medium">{profileBranch}</span>
-                  </div>
-                )}
-                {hasKnownYear && (
-                  <div className="flex items-center gap-2 text-slate-600">
-                    <Calendar className="w-4 h-4 flex-shrink-0 text-slate-400" />
-                    <span className="font-medium">Year {student.year}</span>
-                  </div>
-                )}
                 <div className="flex items-center gap-2 text-slate-600">
                   <Mail className="w-4 h-4 flex-shrink-0 text-slate-400" />
-                  <span className="font-medium truncate">{student.email}</span>
+                  <span className="font-medium truncate">{profileEmail || 'Email not added'}</span>
+                </div>
+                <div className="flex items-center gap-2 text-slate-600">
+                  <Calendar className="w-4 h-4 flex-shrink-0 text-slate-400" />
+                  <span className="font-medium">{yearLabel}</span>
+                </div>
+                <div className="flex items-center gap-2 text-slate-600">
+                  <MapPin className="w-4 h-4 flex-shrink-0 text-slate-400" />
+                  <span className="font-medium">{branchLabel}</span>
                 </div>
               </div>
 
@@ -904,6 +907,7 @@ export function ProfilePage({
                 </div>
               </div>
             </div>
+          </div>
           </div>
         </section>
 
@@ -1220,14 +1224,6 @@ export function ProfilePage({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Professional Headline</label>
-            <Input
-              value={editedStudent.headline || ''}
-              onChange={(e) => setEditedStudent({ ...editedStudent, headline: e.target.value })}
-              placeholder="e.g., Aspiring ML Engineer | Python Developer"
-            />
-          </div>
-          <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">About</label>
             <Textarea
               value={editedStudent.bio || ''}
@@ -1249,7 +1245,7 @@ export function ProfilePage({
       <Modal isOpen={activeModal === 'about'} onClose={closeModal} title="Edit About" className="w-[min(40rem,calc(100vw-2rem))]" style={{ width: 'min(40rem, calc(100vw - 2rem))' }}>
         <div className="space-y-4 max-w-[560px] w-full">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Bio</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">About</label>
             <Textarea
               value={editedStudent.bio || ''}
               onChange={(e) => setEditedStudent({ ...editedStudent, bio: e.target.value })}

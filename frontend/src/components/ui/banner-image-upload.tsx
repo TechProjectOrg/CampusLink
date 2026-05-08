@@ -188,7 +188,7 @@ export function BannerImageUpload({ onBannerChange }: BannerImageUploadProps) {
 
       <button
         onClick={() => setActionOpen(true)}
-        className="absolute top-4 right-4 sm:top-6 sm:right-6 p-2.5 bg-white/20 hover:bg-white/30 text-white rounded-full transition-all backdrop-blur-sm z-10"
+        className="absolute top-4 right-4 sm:top-6 sm:right-6 flex h-10 w-10 items-center justify-center rounded-full bg-white/20 p-0 text-white transition-all backdrop-blur-sm hover:bg-white/30 z-10"
         title="Edit Banner"
       >
         <Edit2 className="w-5 h-5" />

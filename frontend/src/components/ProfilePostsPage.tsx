@@ -166,7 +166,7 @@ export function ProfilePostsPage({
             <div>
               <p className="text-sm font-medium uppercase tracking-[0.18em] text-slate-400">Posts</p>
               <h1 className="text-2xl font-semibold tracking-tight text-slate-950">{student.name}</h1>
-              <p className="mt-1 text-sm text-slate-500">{student.headline || student.branch}</p>
+              <p className="mt-1 text-sm text-slate-500">{student.bio || student.branch}</p>
             </div>
           </div>
         </header>

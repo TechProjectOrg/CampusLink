@@ -36,7 +36,6 @@ export interface Achievement {
 export interface Student {
   id: string;
   name: string;
-  headline?: string;
   username: string;
   email: string;
   createdAt?: string;
