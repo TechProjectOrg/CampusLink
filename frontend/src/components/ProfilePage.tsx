@@ -155,7 +155,6 @@ export function ProfilePage({
 
   // Profile state
   const [editedStudent, setEditedStudent] = useState(student);
-  const [isAboutExpanded, setIsAboutExpanded] = useState(false);
 
   // Skills state
   const [skills, setSkills] = useState<UserSkill[]>([]);
@@ -711,7 +710,6 @@ export function ProfilePage({
   const hasKnownYear = student.year > 0;
   const yearLabel = hasKnownYear ? `Year ${student.year}` : 'Year not added';
   const branchLabel = hasKnownBranch ? profileBranch : 'Branch not added';
-  const hasAbout = Boolean(student.bio?.trim());
   const clubCount = societies.length;
   const hasFeaturedContent = Boolean(featuredProject || featuredPost || featuredAchievement);
   const showFeaturedSection = isOwnProfile || hasFeaturedContent;
@@ -910,32 +908,6 @@ export function ProfilePage({
           </div>
           </div>
         </section>
-
-        {/* About Section - Visual Consistency with other sections */}
-        {(hasAbout || isOwnProfile) && (
-          <section className={profileSectionCardClass}>
-            <SectionHeader title="About" onAdd={() => setActiveModal('editProfile')} />
-            {hasAbout ? (
-              <div className="cl-about-content text-slate-700 leading-relaxed text-[15px] sm:text-base">
-                <div className="cl-about-text-wrapper relative">
-                  <p className={`cl-about-text ${isAboutExpanded ? '' : 'line-clamp-4'}`}>
-                    {student.bio}
-                  </p>
-                  {student.bio && student.bio.length > 250 && (
-                    <button
-                      onClick={() => setIsAboutExpanded(!isAboutExpanded)}
-                      className="cl-see-more-btn mt-2 text-sm font-bold text-blue-600 hover:underline"
-                    >
-                      {isAboutExpanded ? 'See less' : '...see more'}
-                    </button>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <EmptyState message="Add a short introduction about yourself." />
-            )}
-          </section>
-        )}
 
         {showPostsSection ? (
         <section className={profileSectionCardClass}>
