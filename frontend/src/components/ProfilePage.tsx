@@ -879,8 +879,8 @@ export function ProfilePage({
         {(hasAbout || isOwnProfile) && (
           <section className={profileSectionCardClass}>
             <SectionHeader title="About" onAdd={() => setActiveModal('editProfile')} />
-            <div className="cl-about-content text-slate-700 leading-relaxed text-[15px] sm:text-base">
-              {hasAbout ? (
+            {hasAbout ? (
+              <div className="cl-about-content text-slate-700 leading-relaxed text-[15px] sm:text-base">
                 <div className="cl-about-text-wrapper relative">
                   <p className={`cl-about-text ${isAboutExpanded ? '' : 'line-clamp-4'}`}>
                     {student.bio}
@@ -894,10 +894,10 @@ export function ProfilePage({
                     </button>
                   )}
                 </div>
-              ) : (
-                <p className="cl-about-empty text-slate-500">Add a short introduction about yourself.</p>
-              )}
-            </div>
+              </div>
+            ) : (
+              <EmptyState message="Add a short introduction about yourself." />
+            )}
           </section>
         )}
 
