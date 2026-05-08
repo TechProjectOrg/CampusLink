@@ -253,7 +253,7 @@ export function NetworkPage({
           </AlertDialogHeader>
           <AlertDialogFooter className="flex items-center justify-center gap-4 mt-6 sm:justify-center">
             <AlertDialogAction
-              className="text-red-600 font-semibold hover:text-red-700 bg-transparent opacity-100 transition-all duration-200 border-none shadow-none h-10 px-4 flex items-center justify-center"
+              className="bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 hover:text-red-700 hover:border-red-300 focus:outline-none focus:ring-0 active:bg-red-100 transition-none rounded-full h-10 px-4 font-semibold flex items-center justify-center shadow-none"
               onClick={() => {
                 if (removeFollowerId !== null) {
                   onRemoveFollower(removeFollowerId);
