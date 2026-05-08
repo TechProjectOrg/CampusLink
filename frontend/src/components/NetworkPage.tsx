@@ -251,9 +251,9 @@ export function NetworkPage({
                 : 'You will no longer be sending a follow request.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex-row justify-end gap-3 sm:gap-3">
+          <AlertDialogFooter className="flex items-center justify-center gap-4 mt-6 sm:justify-center">
             <AlertDialogAction
-              className="text-red-600 font-semibold hover:text-red-700 bg-transparent opacity-100 transition-all duration-200 border-none shadow-none h-10 px-5 flex items-center justify-center"
+              className="text-red-600 font-semibold hover:text-red-700 bg-transparent opacity-100 transition-all duration-200 border-none shadow-none h-10 px-4 flex items-center justify-center"
               onClick={() => {
                 if (removeFollowerId !== null) {
                   onRemoveFollower(removeFollowerId);
@@ -269,7 +269,7 @@ export function NetworkPage({
             >
               Remove
             </AlertDialogAction>
-            <AlertDialogCancel className="bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 rounded-full px-5 h-10 transition-all duration-200 mt-0">
+            <AlertDialogCancel className="bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 rounded-full px-4 h-10 transition-all duration-200 mt-0 flex items-center justify-center">
               Cancel
             </AlertDialogCancel>
           </AlertDialogFooter>
