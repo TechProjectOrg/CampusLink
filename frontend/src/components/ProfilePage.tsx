@@ -44,6 +44,7 @@ import { Modal } from './ui/modal';
 import { DatePicker } from './ui/date-picker';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { ProfilePhotoUpload } from './ui/profile-photo-upload';
+import { BannerImageUpload } from './ui/banner-image-upload';
 import { apiUpdateUserProfilePicture, apiUploadUserProfilePicture } from '../lib/authApi';
 import { OpportunityCard } from './OpportunityCard';
 import { apiFetchProfilePosts, type UserPost } from '../lib/postsApi';
@@ -182,7 +183,7 @@ export function ProfilePage({
 
   // Modal states
   const [activeModal, setActiveModal] = useState<
-    'editProfile' | 'about' | 'skill' | 'experience' | 'project' | 'certification' | 'society' | 'achievement' | null
+    'editProfile' | 'editBanner' | 'about' | 'skill' | 'experience' | 'project' | 'certification' | 'society' | 'achievement' | null
   >(null);
 
   // Edit item states (for editing existing items)
@@ -436,6 +437,7 @@ export function ProfilePage({
   const currentProfilePhoto = isOwnProfile ? auth.profile?.profilePictureUrl ?? null : null;
   const hasCustomProfilePhoto = isOwnProfile && Boolean(auth.profile?.profilePictureUrl);
   const displayedProfilePhoto = isOwnProfile ? currentProfilePhoto ?? student.avatar : student.avatar;
+  const [bannerImage, setBannerImage] = useState<string | null>(null);
 
   const handleProfilePhotoChange = async (payload: { file?: File; previewUrl?: string; remove?: boolean }) => {
     if (!isOwnProfile || !authUserId) return;
@@ -454,6 +456,19 @@ export function ProfilePage({
       onEdit?.({ avatar: payload.previewUrl });
     }
     await auth.refreshProfile();
+  };
+
+  const handleBannerChange = async (payload: { file?: File; previewUrl?: string; remove?: boolean }) => {
+    if (!isOwnProfile) return;
+
+    if (payload.remove) {
+      setBannerImage(null);
+      return;
+    }
+
+    if (payload.previewUrl) {
+      setBannerImage(payload.previewUrl);
+    }
   };
 
   // Skill handlers
@@ -767,18 +782,17 @@ export function ProfilePage({
         <section className="cl-profile-header relative bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
           
           {/* Banner/Cover Section */}
-          <div className="cl-cover-section relative h-48 sm:h-64 md:h-72 w-full bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 flex-shrink-0">
+          <div 
+            className="cl-cover-section relative h-48 sm:h-64 md:h-72 w-full flex-shrink-0 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 bg-cover bg-center"
+            style={{
+              backgroundImage: bannerImage ? `url(${bannerImage})` : undefined,
+            }}
+          >
             <div className="absolute inset-0 bg-black/5" />
             
             {/* Banner Edit Button (Owner Only) */}
             {isOwnProfile && (
-              <button 
-                onClick={() => setActiveModal('editProfile')}
-                className="absolute top-3 right-3 sm:top-4 sm:right-4 p-2 bg-white/20 hover:bg-white/30 text-white rounded-full transition-all backdrop-blur-sm z-10"
-                title="Edit Banner"
-              >
-                <Edit2 className="w-5 h-5" />
-              </button>
+              <BannerImageUpload onBannerChange={handleBannerChange} />
             )}
           </div>
 
