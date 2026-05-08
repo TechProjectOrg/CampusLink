@@ -260,7 +260,7 @@ export function OpportunityCard({
         <div className="p-6 pb-4">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-3 cursor-pointer group" onClick={() => onViewProfile?.(opportunity.authorId)}>
-              <Avatar className="ring-2 ring-primary/20 transition-all duration-300 group-hover:ring-primary/40">
+              <Avatar className="w-10 h-10 ring-2 ring-primary/20 transition-all duration-300 group-hover:ring-primary/40 flex-shrink-0">
                 <AvatarImage src={opportunity.authorAvatar} />
                 <AvatarFallback>{opportunity.authorName[0]}</AvatarFallback>
               </Avatar>

@@ -14,6 +14,12 @@ interface ProfilePhotoUploadProps {
   onPhotoChange: (payload: { file?: File; previewUrl?: string; remove?: boolean }) => Promise<void> | void;
   size?: 'sm' | 'md' | 'lg' |'xl' | '2xl' | '3xl' ;
   editable?: boolean;
+  /**
+   * If true, component fills its parent container instead of using a fixed size.
+   * Useful when the container controls the avatar dimensions (responsive sizing).
+   * When enabled, ignores the `size` prop.
+   */
+  fill?: boolean;
 }
 
 async function dataUrlToFile(dataUrl: string, fileName: string): Promise<File> {
@@ -29,6 +35,7 @@ export function ProfilePhotoUpload({
   onPhotoChange,
   size = 'lg',
   editable = true,
+  fill = false,
 }: ProfilePhotoUploadProps) {
   const [actionOpen, setActionOpen] = useState(false);
   const [cropOpen, setCropOpen] = useState(false);
@@ -50,6 +57,9 @@ export function ProfilePhotoUpload({
     '2xl': 'w-52 h-52',
     '3xl': 'w-[240px] h-[240px]',
   };
+
+  // When fill mode is enabled, use container dimensions instead of fixed size
+  const containerSize = fill ? 'w-full h-full' : sizeClasses[size];
 
   const iconSizes = {
     sm: 'w-4 h-4',
@@ -130,7 +140,7 @@ export function ProfilePhotoUpload({
       />
 
       <div
-        className={`relative ${sizeClasses[size]} rounded-full cursor-pointer group`}
+        className={`relative ${containerSize} rounded-full cursor-pointer group flex-shrink-0`}
         onMouseEnter={() => setIsHovering(true)}
         onMouseLeave={() => setIsHovering(false)}
         onClick={() => editable && setActionOpen(true)}
@@ -144,8 +154,8 @@ export function ProfilePhotoUpload({
           }
         }}
       >
-        <Avatar className={`${sizeClasses[size]} w-full h-full ring-4 ring-white shadow-xl rounded-full overflow-hidden`}>
-          <AvatarImage src={displayImage} className="w-full h-full object-cover rounded-full" />
+        <Avatar className={`w-full h-full ring-4 ring-white shadow-xl rounded-full overflow-hidden`}>
+          <AvatarImage src={displayImage} className="object-cover" />
           <AvatarFallback className="text-3xl bg-gradient-to-br from-blue-500 to-blue-600 text-white">
             {name ? name[0].toUpperCase() : <User className={iconSizes[size]} />}
           </AvatarFallback>
