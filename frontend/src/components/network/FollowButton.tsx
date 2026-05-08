@@ -72,8 +72,8 @@ export function FollowButton({
         size="sm"
         className={
           label === 'Following' || label === 'Requested'
-            ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl rounded-xl'
-            : 'gradient-primary shadow-lg hover:shadow-xl rounded-xl'
+            ? 'w-full bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl rounded-xl'
+            : 'w-full gradient-primary shadow-lg hover:shadow-xl rounded-xl'
         }
         variant="default"
         title={helperText ?? undefined}

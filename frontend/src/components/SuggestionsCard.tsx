@@ -129,31 +129,31 @@ export function SuggestionsCard({
 
           <div className="space-y-4">
             {suggestedStudents.length > 0 ? suggestedStudents.map(({ student, sharedSkills, sharedInterests }) => (
-              <div key={student.id} className="space-y-3">
-                <div className="flex items-start gap-3">
+              <div key={student.id} className="space-y-3 rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
+                <div className="flex flex-col items-center gap-3 text-center">
                   <Avatar
-                    className="w-12 h-12 ring-2 ring-primary/10 cursor-pointer transition-all duration-300 hover:ring-primary/30"
+                    className="h-16 w-16 flex-shrink-0 cursor-pointer ring-2 ring-primary/10 transition-all duration-300 hover:ring-primary/30"
                     onClick={() => onViewProfile(student.id)}
                   >
                     <AvatarImage src={student.avatar} />
                     <AvatarFallback>{student.name[0]}</AvatarFallback>
                   </Avatar>
-                  <div className="flex-1 min-w-0">
+                  <div className="w-full min-w-0">
                     <p
-                      className="text-sm text-gray-900 hover:text-primary cursor-pointer transition-colors duration-300"
+                      className="cursor-pointer text-base font-medium leading-6 text-gray-900 transition-colors duration-300 hover:text-primary"
                       onClick={() => onViewProfile(student.id)}
                     >
                       {student.name}
                     </p>
-                    <p className="text-xs text-gray-600">{student.branch}</p>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="mt-1 truncate text-sm text-gray-600">{student.branch}</p>
+                    <p className="mt-1 text-sm leading-6 text-gray-500">
                       {sharedSkills.length > 0
                         ? `Shared skills: ${sharedSkills.slice(0, 2).join(', ')}`
                         : sharedInterests.length > 0
                           ? `Shared interests: ${sharedInterests.slice(0, 2).join(', ')}`
                           : `${student.year}th year`}
                     </p>
-                    <div className="flex flex-wrap gap-1 mt-1">
+                    <div className="mt-3 flex flex-wrap justify-center gap-1.5">
                       {student.skills.slice(0, 2).map((skill) => (
                         <Badge key={skill} variant="outline" className="text-xs border-primary/20 text-primary">
                           {skill}
