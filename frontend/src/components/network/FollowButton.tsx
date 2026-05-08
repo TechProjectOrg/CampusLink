@@ -72,10 +72,10 @@ export function FollowButton({
         size="sm"
         className={
           isFollowing
-            ? 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-600 hover:text-white rounded-full px-5 h-11 font-bold transition-all duration-200 shadow-none'
+            ? 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-600 hover:text-white hover:border-red-600 rounded-full px-6 h-11 font-medium transition-all duration-200 shadow-none flex items-center justify-center'
             : label === 'Requested'
-            ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl rounded-full px-6 h-11 font-bold'
-            : 'gradient-primary shadow-lg hover:shadow-xl rounded-full px-6 h-11 font-bold'
+            ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl rounded-full px-6 h-11 font-medium flex items-center justify-center'
+            : 'gradient-primary shadow-lg hover:shadow-xl rounded-full px-6 h-11 font-medium flex items-center justify-center'
         }
         variant="default"
         title={helperText ?? undefined}
