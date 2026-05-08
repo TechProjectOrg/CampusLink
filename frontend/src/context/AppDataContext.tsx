@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useSyncExternalStore,
@@ -1469,11 +1470,13 @@ export function AppDataProvider({ children }: { children: ReactNode }) {
   const seededUser = auth.currentUser ?? null;
   const sessionKey = auth.session?.userId ?? 'anonymous';
 
-  useEffect(() => {
+  // Sync session state before child effects fire so first-login fetches
+  // do not observe an empty store token and silently bail out.
+  useLayoutEffect(() => {
     store.resetForSession(seededUser);
   }, [store, sessionKey]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     store.setSession(auth.session?.token, seededUser);
   }, [store, auth.session?.token, seededUser]);
 
