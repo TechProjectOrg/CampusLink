@@ -70,6 +70,19 @@ import {
   type CreateUserPostPayload,
   type UserPost,
 } from './lib/postsApi';
+import {
+  cacheCommentsPage,
+  cacheFollowGraph,
+  cacheNotifications,
+  markAllNotificationsCacheRead,
+  markNotificationCacheRead,
+  patchNotificationEntity,
+  readCachedCommentsPage,
+  readCachedFollowGraph,
+  readCachedNotifications,
+} from './cache/socialCache';
+import { invalidateCache } from './cache/client';
+import { cacheKeys } from './cache/keys';
 
 const POST_COMMENTS_PAGE_SIZE = 20;
 const COMMENT_REPLIES_PAGE_SIZE = 10;
@@ -903,8 +916,24 @@ export default function App() {
 
   const refreshFollowGraph = useCallback(async () => {
     if (!authToken) return;
+    const cached = await readCachedFollowGraph(currentUserId);
+    if (cached) {
+      const { graph, requestIdMap: rMap } = buildFollowGraph(cached, currentUserId);
+      setFollowGraph(graph);
+      setRequestIdMap(rMap);
+      const allCachedUsers: NetworkUser[] = [
+        ...cached.followers,
+        ...cached.following,
+        ...cached.incomingRequests,
+        ...cached.outgoingRequests,
+      ];
+      const uniqueCachedUsers = new Map<string, NetworkUser>();
+      allCachedUsers.forEach((user) => uniqueCachedUsers.set(user.userId, user));
+      appData.mergeUsers(networkUsersToStudents(Array.from(uniqueCachedUsers.values())));
+    }
     try {
       const data = await apiGetFollowGraph(authToken);
+      await cacheFollowGraph(currentUserId, data);
       const { graph, requestIdMap: rMap } = buildFollowGraph(data, currentUserId);
       setFollowGraph(graph);
       setRequestIdMap(rMap);
@@ -927,8 +956,13 @@ export default function App() {
 
   const refreshNotifications = useCallback(async () => {
     if (!authToken) return;
+    const cached = await readCachedNotifications();
+    if (cached.length > 0) {
+      setNotifications(cached.map(apiNotificationToLocal).filter((notification) => notification.type !== 'message'));
+    }
     try {
       const data = await apiFetchNotifications(authToken);
+      await cacheNotifications(data);
       setNotifications(data.map(apiNotificationToLocal).filter((notification) => notification.type !== 'message'));
     } catch (err) {
       console.error('Failed to fetch notifications:', err);
@@ -1059,6 +1093,7 @@ export default function App() {
 
         if (parsed.type.startsWith('notification:')) {
           if (parsed.payload?.type === 'message' || parsed.payload?.notificationType === 'message') return;
+          void patchNotificationEntity(parsed.payload as ApiNotification);
           const local = apiNotificationToLocal(parsed.payload);
           setNotifications((prev) => mergeRealtimeNotification(prev, local));
         } else if (parsed.type.startsWith('feed:')) {
@@ -1251,7 +1286,20 @@ export default function App() {
     );
 
     try {
+      const cacheKey = cacheKeys.page.postComments(postId, null);
+      const cached = await readCachedCommentsPage(cacheKey);
+      if (cached) {
+        const comments = cached.comments.map((comment) => mapPostCommentToComment(comment));
+        setOpenedPostComments({
+          items: comments,
+          nextCursor: cached.nextCursor,
+          isLoading: true,
+          hasMore: Boolean(cached.nextCursor),
+          hasHydrated: true,
+        });
+      }
       const page = await apiFetchPostComments(postId, authToken, POST_COMMENTS_PAGE_SIZE);
+      await cacheCommentsPage(cacheKey, `${postId}:root`, page);
       const comments = page.comments.map((comment) => mapPostCommentToComment(comment));
       setOpenedPostComments({
         items: comments,
@@ -1283,12 +1331,25 @@ export default function App() {
     }));
 
     try {
+      const cacheKey = cacheKeys.page.postComments(openedPostId, currentState.nextCursor);
+      const cached = await readCachedCommentsPage(cacheKey);
+      if (cached) {
+        const comments = cached.comments.map((comment) => mapPostCommentToComment(comment));
+        setOpenedPostComments((prev) => ({
+          items: mergeUniqueComments(prev.items, comments),
+          nextCursor: cached.nextCursor,
+          isLoading: true,
+          hasMore: Boolean(cached.nextCursor),
+          hasHydrated: true,
+        }));
+      }
       const page = await apiFetchPostComments(
         openedPostId,
         authToken,
         POST_COMMENTS_PAGE_SIZE,
         currentState.nextCursor,
       );
+      await cacheCommentsPage(cacheKey, `${openedPostId}:${currentState.nextCursor}`, page);
       const comments = page.comments.map((comment) => mapPostCommentToComment(comment));
       setOpenedPostComments((prev) => ({
         items: mergeUniqueComments(prev.items, comments),
@@ -1327,7 +1388,24 @@ export default function App() {
     });
 
     try {
+      const cacheKey = cacheKeys.page.commentReplies(commentId, null);
+      const cached = await readCachedCommentsPage(cacheKey);
+      if (cached) {
+        const replies = cached.comments.map((comment) => mapPostCommentToComment(comment));
+        setOpenedPostRepliesByCommentId((prev) => ({
+          ...prev,
+          [commentId]: {
+            items: replies,
+            nextCursor: cached.nextCursor,
+            isLoading: true,
+            hasMore: Boolean(cached.nextCursor),
+            hasHydrated: true,
+            isExpanded: true,
+          },
+        }));
+      }
       const page = await apiFetchCommentReplies(commentId, authToken, COMMENT_REPLIES_PAGE_SIZE);
+      await cacheCommentsPage(cacheKey, `${commentId}:root`, page);
       const replies = page.comments.map((comment) => mapPostCommentToComment(comment));
       setOpenedPostRepliesByCommentId((prev) => ({
         ...prev,
@@ -1372,12 +1450,30 @@ export default function App() {
     }));
 
     try {
+      const cacheKey = cacheKeys.page.commentReplies(commentId, currentThread.nextCursor);
+      const cached = await readCachedCommentsPage(cacheKey);
+      if (cached) {
+        const replies = cached.comments.map((comment) => mapPostCommentToComment(comment));
+        setOpenedPostRepliesByCommentId((prev) => ({
+          ...prev,
+          [commentId]: {
+            ...prev[commentId],
+            items: mergeUniqueComments(prev[commentId]?.items ?? [], replies),
+            nextCursor: cached.nextCursor,
+            isLoading: true,
+            hasMore: Boolean(cached.nextCursor),
+            hasHydrated: true,
+            isExpanded: true,
+          },
+        }));
+      }
       const page = await apiFetchCommentReplies(
         commentId,
         authToken,
         COMMENT_REPLIES_PAGE_SIZE,
         currentThread.nextCursor,
       );
+      await cacheCommentsPage(cacheKey, `${commentId}:${currentThread.nextCursor}`, page);
       const replies = page.comments.map((comment) => mapPostCommentToComment(comment));
       setOpenedPostRepliesByCommentId((prev) => ({
         ...prev,
@@ -1474,6 +1570,7 @@ export default function App() {
           ...post,
           commentCount: Math.max(post.commentCount + 1, 0),
         }));
+        void invalidateCache({ reason: 'comment-created', prefixes: [`page:post:${opportunityId}:comments`] });
         await appData.refreshPost(opportunityId);
         setPostsRefreshToken((prev) => prev + 1);
       } catch (err) {
@@ -1550,6 +1647,10 @@ export default function App() {
             ...post,
             commentCount: Math.max(post.commentCount + 1, 0),
           }));
+          void invalidateCache({
+            reason: 'reply-created',
+            prefixes: [`page:post:${openedPostId}:comments`, `page:comment:${commentId}:replies`],
+          });
           await appData.refreshPost(openedPostId);
         }
         setPostsRefreshToken((prev) => prev + 1);
@@ -1671,6 +1772,10 @@ export default function App() {
           );
         }
         if (openedPostId) {
+          void invalidateCache({
+            reason: 'comment-deleted',
+            prefixes: [`page:post:${openedPostId}:comments`, `page:comment:${commentId}:replies`],
+          });
           appData.updatePost(openedPostId, (post) => ({
             ...post,
             commentCount: Math.max(post.commentCount - 1, 0),
@@ -1715,6 +1820,7 @@ export default function App() {
           authToken,
         );
         toast.success('Post updated successfully');
+        void invalidateCache({ reason: 'post-updated', keys: [cacheKeys.entity.post(postId)], prefixes: ['page:feed:', `page:user:`] });
         await appData.refreshPost(postId);
         setPostsRefreshToken((prev) => prev + 1);
       } catch (err) {
@@ -1729,6 +1835,7 @@ export default function App() {
       try {
         await apiDeletePost(postId, authToken);
         appData.removePost(postId);
+        void invalidateCache({ reason: 'post-deleted', keys: [cacheKeys.entity.post(postId)], prefixes: ['page:feed:', `page:user:`] });
         toast.success('Post deleted successfully');
         setOpenedPost((prev) => (prev?.id === postId ? null : prev));
         setPostsRefreshToken((prev) => prev + 1);
@@ -1864,6 +1971,7 @@ export default function App() {
     // Backend call
     try {
       await apiFollow(targetUserId, authToken);
+      void refreshFollowGraph();
     } catch (err: any) {
       toast.error(err?.message || 'Follow failed');
       refreshFollowGraph(); // Revert to server state
@@ -1886,6 +1994,7 @@ export default function App() {
 
     try {
       await apiUnfollow(targetUserId, authToken);
+      void refreshFollowGraph();
     } catch (err: any) {
       toast.error(err?.message || 'Unfollow failed');
       refreshFollowGraph();
@@ -1908,6 +2017,7 @@ export default function App() {
 
     try {
       await apiCancelFollowRequest(targetUserId, authToken);
+      void refreshFollowGraph();
     } catch (err: any) {
       toast.error(err?.message || 'Cancel request failed');
       refreshFollowGraph();
@@ -1930,6 +2040,7 @@ export default function App() {
 
     try {
       await apiRemoveFollower(followerUserId, authToken);
+      void refreshFollowGraph();
     } catch (err: any) {
       toast.error(err?.message || 'Remove follower failed');
       refreshFollowGraph();
@@ -1962,6 +2073,7 @@ export default function App() {
 
     try {
       await apiAcceptFollowRequest(requestIdentifier, authToken);
+      void refreshFollowGraph();
     } catch (err: any) {
       toast.error(err?.message || 'Accept request failed');
       refreshFollowGraph();
@@ -1986,6 +2098,7 @@ export default function App() {
 
     try {
       await apiRejectFollowRequest(requestIdentifier, authToken);
+      void refreshFollowGraph();
     } catch (err: any) {
       toast.error(err?.message || 'Reject request failed');
       refreshFollowGraph();
@@ -2086,6 +2199,7 @@ export default function App() {
     setNotifications((prev) =>
       prev.map((n) => (n.id === notificationId ? { ...n, read: true } : n))
     );
+    void markNotificationCacheRead(notificationId);
 
     try {
       await apiMarkNotificationRead(notificationId, authToken);
@@ -2098,6 +2212,7 @@ export default function App() {
   const handleMarkAllAsRead = async () => {
     // Optimistic update
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    void markAllNotificationsCacheRead();
 
     try {
       await apiMarkAllNotificationsRead(authToken);

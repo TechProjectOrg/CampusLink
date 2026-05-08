@@ -10,6 +10,8 @@ import { CreateClubModal } from './CreateClubModal';
 import { ClubActivityPage } from './ClubActivityPage';
 import { LoadingState } from './LoadingState';
 import { ImageWithFallback } from './figma/ImageWithFallback';
+import { cacheClubsList, readCachedClubsList } from '../cache/socialCache';
+import { cacheKeys } from '../cache/keys';
 
 interface ClubsPageProps {
   clubs?: Club[];
@@ -39,23 +41,30 @@ export function ClubsPage({ students, currentUserId, initialClubSlug = null, onC
   useEffect(() => {
     let isMounted = true;
     setIsLoading(true);
-    apiFetchClubs(auth.session?.token)
-      .then((items) => {
+    void (async () => {
+      const key = cacheKeys.list.clubs();
+      const cached = await readCachedClubsList(key);
+      if (isMounted && cached.length > 0) {
+        setClubs(cached);
+      }
+
+      try {
+        const items = await apiFetchClubs(auth.session?.token);
+        await cacheClubsList(key, items);
         if (isMounted) {
           setClubs(items);
           setError(null);
         }
-      })
-      .catch((err) => {
+      } catch (err) {
         if (isMounted) {
           setError(err instanceof Error ? err.message : 'Unable to load clubs');
         }
-      })
-      .finally(() => {
+      } finally {
         if (isMounted) {
           setIsLoading(false);
         }
-      });
+      }
+    })();
 
     return () => {
       isMounted = false;
@@ -63,14 +72,22 @@ export function ClubsPage({ students, currentUserId, initialClubSlug = null, onC
   }, [auth.session?.token]);
 
   const handleClubCreate = (club: Club) => {
-    setClubs((current) => [club, ...current]);
+    setClubs((current) => {
+      const next = [club, ...current];
+      void cacheClubsList(cacheKeys.list.clubs(), next);
+      return next;
+    });
     onCreateClub?.(club);
   };
 
   const handleJoinClub = async (club: Club) => {
     try {
       const updated = await apiJoinClub(club.id, auth.session?.token);
-      setClubs((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setClubs((current) => {
+        const next = current.map((item) => (item.id === updated.id ? updated : item));
+        void cacheClubsList(cacheKeys.list.clubs(), next);
+        return next;
+      });
     } catch (error) {
       setError(error instanceof Error ? error.message : 'Unable to join club');
     }

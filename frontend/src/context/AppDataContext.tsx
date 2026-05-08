@@ -35,6 +35,20 @@ import {
   mergeConversationReadUpdate,
   sortConversationsByTimestamp,
 } from '../lib/chatUi';
+import {
+  cacheConversationList,
+  cacheFeedPage,
+  cachePosts,
+  cacheStudents,
+  cacheUserProfile,
+  invalidateFeedCaches,
+  readCachedConversationList,
+  readCachedFeedPage,
+  readCachedPost,
+  readCachedStudent,
+  readCachedUserProfile,
+} from '../cache/socialCache';
+import { cacheKeys } from '../cache/keys';
 
 const FEED_TIMELINE_KEY = 'feed:home';
 const FEED_FRESHNESS_MS = 20_000;
@@ -191,6 +205,16 @@ function isFresh(timestamp: number | null, freshnessMs: number): boolean {
 
 function hashtagTimelineKey(hashtag: string): string {
   return `hashtag:${hashtag.trim().toLowerCase()}`;
+}
+
+function timelinePageCacheKey(key: string, limit: number, offset: number): string {
+  if (key === FEED_TIMELINE_KEY) {
+    return cacheKeys.page.feedHome(limit, offset);
+  }
+  if (key.startsWith('hashtag:')) {
+    return cacheKeys.page.feedHashtag(key.slice('hashtag:'.length), limit, offset);
+  }
+  return `${key}:${limit}:${offset}`;
 }
 
 export function apiProfileToStudent(profile: ApiUserProfile): Student {
@@ -549,11 +573,13 @@ function createStore(): AppDataStore {
         userLastFetchedAt: nextUserFetched,
       };
     });
+    void cacheStudents(users);
   };
 
   const upsertUserProfile = (profile: ApiUserProfile): Student => {
     const student = apiProfileToStudent(profile);
     mergeUsers([student]);
+    void cacheUserProfile(profile);
     return student;
   };
 
@@ -574,6 +600,7 @@ function createStore(): AppDataStore {
       .map((post) => userSummaryFromPost(post))
       .filter((user): user is Student => Boolean(user));
     mergeUsers(users);
+    void cachePosts(posts);
   };
 
   const ensureTimeline = async (
@@ -594,6 +621,33 @@ function createStore(): AppDataStore {
     if (!append && !force && timeline?.isHydrated && isFresh(timeline.lastFetchedAt, freshnessMs)) {
       return;
     }
+
+    const cacheKey = timelinePageCacheKey(key, limit, offset);
+    const cachedPage = await readCachedFeedPage(cacheKey);
+    if (cachedPage && cachedPage.posts.length > 0) {
+      mergePosts(cachedPage.posts);
+      setState((current) => ({
+        ...current,
+        timelines: {
+          ...current.timelines,
+          [key]: {
+            postIds: append
+              ? upsertUniquePostIds(current.timelines[key]?.postIds ?? [], cachedPage.posts.map((post) => post.id))
+              : cachedPage.posts.map((post) => post.id),
+            lastFetchedAt: current.timelines[key]?.lastFetchedAt ?? Date.now(),
+            isHydrated: true,
+            isRefreshing: force || append,
+            hasMore: cachedPage.hasMore,
+            nextOffset: cachedPage.nextOffset ?? offset + limit,
+            error: null,
+          },
+        },
+      }));
+      if (!force && !append) {
+        return;
+      }
+    }
+
     const existing = pendingTimelines.get(key);
     if (existing) return existing;
 
@@ -617,6 +671,13 @@ function createStore(): AppDataStore {
       try {
         const posts = await fetcher({ limit, offset });
         mergePosts(posts);
+        await cacheFeedPage({
+          key: cacheKey,
+          pageParam: `${limit}:${offset}`,
+          posts,
+          hasMore: posts.length > 0,
+          nextOffset: offset + limit,
+        });
         setState((current) => ({
           ...current,
           timelines: {
@@ -727,6 +788,7 @@ function createStore(): AppDataStore {
         },
       };
     });
+    void cacheConversationList(conversations as unknown as ConversationApiResponse[]);
   };
 
   return {
@@ -787,6 +849,23 @@ function createStore(): AppDataStore {
       if (!force && state.usersById[userId] && isFresh(state.userLastFetchedAt[userId] ?? null, USER_FRESHNESS_MS)) {
         return state.usersById[userId];
       }
+
+      const cachedStudent = await readCachedStudent(userId);
+      if (cachedStudent) {
+        mergeUsers([cachedStudent]);
+        if (!force) {
+          return cachedStudent;
+        }
+      }
+
+      const cachedProfile = await readCachedUserProfile(userId);
+      if (cachedProfile) {
+        const student = upsertUserProfile(cachedProfile);
+        if (!force) {
+          return student;
+        }
+      }
+
       const existing = pendingUsers.get(userId);
       if (existing) return existing;
 
@@ -824,6 +903,23 @@ function createStore(): AppDataStore {
     },
     refreshPost: async (postId, options) => {
       if (!authToken || !postId) return;
+      const cachedPost = await readCachedPost(postId);
+      if (cachedPost) {
+        mergePosts([cachedPost]);
+        setState((current) => {
+          let nextState = upsertTimelinePost(current, cachedPost, FEED_TIMELINE_KEY, options?.insertToTop ?? false);
+          for (const tag of cachedPost.hashtags) {
+            const key = hashtagTimelineKey(tag);
+            if (current.timelines[key]?.isHydrated) {
+              nextState = upsertTimelinePost(nextState, cachedPost, key, options?.insertToTop ?? false);
+            }
+          }
+          return nextState;
+        });
+        if (!options?.insertToTop) {
+          return;
+        }
+      }
       const existing = pendingPosts.get(postId);
       if (existing) return existing;
       const request = (async () => {
@@ -877,10 +973,18 @@ function createStore(): AppDataStore {
           timelines: nextTimelines,
         };
       });
+      void invalidateFeedCaches();
     },
     prependPostToFeed: (post) => {
       mergePosts([post]);
       setState((current) => upsertTimelinePost(current, post, FEED_TIMELINE_KEY, true));
+      void cacheFeedPage({
+        key: timelinePageCacheKey(FEED_TIMELINE_KEY, 1, 0),
+        pageParam: '1:0',
+        posts: [post],
+        hasMore: true,
+        nextOffset: 1,
+      });
     },
     ensureConversations: async (options) => {
       if (!authToken) return;
@@ -890,6 +994,36 @@ function createStore(): AppDataStore {
         isFresh(state.chat.listLastFetchedAt, CHAT_LIST_FRESHNESS_MS)
       ) {
         return;
+      }
+
+      const cachedConversations = await readCachedConversationList();
+      if (cachedConversations.length > 0) {
+        const mappedCached = sortConversationsByTimestamp(cachedConversations as unknown as ChatConversation[]);
+        const cachedUsers = mappedCached
+          .filter((conversation) => !conversation.isGroup)
+          .map((conversation) => ({
+            id: conversation.participantId,
+            name: conversation.participantName,
+            username: conversation.participantName,
+            email: '',
+            branch: 'Unknown',
+            year: 0,
+            avatar: conversation.participantAvatar || undefined,
+            bio: '',
+            skills: [],
+            interests: [],
+            certifications: [],
+            experience: [],
+            societies: [],
+            achievements: [],
+            projects: [],
+            accountType: 'public' as const,
+          }));
+        mergeUsers(cachedUsers);
+        setConversations(mappedCached);
+        if (!options?.force) {
+          return;
+        }
       }
 
       const key = 'chat:list';
@@ -908,6 +1042,7 @@ function createStore(): AppDataStore {
       const request = (async () => {
         try {
           const conversations = (await apiFetchConversations(authToken, 'active')) as ConversationApiResponse[];
+          await cacheConversationList(conversations);
           const mapped = sortConversationsByTimestamp(conversations as ChatConversation[]);
           const users = mapped
             .filter((conversation) => !conversation.isGroup)
@@ -1211,14 +1346,14 @@ function createStore(): AppDataStore {
       }));
     },
     upsertConversation: (conversation) => {
-      setConversations(
-        sortConversationsByTimestamp([
-          conversation,
-          ...state.chat.conversationOrder
-            .map((id) => state.chat.conversationsById[id])
-            .filter((item): item is ChatConversation => Boolean(item) && item.id !== conversation.id),
-        ]),
-      );
+      const nextConversations = sortConversationsByTimestamp([
+        conversation,
+        ...state.chat.conversationOrder
+          .map((id) => state.chat.conversationsById[id])
+          .filter((item): item is ChatConversation => Boolean(item) && item.id !== conversation.id),
+      ]);
+      setConversations(nextConversations);
+      void cacheConversationList(nextConversations as unknown as ConversationApiResponse[]);
     },
     applyRealtimeEvent: (event, currentUserId) => {
       if (!event?.type || !event.payload) return;

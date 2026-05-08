@@ -36,6 +36,16 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from './ui/dropdown-menu';
 import { CreateUnifiedPostModal } from './CreateUnifiedPostModal';
 import { LoadingIndicator } from './ui/LoadingIndicator';
+import {
+  cacheClub,
+  cacheFeedPage,
+  cacheFollowGraph,
+  fetchCachedValue,
+  readCachedFeedPage,
+  readCachedFollowGraph,
+} from '../cache/socialCache';
+import { cacheKeys } from '../cache/keys';
+import { cachePolicies } from '../cache/policies';
 
 interface ClubActivityPageProps {
   clubSlug: string;
@@ -87,10 +97,51 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
   });
 
   const loadClubData = async () => {
-    const clubValue = await apiFetchClub(clubSlug, auth.session?.token);
+    const detailKey = `page:club:detail:${clubSlug}`;
+    const clubValue = await fetchCachedValue({
+      key: detailKey,
+      policy: cachePolicies.clubPage,
+      fetcher: async () => {
+        const fresh = await apiFetchClub(clubSlug, auth.session?.token);
+        await cacheClub(fresh);
+        return fresh;
+      },
+      onCached: (cachedClub) => {
+        setClub(cachedClub);
+        setSettingsForm({
+          name: cachedClub.name,
+          description: cachedClub.description ?? cachedClub.shortDescription ?? '',
+          privacy: cachedClub.privacy,
+          primaryCategory: cachedClub.primaryCategory?.displayName ?? '',
+        });
+      },
+    });
+
+    const membersKey = cacheKeys.page.clubMembers(clubValue.id, 100, 0);
+    const postsKey = cacheKeys.page.clubPosts(clubValue.id, 'latest', 25, 0);
+    const cachedPosts = await readCachedFeedPage(postsKey);
+    if (cachedPosts?.posts.length) {
+      setPosts(cachedPosts.posts.map((post) => userPostToOpportunity(post, {}, auth.currentUser ?? null)));
+    }
+
     const [memberRows, postRows] = await Promise.all([
-      apiFetchClubMembers(clubValue.id, auth.session?.token, 100, 0).catch(() => []),
-      apiFetchClubPosts(clubValue.id, auth.session?.token, 25, 0).catch(() => []),
+      fetchCachedValue({
+        key: membersKey,
+        policy: cachePolicies.clubPage,
+        fetcher: () => apiFetchClubMembers(clubValue.id, auth.session?.token, 100, 0).catch(() => []),
+        onCached: (cachedMembers) => setMembers(cachedMembers),
+      }),
+      (async () => {
+        const rows = await apiFetchClubPosts(clubValue.id, auth.session?.token, 25, 0).catch(() => []);
+        await cacheFeedPage({
+          key: postsKey,
+          pageParam: 'latest:25:0',
+          posts: rows,
+          hasMore: rows.length > 0,
+          nextOffset: 25,
+        });
+        return rows;
+      })(),
     ]);
 
     setClub(clubValue);
@@ -139,18 +190,29 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
   useEffect(() => {
     if (!auth.session?.token || !isInviteOpen) return;
     let isMounted = true;
-    apiGetFollowGraph(auth.session.token)
-      .then((graph) => {
+    void (async () => {
+      const cached = await readCachedFollowGraph(currentUserId);
+      if (cached && isMounted) {
+        const connected = new Set<string>();
+        for (const user of cached.followers ?? []) connected.add(user.userId);
+        for (const user of cached.following ?? []) connected.add(user.userId);
+        connected.delete(currentUserId);
+        setConnectedUserIds(connected);
+      }
+
+      try {
+        const graph = await apiGetFollowGraph(auth.session.token);
+        await cacheFollowGraph(currentUserId, graph);
         if (!isMounted) return;
         const connected = new Set<string>();
         for (const user of graph.followers ?? []) connected.add(user.userId);
         for (const user of graph.following ?? []) connected.add(user.userId);
         connected.delete(currentUserId);
         setConnectedUserIds(connected);
-      })
-      .catch(() => {
-        if (isMounted) setConnectedUserIds(new Set());
-      });
+      } catch {
+        if (isMounted && !cached) setConnectedUserIds(new Set());
+      }
+    })();
     return () => {
       isMounted = false;
     };

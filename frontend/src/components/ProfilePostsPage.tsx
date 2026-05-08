@@ -7,6 +7,7 @@ import { OpportunityCard } from './OpportunityCard';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
 import { LoadingIndicator } from './ui/LoadingIndicator';
+import { cacheProfilePosts, readCachedProfilePosts } from '../cache/socialCache';
 
 interface ProfilePostsPageProps {
   student: Student;
@@ -121,18 +122,25 @@ export function ProfilePostsPage({
   useEffect(() => {
     let cancelled = false;
     setIsLoading(true);
-    apiFetchProfilePosts(student.id, auth.session?.token)
-      .then((list) => {
+
+    void (async () => {
+      const cached = await readCachedProfilePosts(student.id);
+      if (!cancelled && cached.length > 0) {
+        setPosts(cached.map((post) => mapApiPostToOpportunity(post, student)));
+      }
+
+      try {
+        const list = await apiFetchProfilePosts(student.id, auth.session?.token);
+        await cacheProfilePosts(student.id, list);
         if (!cancelled) {
           setPosts(list.map((post) => mapApiPostToOpportunity(post, student)));
         }
-      })
-      .catch(() => {
-        if (!cancelled) setPosts([]);
-      })
-      .finally(() => {
+      } catch {
+        if (!cancelled && cached.length === 0) setPosts([]);
+      } finally {
         if (!cancelled) setIsLoading(false);
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;

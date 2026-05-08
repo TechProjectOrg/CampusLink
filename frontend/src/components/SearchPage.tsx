@@ -7,6 +7,9 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Card, CardContent } from './ui/card';
 import { useAuth } from '../context/AuthContext';
 import { apiSearchAll, type SearchClubResult, type SearchHashtagResult, type SearchUserResult } from '../lib/networkApi';
+import { fetchCachedValue } from '../cache/socialCache';
+import { cacheKeys } from '../cache/keys';
+import { cachePolicies } from '../cache/policies';
 
 interface SearchPageProps {
   students: Student[];
@@ -120,7 +123,17 @@ export function SearchPage({
       setIsLoading(true);
       setHasSearched(true);
       try {
-        const result = await apiSearchAll(searchQuery.trim(), auth.session?.token, 50, 25);
+        const trimmedQuery = searchQuery.trim();
+        const result = await fetchCachedValue({
+          key: cacheKeys.page.searchAll(trimmedQuery, 0, 0, 0),
+          policy: cachePolicies.search,
+          fetcher: () => apiSearchAll(trimmedQuery, auth.session?.token, 50, 25),
+          onCached: (cachedResult) => {
+            setSearchResults(cachedResult.users.map(searchResultToStudent));
+            setHashtagResults(cachedResult.hashtags);
+            setClubResults(cachedResult.clubs ?? []);
+          },
+        });
         setSearchResults(result.users.map(searchResultToStudent));
         setHashtagResults(result.hashtags);
         setClubResults(result.clubs ?? []);

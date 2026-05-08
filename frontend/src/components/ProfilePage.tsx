@@ -47,6 +47,7 @@ import { apiUpdateUserProfilePicture, apiUploadUserProfilePicture } from '../lib
 import { OpportunityCard } from './OpportunityCard';
 import { apiFetchProfilePosts, type UserPost } from '../lib/postsApi';
 import { LoadingIndicator } from './ui/LoadingIndicator';
+import { cacheProfilePosts, readCachedProfilePosts } from '../cache/socialCache';
 
 interface ProfilePageProps {
   student: Student;
@@ -343,11 +344,18 @@ export function ProfilePage({
   const loadPosts = async () => {
     if (!student.id) return;
     setPostsLoading(true);
+    const cached = await readCachedProfilePosts(student.id);
+    if (cached.length > 0) {
+      setLoadedPosts(cached.map(mapApiPostToOpportunity));
+    }
     try {
       const list = await apiFetchProfilePosts(student.id, authToken);
+      await cacheProfilePosts(student.id, list);
       setLoadedPosts(list.map(mapApiPostToOpportunity));
     } catch {
-      setLoadedPosts([]);
+      if (cached.length === 0) {
+        setLoadedPosts([]);
+      }
     } finally {
       setPostsLoading(false);
     }
