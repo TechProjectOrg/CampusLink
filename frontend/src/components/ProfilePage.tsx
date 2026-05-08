@@ -1051,12 +1051,14 @@ export function ProfilePage({
               onAdd={() => setActiveModal('education')} 
             />
             {hasKnownBranch || hasKnownYear ? (
-              <div className="relative border-l-2 border-emerald-100 pl-5">
-                <span className="absolute -left-[9px] top-1 h-4 w-4 rounded-full border-4 border-white bg-emerald-500 shadow" />
-                {hasKnownBranch && <h3 className="break-words font-semibold text-slate-950">{profileBranch}</h3>}
-                <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">
-                  {hasKnownYear ? `Year ${student.year}` : ''}
-                </p>
+              <div className="flex items-start gap-3">
+                <span className="mt-1 h-3.5 w-3.5 flex-shrink-0 rounded-full bg-emerald-500 shadow-sm" />
+                <div className="min-w-0">
+                  {hasKnownBranch && <h3 className="break-words font-semibold text-slate-950">{profileBranch}</h3>}
+                  <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                    {hasKnownYear ? `Year ${student.year}` : ''}
+                  </p>
+                </div>
               </div>
             ) : (
               <EmptyState message="Highlight your academic background." />
