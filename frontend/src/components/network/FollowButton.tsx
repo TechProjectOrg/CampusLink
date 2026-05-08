@@ -96,16 +96,18 @@ export function FollowButton({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Keep</AlertDialogCancel>
+            <AlertDialogCancel className="bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 rounded-full px-5 py-2 h-auto">
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="bg-red-500 text-white hover:bg-red-600 rounded-full px-5 py-2 h-auto border-none shadow-none"
               onClick={() => {
                 if (confirmMode === 'unfollow') onUnfollow();
                 if (confirmMode === 'cancel-request') onCancelRequest();
                 setConfirmMode(null);
               }}
             >
-              {confirmMode === 'unfollow' ? 'Unfollow' : 'Cancel Request'}
+              Remove
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

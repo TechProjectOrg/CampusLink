@@ -206,8 +206,7 @@ export function NetworkPage({
                        ) : (
                        <Button
                          size="sm"
-                         variant="outline"
-                         className="rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10"
+                         className="rounded-xl bg-red-50 text-red-600 border border-red-200 hover:bg-red-600 hover:text-white transition-all duration-200 shadow-none"
                         
                          onClick={() => setUnfollowUserId(user.id)}
                          >
@@ -253,8 +252,11 @@ export function NetworkPage({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="bg-gray-100 text-gray-700 border border-gray-200 hover:bg-gray-200 rounded-full px-5 py-2 h-auto">
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
+              className="bg-red-500 text-white hover:bg-red-600 rounded-full px-5 py-2 h-auto border-none shadow-none"
               onClick={() => {
                 if (removeFollowerId !== null) {
                   onRemoveFollower(removeFollowerId);
@@ -267,9 +269,8 @@ export function NetworkPage({
                   setCancelRequestId(null);
                 }
               }}
-              variant="destructive"
             >
-              {removeFollowerId !== null ? 'Remove' : unfollowUserId !== null ? 'Unfollow' : 'Cancel Request'}
+              Remove
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
