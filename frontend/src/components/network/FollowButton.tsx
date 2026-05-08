@@ -38,7 +38,7 @@ export function FollowButton({
   const [confirmMode, setConfirmMode] = useState<'unfollow' | 'cancel-request' | null>(null);
 
   const label = useMemo(() => {
-    if (isFollowing) return 'Following';
+    if (isFollowing) return 'Unfollow';
     if (requestStatus === 'requested') return 'Requested';
     if (isFollower) return 'Follow Back';
     return 'Follow';
@@ -71,9 +71,11 @@ export function FollowButton({
         onClick={handleClick}
         size="sm"
         className={
-          label === 'Following' || label === 'Requested'
-            ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl rounded-xl'
-            : 'gradient-primary shadow-lg hover:shadow-xl rounded-xl'
+          isFollowing
+            ? 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-600 hover:text-white rounded-full px-5 h-11 font-bold transition-all duration-200 shadow-none'
+            : label === 'Requested'
+            ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-lg hover:shadow-xl rounded-full px-6 h-11 font-bold'
+            : 'gradient-primary shadow-lg hover:shadow-xl rounded-full px-6 h-11 font-bold'
         }
         variant="default"
         title={helperText ?? undefined}
