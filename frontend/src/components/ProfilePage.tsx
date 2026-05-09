@@ -1096,7 +1096,7 @@ export function ProfilePage({
               <img
                 src={bannerImage}
                 alt="Profile banner"
-                className="absolute inset-0 h-full w-full object-contain object-center"
+                className="absolute inset-0 h-full w-full object-cover object-center"
               />
             ) : null}
             <div className="absolute inset-0 bg-black/5" />
