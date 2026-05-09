@@ -221,9 +221,11 @@ export async function apiChangePassword(
 }
 
 export interface UpdateUserProfilePayload {
-  username: string;
-  branch: string;
-  year: string | number;
+  username?: string;
+  branch?: string;
+  year?: string | number;
+  bio?: string | null;
+  headline?: string | null;
 }
 
 export async function apiUpdateUserProfile(
@@ -289,6 +291,52 @@ export async function apiUploadUserProfilePicture(
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
     throw new Error(err?.message || 'Unable to upload profile picture');
+  }
+
+  return (await response.json()) as ApiUserProfile;
+}
+
+export async function apiUpdateUserCoverPhoto(
+  userId: string,
+  coverPhotoUrl: string | null,
+  token?: string,
+): Promise<ApiUserProfile> {
+  const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}/cover-photo`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(token),
+    },
+    body: JSON.stringify({ coverPhotoUrl }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to update cover photo');
+  }
+
+  return (await response.json()) as ApiUserProfile;
+}
+
+export async function apiUploadUserCoverPhoto(
+  userId: string,
+  file: File,
+  token?: string,
+): Promise<ApiUserProfile> {
+  const formData = new FormData();
+  formData.append('image', file);
+
+  const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}/cover-photo`, {
+    method: 'PATCH',
+    headers: {
+      ...authHeaders(token),
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to upload cover photo');
   }
 
   return (await response.json()) as ApiUserProfile;

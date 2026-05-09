@@ -9,6 +9,8 @@ function authHeaders(token?: string): HeadersInit {
 export interface UserCertification {
   id: string;
   name: string;
+  issuer?: string | null;
+  credentialUrl?: string | null;
   description: string | null;
   imageUrl: string | null;
 
@@ -47,6 +49,8 @@ function normalizeCertification(raw: CertificationRaw, index: number): UserCerti
   return {
     id: String(id),
     name: String(name),
+    issuer: raw.issuer ? String(raw.issuer) : null,
+    credentialUrl: raw.credentialUrl ?? raw.credential_url ?? null,
     description: description ? String(description) : null,
     imageUrl: imageUrl ? String(imageUrl) : null,
     issuedAt: issuedAt ? String(issuedAt) : null,
@@ -81,14 +85,16 @@ export async function apiFetchUserCertifications(
 
 export async function apiCreateUserCertification(
   userId: string,
-  payload: { name: string; description?: string; imageUrl?: string },
+  payload: { name: string; issuer?: string; description?: string; imageUrl?: string; credentialUrl?: string; issuedAt?: string },
   token?: string
 ): Promise<void> {
   const name = payload.name.trim();
+  const issuer = payload.issuer?.trim() || null;
   const description = payload.description?.trim() || null;
   const imageUrl = payload.imageUrl?.trim() || null;
+  const credentialUrl = payload.credentialUrl?.trim() || null;
+  const issuedAt = payload.issuedAt?.trim() || null;
 
-  // Backend currently stores: issuer + credentialUrl. We send both to stay compatible.
   const response = await fetch(`${API_BASE}/users/${encodeURIComponent(userId)}/certifications`, {
     method: 'POST',
     headers: {
@@ -97,12 +103,43 @@ export async function apiCreateUserCertification(
     },
     body: JSON.stringify({
       name,
+      issuer,
       description,
       imageUrl,
-      issuer: description,
-      credentialUrl: imageUrl,
+      credentialUrl,
+      issuedAt,
     }),
   });
+
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response));
+  }
+}
+
+export async function apiUpdateUserCertification(
+  userId: string,
+  certificationId: string,
+  payload: {
+    name?: string;
+    issuer?: string;
+    description?: string;
+    imageUrl?: string;
+    credentialUrl?: string;
+    issuedAt?: string;
+  },
+  token?: string,
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE}/users/${encodeURIComponent(userId)}/certifications/${encodeURIComponent(certificationId)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(token),
+      },
+      body: JSON.stringify(payload),
+    },
+  );
 
   if (!response.ok) {
     throw new Error(await parseErrorMessage(response));

@@ -48,13 +48,19 @@ const requireOwnUser: RequestHandler = (req, res, next: NextFunction) => {
 router.use('/:userId', authenticateToken, requireOwnUser);
 
 interface UpdateUserBody {
-  username: string;
-  branch: string;
-  year: string | number;
+  username?: string;
+  branch?: string;
+  year?: string | number;
+  bio?: string | null;
+  headline?: string | null;
 }
 
 interface UpdateProfilePictureBody {
   profilePictureUrl?: string | null;
+}
+
+interface UpdateCoverPhotoBody {
+  coverPhotoUrl?: string | null;
 }
 
 const profilePhotoUpload = multer({
@@ -529,19 +535,37 @@ router.patch(
 
 router.patch(
   '/:userId',
-  async (req: Request<GetUserParams, unknown, Partial<UpdateUserBody>>, res: Response) => {
+  async (req: Request<GetUserParams, unknown, UpdateUserBody>, res: Response) => {
     const { userId } = req.params;
-    const { username, branch, year } = req.body;
+    const { username, branch, year, bio, headline } = req.body;
 
     const trimmedUsername = username?.trim();
     const trimmedBranch = branch?.trim();
     const numericYear = typeof year === 'string' ? Number.parseInt(year, 10) : year;
+    const hasBioUpdate = Object.prototype.hasOwnProperty.call(req.body, 'bio');
+    const hasHeadlineUpdate = Object.prototype.hasOwnProperty.call(req.body, 'headline');
 
-    if (!trimmedUsername || !trimmedBranch || year === undefined || year === null) {
-      return res.status(400).json({ message: 'Username, branch, and year are required' });
+    const hasUsernameUpdate = trimmedUsername !== undefined;
+    const hasBranchOrYearUpdate = branch !== undefined || year !== undefined;
+
+    if (
+      !hasUsernameUpdate &&
+      !hasBranchOrYearUpdate &&
+      !hasBioUpdate &&
+      !hasHeadlineUpdate
+    ) {
+      return res.status(400).json({ message: 'No profile fields provided for update' });
     }
 
-    if (Number.isNaN(numericYear)) {
+    if (hasUsernameUpdate && !trimmedUsername) {
+      return res.status(400).json({ message: 'Username cannot be empty' });
+    }
+
+    if (hasBranchOrYearUpdate && (!trimmedBranch || year === undefined || year === null)) {
+      return res.status(400).json({ message: 'Branch and year must both be provided together' });
+    }
+
+    if (hasBranchOrYearUpdate && Number.isNaN(numericYear)) {
       return res.status(400).json({ message: 'Year must be a valid number' });
     }
 
@@ -558,6 +582,7 @@ router.patch(
       }
 
       if (
+        hasBranchOrYearUpdate &&
         profileRow.user_type === 'student' &&
         (typeof numericYear !== 'number' || !Number.isInteger(numericYear) || numericYear < 1 || numericYear > 4)
       ) {
@@ -567,9 +592,16 @@ router.patch(
       await prisma.$transaction(async (tx) => {
         await tx.$queryRaw`
           UPDATE users
-          SET username = ${trimmedUsername}
+          SET
+            username = CASE WHEN ${hasUsernameUpdate} THEN ${trimmedUsername} ELSE username END,
+            bio = CASE WHEN ${hasBioUpdate} THEN ${bio?.trim() || null} ELSE bio END,
+            headline = CASE WHEN ${hasHeadlineUpdate} THEN ${headline?.trim() || null} ELSE headline END
           WHERE user_id = ${userId}
         `;
+
+        if (!hasBranchOrYearUpdate) {
+          return;
+        }
 
         if (profileRow.user_type === 'student') {
           await tx.$queryRaw`
@@ -589,23 +621,29 @@ router.patch(
 
       await patchUserSummary(userId, (current) => ({
         ...current,
-        username: trimmedUsername,
+        username: trimmedUsername ?? current.username,
+        bio: hasBioUpdate ? bio?.trim() || null : current.bio,
+        headline: hasHeadlineUpdate ? headline?.trim() || null : current.headline,
         details:
-          profileRow.user_type === 'student'
+          hasBranchOrYearUpdate && profileRow.user_type === 'student'
             ? {
                 ...current.details,
                 branch: trimmedBranch,
                 year: typeof numericYear === 'number' ? numericYear : current.details.year,
               }
-            : {
+            : hasBranchOrYearUpdate
+            ? {
                 ...current.details,
                 branch: trimmedBranch,
                 passingYear:
                   typeof numericYear === 'number' ? numericYear : current.details.passingYear,
-              },
+              }
+            : current.details,
       }));
 
-      await invalidateConversationLists(await getConversationViewerUserIds(userId));
+      if (hasUsernameUpdate) {
+        await invalidateConversationLists(await getConversationViewerUserIds(userId));
+      }
 
       const updatedProfile = await getUserProfileById(userId);
       if (!updatedProfile) {
@@ -702,6 +740,87 @@ router.patch(
       }
 
       console.error('Error updating profile picture:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
+
+router.patch(
+  '/:userId/cover-photo',
+  profilePhotoUpload.single('image') as unknown as RequestHandler<GetUserParams>,
+  async (
+    req: Request<GetUserParams, unknown, UpdateCoverPhotoBody> & { file?: Express.Multer.File },
+    res: Response,
+  ) => {
+    const { userId } = req.params;
+    const { coverPhotoUrl } = req.body;
+    const uploadedFile = req.file;
+
+    if (!uploadedFile && coverPhotoUrl === undefined) {
+      return res.status(400).json({ message: 'Provide an image file or coverPhotoUrl=null' });
+    }
+
+    if (uploadedFile && !uploadedFile.mimetype.startsWith('image/')) {
+      return res.status(400).json({ message: 'Only image uploads are allowed' });
+    }
+
+    if (!uploadedFile && coverPhotoUrl !== null) {
+      return res.status(400).json({ message: 'coverPhotoUrl must be null when no file is uploaded' });
+    }
+
+    try {
+      const currentProfile = await getUserProfileById(userId);
+      if (!currentProfile) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      let nextPhoto: string | null = currentProfile.coverPhotoUrl;
+
+      if (uploadedFile) {
+        nextPhoto = await uploadProfilePhotoToStorage({
+          userId,
+          fileBuffer: uploadedFile.buffer,
+          mimeType: uploadedFile.mimetype,
+        });
+      } else {
+        nextPhoto = null;
+      }
+
+      await prisma.$queryRaw`
+        UPDATE users
+        SET cover_photo_url = ${nextPhoto}
+        WHERE user_id = ${userId}
+      `;
+
+      await patchUserSummary(userId, (current) => ({
+        ...current,
+        coverPhotoUrl: nextPhoto,
+      }));
+
+      if (currentProfile.coverPhotoUrl && currentProfile.coverPhotoUrl !== nextPhoto) {
+        try {
+          await deleteManagedPhotoByUrl(currentProfile.coverPhotoUrl);
+        } catch (storageErr) {
+          console.warn('Unable to delete previous cover photo from object storage:', storageErr);
+        }
+      }
+
+      const updatedProfile = await getUserProfileById(userId);
+      if (!updatedProfile) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      return res.status(200).json(updatedProfile);
+    } catch (err) {
+      if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ message: 'Cover photo must be 5MB or smaller' });
+      }
+
+      if (err instanceof Error && err.message.startsWith('Missing required environment variable')) {
+        return res.status(500).json({ message: 'Cover image storage is not configured on the server' });
+      }
+
+      console.error('Error updating cover photo:', err);
       return res.status(500).json({ message: 'Internal server error' });
     }
   }
@@ -1063,6 +1182,94 @@ router.post(
   }
 );
 
+router.patch(
+  '/:userId/certifications/:certificationId',
+  async (
+    req: Request<
+      { userId: string; certificationId: string },
+      unknown,
+      {
+        name?: string;
+        issuer?: string;
+        credentialUrl?: string;
+        issuedAt?: string;
+        description?: string;
+        imageUrl?: string;
+      }
+    >,
+    res: Response,
+  ) => {
+    const { userId, certificationId } = req.params;
+    const { name, issuer, credentialUrl, issuedAt, description, imageUrl } = req.body;
+
+    const hasName = Object.prototype.hasOwnProperty.call(req.body, 'name');
+    const hasIssuer = Object.prototype.hasOwnProperty.call(req.body, 'issuer');
+    const hasCredentialUrl = Object.prototype.hasOwnProperty.call(req.body, 'credentialUrl');
+    const hasIssuedAt = Object.prototype.hasOwnProperty.call(req.body, 'issuedAt');
+    const hasDescription = Object.prototype.hasOwnProperty.call(req.body, 'description');
+    const hasImageUrl = Object.prototype.hasOwnProperty.call(req.body, 'imageUrl');
+
+    if (!hasName && !hasIssuer && !hasCredentialUrl && !hasIssuedAt && !hasDescription && !hasImageUrl) {
+      return res.status(400).json({ message: 'No certification fields provided for update' });
+    }
+
+    if (hasName && !name?.trim()) {
+      return res.status(400).json({ message: 'Certification name cannot be empty' });
+    }
+
+    const issuedAtDate = hasIssuedAt ? (issuedAt ? new Date(issuedAt) : null) : undefined;
+    if (hasIssuedAt && issuedAt && Number.isNaN(issuedAtDate?.getTime())) {
+      return res.status(400).json({ message: 'issuedAt must be a valid date (YYYY-MM-DD)' });
+    }
+
+    try {
+      const rows = await prisma.$queryRaw<
+        {
+          certification_id: string;
+          name: string;
+          issuer: string | null;
+          description: string | null;
+          credential_url: string | null;
+          image_url: string | null;
+          issued_at: Date | null;
+          created_at: Date;
+        }[]
+      >`
+        UPDATE user_certifications
+        SET
+          name = CASE WHEN ${hasName} THEN ${name?.trim()} ELSE name END,
+          issuer = CASE WHEN ${hasIssuer} THEN ${issuer?.trim() || null} ELSE issuer END,
+          description = CASE WHEN ${hasDescription} THEN ${description?.trim() || null} ELSE description END,
+          credential_url = CASE WHEN ${hasCredentialUrl} THEN ${credentialUrl?.trim() || null} ELSE credential_url END,
+          image_url = CASE WHEN ${hasImageUrl} THEN ${imageUrl?.trim() || null} ELSE image_url END,
+          issued_at = CASE WHEN ${hasIssuedAt} THEN ${issuedAtDate ?? null} ELSE issued_at END,
+          updated_at = NOW()
+        WHERE user_id = ${userId} AND certification_id = ${certificationId}
+        RETURNING certification_id, name, issuer, description, credential_url, image_url, issued_at, created_at
+      `;
+
+      const updated = rows[0];
+      if (!updated) {
+        return res.status(404).json({ message: 'Certification not found' });
+      }
+
+      return res.status(200).json({
+        id: updated.certification_id,
+        name: updated.name,
+        issuer: updated.issuer,
+        description: updated.description,
+        credentialUrl: updated.credential_url,
+        imageUrl: updated.image_url,
+        issuedAt: updated.issued_at ? updated.issued_at.toISOString().slice(0, 10) : null,
+        createdAt: updated.created_at.toISOString(),
+      });
+    } catch (err) {
+      console.error('Error updating certification:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
+
 router.delete(
   '/:userId/certifications/:certificationId',
   async (req: Request<{ userId: string; certificationId: string }>, res: Response) => {
@@ -1212,6 +1419,110 @@ router.post(
   }
 );
 
+router.patch(
+  '/:userId/projects/:projectId',
+  async (
+    req: Request<
+      { userId: string; projectId: string },
+      unknown,
+      { title?: string; description?: string; sourceUrl?: string; demoUrl?: string; imageUrl?: string; tags?: string[] }
+    >,
+    res: Response,
+  ) => {
+    const { userId, projectId } = req.params;
+    const { title, description, sourceUrl, demoUrl, imageUrl, tags } = req.body;
+
+    const hasTitle = Object.prototype.hasOwnProperty.call(req.body, 'title');
+    const hasDescription = Object.prototype.hasOwnProperty.call(req.body, 'description');
+    const hasSourceUrl = Object.prototype.hasOwnProperty.call(req.body, 'sourceUrl');
+    const hasDemoUrl = Object.prototype.hasOwnProperty.call(req.body, 'demoUrl');
+    const hasImageUrl = Object.prototype.hasOwnProperty.call(req.body, 'imageUrl');
+    const hasTags = Object.prototype.hasOwnProperty.call(req.body, 'tags');
+
+    if (!hasTitle && !hasDescription && !hasSourceUrl && !hasDemoUrl && !hasImageUrl && !hasTags) {
+      return res.status(400).json({ message: 'No project fields provided for update' });
+    }
+
+    if (hasTitle && !title?.trim()) {
+      return res.status(400).json({ message: 'Project title cannot be empty' });
+    }
+
+    if (hasDescription && !description?.trim()) {
+      return res.status(400).json({ message: 'Project description cannot be empty' });
+    }
+
+    try {
+      const updatedRows = await prisma.$queryRaw<
+        {
+          project_id: string;
+          title: string;
+          description: string;
+          source_url: string | null;
+          demo_url: string | null;
+          image_url: string | null;
+          created_at: Date;
+        }[]
+      >`
+        UPDATE user_projects
+        SET
+          title = CASE WHEN ${hasTitle} THEN ${title?.trim()} ELSE title END,
+          description = CASE WHEN ${hasDescription} THEN ${description?.trim()} ELSE description END,
+          source_url = CASE WHEN ${hasSourceUrl} THEN ${sourceUrl?.trim() || null} ELSE source_url END,
+          demo_url = CASE WHEN ${hasDemoUrl} THEN ${demoUrl?.trim() || null} ELSE demo_url END,
+          image_url = CASE WHEN ${hasImageUrl} THEN ${imageUrl?.trim() || null} ELSE image_url END,
+          updated_at = NOW()
+        WHERE user_id = ${userId} AND project_id = ${projectId}
+        RETURNING project_id, title, description, source_url, demo_url, image_url, created_at
+      `;
+
+      const updated = updatedRows[0];
+      if (!updated) {
+        return res.status(404).json({ message: 'Project not found' });
+      }
+
+      if (hasTags) {
+        const normalizedTags = Array.isArray(tags)
+          ? Array.from(new Set(tags.map((tag) => String(tag).trim()).filter(Boolean)))
+          : [];
+
+        await prisma.$queryRaw`
+          DELETE FROM project_tags
+          WHERE project_id = ${projectId}
+        `;
+
+        for (const tagName of normalizedTags) {
+          await prisma.$queryRaw`
+            INSERT INTO project_tags (project_id, tag_name)
+            VALUES (${projectId}, ${tagName})
+          `;
+        }
+      }
+
+      const tagRows = await prisma.$queryRaw<{ tag_name: string }[]>`
+        SELECT tag_name
+        FROM project_tags
+        WHERE project_id = ${projectId}
+        ORDER BY tag_name
+      `;
+
+      return res.status(200).json({
+        id: updated.project_id,
+        title: updated.title,
+        description: updated.description,
+        link: updated.demo_url ?? updated.source_url,
+        sourceUrl: updated.source_url,
+        demoUrl: updated.demo_url,
+        imageUrl: updated.image_url,
+        tags: tagRows.map((row) => row.tag_name),
+        createdAt: updated.created_at.toISOString(),
+      });
+    } catch (err) {
+      console.error('Error updating project:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
+
 router.delete(
   '/:userId/projects/:projectId',
   async (req: Request<{ userId: string; projectId: string }>, res: Response) => {
@@ -1238,6 +1549,640 @@ router.delete(
       return res.status(500).json({ message: 'Internal server error' });
     }
   }
+);
+
+// ==============================
+// Profile: Experiences
+// ==============================
+router.get('/:userId/experiences', async (req: Request<{ userId: string }>, res: Response) => {
+  const { userId } = req.params;
+
+  try {
+    const rows = await prisma.$queryRaw<
+      {
+        experience_id: string;
+        role_title: string;
+        organization: string;
+        description: string | null;
+        start_date: Date;
+        end_date: Date | null;
+        is_current: boolean;
+        created_at: Date;
+      }[]
+    >`
+      SELECT experience_id, role_title, organization, description, start_date, end_date, is_current, created_at
+      FROM user_experiences
+      WHERE user_id = ${userId}
+      ORDER BY start_date DESC, created_at DESC
+    `;
+
+    return res.status(200).json(
+      rows.map((row) => ({
+        id: row.experience_id,
+        roleTitle: row.role_title,
+        organization: row.organization,
+        description: row.description,
+        startDate: row.start_date.toISOString(),
+        endDate: row.end_date ? row.end_date.toISOString() : null,
+        isCurrentlyWorking: row.is_current,
+        createdAt: row.created_at.toISOString(),
+      }))
+    );
+  } catch (err) {
+    console.error('Error fetching experiences:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.post(
+  '/:userId/experiences',
+  async (
+    req: Request<
+      { userId: string },
+      unknown,
+      {
+        roleTitle?: string;
+        organization?: string;
+        description?: string;
+        startDate?: string;
+        endDate?: string | null;
+        isCurrentlyWorking?: boolean;
+      }
+    >,
+    res: Response,
+  ) => {
+    const { userId } = req.params;
+    const { roleTitle, organization, description, startDate, endDate, isCurrentlyWorking } = req.body;
+
+    if (!roleTitle?.trim() || !organization?.trim() || !startDate) {
+      return res.status(400).json({ message: 'roleTitle, organization, and startDate are required' });
+    }
+
+    const startDateValue = new Date(startDate);
+    if (Number.isNaN(startDateValue.getTime())) {
+      return res.status(400).json({ message: 'startDate must be a valid date string' });
+    }
+
+    const endDateValue = endDate ? new Date(endDate) : null;
+    if (endDate && Number.isNaN(endDateValue?.getTime())) {
+      return res.status(400).json({ message: 'endDate must be a valid date string' });
+    }
+
+    try {
+      const rows = await prisma.$queryRaw<
+        {
+          experience_id: string;
+          role_title: string;
+          organization: string;
+          description: string | null;
+          start_date: Date;
+          end_date: Date | null;
+          is_current: boolean;
+          created_at: Date;
+        }[]
+      >`
+        INSERT INTO user_experiences (user_id, role_title, organization, description, start_date, end_date, is_current)
+        VALUES (
+          ${userId},
+          ${roleTitle.trim()},
+          ${organization.trim()},
+          ${description?.trim() || null},
+          ${startDateValue},
+          ${isCurrentlyWorking ? null : endDateValue},
+          ${Boolean(isCurrentlyWorking)}
+        )
+        RETURNING experience_id, role_title, organization, description, start_date, end_date, is_current, created_at
+      `;
+
+      const created = rows[0];
+      return res.status(201).json({
+        id: created.experience_id,
+        roleTitle: created.role_title,
+        organization: created.organization,
+        description: created.description,
+        startDate: created.start_date.toISOString(),
+        endDate: created.end_date ? created.end_date.toISOString() : null,
+        isCurrentlyWorking: created.is_current,
+        createdAt: created.created_at.toISOString(),
+      });
+    } catch (err) {
+      console.error('Error creating experience:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  },
+);
+
+router.patch(
+  '/:userId/experiences/:experienceId',
+  async (
+    req: Request<
+      { userId: string; experienceId: string },
+      unknown,
+      {
+        roleTitle?: string;
+        organization?: string;
+        description?: string;
+        startDate?: string;
+        endDate?: string | null;
+        isCurrentlyWorking?: boolean;
+      }
+    >,
+    res: Response,
+  ) => {
+    const { userId, experienceId } = req.params;
+    const { roleTitle, organization, description, startDate, endDate, isCurrentlyWorking } = req.body;
+
+    const hasRoleTitle = Object.prototype.hasOwnProperty.call(req.body, 'roleTitle');
+    const hasOrganization = Object.prototype.hasOwnProperty.call(req.body, 'organization');
+    const hasDescription = Object.prototype.hasOwnProperty.call(req.body, 'description');
+    const hasStartDate = Object.prototype.hasOwnProperty.call(req.body, 'startDate');
+    const hasEndDate = Object.prototype.hasOwnProperty.call(req.body, 'endDate');
+    const hasIsCurrent = Object.prototype.hasOwnProperty.call(req.body, 'isCurrentlyWorking');
+
+    if (!hasRoleTitle && !hasOrganization && !hasDescription && !hasStartDate && !hasEndDate && !hasIsCurrent) {
+      return res.status(400).json({ message: 'No experience fields provided for update' });
+    }
+
+    if (hasRoleTitle && !roleTitle?.trim()) {
+      return res.status(400).json({ message: 'roleTitle cannot be empty' });
+    }
+
+    if (hasOrganization && !organization?.trim()) {
+      return res.status(400).json({ message: 'organization cannot be empty' });
+    }
+
+    const startDateValue = hasStartDate && startDate ? new Date(startDate) : null;
+    if (hasStartDate && startDate && Number.isNaN(startDateValue?.getTime())) {
+      return res.status(400).json({ message: 'startDate must be a valid date string' });
+    }
+
+    const endDateValue = hasEndDate && endDate ? new Date(endDate) : null;
+    if (hasEndDate && endDate && Number.isNaN(endDateValue?.getTime())) {
+      return res.status(400).json({ message: 'endDate must be a valid date string' });
+    }
+
+    try {
+      const rows = await prisma.$queryRaw<
+        {
+          experience_id: string;
+          role_title: string;
+          organization: string;
+          description: string | null;
+          start_date: Date;
+          end_date: Date | null;
+          is_current: boolean;
+          created_at: Date;
+        }[]
+      >`
+        UPDATE user_experiences
+        SET
+          role_title = CASE WHEN ${hasRoleTitle} THEN ${roleTitle?.trim()} ELSE role_title END,
+          organization = CASE WHEN ${hasOrganization} THEN ${organization?.trim()} ELSE organization END,
+          description = CASE WHEN ${hasDescription} THEN ${description?.trim() || null} ELSE description END,
+          start_date = CASE WHEN ${hasStartDate} THEN ${startDateValue} ELSE start_date END,
+          end_date = CASE
+            WHEN ${hasIsCurrent} AND ${Boolean(isCurrentlyWorking)} THEN NULL
+            WHEN ${hasEndDate} THEN ${endDateValue}
+            ELSE end_date
+          END,
+          is_current = CASE WHEN ${hasIsCurrent} THEN ${Boolean(isCurrentlyWorking)} ELSE is_current END,
+          updated_at = NOW()
+        WHERE user_id = ${userId} AND experience_id = ${experienceId}
+        RETURNING experience_id, role_title, organization, description, start_date, end_date, is_current, created_at
+      `;
+
+      const updated = rows[0];
+      if (!updated) {
+        return res.status(404).json({ message: 'Experience not found' });
+      }
+
+      return res.status(200).json({
+        id: updated.experience_id,
+        roleTitle: updated.role_title,
+        organization: updated.organization,
+        description: updated.description,
+        startDate: updated.start_date.toISOString(),
+        endDate: updated.end_date ? updated.end_date.toISOString() : null,
+        isCurrentlyWorking: updated.is_current,
+        createdAt: updated.created_at.toISOString(),
+      });
+    } catch (err) {
+      console.error('Error updating experience:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  },
+);
+
+router.delete(
+  '/:userId/experiences/:experienceId',
+  async (req: Request<{ userId: string; experienceId: string }>, res: Response) => {
+    const { userId, experienceId } = req.params;
+
+    try {
+      const result = await prisma.$queryRaw<{ count: number }[]>`
+        WITH deleted AS (
+          DELETE FROM user_experiences
+          WHERE user_id = ${userId} AND experience_id = ${experienceId}
+          RETURNING 1
+        )
+        SELECT COUNT(*)::int AS count FROM deleted
+      `;
+
+      const count = result[0]?.count ?? 0;
+      if (count === 0) {
+        return res.status(404).json({ message: 'Experience not found' });
+      }
+
+      return res.status(204).send();
+    } catch (err) {
+      console.error('Error deleting experience:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  },
+);
+
+// ==============================
+// Profile: Societies
+// ==============================
+router.get('/:userId/societies', async (req: Request<{ userId: string }>, res: Response) => {
+  const { userId } = req.params;
+
+  try {
+    const rows = await prisma.$queryRaw<
+      {
+        user_society_id: string;
+        society_name: string;
+        role_name: string;
+        start_date: Date | null;
+        end_date: Date | null;
+        created_at: Date;
+      }[]
+    >`
+      SELECT user_society_id, society_name, role_name, start_date, end_date, created_at
+      FROM user_societies
+      WHERE user_id = ${userId}
+      ORDER BY created_at DESC
+    `;
+
+    return res.status(200).json(
+      rows.map((row) => ({
+        id: row.user_society_id,
+        societyName: row.society_name,
+        role: row.role_name,
+        startDate: row.start_date ? row.start_date.toISOString() : null,
+        endDate: row.end_date ? row.end_date.toISOString() : null,
+        createdAt: row.created_at.toISOString(),
+      }))
+    );
+  } catch (err) {
+    console.error('Error fetching societies:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.post(
+  '/:userId/societies',
+  async (
+    req: Request<
+      { userId: string },
+      unknown,
+      { societyName?: string; role?: string; startDate?: string | null; endDate?: string | null }
+    >,
+    res: Response,
+  ) => {
+    const { userId } = req.params;
+    const { societyName, role, startDate, endDate } = req.body;
+
+    if (!societyName?.trim() || !role?.trim()) {
+      return res.status(400).json({ message: 'societyName and role are required' });
+    }
+
+    const startDateValue = startDate ? new Date(startDate) : null;
+    if (startDate && Number.isNaN(startDateValue?.getTime())) {
+      return res.status(400).json({ message: 'startDate must be a valid date string' });
+    }
+
+    const endDateValue = endDate ? new Date(endDate) : null;
+    if (endDate && Number.isNaN(endDateValue?.getTime())) {
+      return res.status(400).json({ message: 'endDate must be a valid date string' });
+    }
+
+    try {
+      const rows = await prisma.$queryRaw<
+        {
+          user_society_id: string;
+          society_name: string;
+          role_name: string;
+          start_date: Date | null;
+          end_date: Date | null;
+          created_at: Date;
+        }[]
+      >`
+        INSERT INTO user_societies (user_id, society_name, role_name, start_date, end_date)
+        VALUES (${userId}, ${societyName.trim()}, ${role.trim()}, ${startDateValue}, ${endDateValue})
+        RETURNING user_society_id, society_name, role_name, start_date, end_date, created_at
+      `;
+
+      const created = rows[0];
+      return res.status(201).json({
+        id: created.user_society_id,
+        societyName: created.society_name,
+        role: created.role_name,
+        startDate: created.start_date ? created.start_date.toISOString() : null,
+        endDate: created.end_date ? created.end_date.toISOString() : null,
+        createdAt: created.created_at.toISOString(),
+      });
+    } catch (err) {
+      console.error('Error creating society:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  },
+);
+
+router.patch(
+  '/:userId/societies/:societyId',
+  async (
+    req: Request<
+      { userId: string; societyId: string },
+      unknown,
+      { societyName?: string; role?: string; startDate?: string | null; endDate?: string | null }
+    >,
+    res: Response,
+  ) => {
+    const { userId, societyId } = req.params;
+    const { societyName, role, startDate, endDate } = req.body;
+
+    const hasSocietyName = Object.prototype.hasOwnProperty.call(req.body, 'societyName');
+    const hasRole = Object.prototype.hasOwnProperty.call(req.body, 'role');
+    const hasStartDate = Object.prototype.hasOwnProperty.call(req.body, 'startDate');
+    const hasEndDate = Object.prototype.hasOwnProperty.call(req.body, 'endDate');
+
+    if (!hasSocietyName && !hasRole && !hasStartDate && !hasEndDate) {
+      return res.status(400).json({ message: 'No society fields provided for update' });
+    }
+
+    if (hasSocietyName && !societyName?.trim()) {
+      return res.status(400).json({ message: 'societyName cannot be empty' });
+    }
+
+    if (hasRole && !role?.trim()) {
+      return res.status(400).json({ message: 'role cannot be empty' });
+    }
+
+    const startDateValue = hasStartDate && startDate ? new Date(startDate) : null;
+    if (hasStartDate && startDate && Number.isNaN(startDateValue?.getTime())) {
+      return res.status(400).json({ message: 'startDate must be a valid date string' });
+    }
+
+    const endDateValue = hasEndDate && endDate ? new Date(endDate) : null;
+    if (hasEndDate && endDate && Number.isNaN(endDateValue?.getTime())) {
+      return res.status(400).json({ message: 'endDate must be a valid date string' });
+    }
+
+    try {
+      const rows = await prisma.$queryRaw<
+        {
+          user_society_id: string;
+          society_name: string;
+          role_name: string;
+          start_date: Date | null;
+          end_date: Date | null;
+          created_at: Date;
+        }[]
+      >`
+        UPDATE user_societies
+        SET
+          society_name = CASE WHEN ${hasSocietyName} THEN ${societyName?.trim()} ELSE society_name END,
+          role_name = CASE WHEN ${hasRole} THEN ${role?.trim()} ELSE role_name END,
+          start_date = CASE WHEN ${hasStartDate} THEN ${startDateValue} ELSE start_date END,
+          end_date = CASE WHEN ${hasEndDate} THEN ${endDateValue} ELSE end_date END,
+          updated_at = NOW()
+        WHERE user_id = ${userId} AND user_society_id = ${societyId}
+        RETURNING user_society_id, society_name, role_name, start_date, end_date, created_at
+      `;
+
+      const updated = rows[0];
+      if (!updated) {
+        return res.status(404).json({ message: 'Society not found' });
+      }
+
+      return res.status(200).json({
+        id: updated.user_society_id,
+        societyName: updated.society_name,
+        role: updated.role_name,
+        startDate: updated.start_date ? updated.start_date.toISOString() : null,
+        endDate: updated.end_date ? updated.end_date.toISOString() : null,
+        createdAt: updated.created_at.toISOString(),
+      });
+    } catch (err) {
+      console.error('Error updating society:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  },
+);
+
+router.delete(
+  '/:userId/societies/:societyId',
+  async (req: Request<{ userId: string; societyId: string }>, res: Response) => {
+    const { userId, societyId } = req.params;
+
+    try {
+      const result = await prisma.$queryRaw<{ count: number }[]>`
+        WITH deleted AS (
+          DELETE FROM user_societies
+          WHERE user_id = ${userId} AND user_society_id = ${societyId}
+          RETURNING 1
+        )
+        SELECT COUNT(*)::int AS count FROM deleted
+      `;
+
+      const count = result[0]?.count ?? 0;
+      if (count === 0) {
+        return res.status(404).json({ message: 'Society not found' });
+      }
+
+      return res.status(204).send();
+    } catch (err) {
+      console.error('Error deleting society:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  },
+);
+
+// ==============================
+// Profile: Achievements
+// ==============================
+router.get('/:userId/achievements', async (req: Request<{ userId: string }>, res: Response) => {
+  const { userId } = req.params;
+
+  try {
+    const rows = await prisma.$queryRaw<
+      {
+        achievement_id: string;
+        title: string;
+        description: string | null;
+        achievement_year: number;
+        created_at: Date;
+      }[]
+    >`
+      SELECT achievement_id, title, description, achievement_year, created_at
+      FROM user_achievements
+      WHERE user_id = ${userId}
+      ORDER BY achievement_year DESC, created_at DESC
+    `;
+
+    return res.status(200).json(
+      rows.map((row) => ({
+        id: row.achievement_id,
+        title: row.title,
+        description: row.description,
+        year: row.achievement_year,
+        createdAt: row.created_at.toISOString(),
+      }))
+    );
+  } catch (err) {
+    console.error('Error fetching achievements:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.post(
+  '/:userId/achievements',
+  async (
+    req: Request<{ userId: string }, unknown, { title?: string; description?: string; year?: number }>,
+    res: Response,
+  ) => {
+    const { userId } = req.params;
+    const { title, description, year } = req.body;
+
+    if (!title?.trim() || year === undefined || !Number.isInteger(year)) {
+      return res.status(400).json({ message: 'title and integer year are required' });
+    }
+
+    try {
+      const rows = await prisma.$queryRaw<
+        {
+          achievement_id: string;
+          title: string;
+          description: string | null;
+          achievement_year: number;
+          created_at: Date;
+        }[]
+      >`
+        INSERT INTO user_achievements (user_id, title, description, achievement_year)
+        VALUES (${userId}, ${title.trim()}, ${description?.trim() || null}, ${year})
+        RETURNING achievement_id, title, description, achievement_year, created_at
+      `;
+
+      const created = rows[0];
+      return res.status(201).json({
+        id: created.achievement_id,
+        title: created.title,
+        description: created.description,
+        year: created.achievement_year,
+        createdAt: created.created_at.toISOString(),
+      });
+    } catch (err) {
+      console.error('Error creating achievement:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  },
+);
+
+router.patch(
+  '/:userId/achievements/:achievementId',
+  async (
+    req: Request<
+      { userId: string; achievementId: string },
+      unknown,
+      { title?: string; description?: string; year?: number }
+    >,
+    res: Response,
+  ) => {
+    const { userId, achievementId } = req.params;
+    const { title, description, year } = req.body;
+
+    const hasTitle = Object.prototype.hasOwnProperty.call(req.body, 'title');
+    const hasDescription = Object.prototype.hasOwnProperty.call(req.body, 'description');
+    const hasYear = Object.prototype.hasOwnProperty.call(req.body, 'year');
+
+    if (!hasTitle && !hasDescription && !hasYear) {
+      return res.status(400).json({ message: 'No achievement fields provided for update' });
+    }
+
+    if (hasTitle && !title?.trim()) {
+      return res.status(400).json({ message: 'title cannot be empty' });
+    }
+
+    if (hasYear && (year === undefined || !Number.isInteger(year))) {
+      return res.status(400).json({ message: 'year must be an integer' });
+    }
+
+    try {
+      const rows = await prisma.$queryRaw<
+        {
+          achievement_id: string;
+          title: string;
+          description: string | null;
+          achievement_year: number;
+          created_at: Date;
+        }[]
+      >`
+        UPDATE user_achievements
+        SET
+          title = CASE WHEN ${hasTitle} THEN ${title?.trim()} ELSE title END,
+          description = CASE WHEN ${hasDescription} THEN ${description?.trim() || null} ELSE description END,
+          achievement_year = CASE WHEN ${hasYear} THEN ${year} ELSE achievement_year END,
+          updated_at = NOW()
+        WHERE user_id = ${userId} AND achievement_id = ${achievementId}
+        RETURNING achievement_id, title, description, achievement_year, created_at
+      `;
+
+      const updated = rows[0];
+      if (!updated) {
+        return res.status(404).json({ message: 'Achievement not found' });
+      }
+
+      return res.status(200).json({
+        id: updated.achievement_id,
+        title: updated.title,
+        description: updated.description,
+        year: updated.achievement_year,
+        createdAt: updated.created_at.toISOString(),
+      });
+    } catch (err) {
+      console.error('Error updating achievement:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  },
+);
+
+router.delete(
+  '/:userId/achievements/:achievementId',
+  async (req: Request<{ userId: string; achievementId: string }>, res: Response) => {
+    const { userId, achievementId } = req.params;
+
+    try {
+      const result = await prisma.$queryRaw<{ count: number }[]>`
+        WITH deleted AS (
+          DELETE FROM user_achievements
+          WHERE user_id = ${userId} AND achievement_id = ${achievementId}
+          RETURNING 1
+        )
+        SELECT COUNT(*)::int AS count FROM deleted
+      `;
+
+      const count = result[0]?.count ?? 0;
+      if (count === 0) {
+        return res.status(404).json({ message: 'Achievement not found' });
+      }
+
+      return res.status(204).send();
+    } catch (err) {
+      console.error('Error deleting achievement:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  },
 );
 
 // ==============================

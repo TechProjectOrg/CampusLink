@@ -11,6 +11,8 @@ export interface UserProject {
   title: string;
   description: string;
   link: string | null;
+  sourceUrl?: string | null;
+  demoUrl?: string | null;
   imageUrl: string | null;
   tags: string[];
 }
@@ -46,6 +48,8 @@ function normalizeProject(raw: ProjectRaw, index: number): UserProject {
     title: String(title),
     description: String(description),
     link: link ? String(link) : null,
+    sourceUrl: (raw as Record<string, unknown>).sourceUrl as string | null,
+    demoUrl: (raw as Record<string, unknown>).demoUrl as string | null,
     imageUrl: imageUrl ? String(imageUrl) : null,
     tags,
   };
@@ -78,7 +82,7 @@ export async function apiFetchUserProjects(
 
 export async function apiCreateUserProject(
   userId: string,
-  payload: { title: string; description: string },
+  payload: { title: string; description: string; sourceUrl?: string; demoUrl?: string; imageUrl?: string; tags?: string[] },
   token?: string
 ): Promise<void> {
   const response = await fetch(`${API_BASE}/users/${encodeURIComponent(userId)}/projects`, {
@@ -90,8 +94,42 @@ export async function apiCreateUserProject(
     body: JSON.stringify({
       title: payload.title,
       description: payload.description,
+      sourceUrl: payload.sourceUrl,
+      demoUrl: payload.demoUrl,
+      imageUrl: payload.imageUrl,
+      tags: payload.tags,
     }),
   });
+
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response));
+  }
+}
+
+export async function apiUpdateUserProject(
+  userId: string,
+  projectId: string,
+  payload: {
+    title?: string;
+    description?: string;
+    sourceUrl?: string;
+    demoUrl?: string;
+    imageUrl?: string;
+    tags?: string[];
+  },
+  token?: string,
+): Promise<void> {
+  const response = await fetch(
+    `${API_BASE}/users/${encodeURIComponent(userId)}/projects/${encodeURIComponent(projectId)}`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(token),
+      },
+      body: JSON.stringify(payload),
+    },
+  );
 
   if (!response.ok) {
     throw new Error(await parseErrorMessage(response));

@@ -1,16 +1,13 @@
 import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import {
-  GraduationCap,
   Calendar,
   MapPin,
   Edit2,
   ExternalLink,
   Plus,
   X,
-  Heart,
   MessageCircle,
-  Bookmark,
   Award,
   Users,
   Trophy,
@@ -18,7 +15,7 @@ import {
   Trash2,
   Upload,
   Mail,
-  Link2,
+  Eye,
 } from 'lucide-react';
 import { Student, Opportunity } from '../types';
 import type { FollowGraph } from '../App';
@@ -29,11 +26,13 @@ import {
   apiCreateUserCertification,
   apiFetchUserCertifications,
   apiDeleteUserCertification,
+  apiUpdateUserCertification,
 } from '../lib/certificationsApi';
 import {
   apiCreateUserProject,
   apiDeleteUserProject,
   apiFetchUserProjects,
+  apiUpdateUserProject,
 } from '../lib/projectsApi';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
@@ -45,12 +44,36 @@ import { DatePicker } from './ui/date-picker';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { ProfilePhotoUpload } from './ui/profile-photo-upload';
 import { BannerImageUpload } from './ui/banner-image-upload';
-import { apiUpdateUserProfilePicture, apiUploadUserProfilePicture } from '../lib/authApi';
+import {
+  apiUpdateUserCoverPhoto,
+  apiUpdateUserProfile,
+  apiUpdateUserProfilePicture,
+  apiUploadUserCoverPhoto,
+  apiUploadUserProfilePicture,
+} from '../lib/authApi';
 import { OpportunityCard } from './OpportunityCard';
-import { apiFetchProfilePosts, type UserPost } from '../lib/postsApi';
+import { apiCreateUserPost, apiFetchProfilePosts, type UserPost } from '../lib/postsApi';
 import { LoadingIndicator } from './ui/LoadingIndicator';
 import { cacheProfilePosts, readCachedProfilePosts } from '../cache/socialCache';
 import { PageLayout } from './PageLayout';
+import {
+  apiCreateUserExperience,
+  apiDeleteUserExperience,
+  apiFetchUserExperiences,
+  apiUpdateUserExperience,
+} from '../lib/experiencesApi';
+import {
+  apiCreateUserSociety,
+  apiDeleteUserSociety,
+  apiFetchUserSocieties,
+  apiUpdateUserSociety,
+} from '../lib/societiesApi';
+import {
+  apiCreateUserAchievement,
+  apiDeleteUserAchievement,
+  apiFetchUserAchievements,
+  apiUpdateUserAchievement,
+} from '../lib/achievementsApi';
 
 interface ProfilePageProps {
   student: Student;
@@ -182,7 +205,18 @@ export function ProfilePage({
 
   // Modal states
   const [activeModal, setActiveModal] = useState<
-    'editProfile' | 'editBanner' | 'about' | 'skill' | 'experience' | 'project' | 'certification' | 'society' | 'achievement' | null
+    | 'editProfile'
+    | 'editBanner'
+    | 'about'
+    | 'skill'
+    | 'experience'
+    | 'project'
+    | 'certification'
+    | 'society'
+    | 'achievement'
+    | 'education'
+    | 'newPost'
+    | null
   >(null);
 
   // Edit item states (for editing existing items)
@@ -232,6 +266,16 @@ export function ProfilePage({
     description: '',
   });
 
+  const [educationDraft, setEducationDraft] = useState({
+    branch: student.branch || '',
+    year: student.year ? String(student.year) : '',
+  });
+
+  const [newPostDraft, setNewPostDraft] = useState({
+    title: '',
+    content: '',
+  });
+
   const authUserId = auth.currentUser?.id ?? auth.session?.userId;
   const authToken = auth.session?.token;
 
@@ -254,7 +298,17 @@ export function ProfilePage({
     setCertificationsLoading(true);
     try {
       const list = await apiFetchUserCertifications(student.id, authToken);
-      setLoadedCertifications(list as Certification[]);
+      setLoadedCertifications(
+        list.map((item) => ({
+          id: item.id,
+          name: item.name,
+          issuer: item.issuer || undefined,
+          description: item.description || undefined,
+          imageUrl: item.imageUrl || undefined,
+          certificateUrl: item.credentialUrl || undefined,
+          issueDate: item.issuedAt ? new Date(item.issuedAt) : undefined,
+        })),
+      );
     } catch {
       setLoadedCertifications([]);
     } finally {
@@ -267,11 +321,76 @@ export function ProfilePage({
     setProjectsLoading(true);
     try {
       const list = await apiFetchUserProjects(student.id, authToken);
-      setLoadedProjects(list as Project[]);
+      setLoadedProjects(
+        list.map((item) => ({
+          id: item.id,
+          title: item.title,
+          description: item.description,
+          imageUrl: item.imageUrl || undefined,
+          githubUrl: item.sourceUrl || undefined,
+          liveUrl: item.demoUrl || item.link || undefined,
+          tags: item.tags,
+        })),
+      );
     } catch {
       setLoadedProjects([]);
     } finally {
       setProjectsLoading(false);
+    }
+  };
+
+  const loadExperiences = async () => {
+    if (!student.id) return;
+    try {
+      const list = await apiFetchUserExperiences(student.id, authToken);
+      setExperiences(
+        list.map((item) => ({
+          id: item.id,
+          roleTitle: item.roleTitle,
+          organization: item.organization,
+          description: item.description || '',
+          startDate: new Date(item.startDate),
+          endDate: item.endDate ? new Date(item.endDate) : undefined,
+          isCurrentlyWorking: item.isCurrentlyWorking,
+        })),
+      );
+    } catch {
+      setExperiences([]);
+    }
+  };
+
+  const loadSocieties = async () => {
+    if (!student.id) return;
+    try {
+      const list = await apiFetchUserSocieties(student.id, authToken);
+      setSocieties(
+        list.map((item) => ({
+          id: item.id,
+          societyName: item.societyName,
+          role: item.role,
+          startDate: item.startDate ? new Date(item.startDate) : new Date(),
+          endDate: item.endDate ? new Date(item.endDate) : undefined,
+        })),
+      );
+    } catch {
+      setSocieties([]);
+    }
+  };
+
+  const loadAchievements = async () => {
+    if (!student.id) return;
+    try {
+      const list = await apiFetchUserAchievements(student.id, authToken);
+      setAchievements(
+        list.map((item) => ({
+          id: item.id,
+          title: item.title,
+          description: item.description || undefined,
+          year: item.year,
+        })),
+      );
+    } catch {
+      setAchievements([]);
     }
   };
 
@@ -372,6 +491,9 @@ export function ProfilePage({
   useEffect(() => {
     loadCertifications();
     loadProjects();
+    loadExperiences();
+    loadSocieties();
+    loadAchievements();
   }, [student.id, authToken]);
 
   useEffect(() => {
@@ -379,24 +501,15 @@ export function ProfilePage({
   }, [student.id, authToken, isOwnProfile, authUserId, postsRefreshToken]);
 
   useEffect(() => {
-    // Initialize from student data
-    if (student.experience) {
-      setExperiences(student.experience.map(exp => ({
-        ...exp,
-        startDate: new Date(),
-        isCurrentlyWorking: false,
-      })) as Experience[]);
-    }
-    if (student.societies) {
-      setSocieties(student.societies.map(soc => ({
-        ...soc,
-        startDate: new Date(),
-      })) as Society[]);
-    }
-    if (student.achievements) {
-      setAchievements(student.achievements as Achievement[]);
-    }
-  }, [student]);
+    setEducationDraft({
+      branch: student.branch || '',
+      year: student.year ? String(student.year) : '',
+    });
+  }, [student.branch, student.year]);
+
+  useEffect(() => {
+    setBannerImage((isOwnProfile ? auth.profile?.coverPhotoUrl : student.coverPhotoUrl) ?? null);
+  }, [isOwnProfile, auth.profile?.coverPhotoUrl, student.coverPhotoUrl]);
 
   // Follow counts
   const followersCount = (followGraph.followersByUserId[student.id] ?? []).length;
@@ -426,17 +539,34 @@ export function ProfilePage({
     setNewAchievement({ title: '', year: new Date().getFullYear(), description: '' });
   };
 
-  const handleSaveProfile = () => {
-    if (onEdit) {
-      onEdit(editedStudent);
-    }
-    closeModal();
+  const handleSaveProfile = async () => {
+    if (!isOwnProfile || !authUserId) return;
+
+    try {
+      await apiUpdateUserProfile(
+        authUserId,
+        {
+          username: editedStudent.name?.trim(),
+          bio: editedStudent.bio?.trim() || null,
+        },
+        authToken,
+      );
+      onEdit?.({
+        name: editedStudent.name,
+        username: editedStudent.name,
+        bio: editedStudent.bio,
+      });
+      await auth.refreshProfile();
+      closeModal();
+    } catch {}
   };
 
   const currentProfilePhoto = isOwnProfile ? auth.profile?.profilePictureUrl ?? null : null;
   const hasCustomProfilePhoto = isOwnProfile && Boolean(auth.profile?.profilePictureUrl);
   const displayedProfilePhoto = isOwnProfile ? currentProfilePhoto ?? student.avatar : student.avatar;
-  const [bannerImage, setBannerImage] = useState<string | null>(null);
+  const [bannerImage, setBannerImage] = useState<string | null>(
+    (isOwnProfile ? auth.profile?.coverPhotoUrl : student.coverPhotoUrl) ?? null,
+  );
 
   const handleProfilePhotoChange = async (payload: { file?: File; previewUrl?: string; remove?: boolean }) => {
     if (!isOwnProfile || !authUserId) return;
@@ -458,16 +588,22 @@ export function ProfilePage({
   };
 
   const handleBannerChange = async (payload: { file?: File; previewUrl?: string; remove?: boolean }) => {
-    if (!isOwnProfile) return;
+    if (!isOwnProfile || !authUserId) return;
 
     if (payload.remove) {
+      await apiUpdateUserCoverPhoto(authUserId, null, authToken);
       setBannerImage(null);
+      onEdit?.({ coverPhotoUrl: undefined });
+      await auth.refreshProfile();
       return;
     }
 
-    if (payload.previewUrl) {
-      setBannerImage(payload.previewUrl);
-    }
+    if (!payload.file) return;
+
+    const profile = await apiUploadUserCoverPhoto(authUserId, payload.file, authToken);
+    setBannerImage(profile.coverPhotoUrl ?? payload.previewUrl ?? null);
+    onEdit?.({ coverPhotoUrl: profile.coverPhotoUrl || undefined });
+    await auth.refreshProfile();
   };
 
   // Skill handlers
@@ -490,37 +626,28 @@ export function ProfilePage({
   };
 
   // Experience handlers
-  const handleAddExperience = () => {
+  const handleAddExperience = async () => {
+    if (!authUserId) return;
     if (!newExperience.roleTitle?.trim() || !newExperience.organization?.trim()) return;
-    
-    const exp: Experience = {
-      id: editingItem || `exp-${Date.now()}`,
-      roleTitle: newExperience.roleTitle.trim(),
-      organization: newExperience.organization.trim(),
-      startDate: newExperience.startDate || new Date(),
-      endDate: newExperience.isCurrentlyWorking ? undefined : newExperience.endDate,
-      isCurrentlyWorking: newExperience.isCurrentlyWorking || false,
-      description: newExperience.description?.trim() || '',
-    };
 
-    if (editingItem) {
-      setExperiences(experiences.map(e => e.id === editingItem ? exp : e));
-    } else {
-      setExperiences([...experiences, exp]);
-    }
-    
-    if (onEdit) {
-      onEdit({ experience: [...experiences.filter(e => e.id !== editingItem), exp].map(e => ({
-        id: e.id,
-        roleTitle: e.roleTitle,
-        organization: e.organization,
-        duration: e.isCurrentlyWorking 
-          ? `${format(e.startDate, 'MMM yyyy')} - Present`
-          : `${format(e.startDate, 'MMM yyyy')} - ${e.endDate ? format(e.endDate, 'MMM yyyy') : 'Present'}`,
-        description: e.description,
-      })) });
-    }
-    closeModal();
+    try {
+      const payload = {
+        roleTitle: newExperience.roleTitle.trim(),
+        organization: newExperience.organization.trim(),
+        description: newExperience.description?.trim() || '',
+        startDate: (newExperience.startDate || new Date()).toISOString(),
+        endDate: newExperience.isCurrentlyWorking ? null : newExperience.endDate?.toISOString() ?? null,
+        isCurrentlyWorking: newExperience.isCurrentlyWorking || false,
+      };
+
+      if (editingItem) {
+        await apiUpdateUserExperience(authUserId, editingItem, payload, authToken);
+      } else {
+        await apiCreateUserExperience(authUserId, payload, authToken);
+      }
+      await loadExperiences();
+      closeModal();
+    } catch {}
   };
 
   const handleEditExperience = (exp: Experience) => {
@@ -529,8 +656,12 @@ export function ProfilePage({
     setActiveModal('experience');
   };
 
-  const handleDeleteExperience = (id: string) => {
-    setExperiences(experiences.filter(e => e.id !== id));
+  const handleDeleteExperience = async (id: string) => {
+    if (!authUserId) return;
+    try {
+      await apiDeleteUserExperience(authUserId, id, authToken);
+      await loadExperiences();
+    } catch {}
   };
 
   // Project handlers
@@ -547,17 +678,39 @@ export function ProfilePage({
       tags: newProject.tags || [],
     };
 
-    if (authUserId && !editingItem) {
-      try {
-        await apiCreateUserProject(authUserId, {
-          title: project.title,
-          description: project.description,
-        }, authToken);
-        await loadProjects();
-      } catch {}
-    } else if (editingItem) {
-      setLoadedProjects(loadedProjects.map(p => p.id === editingItem ? project : p));
-    }
+    if (!authUserId) return;
+
+    try {
+      if (!editingItem) {
+        await apiCreateUserProject(
+          authUserId,
+          {
+            title: project.title,
+            description: project.description,
+            sourceUrl: project.githubUrl,
+            demoUrl: project.liveUrl,
+            imageUrl: project.imageUrl,
+            tags: project.tags,
+          },
+          authToken,
+        );
+      } else {
+        await apiUpdateUserProject(
+          authUserId,
+          editingItem,
+          {
+            title: project.title,
+            description: project.description,
+            sourceUrl: project.githubUrl,
+            demoUrl: project.liveUrl,
+            imageUrl: project.imageUrl,
+            tags: project.tags,
+          },
+          authToken,
+        );
+      }
+      await loadProjects();
+    } catch {}
     closeModal();
   };
 
@@ -604,11 +757,30 @@ export function ProfilePage({
 
     if (authUserId) {
       try {
-        await apiCreateUserCertification(authUserId, {
-          name: newCertification.name.trim(),
-          description: newCertification.description?.trim(),
-          imageUrl: certImagePreview || newCertification.imageUrl,
-        }, authToken);
+        if (!editingItem) {
+          await apiCreateUserCertification(authUserId, {
+            name: newCertification.name.trim(),
+            issuer: newCertification.issuer?.trim(),
+            description: newCertification.description?.trim(),
+            imageUrl: certImagePreview || newCertification.imageUrl,
+            credentialUrl: newCertification.certificateUrl,
+            issuedAt: newCertification.issueDate ? format(newCertification.issueDate, 'yyyy-MM-dd') : undefined,
+          }, authToken);
+        } else {
+          await apiUpdateUserCertification(
+            authUserId,
+            editingItem,
+            {
+              name: newCertification.name.trim(),
+              issuer: newCertification.issuer?.trim(),
+              description: newCertification.description?.trim(),
+              imageUrl: certImagePreview || newCertification.imageUrl,
+              credentialUrl: newCertification.certificateUrl,
+              issuedAt: newCertification.issueDate ? format(newCertification.issueDate, 'yyyy-MM-dd') : undefined,
+            },
+            authToken,
+          );
+        }
         await loadCertifications();
       } catch {}
     }
@@ -642,23 +814,27 @@ export function ProfilePage({
   };
 
   // Society handlers
-  const handleAddSociety = () => {
+  const handleAddSociety = async () => {
+    if (!authUserId) return;
     if (!newSociety.societyName?.trim() || !newSociety.role?.trim()) return;
 
-    const soc: Society = {
-      id: editingItem || `soc-${Date.now()}`,
-      societyName: newSociety.societyName.trim(),
-      role: newSociety.role.trim(),
-      startDate: newSociety.startDate || new Date(),
-      endDate: newSociety.endDate,
-    };
+    try {
+      const payload = {
+        societyName: newSociety.societyName.trim(),
+        role: newSociety.role.trim(),
+        startDate: newSociety.startDate ? newSociety.startDate.toISOString() : null,
+        endDate: newSociety.endDate ? newSociety.endDate.toISOString() : null,
+      };
 
-    if (editingItem) {
-      setSocieties(societies.map(s => s.id === editingItem ? soc : s));
-    } else {
-      setSocieties([...societies, soc]);
-    }
-    closeModal();
+      if (!editingItem) {
+        await apiCreateUserSociety(authUserId, payload, authToken);
+      } else {
+        await apiUpdateUserSociety(authUserId, editingItem, payload, authToken);
+      }
+
+      await loadSocieties();
+      closeModal();
+    } catch {}
   };
 
   const handleEditSociety = (soc: Society) => {
@@ -667,27 +843,35 @@ export function ProfilePage({
     setActiveModal('society');
   };
 
-  const handleDeleteSociety = (id: string) => {
-    setSocieties(societies.filter(s => s.id !== id));
+  const handleDeleteSociety = async (id: string) => {
+    if (!authUserId) return;
+    try {
+      await apiDeleteUserSociety(authUserId, id, authToken);
+      await loadSocieties();
+    } catch {}
   };
 
   // Achievement handlers
-  const handleAddAchievement = () => {
+  const handleAddAchievement = async () => {
+    if (!authUserId) return;
     if (!newAchievement.title?.trim()) return;
 
-    const ach: Achievement = {
-      id: editingItem || `ach-${Date.now()}`,
-      title: newAchievement.title.trim(),
-      year: newAchievement.year || new Date().getFullYear(),
-      description: newAchievement.description?.trim(),
-    };
+    try {
+      const payload = {
+        title: newAchievement.title.trim(),
+        year: newAchievement.year || new Date().getFullYear(),
+        description: newAchievement.description?.trim(),
+      };
 
-    if (editingItem) {
-      setAchievements(achievements.map(a => a.id === editingItem ? ach : a));
-    } else {
-      setAchievements([...achievements, ach]);
-    }
-    closeModal();
+      if (!editingItem) {
+        await apiCreateUserAchievement(authUserId, payload, authToken);
+      } else {
+        await apiUpdateUserAchievement(authUserId, editingItem, payload, authToken);
+      }
+
+      await loadAchievements();
+      closeModal();
+    } catch {}
   };
 
   const handleEditAchievement = (ach: Achievement) => {
@@ -696,14 +880,55 @@ export function ProfilePage({
     setActiveModal('achievement');
   };
 
-  const handleDeleteAchievement = (id: string) => {
-    setAchievements(achievements.filter(a => a.id !== id));
+  const handleDeleteAchievement = async (id: string) => {
+    if (!authUserId) return;
+    try {
+      await apiDeleteUserAchievement(authUserId, id, authToken);
+      await loadAchievements();
+    } catch {}
+  };
+
+  const handleSaveEducation = async () => {
+    if (!authUserId) return;
+    const branch = educationDraft.branch.trim();
+    const year = Number.parseInt(educationDraft.year, 10);
+    if (!branch || Number.isNaN(year)) return;
+
+    try {
+      await apiUpdateUserProfile(
+        authUserId,
+        {
+          username: student.username,
+          branch,
+          year,
+        },
+        authToken,
+      );
+      onEdit?.({ branch, year });
+      await auth.refreshProfile();
+      setActiveModal(null);
+    } catch {}
+  };
+
+  const handleCreatePost = async () => {
+    if (!authUserId || !newPostDraft.content.trim()) return;
+    try {
+      await apiCreateUserPost(
+        authUserId,
+        {
+          postType: 'general',
+          title: newPostDraft.title.trim() || undefined,
+          contentText: newPostDraft.content.trim(),
+        },
+        authToken,
+      );
+      setNewPostDraft({ title: '', content: '' });
+      closeModal();
+      await loadPosts();
+    } catch {}
   };
 
   const displaySkills = isOwnProfile ? skills : student.skills.map((name, index) => ({ id: String(index), name }));
-  const featuredProject = loadedProjects[0];
-  const featuredPost = profilePosts[0];
-  const featuredAchievement = achievements[0];
   const profileEmail = student.email?.trim() || '';
   const profileBranch = student.branch?.trim() || '';
   const hasKnownBranch = Boolean(profileBranch && profileBranch.toLowerCase() !== 'unknown');
@@ -711,8 +936,6 @@ export function ProfilePage({
   const yearLabel = hasKnownYear ? `Year ${student.year}` : 'Year not added';
   const branchLabel = hasKnownBranch ? profileBranch : 'Branch not added';
   const clubCount = societies.length;
-  const hasFeaturedContent = Boolean(featuredProject || featuredPost || featuredAchievement);
-  const showFeaturedSection = isOwnProfile || hasFeaturedContent;
   const showPostsSection = isOwnProfile || postsLoading || profilePosts.length > 0;
   const showProjectsSection = isOwnProfile || projectsLoading || loadedProjects.length > 0;
   const showExperienceSection = isOwnProfile || experiences.length > 0;
@@ -778,10 +1001,10 @@ export function ProfilePage({
 
   return (
     <PageLayout maxWidth="4xl" className="bg-slate-50 pb-24 md:pb-8" contentClassName="py-4 sm:py-5 lg:py-6 max-w-[720px]">
-      <div className="mx-auto grid w-full [grid-template-columns:1fr] gap-4" style={{ maxWidth: '720px' }}>
+      <div className="mx-auto grid w-full [grid-template-columns:1fr] gap-4" style={{ maxWidth: '1000px' }}>
         {/* Modern Profile Header: Cover + Overlapping Avatar + Stacked Content */}
         <section className="cl-profile-header relative bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-          <div className="mx-auto w-full max-w-[720px]">
+          <div className="mx-auto w-full max-w-[1000px]">
           
           {/* Banner/Cover Section */}
           <div className="cl-cover-section relative h-48 sm:h-64 md:h-72 w-full flex-shrink-0 overflow-hidden bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 bg-cover bg-center">
@@ -1578,6 +1801,80 @@ export function ProfilePage({
               className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold"
             >
               {editingItem ? 'Update' : 'Add'} Achievement
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={activeModal === 'education'}
+        onClose={closeModal}
+        title="Update Education"
+        className="w-[min(32rem,calc(100vw-2rem))]"
+        style={{ width: 'min(32rem, calc(100vw - 2rem))' }}
+      >
+        <div className="space-y-4 max-w-[460px] w-full">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
+            <Input
+              value={educationDraft.branch}
+              onChange={(event) => setEducationDraft((prev) => ({ ...prev, branch: event.target.value }))}
+              placeholder="e.g., Computer Engineering"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
+            <Input
+              type="number"
+              value={educationDraft.year}
+              onChange={(event) => setEducationDraft((prev) => ({ ...prev, year: event.target.value }))}
+              min="1"
+              max="4"
+              placeholder="e.g., 3"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={closeModal}>Cancel</Button>
+            <Button onClick={handleSaveEducation} className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold">
+              Save
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={activeModal === 'newPost'}
+        onClose={closeModal}
+        title="Create Activity Post"
+        className="w-[min(36rem,calc(100vw-2rem))]"
+        style={{ width: 'min(36rem, calc(100vw - 2rem))' }}
+      >
+        <div className="space-y-4 max-w-[520px] w-full">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Title (Optional)</label>
+            <Input
+              value={newPostDraft.title}
+              onChange={(event) => setNewPostDraft((prev) => ({ ...prev, title: event.target.value }))}
+              placeholder="Share a quick update"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Content *</label>
+            <Textarea
+              value={newPostDraft.content}
+              onChange={(event) => setNewPostDraft((prev) => ({ ...prev, content: event.target.value }))}
+              rows={5}
+              placeholder="What's happening?"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-4">
+            <Button variant="outline" onClick={closeModal}>Cancel</Button>
+            <Button
+              onClick={handleCreatePost}
+              disabled={!newPostDraft.content.trim()}
+              className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold"
+            >
+              Post
             </Button>
           </div>
         </div>

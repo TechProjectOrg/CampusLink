@@ -45,6 +45,7 @@ function profileToStudent(profile: ApiUserProfile): Student {
     year: profile.details?.year ?? profile.details?.passingYear ?? 0,
     avatar:
       profile.profilePictureUrl || undefined,
+    coverPhotoUrl: profile.coverPhotoUrl || undefined,
     bio: profile.bio ?? '',
     skills: [],
     interests: [],

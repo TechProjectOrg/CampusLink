@@ -42,6 +42,7 @@ export interface Student {
   branch: string;
   year: number;
   avatar: string;
+  coverPhotoUrl?: string;
   bio?: string;
   skills: string[];
   interests: string[];
@@ -219,7 +220,9 @@ export interface ApiUserProfile {
   username: string;
   email: string;
   bio: string | null;
+  headline?: string | null;
   profilePictureUrl: string | null;
+  coverPhotoUrl?: string | null;
   isPublic: boolean;
   createdAt: string; // ISO string
   type: ApiUserType;

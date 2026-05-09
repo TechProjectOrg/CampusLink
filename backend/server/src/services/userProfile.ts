@@ -8,6 +8,7 @@ export interface UserProfile {
   email: string;
   bio: string | null;
   profilePictureUrl: string | null;
+  coverPhotoUrl: string | null;
   isPublic: boolean;
   headline: string | null;
   isActive: boolean;
@@ -38,6 +39,7 @@ export async function getUserProfileById(userId: string): Promise<UserProfile | 
     bio: summary.bio,
     headline: summary.headline,
     profilePictureUrl: summary.profilePictureUrl,
+    coverPhotoUrl: summary.coverPhotoUrl,
     isPublic: !summary.isPrivate,
     isActive: summary.isActive,
     isOnline: summary.isOnline,

@@ -18,6 +18,7 @@ export interface CachedUserSummary {
   bio: string | null;
   headline: string | null;
   profilePictureUrl: string | null;
+  coverPhotoUrl: string | null;
   isPrivate: boolean;
   isActive: boolean;
   isOnline: boolean;
@@ -71,6 +72,7 @@ interface UserSummaryRow {
   bio: string | null;
   headline: string | null;
   profile_photo_url: string | null;
+  cover_photo_url: string | null;
   is_private: boolean;
   is_active: boolean;
   is_online: boolean;
@@ -124,6 +126,7 @@ function mapSummaryRow(row: UserSummaryRow): CachedUserSummary {
     bio: row.bio,
     headline: row.headline,
     profilePictureUrl: row.profile_photo_url,
+    coverPhotoUrl: row.cover_photo_url,
     isPrivate: row.is_private,
     isActive: row.is_active,
     isOnline: row.is_online,
@@ -155,6 +158,7 @@ async function fetchUserSummariesByIdsFromDb(userIds: string[]): Promise<Map<str
       u.bio,
       u.headline,
       u.profile_photo_url,
+      u.cover_photo_url,
       u.is_private,
       u.is_active,
       u.is_online,
