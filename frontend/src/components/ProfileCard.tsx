@@ -19,9 +19,16 @@ export function ProfileCard({ student, followerCount, followingCount, onViewProf
     <div className="space-y-4">
       {/* Main Profile Card */}
       <Card className="border-primary/10 rounded-2xl shadow-lg hover-lift overflow-hidden animate-slide-in-up">
-        {/* Gradient Header */}
-        <div className="h-20 bg-gradient-to-r from-primary via-secondary to-purple-600 relative">
-          <div className="absolute inset-0 bg-white/10 backdrop-blur-sm"></div>
+        {/* Cover Photo / Gradient Header */}
+        <div className="h-20 bg-gradient-to-r from-primary via-secondary to-purple-600 relative overflow-hidden">
+          {student.coverPhotoUrl ? (
+            <img
+              src={student.coverPhotoUrl}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+          ) : null}
+          <div className="absolute inset-0 bg-white/10 backdrop-blur-[1px]"></div>
         </div>
         
         <CardContent className="relative px-6 pb-6">

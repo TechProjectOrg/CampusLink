@@ -340,7 +340,10 @@ export function ProfilePage({
   };
 
   const loadExperiences = async () => {
-    if (!student.id) return;
+    if (!student.id) {
+      console.warn('Cannot load experiences: student.id not set');
+      return;
+    }
     try {
       const list = await apiFetchUserExperiences(student.id, authToken);
       setExperiences(
@@ -354,13 +357,19 @@ export function ProfilePage({
           isCurrentlyWorking: item.isCurrentlyWorking,
         })),
       );
-    } catch {
+      console.log('✓ Loaded experiences:', list.length);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error('✗ Error loading experiences:', errorMsg);
       setExperiences([]);
     }
   };
 
   const loadSocieties = async () => {
-    if (!student.id) return;
+    if (!student.id) {
+      console.warn('Cannot load societies: student.id not set');
+      return;
+    }
     try {
       const list = await apiFetchUserSocieties(student.id, authToken);
       setSocieties(
@@ -372,13 +381,19 @@ export function ProfilePage({
           endDate: item.endDate ? new Date(item.endDate) : undefined,
         })),
       );
-    } catch {
+      console.log('✓ Loaded societies:', list.length);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error('✗ Error loading societies:', errorMsg);
       setSocieties([]);
     }
   };
 
   const loadAchievements = async () => {
-    if (!student.id) return;
+    if (!student.id) {
+      console.warn('Cannot load achievements: student.id not set');
+      return;
+    }
     try {
       const list = await apiFetchUserAchievements(student.id, authToken);
       setAchievements(
@@ -389,7 +404,10 @@ export function ProfilePage({
           year: item.year,
         })),
       );
-    } catch {
+      console.log('✓ Loaded achievements:', list.length);
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error('✗ Error loading achievements:', errorMsg);
       setAchievements([]);
     }
   };
@@ -627,8 +645,14 @@ export function ProfilePage({
 
   // Experience handlers
   const handleAddExperience = async () => {
-    if (!authUserId) return;
-    if (!newExperience.roleTitle?.trim() || !newExperience.organization?.trim()) return;
+    if (!authUserId) {
+      console.error('Cannot add experience: authUserId not set');
+      return;
+    }
+    if (!newExperience.roleTitle?.trim() || !newExperience.organization?.trim()) {
+      console.error('Cannot add experience: missing required fields');
+      return;
+    }
 
     try {
       const payload = {
@@ -647,7 +671,10 @@ export function ProfilePage({
       }
       await loadExperiences();
       closeModal();
-    } catch {}
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error('Error adding/updating experience:', errorMsg);
+    }
   };
 
   const handleEditExperience = (exp: Experience) => {
@@ -657,11 +684,17 @@ export function ProfilePage({
   };
 
   const handleDeleteExperience = async (id: string) => {
-    if (!authUserId) return;
+    if (!authUserId) {
+      console.error('Cannot delete experience: authUserId not set');
+      return;
+    }
     try {
       await apiDeleteUserExperience(authUserId, id, authToken);
       await loadExperiences();
-    } catch {}
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error('Error deleting experience:', errorMsg);
+    }
   };
 
   // Project handlers
@@ -710,8 +743,11 @@ export function ProfilePage({
         );
       }
       await loadProjects();
-    } catch {}
-    closeModal();
+      closeModal();
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error('Error adding/updating project:', errorMsg);
+    }
   };
 
   const handleEditProject = (project: Project) => {
@@ -722,11 +758,17 @@ export function ProfilePage({
   };
 
   const handleDeleteProject = async (id: string) => {
-    if (!authUserId) return;
+    if (!authUserId) {
+      console.error('Cannot delete project: authUserId not set');
+      return;
+    }
     try {
       await apiDeleteUserProject(authUserId, id, authToken);
       await loadProjects();
-    } catch {}
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error('Error deleting project:', errorMsg);
+    }
   };
 
   const handleProjectImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -782,9 +824,12 @@ export function ProfilePage({
           );
         }
         await loadCertifications();
-      } catch {}
+        closeModal();
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        console.error('Error adding/updating certification:', errorMsg);
+      }
     }
-    closeModal();
   };
 
   const handleEditCertification = (cert: Certification) => {
@@ -795,11 +840,17 @@ export function ProfilePage({
   };
 
   const handleDeleteCertification = async (id: string) => {
-    if (!authUserId) return;
+    if (!authUserId) {
+      console.error('Cannot delete certification: authUserId not set');
+      return;
+    }
     try {
       await apiDeleteUserCertification(authUserId, id, authToken);
       await loadCertifications();
-    } catch {}
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error('Error deleting certification:', errorMsg);
+    }
   };
 
   const handleCertImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -815,8 +866,14 @@ export function ProfilePage({
 
   // Society handlers
   const handleAddSociety = async () => {
-    if (!authUserId) return;
-    if (!newSociety.societyName?.trim() || !newSociety.role?.trim()) return;
+    if (!authUserId) {
+      console.error('Cannot add society: authUserId not set');
+      return;
+    }
+    if (!newSociety.societyName?.trim() || !newSociety.role?.trim()) {
+      console.error('Cannot add society: missing required fields');
+      return;
+    }
 
     try {
       const payload = {
@@ -834,7 +891,10 @@ export function ProfilePage({
 
       await loadSocieties();
       closeModal();
-    } catch {}
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error('Error adding/updating society:', errorMsg);
+    }
   };
 
   const handleEditSociety = (soc: Society) => {
@@ -844,11 +904,17 @@ export function ProfilePage({
   };
 
   const handleDeleteSociety = async (id: string) => {
-    if (!authUserId) return;
+    if (!authUserId) {
+      console.error('Cannot delete society: authUserId not set');
+      return;
+    }
     try {
       await apiDeleteUserSociety(authUserId, id, authToken);
       await loadSocieties();
-    } catch {}
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error('Error deleting society:', errorMsg);
+    }
   };
 
   // Achievement handlers
@@ -871,7 +937,10 @@ export function ProfilePage({
 
       await loadAchievements();
       closeModal();
-    } catch {}
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error('Error adding/updating achievement:', errorMsg);
+    }
   };
 
   const handleEditAchievement = (ach: Achievement) => {
@@ -881,18 +950,30 @@ export function ProfilePage({
   };
 
   const handleDeleteAchievement = async (id: string) => {
-    if (!authUserId) return;
+    if (!authUserId) {
+      console.error('Cannot delete achievement: authUserId not set');
+      return;
+    }
     try {
       await apiDeleteUserAchievement(authUserId, id, authToken);
       await loadAchievements();
-    } catch {}
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error('Error deleting achievement:', errorMsg);
+    }
   };
 
   const handleSaveEducation = async () => {
-    if (!authUserId) return;
+    if (!authUserId) {
+      console.error('Cannot save education: authUserId not set');
+      return;
+    }
     const branch = educationDraft.branch.trim();
     const year = Number.parseInt(educationDraft.year, 10);
-    if (!branch || Number.isNaN(year)) return;
+    if (!branch || Number.isNaN(year)) {
+      console.error('Cannot save education: missing or invalid fields');
+      return;
+    }
 
     try {
       await apiUpdateUserProfile(
@@ -907,7 +988,10 @@ export function ProfilePage({
       onEdit?.({ branch, year });
       await auth.refreshProfile();
       setActiveModal(null);
-    } catch {}
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      console.error('Error saving education:', errorMsg);
+    }
   };
 
   const handleCreatePost = async () => {

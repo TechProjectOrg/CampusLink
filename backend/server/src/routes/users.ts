@@ -45,7 +45,8 @@ const requireOwnUser: RequestHandler = (req, res, next: NextFunction) => {
   return next();
 };
 
-router.use('/:userId', authenticateToken, requireOwnUser);
+// Apply authentication to all routes (allows reading public data while knowing who's requesting)
+router.use('/:userId', authenticateToken);
 
 interface UpdateUserBody {
   username?: string;
@@ -404,6 +405,7 @@ router.get('/:userId/settings', async (req: Request<GetUserParams>, res: Respons
 
 router.patch(
   '/:userId/settings',
+  requireOwnUser,
   async (req: Request<GetUserParams, unknown, UpdateUserSettingsBody>, res: Response) => {
     const { userId } = req.params;
     const { notifications, privacy } = req.body;
@@ -535,6 +537,7 @@ router.patch(
 
 router.patch(
   '/:userId',
+  requireOwnUser,
   async (req: Request<GetUserParams, unknown, UpdateUserBody>, res: Response) => {
     const { userId } = req.params;
     const { username, branch, year, bio, headline } = req.body;
@@ -664,6 +667,7 @@ router.patch(
 
 router.patch(
   '/:userId/profile-picture',
+  requireOwnUser,
   profilePhotoUpload.single('image') as unknown as RequestHandler<GetUserParams>,
   async (
     req: Request<GetUserParams, unknown, UpdateProfilePictureBody> & { file?: Express.Multer.File },
@@ -747,6 +751,7 @@ router.patch(
 
 router.patch(
   '/:userId/cover-photo',
+  requireOwnUser,
   profilePhotoUpload.single('image') as unknown as RequestHandler<GetUserParams>,
   async (
     req: Request<GetUserParams, unknown, UpdateCoverPhotoBody> & { file?: Express.Multer.File },
@@ -863,6 +868,7 @@ router.post(
 
 router.patch(
   '/:userId/password',
+  requireOwnUser,
   async (req: Request<GetUserParams, unknown, Partial<ChangePasswordBody>>, res: Response) => {
     const { userId } = req.params;
     const { changeToken, newPassword } = req.body;
@@ -923,7 +929,10 @@ interface DeleteUserBody {
 
 // Deletes the user and all dependent records via DB cascades.
 // For now, this uses password confirmation (no JWT/session validation implemented yet).
-router.delete('/:userId', async (req: Request<GetUserParams, unknown, Partial<DeleteUserBody>>, res: Response) => {
+router.delete(
+  '/:userId',
+  requireOwnUser,
+  async (req: Request<GetUserParams, unknown, Partial<DeleteUserBody>>, res: Response) => {
   const { userId } = req.params;
   const { password } = req.body;
 
@@ -997,6 +1006,7 @@ router.get('/:userId/skills', async (req: Request<{ userId: string }>, res: Resp
 
 router.post(
   '/:userId/skills',
+  requireOwnUser,
   async (req: Request<{ userId: string }, unknown, { name?: string }>, res: Response) => {
     const { userId } = req.params;
     const { name } = req.body;
@@ -1034,6 +1044,7 @@ router.post(
 
 router.delete(
   '/:userId/skills/:skillId',
+  requireOwnUser,
   async (req: Request<{ userId: string; skillId: string }>, res: Response) => {
     const { userId, skillId } = req.params;
 
@@ -1114,6 +1125,7 @@ router.get('/:userId/certifications', async (req: Request<{ userId: string }>, r
 
 router.post(
   '/:userId/certifications',
+  requireOwnUser,
   async (
     req: Request<
       { userId: string },
@@ -1184,6 +1196,7 @@ router.post(
 
 router.patch(
   '/:userId/certifications/:certificationId',
+  requireOwnUser,
   async (
     req: Request<
       { userId: string; certificationId: string },
@@ -1272,6 +1285,7 @@ router.patch(
 
 router.delete(
   '/:userId/certifications/:certificationId',
+  requireOwnUser,
   async (req: Request<{ userId: string; certificationId: string }>, res: Response) => {
     const { userId, certificationId } = req.params;
 
@@ -1357,6 +1371,7 @@ router.get('/:userId/projects', async (req: Request<{ userId: string }>, res: Re
 
 router.post(
   '/:userId/projects',
+  requireOwnUser,
   async (
     req: Request<
       { userId: string },
@@ -1421,6 +1436,7 @@ router.post(
 
 router.patch(
   '/:userId/projects/:projectId',
+  requireOwnUser,
   async (
     req: Request<
       { userId: string; projectId: string },
@@ -1525,6 +1541,7 @@ router.patch(
 
 router.delete(
   '/:userId/projects/:projectId',
+  requireOwnUser,
   async (req: Request<{ userId: string; projectId: string }>, res: Response) => {
     const { userId, projectId } = req.params;
 
@@ -1596,6 +1613,7 @@ router.get('/:userId/experiences', async (req: Request<{ userId: string }>, res:
 
 router.post(
   '/:userId/experiences',
+  requireOwnUser,
   async (
     req: Request<
       { userId: string },
@@ -1674,6 +1692,7 @@ router.post(
 
 router.patch(
   '/:userId/experiences/:experienceId',
+  requireOwnUser,
   async (
     req: Request<
       { userId: string; experienceId: string },
@@ -1775,6 +1794,7 @@ router.patch(
 
 router.delete(
   '/:userId/experiences/:experienceId',
+  requireOwnUser,
   async (req: Request<{ userId: string; experienceId: string }>, res: Response) => {
     const { userId, experienceId } = req.params;
 
@@ -1842,6 +1862,7 @@ router.get('/:userId/societies', async (req: Request<{ userId: string }>, res: R
 
 router.post(
   '/:userId/societies',
+  requireOwnUser,
   async (
     req: Request<
       { userId: string },
@@ -1901,6 +1922,7 @@ router.post(
 
 router.patch(
   '/:userId/societies/:societyId',
+  requireOwnUser,
   async (
     req: Request<
       { userId: string; societyId: string },
@@ -1983,6 +2005,7 @@ router.patch(
 
 router.delete(
   '/:userId/societies/:societyId',
+  requireOwnUser,
   async (req: Request<{ userId: string; societyId: string }>, res: Response) => {
     const { userId, societyId } = req.params;
 
@@ -2048,6 +2071,7 @@ router.get('/:userId/achievements', async (req: Request<{ userId: string }>, res
 
 router.post(
   '/:userId/achievements',
+  requireOwnUser,
   async (
     req: Request<{ userId: string }, unknown, { title?: string; description?: string; year?: number }>,
     res: Response,
@@ -2091,6 +2115,7 @@ router.post(
 
 router.patch(
   '/:userId/achievements/:achievementId',
+  requireOwnUser,
   async (
     req: Request<
       { userId: string; achievementId: string },
@@ -2159,6 +2184,7 @@ router.patch(
 
 router.delete(
   '/:userId/achievements/:achievementId',
+  requireOwnUser,
   async (req: Request<{ userId: string; achievementId: string }>, res: Response) => {
     const { userId, achievementId } = req.params;
 
@@ -2253,6 +2279,7 @@ router.get('/:userId/posts', async (req: Request<{ userId: string }>, res: Respo
 
 router.post(
   '/:userId/posts',
+  requireOwnUser,
   postMediaUpload.array('media', 10),
   async (
     req: Request<{ userId: string }, unknown, CreateUserPostBody & { payload?: string }>,
