@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import {
   Calendar,
-  MapPin,
+  BookOpen,
   Edit2,
   ExternalLink,
   Plus,
@@ -215,7 +215,6 @@ export function ProfilePage({
     | 'society'
     | 'achievement'
     | 'education'
-    | 'newPost'
     | null
   >(null);
 
@@ -269,11 +268,6 @@ export function ProfilePage({
   const [educationDraft, setEducationDraft] = useState({
     branch: student.branch || '',
     year: student.year ? String(student.year) : '',
-  });
-
-  const [newPostDraft, setNewPostDraft] = useState({
-    title: '',
-    content: '',
   });
 
   const authUserId = auth.currentUser?.id ?? auth.session?.userId;
@@ -994,24 +988,6 @@ export function ProfilePage({
     }
   };
 
-  const handleCreatePost = async () => {
-    if (!authUserId || !newPostDraft.content.trim()) return;
-    try {
-      await apiCreateUserPost(
-        authUserId,
-        {
-          postType: 'general',
-          title: newPostDraft.title.trim() || undefined,
-          contentText: newPostDraft.content.trim(),
-        },
-        authToken,
-      );
-      setNewPostDraft({ title: '', content: '' });
-      closeModal();
-      await loadPosts();
-    } catch {}
-  };
-
   const displaySkills = isOwnProfile ? skills : student.skills.map((name, index) => ({ id: String(index), name }));
   const profileEmail = student.email?.trim() || '';
   const profileBranch = student.branch?.trim() || '';
@@ -1171,7 +1147,7 @@ export function ProfilePage({
 
               {/* About Preview Row */}
               <div className="cl-about-preview-section">
-                <p className="text-base sm:text-lg text-slate-600 font-medium leading-relaxed max-w-2xl">
+                <p className="text-base sm:text-lg text-slate-600 leading-relaxed max-w-2xl">
                   {student.bio || (isOwnProfile ? 'Add an about section so people can know you better.' : 'Campus community member')}
                 </p>
               </div>
@@ -1180,15 +1156,15 @@ export function ProfilePage({
               <div className="cl-metadata-row flex flex-wrap items-center gap-4 sm:gap-6 text-sm">
                 <div className="flex items-center gap-2 text-slate-600">
                   <Mail className="w-4 h-4 flex-shrink-0 text-slate-400" />
-                  <span className="font-medium truncate">{profileEmail || 'Email not added'}</span>
+                  <span className="truncate">{profileEmail || 'Email not added'}</span>
                 </div>
                 <div className="flex items-center gap-2 text-slate-600">
                   <Calendar className="w-4 h-4 flex-shrink-0 text-slate-400" />
-                  <span className="font-medium">{yearLabel}</span>
+                  <span>{yearLabel}</span>
                 </div>
                 <div className="flex items-center gap-2 text-slate-600">
-                  <MapPin className="w-4 h-4 flex-shrink-0 text-slate-400" />
-                  <span className="font-medium">{branchLabel}</span>
+                  <BookOpen className="w-4 h-4 flex-shrink-0 text-slate-400" />
+                  <span>{branchLabel}</span>
                 </div>
               </div>
 
@@ -1218,7 +1194,7 @@ export function ProfilePage({
 
         {showPostsSection ? (
         <section className={profileSectionCardClass}>
-          <SectionHeader title="Activity" onAdd={() => setActiveModal('newPost')} />
+          <SectionHeader title="Activity" />
           {postsLoading ? (
             <LoadingIndicator label="Loading posts..." className="justify-start" size={20} />
           ) : profilePosts.length > 0 ? (
@@ -1921,44 +1897,6 @@ export function ProfilePage({
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button onClick={handleSaveEducation} className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold">
               Save
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      <Modal
-        isOpen={activeModal === 'newPost'}
-        onClose={closeModal}
-        title="Create Activity Post"
-        className="w-[min(36rem,calc(100vw-2rem))]"
-        style={{ width: 'min(36rem, calc(100vw - 2rem))' }}
-      >
-        <div className="space-y-4 max-w-[520px] w-full">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Title (Optional)</label>
-            <Input
-              value={newPostDraft.title}
-              onChange={(event) => setNewPostDraft((prev) => ({ ...prev, title: event.target.value }))}
-              placeholder="Share a quick update"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Content *</label>
-            <Textarea
-              value={newPostDraft.content}
-              onChange={(event) => setNewPostDraft((prev) => ({ ...prev, content: event.target.value }))}
-              rows={5}
-              placeholder="What's happening?"
-            />
-          </div>
-          <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={closeModal}>Cancel</Button>
-            <Button
-              onClick={handleCreatePost}
-              disabled={!newPostDraft.content.trim()}
-              className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold"
-            >
-              Post
             </Button>
           </div>
         </div>

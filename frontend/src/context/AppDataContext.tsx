@@ -277,8 +277,14 @@ function mergeStudents(current: Student | undefined, incoming: Student): Student
   return {
     ...current,
     ...incoming,
+    name: incoming.name && incoming.name !== 'Unknown User' ? incoming.name : (current?.name ?? incoming.name),
+    username: incoming.username && incoming.username !== 'Unknown User' ? incoming.username : (current?.username ?? incoming.username),
+    email: incoming.email ? incoming.email : (current?.email ?? ''),
+    branch: incoming.branch && incoming.branch !== 'Unknown' ? incoming.branch : (current?.branch ?? 'Unknown'),
+    year: incoming.year ? incoming.year : (current?.year ?? 0),
     avatar: incoming.avatar ?? current?.avatar,
-    bio: incoming.bio ?? current?.bio ?? '',
+    coverPhotoUrl: incoming.coverPhotoUrl ?? current?.coverPhotoUrl,
+    bio: incoming.bio ? incoming.bio : (current?.bio ?? ''),
     skills: incomingSkills.length > 0 ? incomingSkills : current?.skills ?? [],
     interests: incomingInterests.length > 0 ? incomingInterests : current?.interests ?? [],
     certifications:
