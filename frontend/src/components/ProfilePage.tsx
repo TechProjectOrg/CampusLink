@@ -32,6 +32,7 @@ import {
   apiCreateUserProject,
   apiDeleteUserProject,
   apiFetchUserProjects,
+  apiUploadUserProjectImage,
   apiUpdateUserProject,
 } from '../lib/projectsApi';
 import { Button } from './ui/button';
@@ -240,6 +241,7 @@ export function ProfilePage({
     tags: [],
   });
   const [projectImagePreview, setProjectImagePreview] = useState<string | null>(null);
+  const [projectImageFile, setProjectImageFile] = useState<File | null>(null);
   const [newProjectTag, setNewProjectTag] = useState('');
 
   const [newCertification, setNewCertification] = useState<Partial<Certification>>({
@@ -544,6 +546,7 @@ export function ProfilePage({
     setNewExperience({ roleTitle: '', organization: '', startDate: undefined, endDate: undefined, isCurrentlyWorking: false, description: '' });
     setNewProject({ title: '', description: '', imageUrl: '', githubUrl: '', liveUrl: '', tags: [] });
     setProjectImagePreview(null);
+    setProjectImageFile(null);
     setNewProjectTag('');
     setNewCertification({ name: '', issuer: '', issueDate: undefined, imageUrl: '', certificateUrl: '', description: '' });
     setCertImagePreview(null);
@@ -721,12 +724,17 @@ export function ProfilePage({
     }
 
     try {
+      let uploadedImageUrl: string | undefined;
+      if (projectImageFile) {
+        uploadedImageUrl = await apiUploadUserProjectImage(authUserId, projectImageFile, authToken);
+      }
+
       const payload = {
         title: project.title,
         description: project.description,
         sourceUrl: project.githubUrl,
         demoUrl: project.liveUrl,
-        imageUrl: project.imageUrl,
+        imageUrl: uploadedImageUrl ?? project.imageUrl,
         tags: project.tags,
       };
 
@@ -780,6 +788,7 @@ export function ProfilePage({
     setEditingItem(project.id);
     setNewProject(project);
     setProjectImagePreview(project.imageUrl || null);
+    setProjectImageFile(null);
     setActiveModal('project');
   };
 
@@ -800,6 +809,7 @@ export function ProfilePage({
   const handleProjectImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setProjectImageFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setProjectImagePreview(reader.result as string);

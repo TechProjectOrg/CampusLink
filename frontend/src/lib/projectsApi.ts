@@ -121,6 +121,33 @@ export async function apiCreateUserProject(
   return normalizeProject(data, 0);
 }
 
+export async function apiUploadUserProjectImage(
+  userId: string,
+  file: File,
+  token?: string,
+): Promise<string> {
+  const formData = new FormData();
+  formData.append('image', file);
+
+  const response = await fetch(`${API_BASE}/users/${encodeURIComponent(userId)}/projects/upload-image`, {
+    method: 'POST',
+    headers: {
+      ...authHeaders(token),
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response));
+  }
+
+  const data = (await response.json().catch(() => ({}))) as { imageUrl?: string };
+  if (!data.imageUrl) {
+    throw new Error('Project image upload succeeded but image URL was missing');
+  }
+  return data.imageUrl;
+}
+
 export async function apiUpdateUserProject(
   userId: string,
   projectId: string,

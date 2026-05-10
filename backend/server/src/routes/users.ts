@@ -1370,6 +1370,48 @@ router.get('/:userId/projects', async (req: Request<{ userId: string }>, res: Re
 });
 
 router.post(
+  '/:userId/projects/upload-image',
+  requireOwnUser,
+  profilePhotoUpload.single('image') as unknown as RequestHandler<GetUserParams>,
+  async (
+    req: Request<GetUserParams> & { file?: Express.Multer.File },
+    res: Response,
+  ) => {
+    const { userId } = req.params;
+    const uploadedFile = req.file;
+
+    if (!uploadedFile) {
+      return res.status(400).json({ message: 'Provide an image file' });
+    }
+
+    if (!uploadedFile.mimetype.startsWith('image/')) {
+      return res.status(400).json({ message: 'Only image uploads are allowed' });
+    }
+
+    try {
+      const imageUrl = await uploadPostMediaToStorage({
+        userId,
+        fileBuffer: uploadedFile.buffer,
+        mimeType: uploadedFile.mimetype,
+      });
+
+      return res.status(200).json({ imageUrl });
+    } catch (err) {
+      if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ message: 'Project image must be 5MB or smaller' });
+      }
+
+      if (err instanceof Error && err.message.startsWith('Missing required environment variable')) {
+        return res.status(500).json({ message: 'Project image storage is not configured on the server' });
+      }
+
+      console.error('Error uploading project image:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  },
+);
+
+router.post(
   '/:userId/projects',
   requireOwnUser,
   async (
