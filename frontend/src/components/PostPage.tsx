@@ -7,6 +7,7 @@ import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { LoadingIndicator } from './ui/LoadingIndicator';
+import { useAuth } from '../context/AuthContext';
 
 interface DiscussionListState {
   isLoading: boolean;
@@ -85,6 +86,7 @@ export function PostPage({
   onDeleteComment,
   onViewProfile,
 }: PostPageProps) {
+  const auth = useAuth();
   const [commentText, setCommentText] = useState('');
   const [replyTarget, setReplyTarget] = useState<Comment | null>(null);
   const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
@@ -94,6 +96,11 @@ export function PostPage({
   const likeCount = post.likeCount ?? post.likes.length;
   const saveCount = post.saveCount ?? post.saved.length;
   const commentCount = post.commentCount ?? post.comments.length;
+  const currentUserAvatar = auth.profile?.profilePictureUrl ?? undefined;
+  const currentUserInitial =
+    auth.profile?.username?.trim()?.charAt(0)?.toUpperCase() ||
+    auth.currentUser?.name?.trim()?.charAt(0)?.toUpperCase() ||
+    'U';
 
   const typeColors = {
     internship: 'bg-accent/10 text-accent border-accent/20',
@@ -382,7 +389,8 @@ export function PostPage({
 
             <div className="flex gap-3">
               <Avatar className="w-8 h-8 ring-2 ring-primary/10">
-                <AvatarFallback>Y</AvatarFallback>
+                <AvatarImage src={currentUserAvatar} />
+                <AvatarFallback>{currentUserInitial}</AvatarFallback>
               </Avatar>
               <div className="flex-1 space-y-2">
                 {replyTarget && (

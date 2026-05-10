@@ -195,6 +195,7 @@ export function ProfilePage({
   // Projects state
   const [loadedProjects, setLoadedProjects] = useState<Project[]>([]);
   const [projectsLoading, setProjectsLoading] = useState(false);
+  const [projectLikesById, setProjectLikesById] = useState<Record<string, { liked: boolean; count: number }>>({});
   const [loadedPosts, setLoadedPosts] = useState<Opportunity[]>([]);
   const [postsLoading, setPostsLoading] = useState(false);
 
@@ -571,6 +572,21 @@ export function ProfilePage({
     : 'none';
   const profilePosts = [...loadedPosts].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
+  const handleProfileLike = (opportunityId: string) => {
+    setLoadedPosts((current) =>
+      current.map((post) => {
+        if (post.id !== opportunityId) return post;
+        const currentlyLiked = post.isLikedByMe ?? false;
+        return {
+          ...post,
+          isLikedByMe: !currentlyLiked,
+          likeCount: Math.max((post.likeCount ?? 0) + (currentlyLiked ? -1 : 1), 0),
+        };
+      }),
+    );
+    onLike?.(opportunityId);
+  };
+
   // Handlers
   const closeModal = () => {
     setActiveModal(null);
@@ -836,6 +852,12 @@ export function ProfilePage({
   };
 
   const mapProjectToOpportunity = (project: Project): Opportunity => ({
+    ...(projectLikesById[project.id]
+      ? {
+          likeCount: projectLikesById[project.id].count,
+          isLikedByMe: projectLikesById[project.id].liked,
+        }
+      : {}),
     id: `project-${project.id}`,
     authorId: student.id,
     authorName: student.name,
@@ -850,10 +872,10 @@ export function ProfilePage({
     likes: [],
     comments: [],
     saved: [],
-    likeCount: 0,
+    likeCount: projectLikesById[project.id]?.count ?? 0,
     commentCount: 0,
     saveCount: 0,
-    isLikedByMe: false,
+    isLikedByMe: projectLikesById[project.id]?.liked ?? false,
     isSavedByMe: false,
     canEdit: isOwnProfile,
     canDelete: isOwnProfile,
@@ -865,6 +887,20 @@ export function ProfilePage({
     setProjectImagePreview(project.imageUrl || null);
     setProjectImageFile(null);
     setActiveModal('project');
+  };
+
+  const handleProjectLike = (projectId: string) => {
+    setProjectLikesById((current) => {
+      const previous = current[projectId] ?? { liked: false, count: 0 };
+      const nextLiked = !previous.liked;
+      return {
+        ...current,
+        [projectId]: {
+          liked: nextLiked,
+          count: Math.max(previous.count + (nextLiked ? 1 : -1), 0),
+        },
+      };
+    });
   };
 
   const handleDeleteProject = async (id: string) => {
@@ -1330,7 +1366,7 @@ export function ProfilePage({
                           opportunity={post}
                           currentUserId={currentUserId}
                           showManagementControls={isOwnProfile}
-                          onLike={(id) => onLike?.(id)}
+                          onLike={handleProfileLike}
                           onSave={(id) => onSave?.(id)}
                           onComment={(id, comment) => onComment?.(id, comment)}
                           onReply={(commentId, comment) => onReply?.(commentId, comment)}
@@ -1346,7 +1382,7 @@ export function ProfilePage({
                   </div>
                 </div>
               </div>
-              <Button variant="outline" className="w-full rounded-2xl border-slate-200 bg-white shadow-sm hover:bg-slate-50" onClick={() => onShowAllPosts?.(student.id)}>
+              <Button variant="outline" className="w-full rounded-2xl border-slate-200 bg-white text-slate-800 shadow-sm transition-transform duration-200 hover:scale-[1.02]" onClick={() => onShowAllPosts?.(student.id)}>
                 Show all posts
               </Button>
             </>
@@ -1375,7 +1411,7 @@ export function ProfilePage({
                         opportunity={mapProjectToOpportunity(project)}
                         currentUserId={currentUserId}
                         showManagementControls={isOwnProfile}
-                        onLike={(id) => onLike?.(id)}
+                        onLike={() => handleProjectLike(project.id)}
                         onSave={(id) => onSave?.(id)}
                         onComment={(id, comment) => onComment?.(id, comment)}
                         onReply={(commentId, comment) => onReply?.(commentId, comment)}
@@ -1383,7 +1419,7 @@ export function ProfilePage({
                         onDeleteComment={(commentId) => onDeleteComment?.(commentId)}
                         onEditPost={() => handleEditProject(project)}
                         onDeletePost={() => handleDeleteProject(project.id)}
-                        onOpenPost={undefined}
+                        onOpenPost={onOpenPost}
                         onViewProfile={() => undefined}
                       />
                     </div>
@@ -1391,7 +1427,7 @@ export function ProfilePage({
                 </div>
                 </div>
               </div>
-              <Button variant="outline" className="w-full rounded-2xl border-slate-200 bg-white shadow-sm hover:bg-slate-50" onClick={() => onShowAllProjects?.(student.id)}>
+              <Button variant="outline" className="w-full rounded-2xl border-slate-200 bg-white text-slate-800 shadow-sm transition-transform duration-200 hover:scale-[1.02]" onClick={() => onShowAllProjects?.(student.id)}>
                 Show all projects
               </Button>
             </>

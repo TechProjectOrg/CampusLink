@@ -7,6 +7,7 @@ import { Badge } from './ui/badge';
 import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
 import { ImageWithFallback } from './figma/ImageWithFallback';
+import { useAuth } from '../context/AuthContext';
 
 interface OpportunityCardProps {
   opportunity: Opportunity;
@@ -39,6 +40,7 @@ export function OpportunityCard({
   onViewProfile,
   onOpenPost,
 }: OpportunityCardProps) {
+  const auth = useAuth();
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [replyByCommentId, setReplyByCommentId] = useState<Record<string, string>>({});
@@ -60,6 +62,11 @@ export function OpportunityCard({
   const likeCount = opportunity.likeCount ?? opportunity.likes.length;
   const saveCount = opportunity.saveCount ?? opportunity.saved.length;
   const commentCount = opportunity.commentCount ?? opportunity.comments.length;
+  const currentUserAvatar = auth.profile?.profilePictureUrl ?? undefined;
+  const currentUserInitial =
+    auth.profile?.username?.trim()?.charAt(0)?.toUpperCase() ||
+    auth.currentUser?.name?.trim()?.charAt(0)?.toUpperCase() ||
+    'U';
 
   const isLiked = opportunity.isLikedByMe ?? opportunity.likes.includes(currentUserId);
   const isSaved = opportunity.isSavedByMe ?? opportunity.saved.includes(currentUserId);
@@ -362,8 +369,8 @@ export function OpportunityCard({
 
             <div className="flex gap-3">
               <Avatar className="w-8 h-8 ring-2 ring-primary/10">
-
-                <AvatarFallback>Y</AvatarFallback>
+                <AvatarImage src={currentUserAvatar} />
+                <AvatarFallback>{currentUserInitial}</AvatarFallback>
               </Avatar>
               <div className="flex-1 space-y-2">
                 <Textarea

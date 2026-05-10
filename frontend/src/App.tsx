@@ -1249,17 +1249,40 @@ export default function App() {
   const handleLike = (opportunityId: string) => {
     const target =
       opportunities.find((opp) => opp.id === opportunityId) ??
-      hashtagOpportunities.find((opp) => opp.id === opportunityId);
+      hashtagOpportunities.find((opp) => opp.id === opportunityId) ??
+      (openedPost?.id === opportunityId ? openedPost : null);
     if (!target) return;
     const nextLiked = !(target.isLikedByMe ?? target.likes.includes(currentUserId));
     const previousLiked = Boolean(target.isLikedByMe ?? target.likes.includes(currentUserId));
     const previousLikeCount = Math.max(target.likeCount ?? target.likes.length, 0);
+
+    if (opportunityId.startsWith('project-')) {
+      setOpenedPost((prev) =>
+        prev?.id === opportunityId
+          ? {
+              ...prev,
+              isLikedByMe: nextLiked,
+              likeCount: Math.max((prev.likeCount ?? 0) + (nextLiked ? 1 : -1), 0),
+            }
+          : prev,
+      );
+      return;
+    }
 
     appData.updatePost(opportunityId, (post) => ({
       ...post,
       isLikedByMe: nextLiked,
       likeCount: Math.max(post.likeCount + (nextLiked ? 1 : -1), 0),
     }));
+    setOpenedPost((prev) =>
+      prev?.id === opportunityId
+        ? {
+            ...prev,
+            isLikedByMe: nextLiked,
+            likeCount: Math.max((prev.likeCount ?? 0) + (nextLiked ? 1 : -1), 0),
+          }
+        : prev,
+    );
 
     void (async () => {
       try {
@@ -1275,6 +1298,15 @@ export default function App() {
           isLikedByMe: previousLiked,
           likeCount: previousLikeCount,
         }));
+        setOpenedPost((prev) =>
+          prev?.id === opportunityId
+            ? {
+                ...prev,
+                isLikedByMe: previousLiked,
+                likeCount: previousLikeCount,
+              }
+            : prev,
+        );
       }
     })();
   };
@@ -1913,6 +1945,7 @@ export default function App() {
 
   useEffect(() => {
     if (activeTab !== 'post' || !openedPostId || !authToken) return;
+    if (openedPostId.startsWith('project-')) return;
 
     let cancelled = false;
 
