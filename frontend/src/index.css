@@ -4518,6 +4518,32 @@ textarea {
   height: 0;
 }
 
+/* Global interactive cursor policy */
+button:not(:disabled),
+input[type="button"]:not(:disabled),
+input[type="submit"]:not(:disabled),
+input[type="reset"]:not(:disabled),
+input[type="checkbox"]:not(:disabled),
+input[type="radio"]:not(:disabled),
+input[type="range"]:not(:disabled),
+input[type="file"]:not(:disabled),
+select:not(:disabled),
+summary,
+a[href],
+[role="button"]:not([aria-disabled="true"]),
+[role="link"]:not([aria-disabled="true"]),
+[role="tab"]:not([aria-disabled="true"]),
+[role="switch"]:not([aria-disabled="true"]),
+[role="checkbox"]:not([aria-disabled="true"]),
+[role="radio"]:not([aria-disabled="true"]),
+[role="menuitem"]:not([aria-disabled="true"]),
+[role="menuitemcheckbox"]:not([aria-disabled="true"]),
+[role="menuitemradio"]:not([aria-disabled="true"]),
+[role="option"]:not([aria-disabled="true"]),
+[data-radix-collection-item]:not([data-disabled]) {
+  cursor: pointer;
+}
+
 /* Custom breakpoint for 14-inch laptops (1200px+) */
 @media (min-width: 1200px) {
   .show-on-laptop {

@@ -855,8 +855,8 @@ export function ProfilePage({
     saveCount: 0,
     isLikedByMe: false,
     isSavedByMe: false,
-    canEdit: false,
-    canDelete: false,
+    canEdit: isOwnProfile,
+    canDelete: isOwnProfile,
   });
 
   const handleEditProject = (project: Project) => {
@@ -1374,26 +1374,18 @@ export function ProfilePage({
                       <OpportunityCard
                         opportunity={mapProjectToOpportunity(project)}
                         currentUserId={currentUserId}
-                        showManagementControls={false}
+                        showManagementControls={isOwnProfile}
                         onLike={(id) => onLike?.(id)}
                         onSave={(id) => onSave?.(id)}
                         onComment={(id, comment) => onComment?.(id, comment)}
                         onReply={(commentId, comment) => onReply?.(commentId, comment)}
                         onLikeComment={(commentId, alreadyLiked) => onLikeComment?.(commentId, alreadyLiked)}
                         onDeleteComment={(commentId) => onDeleteComment?.(commentId)}
+                        onEditPost={() => handleEditProject(project)}
+                        onDeletePost={() => handleDeleteProject(project.id)}
                         onOpenPost={undefined}
                         onViewProfile={() => undefined}
                       />
-                      {isOwnProfile ? (
-                        <div className="mt-2 flex justify-end gap-1">
-                          <button type="button" onClick={() => handleEditProject(project)} className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-blue-50 hover:text-blue-600" aria-label="Edit project">
-                            <Pencil className="w-4 h-4" />
-                          </button>
-                          <button type="button" onClick={() => handleDeleteProject(project.id)} className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600" aria-label="Delete project">
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ) : null}
                     </div>
                   ))}
                 </div>
