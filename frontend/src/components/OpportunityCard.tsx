@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Heart, MessageCircle, Bookmark, MapPin, Calendar, Trash2, Pencil } from 'lucide-react';
+import { Heart, MessageCircle, Bookmark, MapPin, Calendar, Trash2, Pencil, Loader2 } from 'lucide-react';
 import { Opportunity, Comment } from '../types';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -20,7 +20,7 @@ interface OpportunityCardProps {
   onLikeComment?: (commentId: string, alreadyLiked: boolean) => void;
   onDeleteComment?: (commentId: string) => void;
   onEditPost?: (postId: string, updates: Partial<Opportunity>) => void;
-  onDeletePost?: (postId: string) => void;
+  onDeletePost?: (postId: string) => Promise<void> | void;
   onViewProfile?: (authorId: string) => void;
   onOpenPost?: (post: Opportunity) => void;
 }
@@ -47,6 +47,7 @@ export function OpportunityCard({
   const [openReplyByCommentId, setOpenReplyByCommentId] = useState<Record<string, boolean>>({});
   const [expandedRepliesByCommentId, setExpandedRepliesByCommentId] = useState<Record<string, boolean>>({});
   const [editingPost, setEditingPost] = useState(false);
+  const [deletingPost, setDeletingPost] = useState(false);
   const [editDraft, setEditDraft] = useState({
     title: opportunity.title,
     description: opportunity.description,
@@ -290,8 +291,20 @@ export function OpportunityCard({
                 </button>
               )}
               {showManagementControls && opportunity.canDelete && onDeletePost && (
-                <button type="button" className="text-gray-400 hover:text-red-600" onClick={() => onDeletePost(opportunity.id)}>
-                  <Trash2 className="w-4 h-4" />
+                <button
+                  type="button"
+                  disabled={deletingPost}
+                  className="text-gray-400 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={async () => {
+                    setDeletingPost(true);
+                    try {
+                      await onDeletePost(opportunity.id);
+                    } finally {
+                      setDeletingPost(false);
+                    }
+                  }}
+                >
+                  {deletingPost ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
                 </button>
               )}
             </div>

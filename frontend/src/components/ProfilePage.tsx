@@ -16,6 +16,7 @@ import {
   Upload,
   Mail,
   Eye,
+  Loader2,
 } from 'lucide-react';
 import { Student, Opportunity } from '../types';
 import type { FollowGraph } from '../App';
@@ -225,6 +226,8 @@ export function ProfilePage({
 
   // Edit item states (for editing existing items)
   const [editingItem, setEditingItem] = useState<string | null>(null);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
+  const [pendingDeleteByKey, setPendingDeleteByKey] = useState<Record<string, boolean>>({});
 
   // Form states
   const [newExperience, setNewExperience] = useState<Partial<Experience>>({
@@ -283,6 +286,8 @@ export function ProfilePage({
   const loadSkills = async () => {
     if (!isOwnProfile || !authUserId) return;
     setSkillsLoading(true);
+    setBusyAction('save-experience');
+    setBusyAction('save-project');
     try {
       const list = await fetchCachedValue({
         key: `page:user:${authUserId}:profile:skills`,
@@ -608,7 +613,7 @@ export function ProfilePage({
 
   const handleSaveProfile = async () => {
     if (!isOwnProfile || !authUserId) return;
-
+    setBusyAction('save-profile');
     try {
       await apiUpdateUserProfile(
         authUserId,
@@ -626,6 +631,9 @@ export function ProfilePage({
       await auth.refreshProfile();
       closeModal();
     } catch {}
+    finally {
+      setBusyAction(null);
+    }
   };
 
   const currentProfilePhoto = isOwnProfile ? auth.profile?.profilePictureUrl ?? null : null;
@@ -676,20 +684,30 @@ export function ProfilePage({
   // Skill handlers
   const handleAddSkill = async () => {
     if (!isOwnProfile || !authUserId || !newSkillName.trim()) return;
+    setBusyAction('save-skill');
     try {
       await apiAddUserSkill(authUserId, newSkillName.trim(), authToken);
       setNewSkillName('');
       await loadSkills();
       closeModal();
     } catch {}
+    finally {
+      setBusyAction(null);
+    }
   };
 
   const handleRemoveSkill = async (skillId: string) => {
     if (!isOwnProfile || !authUserId) return;
+    if (!window.confirm('Remove this skill?')) return;
+    const key = `skill:${skillId}`;
+    setPendingDeleteByKey((prev) => ({ ...prev, [key]: true }));
     try {
       await apiDeleteUserSkill(authUserId, skillId, authToken);
       await loadSkills();
     } catch {}
+    finally {
+      setPendingDeleteByKey((prev) => ({ ...prev, [key]: false }));
+    }
   };
 
   // Experience handlers
@@ -723,6 +741,8 @@ export function ProfilePage({
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error('Error adding/updating experience:', errorMsg);
+    } finally {
+      setBusyAction(null);
     }
   };
 
@@ -737,12 +757,17 @@ export function ProfilePage({
       console.error('Cannot delete experience: authUserId not set');
       return;
     }
+    if (!window.confirm('Delete this experience?')) return;
+    const key = `experience:${id}`;
+    setPendingDeleteByKey((prev) => ({ ...prev, [key]: true }));
     try {
       await apiDeleteUserExperience(authUserId, id, authToken);
       await loadExperiences();
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error('Error deleting experience:', errorMsg);
+    } finally {
+      setPendingDeleteByKey((prev) => ({ ...prev, [key]: false }));
     }
   };
 
@@ -848,6 +873,8 @@ export function ProfilePage({
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error('Error adding/updating project:', errorMsg);
       window.alert(`Unable to save project. ${errorMsg}`);
+    } finally {
+      setBusyAction(null);
     }
   };
 
@@ -908,12 +935,17 @@ export function ProfilePage({
       console.error('Cannot delete project: authUserId not set');
       return;
     }
+    if (!window.confirm('Delete this project?')) return;
+    const key = `project:${id}`;
+    setPendingDeleteByKey((prev) => ({ ...prev, [key]: true }));
     try {
       await apiDeleteUserProject(authUserId, id, authToken);
       await loadProjects();
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error('Error deleting project:', errorMsg);
+    } finally {
+      setPendingDeleteByKey((prev) => ({ ...prev, [key]: false }));
     }
   };
 
@@ -945,6 +977,7 @@ export function ProfilePage({
     if (!newCertification.name?.trim()) return;
 
     if (authUserId) {
+      setBusyAction('save-certification');
       try {
         if (!editingItem) {
           await apiCreateUserCertification(authUserId, {
@@ -975,6 +1008,8 @@ export function ProfilePage({
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
         console.error('Error adding/updating certification:', errorMsg);
+      } finally {
+        setBusyAction(null);
       }
     }
   };
@@ -991,12 +1026,17 @@ export function ProfilePage({
       console.error('Cannot delete certification: authUserId not set');
       return;
     }
+    if (!window.confirm('Delete this certification?')) return;
+    const key = `certification:${id}`;
+    setPendingDeleteByKey((prev) => ({ ...prev, [key]: true }));
     try {
       await apiDeleteUserCertification(authUserId, id, authToken);
       await loadCertifications();
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error('Error deleting certification:', errorMsg);
+    } finally {
+      setPendingDeleteByKey((prev) => ({ ...prev, [key]: false }));
     }
   };
 
@@ -1022,6 +1062,7 @@ export function ProfilePage({
       return;
     }
 
+    setBusyAction('save-society');
     try {
       const payload = {
         societyName: newSociety.societyName.trim(),
@@ -1041,6 +1082,8 @@ export function ProfilePage({
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error('Error adding/updating society:', errorMsg);
+    } finally {
+      setBusyAction(null);
     }
   };
 
@@ -1055,12 +1098,17 @@ export function ProfilePage({
       console.error('Cannot delete society: authUserId not set');
       return;
     }
+    if (!window.confirm('Delete this society/club entry?')) return;
+    const key = `society:${id}`;
+    setPendingDeleteByKey((prev) => ({ ...prev, [key]: true }));
     try {
       await apiDeleteUserSociety(authUserId, id, authToken);
       await loadSocieties();
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error('Error deleting society:', errorMsg);
+    } finally {
+      setPendingDeleteByKey((prev) => ({ ...prev, [key]: false }));
     }
   };
 
@@ -1069,6 +1117,7 @@ export function ProfilePage({
     if (!authUserId) return;
     if (!newAchievement.title?.trim()) return;
 
+    setBusyAction('save-achievement');
     try {
       const payload = {
         title: newAchievement.title.trim(),
@@ -1087,6 +1136,8 @@ export function ProfilePage({
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error('Error adding/updating achievement:', errorMsg);
+    } finally {
+      setBusyAction(null);
     }
   };
 
@@ -1101,12 +1152,17 @@ export function ProfilePage({
       console.error('Cannot delete achievement: authUserId not set');
       return;
     }
+    if (!window.confirm('Delete this achievement?')) return;
+    const key = `achievement:${id}`;
+    setPendingDeleteByKey((prev) => ({ ...prev, [key]: true }));
     try {
       await apiDeleteUserAchievement(authUserId, id, authToken);
       await loadAchievements();
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error('Error deleting achievement:', errorMsg);
+    } finally {
+      setPendingDeleteByKey((prev) => ({ ...prev, [key]: false }));
     }
   };
 
@@ -1122,6 +1178,7 @@ export function ProfilePage({
       return;
     }
 
+    setBusyAction('save-education');
     try {
       await apiUpdateUserProfile(
         authUserId,
@@ -1138,6 +1195,8 @@ export function ProfilePage({
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error('Error saving education:', errorMsg);
+    } finally {
+      setBusyAction(null);
     }
   };
 
@@ -1189,14 +1248,14 @@ export function ProfilePage({
   );
 
   // Item Actions Component
-  const ItemActions = ({ onEdit, onDelete }: { onEdit: () => void; onDelete: () => void }) => (
+  const ItemActions = ({ onEdit, onDelete, deleting = false }: { onEdit: () => void; onDelete: () => void; deleting?: boolean }) => (
     isOwnProfile ? (
       <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-        <button type="button" onClick={onEdit} className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-blue-50 hover:text-blue-600" aria-label="Edit item">
+        <button type="button" disabled={deleting} onClick={onEdit} className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Edit item">
           <Pencil className="w-4 h-4" />
         </button>
-        <button type="button" onClick={onDelete} className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600" aria-label="Delete item">
-          <Trash2 className="w-4 h-4" />
+        <button type="button" disabled={deleting} onClick={onDelete} className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Delete item">
+          {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
         </button>
       </div>
     ) : null
@@ -1455,7 +1514,11 @@ export function ProfilePage({
                           {format(exp.startDate, 'MMM yyyy')} - {exp.isCurrentlyWorking ? 'Present' : exp.endDate ? format(exp.endDate, 'MMM yyyy') : 'Present'}
                         </p>
                       </div>
-                      <ItemActions onEdit={() => handleEditExperience(exp)} onDelete={() => handleDeleteExperience(exp.id)} />
+                      <ItemActions
+                        onEdit={() => handleEditExperience(exp)}
+                        onDelete={() => handleDeleteExperience(exp.id)}
+                        deleting={Boolean(pendingDeleteByKey[`experience:${exp.id}`])}
+                      />
                     </div>
                     {exp.description ? <p className="mt-2 text-sm leading-6 text-slate-600">{exp.description}</p> : null}
                   </div>
@@ -1502,8 +1565,8 @@ export function ProfilePage({
                 <Badge key={skill.id} className="group/skill rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 shadow-none">
                   {skill.name}
                   {isOwnProfile ? (
-                    <button type="button" onClick={() => handleRemoveSkill(skill.id)} className="ml-2 opacity-70 transition hover:text-red-600 sm:opacity-0 sm:group-hover/skill:opacity-100" aria-label={`Remove ${skill.name}`}>
-                      <X className="h-3 w-3" />
+                    <button type="button" disabled={Boolean(pendingDeleteByKey[`skill:${skill.id}`])} onClick={() => handleRemoveSkill(skill.id)} className="ml-2 opacity-70 transition hover:text-red-600 sm:opacity-0 sm:group-hover/skill:opacity-100 disabled:cursor-not-allowed disabled:opacity-50" aria-label={`Remove ${skill.name}`}>
+                      {pendingDeleteByKey[`skill:${skill.id}`] ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
                     </button>
                   ) : null}
                 </Badge>
@@ -1539,7 +1602,11 @@ export function ProfilePage({
                           <Eye className="h-4 w-4" />
                         </a>
                       ) : null}
-                      <ItemActions onEdit={() => handleEditCertification(cert)} onDelete={() => handleDeleteCertification(cert.id)} />
+                      <ItemActions
+                        onEdit={() => handleEditCertification(cert)}
+                        onDelete={() => handleDeleteCertification(cert.id)}
+                        deleting={Boolean(pendingDeleteByKey[`certification:${cert.id}`])}
+                      />
                     </div>
                   </div>
                 ))}
@@ -1567,7 +1634,11 @@ export function ProfilePage({
                           <p className="text-sm text-slate-500">{soc.role}</p>
                         </div>
                       </div>
-                      <ItemActions onEdit={() => handleEditSociety(soc)} onDelete={() => handleDeleteSociety(soc.id)} />
+                      <ItemActions
+                        onEdit={() => handleEditSociety(soc)}
+                        onDelete={() => handleDeleteSociety(soc.id)}
+                        deleting={Boolean(pendingDeleteByKey[`society:${soc.id}`])}
+                      />
                     </div>
                   </div>
                 ))}
@@ -1596,7 +1667,11 @@ export function ProfilePage({
                       <p className="text-sm text-slate-500">{ach.year}</p>
                       {ach.description ? <p className="mt-2 text-sm leading-6 text-slate-600">{ach.description}</p> : null}
                     </div>
-                    <ItemActions onEdit={() => handleEditAchievement(ach)} onDelete={() => handleDeleteAchievement(ach.id)} />
+                    <ItemActions
+                      onEdit={() => handleEditAchievement(ach)}
+                      onDelete={() => handleDeleteAchievement(ach.id)}
+                      deleting={Boolean(pendingDeleteByKey[`achievement:${ach.id}`])}
+                    />
                   </div>
                 </div>
               ))}
@@ -1633,7 +1708,9 @@ export function ProfilePage({
           </div>
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
-            <Button onClick={handleSaveProfile} className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold">Save Changes</Button>
+            <Button disabled={busyAction === 'save-profile'} onClick={handleSaveProfile} className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold disabled:opacity-70">
+              {busyAction === 'save-profile' ? 'Saving...' : 'Save Changes'}
+            </Button>
           </div>
         </div>
       </Modal>
@@ -1654,7 +1731,9 @@ export function ProfilePage({
           </div>
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
-            <Button onClick={handleSaveProfile} className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold">Save</Button>
+            <Button disabled={busyAction === 'save-profile'} onClick={handleSaveProfile} className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold disabled:opacity-70">
+              {busyAction === 'save-profile' ? 'Saving...' : 'Save'}
+            </Button>
           </div>
         </div>
       </Modal>
@@ -1673,8 +1752,8 @@ export function ProfilePage({
           </div>
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
-            <Button onClick={handleAddSkill} disabled={!newSkillName.trim()} className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold">
-              Add Skill
+            <Button onClick={handleAddSkill} disabled={!newSkillName.trim() || busyAction === 'save-skill'} className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold disabled:opacity-70">
+              {busyAction === 'save-skill' ? 'Adding...' : 'Add Skill'}
             </Button>
           </div>
         </div>
@@ -1739,10 +1818,10 @@ export function ProfilePage({
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button
               onClick={handleAddExperience}
-              disabled={!newExperience.roleTitle?.trim() || !newExperience.organization?.trim()}
+              disabled={!newExperience.roleTitle?.trim() || !newExperience.organization?.trim() || busyAction === 'save-experience'}
               className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold"
             >
-              {editingItem ? 'Update' : 'Add'} Experience
+              {busyAction === 'save-experience' ? 'Saving...' : `${editingItem ? 'Update' : 'Add'} Experience`}
             </Button>
           </div>
         </div>
@@ -1834,10 +1913,10 @@ export function ProfilePage({
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button
               onClick={handleAddProject}
-              disabled={!newProject.title?.trim() || !newProject.description?.trim()}
+              disabled={!newProject.title?.trim() || !newProject.description?.trim() || busyAction === 'save-project'}
               className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold"
             >
-              {editingItem ? 'Update' : 'Add'} Project
+              {busyAction === 'save-project' ? 'Saving...' : `${editingItem ? 'Update' : 'Add'} Project`}
             </Button>
           </div>
         </div>
@@ -1903,10 +1982,10 @@ export function ProfilePage({
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button
               onClick={handleAddCertification}
-              disabled={!newCertification.name?.trim()}
+              disabled={!newCertification.name?.trim() || busyAction === 'save-certification'}
               className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold"
             >
-              {editingItem ? 'Update' : 'Add'} Certification
+              {busyAction === 'save-certification' ? 'Saving...' : `${editingItem ? 'Update' : 'Add'} Certification`}
             </Button>
           </div>
         </div>
@@ -1953,10 +2032,10 @@ export function ProfilePage({
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button
               onClick={handleAddSociety}
-              disabled={!newSociety.societyName?.trim() || !newSociety.role?.trim()}
+              disabled={!newSociety.societyName?.trim() || !newSociety.role?.trim() || busyAction === 'save-society'}
               className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold"
             >
-              {editingItem ? 'Update' : 'Add'} Society
+              {busyAction === 'save-society' ? 'Saving...' : `${editingItem ? 'Update' : 'Add'} Society`}
             </Button>
           </div>
         </div>
@@ -1997,10 +2076,10 @@ export function ProfilePage({
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button
               onClick={handleAddAchievement}
-              disabled={!newAchievement.title?.trim() || !newAchievement.year}
+              disabled={!newAchievement.title?.trim() || !newAchievement.year || busyAction === 'save-achievement'}
               className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold"
             >
-              {editingItem ? 'Update' : 'Add'} Achievement
+              {busyAction === 'save-achievement' ? 'Saving...' : `${editingItem ? 'Update' : 'Add'} Achievement`}
             </Button>
           </div>
         </div>
@@ -2035,8 +2114,8 @@ export function ProfilePage({
           </div>
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
-            <Button onClick={handleSaveEducation} className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold">
-              Save
+            <Button disabled={busyAction === 'save-education'} onClick={handleSaveEducation} className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold disabled:opacity-70">
+              {busyAction === 'save-education' ? 'Saving...' : 'Save'}
             </Button>
           </div>
         </div>

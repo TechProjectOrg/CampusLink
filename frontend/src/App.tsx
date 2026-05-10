@@ -1902,6 +1902,9 @@ export default function App() {
   };
 
   const handleDeletePost = (postId: string) => {
+    if (!window.confirm('Are you sure you want to delete this post?')) {
+      return;
+    }
     void (async () => {
       try {
         await apiDeletePost(postId, authToken);
