@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
 import { LoadingIndicator } from './ui/LoadingIndicator';
 import { cacheProfilePosts, readCachedProfilePosts } from '../cache/socialCache';
+import { PageLayout } from './PageLayout';
 
 interface ProfilePostsPageProps {
   student: Student;
@@ -154,9 +155,9 @@ export function ProfilePostsPage({
   const hasMore = visibleCount < posts.length;
 
   return (
-    <main className="min-h-screen bg-slate-50 pb-24 md:pb-8">
-      <div className="mx-auto max-w-3xl space-y-6 px-4 py-6 sm:px-6">
-        <header className="rounded-3xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+    <PageLayout maxWidth="7xl" className="bg-slate-50 pb-24 md:pb-8" contentClassName="py-4 sm:py-5 lg:py-6">
+      <div className="mx-auto w-full space-y-6" style={{ maxWidth: '1000px' }}>
+        <header className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-sm">
           <Button variant="ghost" size="sm" onClick={onBack} className="-ml-2 mb-4 rounded-full">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back
@@ -175,7 +176,7 @@ export function ProfilePostsPage({
         </header>
 
         {isLoading ? (
-          <div className="rounded-3xl bg-white p-8 shadow-sm ring-1 ring-slate-200">
+          <div className="rounded-3xl border border-slate-200/80 bg-white p-8 shadow-sm">
             <LoadingIndicator label="Loading posts..." />
           </div>
         ) : visiblePosts.length > 0 ? (
@@ -199,13 +200,13 @@ export function ProfilePostsPage({
               />
             ))}
             {hasMore ? (
-              <Button variant="outline" className="w-full rounded-2xl bg-white" onClick={() => setVisibleCount((count) => count + 8)}>
+              <Button variant="outline" className="w-full rounded-2xl border-slate-200 bg-white text-slate-800 shadow-sm transition-transform duration-200 hover:scale-[1.02]" onClick={() => setVisibleCount((count) => count + 8)}>
                 Load more posts
               </Button>
             ) : null}
           </div>
         ) : (
-          <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-10 text-center shadow-sm">
+          <div className="rounded-3xl border border-slate-200/80 bg-white p-10 text-center shadow-sm">
             <MessageCircle className="mx-auto h-10 w-10 text-blue-300" />
             <p className="mt-4 font-medium text-slate-700">
               {isOwnProfile ? 'Share updates, posts, and campus activity.' : `${student.name} has not posted yet.`}
@@ -213,6 +214,6 @@ export function ProfilePostsPage({
           </div>
         )}
       </div>
-    </main>
+    </PageLayout>
   );
 }

@@ -2588,7 +2588,10 @@ export default function App() {
             ) : profileSubpage === 'projects' ? (
               <ProfileProjectsPage
                 student={displayedStudent}
+                currentUserId={currentUserId}
+                isOwnProfile={displayedStudent.id === currentUserId}
                 onBack={() => navigate('profile', displayedStudent.id)}
+                onOpenPost={handleOpenPost}
               />
             ) : (
               <ProfilePage
