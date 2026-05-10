@@ -164,14 +164,14 @@ export async function cacheProfilePosts(userId: string, posts: UserPost[]): Prom
       key: cacheKeys.page.userPosts(userId),
       ids: posts.map((post) => post.id),
       pageParam: userId,
-      policy: cachePolicies.feedPage,
+      policy: cachePolicies.userProfile,
       hasMore: false,
       nextOffset: null,
       entityType: 'post',
       version: listVersion(posts),
       updatedAt: Date.now(),
     }),
-    cachePolicies.feedPage,
+    cachePolicies.userProfile,
   );
 }
 

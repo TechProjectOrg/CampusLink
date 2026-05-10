@@ -56,7 +56,8 @@ import {
 import { OpportunityCard } from './OpportunityCard';
 import { apiCreateUserPost, apiFetchProfilePosts, type UserPost } from '../lib/postsApi';
 import { LoadingIndicator } from './ui/LoadingIndicator';
-import { cacheProfilePosts, readCachedProfilePosts } from '../cache/socialCache';
+import { fetchCachedValue } from '../cache/socialCache';
+import { cachePolicies } from '../cache/policies';
 import { PageLayout } from './PageLayout';
 import {
   apiCreateUserExperience,
@@ -282,7 +283,13 @@ export function ProfilePage({
     if (!isOwnProfile || !authUserId) return;
     setSkillsLoading(true);
     try {
-      const list = await apiFetchUserSkills(authUserId, authToken);
+      const list = await fetchCachedValue({
+        key: `page:user:${authUserId}:profile:skills`,
+        policy: cachePolicies.userProfile,
+        mode: 'cache-first',
+        fetcher: () => apiFetchUserSkills(authUserId, authToken),
+        onCached: (cached) => setSkills(cached),
+      });
       setSkills(list);
     } catch {
       setSkills([]);
@@ -295,7 +302,12 @@ export function ProfilePage({
     if (!student.id) return;
     setCertificationsLoading(true);
     try {
-      const list = await apiFetchUserCertifications(student.id, authToken);
+      const list = await fetchCachedValue({
+        key: `page:user:${student.id}:profile:certifications`,
+        policy: cachePolicies.userProfile,
+        mode: 'cache-first',
+        fetcher: () => apiFetchUserCertifications(student.id, authToken),
+      });
       setLoadedCertifications(
         list.map((item) => ({
           id: item.id,
@@ -318,7 +330,12 @@ export function ProfilePage({
     if (!student.id) return;
     setProjectsLoading(true);
     try {
-      const list = await apiFetchUserProjects(student.id, authToken);
+      const list = await fetchCachedValue({
+        key: `page:user:${student.id}:profile:projects`,
+        policy: cachePolicies.userProfile,
+        mode: 'cache-first',
+        fetcher: () => apiFetchUserProjects(student.id, authToken),
+      });
       setLoadedProjects(
         list.map((item) => ({
           id: item.id,
@@ -343,7 +360,12 @@ export function ProfilePage({
       return;
     }
     try {
-      const list = await apiFetchUserExperiences(student.id, authToken);
+      const list = await fetchCachedValue({
+        key: `page:user:${student.id}:profile:experiences`,
+        policy: cachePolicies.userProfile,
+        mode: 'cache-first',
+        fetcher: () => apiFetchUserExperiences(student.id, authToken),
+      });
       setExperiences(
         list.map((item) => ({
           id: item.id,
@@ -369,7 +391,12 @@ export function ProfilePage({
       return;
     }
     try {
-      const list = await apiFetchUserSocieties(student.id, authToken);
+      const list = await fetchCachedValue({
+        key: `page:user:${student.id}:profile:societies`,
+        policy: cachePolicies.userProfile,
+        mode: 'cache-first',
+        fetcher: () => apiFetchUserSocieties(student.id, authToken),
+      });
       setSocieties(
         list.map((item) => ({
           id: item.id,
@@ -393,7 +420,12 @@ export function ProfilePage({
       return;
     }
     try {
-      const list = await apiFetchUserAchievements(student.id, authToken);
+      const list = await fetchCachedValue({
+        key: `page:user:${student.id}:profile:achievements`,
+        policy: cachePolicies.userProfile,
+        mode: 'cache-first',
+        fetcher: () => apiFetchUserAchievements(student.id, authToken),
+      });
       setAchievements(
         list.map((item) => ({
           id: item.id,
@@ -484,18 +516,17 @@ export function ProfilePage({
   const loadPosts = async () => {
     if (!student.id) return;
     setPostsLoading(true);
-    const cached = await readCachedProfilePosts(student.id);
-    if (cached.length > 0) {
-      setLoadedPosts(cached.map(mapApiPostToOpportunity));
-    }
     try {
-      const list = await apiFetchProfilePosts(student.id, authToken);
-      await cacheProfilePosts(student.id, list);
+      const list = await fetchCachedValue({
+        key: `page:user:${student.id}:profile:activities`,
+        policy: cachePolicies.userProfile,
+        mode: 'cache-first',
+        fetcher: () => apiFetchProfilePosts(student.id, authToken),
+        onCached: (cached) => setLoadedPosts(cached.map(mapApiPostToOpportunity)),
+      });
       setLoadedPosts(list.map(mapApiPostToOpportunity));
     } catch {
-      if (cached.length === 0) {
-        setLoadedPosts([]);
-      }
+      setLoadedPosts([]);
     } finally {
       setPostsLoading(false);
     }

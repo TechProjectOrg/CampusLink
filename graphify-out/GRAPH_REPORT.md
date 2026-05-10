@@ -1,12 +1,12 @@
 # Graph Report - final-year-project  (2026-05-10)
 
 ## Corpus Check
-- 161 files · ~143,552 words
+- 161 files · ~143,621 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1102 nodes · 1745 edges · 38 communities detected
-- Extraction: 85% EXTRACTED · 15% INFERRED · 0% AMBIGUOUS · INFERRED: 259 edges (avg confidence: 0.8)
+- 1102 nodes · 1747 edges · 38 communities detected
+- Extraction: 85% EXTRACTED · 15% INFERRED · 0% AMBIGUOUS · INFERRED: 261 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
@@ -80,12 +80,12 @@ Cohesion: 0.04
 Nodes (42): areStringArraysEqual(), buildCreatePostPayloadFromDraft(), createInitialDiscussionPageState(), findCommentInTree(), findCommentStateById(), findOpportunityIdByCommentId(), getAccountType(), handleAcceptFollowRequest() (+34 more)
 
 ### Community 1 - "Community 1"
-Cohesion: 0.06
-Nodes (48): apiCreateUserAchievement(), apiDeleteUserAchievement(), apiFetchUserAchievements(), apiUpdateUserAchievement(), authHeaders(), parseErrorMessage(), apiCreateUserCertification(), apiDeleteUserCertification() (+40 more)
+Cohesion: 0.05
+Nodes (50): apiCreateUserAchievement(), apiDeleteUserAchievement(), apiFetchUserAchievements(), apiUpdateUserAchievement(), authHeaders(), parseErrorMessage(), apiCreateUserCertification(), apiDeleteUserCertification() (+42 more)
 
 ### Community 2 - "Community 2"
 Cohesion: 0.06
-Nodes (48): handleMarkAllAsRead(), compareVersions(), createCacheEntry(), createPageEntry(), enforcePolicyLimit(), estimateByteSize(), incrementCacheRevalidations(), invalidateCache() (+40 more)
+Nodes (46): handleMarkAllAsRead(), compareVersions(), createCacheEntry(), createPageEntry(), enforcePolicyLimit(), estimateByteSize(), incrementCacheRevalidations(), invalidateCache() (+38 more)
 
 ### Community 3 - "Community 3"
 Cohesion: 0.06
@@ -251,11 +251,11 @@ Nodes (1): Custom Guidelines Placeholder
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `handleAddProject()` connect `Community 5` to `Community 1`, `Community 14`?**
-  _High betweenness centrality (0.048) - this node is a cross-community bridge._
+  _High betweenness centrality (0.046) - this node is a cross-community bridge._
 - **Why does `apiCreateUserPost()` connect `Community 14` to `Community 0`, `Community 8`, `Community 5`?**
-  _High betweenness centrality (0.040) - this node is a cross-community bridge._
+  _High betweenness centrality (0.035) - this node is a cross-community bridge._
 - **Why does `Alert()` connect `Community 5` to `Community 6`?**
-  _High betweenness centrality (0.030) - this node is a cross-community bridge._
+  _High betweenness centrality (0.031) - this node is a cross-community bridge._
 - **Are the 19 inferred relationships involving `cacheSetJson()` (e.g. with `setCachedRecentMessages()` and `setConversationMeta()`) actually correct?**
   _`cacheSetJson()` has 19 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 16 inferred relationships involving `cacheDelete()` (e.g. with `invalidateConversationLists()` and `reconcileConversationMeta()`) actually correct?**
