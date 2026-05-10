@@ -1146,11 +1146,13 @@ export function ProfilePage({
               </div>
 
               {/* About Preview Row */}
-              <div className="cl-about-preview-section">
-                <p className="text-base sm:text-lg text-slate-600 leading-relaxed max-w-2xl">
-                  {student.bio || (isOwnProfile ? 'Add an about section so people can know you better.' : 'Campus community member')}
-                </p>
-              </div>
+              {(isOwnProfile || Boolean(student.bio?.trim())) ? (
+                <div className="cl-about-preview-section">
+                  <p className="text-base sm:text-lg text-slate-600 leading-relaxed max-w-2xl">
+                    {student.bio?.trim() || 'Add an about section so people can know you better.'}
+                  </p>
+                </div>
+              ) : null}
 
               {/* Location, Year, Email Row */}
               <div className="cl-metadata-row flex flex-wrap items-center gap-4 sm:gap-6 text-sm">

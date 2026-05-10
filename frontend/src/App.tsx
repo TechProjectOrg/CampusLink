@@ -2226,14 +2226,11 @@ export default function App() {
     if (activeTab !== 'profile') return;
     if (!viewingProfileId || viewingProfileId === currentUserId) return;
 
-    const alreadyLoaded = Boolean(appData.getSnapshot().usersById[viewingProfileId]);
-    if (alreadyLoaded) return;
-
     let cancelled = false;
 
     const loadViewedProfile = async () => {
       try {
-        await appData.ensureUser(viewingProfileId);
+        await appData.ensureUser(viewingProfileId, true);
       } catch (err) {
         if (cancelled) return;
         console.error('Failed to fetch viewed profile:', err);
@@ -2251,6 +2248,8 @@ export default function App() {
   const handleEditProfile = (updates: Partial<Student>) => {
     appData.updateUser(currentUserId, (student) => ({ ...student, ...updates }));
   };
+
+  const currentUserFromStore = useAppDataSelector((state) => state.usersById[currentUserId]);
 
   // Notification handlers (API-backed)
   const handleMarkAsRead = async (notificationId: string) => {
@@ -2412,7 +2411,7 @@ export default function App() {
             {/* Profile Section (Left) - Visible on XL screens and up */}
             <div className="hide-scrollbar hidden xl:block flex-shrink-0 w-[280px] px-2 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)]" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
               <ProfileCard
-                student={currentUser}
+                student={currentUserFromStore ?? currentUser}
                 followerCount={currentFollowerCount}
                 followingCount={currentFollowingCount}
                 onViewProfile={() => handleViewProfile(currentUserId)}
