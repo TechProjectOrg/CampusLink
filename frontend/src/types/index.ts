@@ -72,7 +72,7 @@ export interface Opportunity {
   clubName?: string | null;
   clubSlug?: string | null;
   clubAvatarUrl?: string | null;
-  type: 'general' | 'internship' | 'hackathon' | 'event' | 'contest' | 'club';
+  type: 'general' | 'internship' | 'hackathon' | 'event' | 'contest' | 'club' | 'project';
   title: string;
   description: string;
   date: string;

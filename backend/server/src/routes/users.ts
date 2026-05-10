@@ -2542,7 +2542,9 @@ router.post(
             event_date,
             location,
             external_url,
-            visibility
+            visibility,
+            created_at,
+            updated_at
           )
           VALUES (
             ${userId},
@@ -2558,7 +2560,9 @@ router.post(
             ${eventDateValue},
             ${locationValue},
             ${externalUrlValue},
-            CAST(${nextVisibility} AS "PostVisibility")
+            CAST(${nextVisibility} AS "PostVisibility"),
+            NOW(),
+            NOW()
           )
           RETURNING post_id
         `;

@@ -251,12 +251,15 @@ function userPostToOpportunity(
   currentUser: Student,
 ): Opportunity {
   let type: Opportunity['type'] = 'general';
+  const isProjectPost = (post.hashtags ?? []).some((tag) => tag.trim().toLowerCase() === 'project');
   if (post.postType === 'event') {
     type = 'event';
   } else if (post.postType === 'club_activity') {
     type = 'club';
   } else if (post.postType === 'opportunity') {
     type = (post.opportunityType ?? 'event') as Opportunity['type'];
+  } else if (isProjectPost) {
+    type = 'project';
   }
 
   const author = usersById[post.authorUserId];

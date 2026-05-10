@@ -21,6 +21,7 @@ import { Student, Opportunity } from '../types';
 import type { FollowGraph } from '../App';
 import { FollowButton } from './network/FollowButton';
 import { useAuth } from '../context/AuthContext';
+import { useAppDataStore } from '../context/AppDataContext';
 import { apiAddUserSkill, apiDeleteUserSkill, apiFetchUserSkills, type UserSkill } from '../lib/skillsApi';
 import {
   apiCreateUserCertification,
@@ -176,6 +177,7 @@ export function ProfilePage({
   onCancelRequest,
 }: ProfilePageProps) {
   const auth = useAuth();
+  const appData = useAppDataStore();
 
   // Profile state
   const [editedStudent, setEditedStudent] = useState(student);
@@ -410,10 +412,13 @@ export function ProfilePage({
 
   const mapApiPostToOpportunity = (post: UserPost): Opportunity => {
     let mappedType: Opportunity['type'] = 'general';
+    const isProjectPost = (post.hashtags ?? []).some((tag) => tag.trim().toLowerCase() === 'project');
     if (post.postType === 'event') {
       mappedType = 'event';
     } else if (post.postType === 'opportunity') {
       mappedType = (post.opportunityType ?? 'event') as Opportunity['type'];
+    } else if (isProjectPost) {
+      mappedType = 'project';
     }
 
     return {
@@ -740,6 +745,21 @@ export function ProfilePage({
 
       if (!editingItem) {
         const created = await apiCreateUserProject(authUserId, payload, authToken);
+        const createdPost = await apiCreateUserPost(
+          authUserId,
+          {
+            postType: 'general',
+            title: created.title,
+            contentText: created.description,
+            externalUrl: created.demoUrl ?? created.sourceUrl ?? undefined,
+            hashtags: Array.from(new Set(['project', ...(created.tags ?? [])])),
+            media: created.imageUrl
+              ? [{ mediaUrl: created.imageUrl, mediaType: 'image', sortOrder: 0 }]
+              : [],
+          },
+          authToken,
+        );
+        appData.prependPostToFeed(createdPost);
         setLoadedProjects((prev) => [
           {
             id: created.id,
@@ -783,6 +803,30 @@ export function ProfilePage({
       window.alert(`Unable to save project. ${errorMsg}`);
     }
   };
+
+  const mapProjectToOpportunity = (project: Project): Opportunity => ({
+    id: `project-${project.id}`,
+    authorId: student.id,
+    authorName: student.name,
+    authorAvatar: student.avatar,
+    type: 'project',
+    title: project.title,
+    description: project.description,
+    date: new Date().toISOString(),
+    link: project.liveUrl || project.githubUrl || undefined,
+    image: project.imageUrl,
+    tags: Array.from(new Set(['project', ...(project.tags ?? [])])),
+    likes: [],
+    comments: [],
+    saved: [],
+    likeCount: 0,
+    commentCount: 0,
+    saveCount: 0,
+    isLikedByMe: false,
+    isSavedByMe: false,
+    canEdit: false,
+    canDelete: false,
+  });
 
   const handleEditProject = (project: Project) => {
     setEditingItem(project.id);
@@ -1294,40 +1338,33 @@ export function ProfilePage({
                   onWheel={handleHorizontalWheel}
                 >
                 <div className="flex w-full snap-x snap-mandatory gap-4 sm:w-max">
-                {loadedProjects.map((project) => {
-                  const projectLink = project.liveUrl || project.githubUrl || (project as Project & { link?: string | null }).link;
-                  return (
-                    <article key={project.id} className="group flex w-full shrink-0 snap-start flex-col overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg sm:w-[20rem]">
-                      {project.imageUrl ? (
-                        <ImageWithFallback src={project.imageUrl} alt={project.title} className="aspect-video w-full object-cover" />
-                      ) : (
-                        <div className="flex aspect-video w-full items-center justify-center bg-gradient-to-br from-indigo-50 via-sky-50 to-emerald-50">
-                          <ExternalLink className="h-10 w-10 text-indigo-300" />
+                  {loadedProjects.map((project) => (
+                    <div key={project.id} className="w-full shrink-0 snap-start sm:w-[22rem]">
+                      <OpportunityCard
+                        opportunity={mapProjectToOpportunity(project)}
+                        currentUserId={currentUserId}
+                        showManagementControls={false}
+                        onLike={(id) => onLike?.(id)}
+                        onSave={(id) => onSave?.(id)}
+                        onComment={(id, comment) => onComment?.(id, comment)}
+                        onReply={(commentId, comment) => onReply?.(commentId, comment)}
+                        onLikeComment={(commentId, alreadyLiked) => onLikeComment?.(commentId, alreadyLiked)}
+                        onDeleteComment={(commentId) => onDeleteComment?.(commentId)}
+                        onOpenPost={undefined}
+                        onViewProfile={() => undefined}
+                      />
+                      {isOwnProfile ? (
+                        <div className="mt-2 flex justify-end gap-1">
+                          <button type="button" onClick={() => handleEditProject(project)} className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-blue-50 hover:text-blue-600" aria-label="Edit project">
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button type="button" onClick={() => handleDeleteProject(project.id)} className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600" aria-label="Delete project">
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
-                      )}
-                      <div className="flex flex-1 flex-col p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <h3 className="break-words text-base font-semibold text-slate-950">{project.title}</h3>
-                          <ItemActions onEdit={() => handleEditProject(project)} onDelete={() => handleDeleteProject(project.id)} />
-                        </div>
-                        <p className="mt-2 line-clamp-3 text-sm leading-6 text-slate-600">{project.description}</p>
-                        {project.tags?.length ? (
-                          <div className="mt-4 flex flex-wrap gap-1.5">
-                            {project.tags.slice(0, 4).map((tag) => (
-                              <Badge key={tag} className="rounded-full border border-slate-200 bg-slate-50 text-xs font-medium text-slate-600 shadow-none">{tag}</Badge>
-                            ))}
-                          </div>
-                        ) : null}
-                        {projectLink ? (
-                          <a href={projectLink} target="_blank" rel="noopener noreferrer" className="mt-auto inline-flex items-center gap-1 pt-4 text-sm font-medium text-blue-600 hover:text-blue-700">
-                            Visit project
-                            <ExternalLink className="h-3.5 w-3.5" />
-                          </a>
-                        ) : null}
-                      </div>
-                    </article>
-                  );
-                })}
+                      ) : null}
+                    </div>
+                  ))}
                 </div>
                 </div>
               </div>

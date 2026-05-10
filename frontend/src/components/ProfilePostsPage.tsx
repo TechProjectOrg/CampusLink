@@ -28,12 +28,15 @@ interface ProfilePostsPageProps {
 
 function mapApiPostToOpportunity(post: UserPost, student: Student): Opportunity {
   let mappedType: Opportunity['type'] = 'general';
+  const isProjectPost = (post.hashtags ?? []).some((tag) => tag.trim().toLowerCase() === 'project');
   if (post.postType === 'event') {
     mappedType = 'event';
   } else if (post.postType === 'club_activity') {
     mappedType = 'club';
   } else if (post.postType === 'opportunity') {
     mappedType = (post.opportunityType ?? 'event') as Opportunity['type'];
+  } else if (isProjectPost) {
+    mappedType = 'project';
   }
 
   return {

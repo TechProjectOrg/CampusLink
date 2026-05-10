@@ -70,6 +70,7 @@ export function OpportunityCard({
     event: 'bg-secondary/10 text-secondary border-secondary/20',
     contest: 'bg-orange-100 text-orange-700 border-orange-200',
     club: 'bg-pink-100 text-pink-700 border-pink-200',
+    project: 'bg-blue-100 text-blue-700 border-blue-200',
     general: 'bg-gray-100 text-gray-700 border-gray-200',
   };
 
