@@ -17,6 +17,15 @@ export interface UserProject {
   tags: string[];
 }
 
+export interface CreateOrUpdateProjectPayload {
+  title: string;
+  description: string;
+  sourceUrl?: string;
+  demoUrl?: string;
+  imageUrl?: string;
+  tags?: string[];
+}
+
 type ProjectRaw = {
   id?: string;
   projectId?: string;
@@ -82,9 +91,9 @@ export async function apiFetchUserProjects(
 
 export async function apiCreateUserProject(
   userId: string,
-  payload: { title: string; description: string; sourceUrl?: string; demoUrl?: string; imageUrl?: string; tags?: string[] },
+  payload: CreateOrUpdateProjectPayload,
   token?: string
-): Promise<void> {
+): Promise<UserProject> {
   const response = await fetch(`${API_BASE}/users/${encodeURIComponent(userId)}/projects`, {
     method: 'POST',
     headers: {
@@ -104,6 +113,12 @@ export async function apiCreateUserProject(
   if (!response.ok) {
     throw new Error(await parseErrorMessage(response));
   }
+
+  const data = (await response.json().catch(() => null)) as ProjectRaw | null;
+  if (!data) {
+    throw new Error('Project was created but response payload was empty');
+  }
+  return normalizeProject(data, 0);
 }
 
 export async function apiUpdateUserProject(
@@ -118,7 +133,7 @@ export async function apiUpdateUserProject(
     tags?: string[];
   },
   token?: string,
-): Promise<void> {
+): Promise<UserProject> {
   const response = await fetch(
     `${API_BASE}/users/${encodeURIComponent(userId)}/projects/${encodeURIComponent(projectId)}`,
     {
@@ -134,6 +149,12 @@ export async function apiUpdateUserProject(
   if (!response.ok) {
     throw new Error(await parseErrorMessage(response));
   }
+
+  const data = (await response.json().catch(() => null)) as ProjectRaw | null;
+  if (!data) {
+    throw new Error('Project was updated but response payload was empty');
+  }
+  return normalizeProject(data, 0);
 }
 
 export async function apiDeleteUserProject(

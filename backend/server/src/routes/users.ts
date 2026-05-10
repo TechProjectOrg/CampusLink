@@ -1399,8 +1399,17 @@ router.post(
           created_at: Date;
         }[]
       >`
-        INSERT INTO user_projects (user_id, title, description, source_url, demo_url, image_url)
-        VALUES (${userId}, ${title.trim()}, ${description.trim()}, ${sourceUrl?.trim() || null}, ${demoUrl?.trim() || null}, ${imageUrl?.trim() || null})
+        INSERT INTO user_projects (user_id, title, description, source_url, demo_url, image_url, created_at, updated_at)
+        VALUES (
+          ${userId},
+          ${title.trim()},
+          ${description.trim()},
+          ${sourceUrl?.trim() || null},
+          ${demoUrl?.trim() || null},
+          ${imageUrl?.trim() || null},
+          NOW(),
+          NOW()
+        )
         RETURNING project_id, title, description, source_url, demo_url, image_url, created_at
       `;
 

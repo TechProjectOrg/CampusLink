@@ -695,45 +695,76 @@ export function ProfilePage({
   const handleAddProject = async () => {
     if (!newProject.title?.trim() || !newProject.description?.trim()) return;
 
+    const normalizeProjectImageUrl = (value?: string) => {
+      if (!value) return undefined;
+      const trimmed = value.trim();
+      if (!trimmed) return undefined;
+      if (trimmed.startsWith('data:') || trimmed.startsWith('blob:')) {
+        return undefined;
+      }
+      return trimmed;
+    };
+
     const project: Project = {
       id: editingItem || `proj-${Date.now()}`,
       title: newProject.title.trim(),
       description: newProject.description.trim(),
-      imageUrl: projectImagePreview || newProject.imageUrl || '',
+      imageUrl: normalizeProjectImageUrl(projectImagePreview || newProject.imageUrl || ''),
       githubUrl: newProject.githubUrl || '',
       liveUrl: newProject.liveUrl || '',
       tags: newProject.tags || [],
     };
 
-    if (!authUserId) return;
+    if (!authUserId) {
+      window.alert('You must be logged in to add a project.');
+      return;
+    }
 
     try {
+      const payload = {
+        title: project.title,
+        description: project.description,
+        sourceUrl: project.githubUrl,
+        demoUrl: project.liveUrl,
+        imageUrl: project.imageUrl,
+        tags: project.tags,
+      };
+
       if (!editingItem) {
-        await apiCreateUserProject(
-          authUserId,
+        const created = await apiCreateUserProject(authUserId, payload, authToken);
+        setLoadedProjects((prev) => [
           {
-            title: project.title,
-            description: project.description,
-            sourceUrl: project.githubUrl,
-            demoUrl: project.liveUrl,
-            imageUrl: project.imageUrl,
-            tags: project.tags,
+            id: created.id,
+            title: created.title,
+            description: created.description,
+            imageUrl: created.imageUrl ?? undefined,
+            githubUrl: created.sourceUrl ?? undefined,
+            liveUrl: created.demoUrl ?? undefined,
+            tags: created.tags ?? [],
           },
-          authToken,
-        );
+          ...prev.filter((item) => item.id !== created.id),
+        ]);
       } else {
-        await apiUpdateUserProject(
+        const updated = await apiUpdateUserProject(
           authUserId,
           editingItem,
-          {
-            title: project.title,
-            description: project.description,
-            sourceUrl: project.githubUrl,
-            demoUrl: project.liveUrl,
-            imageUrl: project.imageUrl,
-            tags: project.tags,
-          },
+          payload,
           authToken,
+        );
+        setLoadedProjects((prev) =>
+          prev.map((item) =>
+            item.id === updated.id
+              ? {
+                  ...item,
+                  title: updated.title,
+                  description: updated.description,
+                  imageUrl: updated.imageUrl ?? undefined,
+                  githubUrl: updated.sourceUrl ?? undefined,
+                  liveUrl: updated.demoUrl ?? undefined,
+                  tags: updated.tags ?? [],
+                }
+              : item,
+          ),
         );
       }
       await loadProjects();
@@ -741,6 +772,7 @@ export function ProfilePage({
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error('Error adding/updating project:', errorMsg);
+      window.alert(`Unable to save project. ${errorMsg}`);
     }
   };
 
