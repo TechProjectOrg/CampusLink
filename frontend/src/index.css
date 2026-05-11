@@ -4975,6 +4975,15 @@ div[style*="width: 25%"]::webkit-scrollbar {
     padding: 1.25rem;
   }
 
+  .cl-create-modal [data-slot="dialog-title"] {
+    padding-right: 2rem;
+  }
+
+  .cl-create-modal > button {
+    top: .875rem;
+    right: .875rem;
+  }
+
   .cl-create-tabs-list {
     display: none;
   }
