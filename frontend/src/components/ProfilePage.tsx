@@ -8,7 +8,6 @@ import {
   Plus,
   X,
   MessageCircle,
-  Award,
   Users,
   Trophy,
   Pencil,
@@ -59,6 +58,7 @@ import { apiCreateUserPost, apiFetchProfilePosts, type UserPost } from '../lib/p
 import { LoadingIndicator } from './ui/LoadingIndicator';
 import { fetchCachedValue } from '../cache/socialCache';
 import { cachePolicies } from '../cache/policies';
+import { invalidateCache } from '../cache/client';
 import { PageLayout } from './PageLayout';
 import {
   apiCreateUserExperience,
@@ -72,12 +72,6 @@ import {
   apiFetchUserSocieties,
   apiUpdateUserSociety,
 } from '../lib/societiesApi';
-import {
-  apiCreateUserAchievement,
-  apiDeleteUserAchievement,
-  apiFetchUserAchievements,
-  apiUpdateUserAchievement,
-} from '../lib/achievementsApi';
 
 interface ProfilePageProps {
   student: Student;
@@ -123,14 +117,6 @@ interface Society {
   startDate: Date;
   endDate?: Date;
   duration?: string;
-}
-
-// Achievement type
-interface Achievement {
-  id: string;
-  title: string;
-  year: number;
-  description?: string;
 }
 
 // Project type with image
@@ -221,9 +207,6 @@ export function ProfilePage({
   // Societies state
   const [societies, setSocieties] = useState<Society[]>([]);
 
-  // Achievements state
-  const [achievements, setAchievements] = useState<Achievement[]>([]);
-
   // Modal states
   const [activeModal, setActiveModal] = useState<
     | 'editProfile'
@@ -234,7 +217,6 @@ export function ProfilePage({
     | 'project'
     | 'certification'
     | 'society'
-    | 'achievement'
     | 'education'
     | null
   >(null);
@@ -281,12 +263,6 @@ export function ProfilePage({
     role: '',
     startDate: undefined,
     endDate: undefined,
-  });
-
-  const [newAchievement, setNewAchievement] = useState<Partial<Achievement>>({
-    title: '',
-    year: new Date().getFullYear(),
-    description: '',
   });
 
   const [educationDraft, setEducationDraft] = useState({
@@ -445,34 +421,6 @@ export function ProfilePage({
     }
   };
 
-  const loadAchievements = async () => {
-    if (!student.id) {
-      console.warn('Cannot load achievements: student.id not set');
-      return;
-    }
-    try {
-      const list = await fetchCachedValue({
-        key: `page:user:${student.id}:profile:achievements`,
-        policy: cachePolicies.userProfile,
-        mode: 'cache-first',
-        fetcher: () => apiFetchUserAchievements(student.id, authToken),
-      });
-      setAchievements(
-        list.map((item) => ({
-          id: item.id,
-          title: item.title,
-          description: item.description || undefined,
-          year: item.year,
-        })),
-      );
-      console.log('✓ Loaded achievements:', list.length);
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      console.error('✗ Error loading achievements:', errorMsg);
-      setAchievements([]);
-    }
-  };
-
   const mapApiPostToOpportunity = (post: UserPost): Opportunity => {
     let mappedType: Opportunity['type'] = 'general';
     const isProjectPost = (post.hashtags ?? []).some((tag) => tag.trim().toLowerCase() === 'project');
@@ -574,7 +522,6 @@ export function ProfilePage({
     loadProjects();
     loadExperiences();
     loadSocieties();
-    loadAchievements();
   }, [student.id, authToken]);
 
   useEffect(() => {
@@ -666,7 +613,6 @@ export function ProfilePage({
     setCertImagePreview(null);
     setShareCertificationAsPost(false);
     setNewSociety({ societyName: '', role: '', startDate: undefined, endDate: undefined });
-    setNewAchievement({ title: '', year: new Date().getFullYear(), description: '' });
   };
 
   const handleSaveProfile = async () => {
@@ -1165,6 +1111,10 @@ export function ProfilePage({
         await apiUpdateUserSociety(authUserId, editingItem, payload, authToken);
       }
 
+      await invalidateCache({
+        reason: 'profile-society-updated',
+        keys: [`page:user:${student.id}:profile:societies`],
+      });
       await loadSocieties();
       closeModal();
     } catch (err) {
@@ -1191,64 +1141,14 @@ export function ProfilePage({
     setPendingDeleteByKey((prev) => ({ ...prev, [key]: true }));
     try {
       await apiDeleteUserSociety(authUserId, id, authToken);
+      await invalidateCache({
+        reason: 'profile-society-deleted',
+        keys: [`page:user:${student.id}:profile:societies`],
+      });
       await loadSocieties();
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error('Error deleting society:', errorMsg);
-    } finally {
-      setPendingDeleteByKey((prev) => ({ ...prev, [key]: false }));
-    }
-  };
-
-  // Achievement handlers
-  const handleAddAchievement = async () => {
-    if (!authUserId) return;
-    if (!newAchievement.title?.trim()) return;
-
-    setBusyAction('save-achievement');
-    try {
-      const payload = {
-        title: newAchievement.title.trim(),
-        year: newAchievement.year || new Date().getFullYear(),
-        description: newAchievement.description?.trim(),
-      };
-
-      if (!editingItem) {
-        await apiCreateUserAchievement(authUserId, payload, authToken);
-      } else {
-        await apiUpdateUserAchievement(authUserId, editingItem, payload, authToken);
-      }
-
-      await loadAchievements();
-      closeModal();
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      console.error('Error adding/updating achievement:', errorMsg);
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
-  const handleEditAchievement = (ach: Achievement) => {
-    setEditingItem(ach.id);
-    setNewAchievement(ach);
-    setActiveModal('achievement');
-  };
-
-  const handleDeleteAchievement = async (id: string) => {
-    if (!authUserId) {
-      console.error('Cannot delete achievement: authUserId not set');
-      return;
-    }
-    if (!window.confirm('Delete this achievement?')) return;
-    const key = `achievement:${id}`;
-    setPendingDeleteByKey((prev) => ({ ...prev, [key]: true }));
-    try {
-      await apiDeleteUserAchievement(authUserId, id, authToken);
-      await loadAchievements();
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      console.error('Error deleting achievement:', errorMsg);
     } finally {
       setPendingDeleteByKey((prev) => ({ ...prev, [key]: false }));
     }
@@ -1284,7 +1184,6 @@ export function ProfilePage({
   const showSkillsSection = isOwnProfile || skillsLoading || displaySkills.length > 0;
   const showCertificationsSection = isOwnProfile || certificationsLoading || loadedCertifications.length > 0;
   const showClubsSection = isOwnProfile || societies.length > 0;
-  const showAchievementsSection = isOwnProfile || achievements.length > 0;
   const profileSectionCardClass = 'box-border flex w-full min-w-0 flex-col gap-4 overflow-hidden break-words rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5 lg:p-6';
   const educationLevelOrder: Record<EducationLevel, number> = {
     '10th': 1,
@@ -1851,36 +1750,6 @@ export function ProfilePage({
         </section>
         ) : null}
 
-        {showAchievementsSection ? (
-        <section className={profileSectionCardClass}>
-          <SectionHeader title="Achievements" onAdd={() => setActiveModal('achievement')} />
-          {achievements.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {achievements.map((ach) => (
-                <div key={ach.id} className="group rounded-2xl border border-orange-100 bg-orange-50/70 p-4 transition hover:bg-white hover:shadow-sm">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-100 text-orange-700">
-                        <Award className="h-5 w-5" />
-                      </div>
-                      <h3 className="break-words font-semibold text-slate-950">{ach.title}</h3>
-                      <p className="text-sm text-slate-500">{ach.year}</p>
-                      {ach.description ? <p className="mt-2 text-sm leading-6 text-slate-600">{ach.description}</p> : null}
-                    </div>
-                    <ItemActions
-                      onEdit={() => handleEditAchievement(ach)}
-                      onDelete={() => handleDeleteAchievement(ach.id)}
-                      deleting={Boolean(pendingDeleteByKey[`achievement:${ach.id}`])}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState message="Highlight awards and accomplishments." />
-          )}
-        </section>
-        ) : null}
       </div>
 
       {/* ===== MODALS ===== */}
@@ -2276,50 +2145,6 @@ export function ProfilePage({
               className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold"
             >
               {busyAction === 'save-society' ? 'Saving...' : `${editingItem ? 'Update' : 'Add'} Society`}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
-      {/* Achievement Modal */}
-      <Modal isOpen={activeModal === 'achievement'} onClose={closeModal} title={editingItem ? 'Edit Achievement' : 'Add Achievement'} className="w-[min(36rem,calc(100vw-2rem))]" style={{ width: 'min(36rem, calc(100vw - 2rem))' }}>
-        <div className="space-y-4 max-w-[520px] w-full">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Achievement Title *</label>
-            <Input
-              value={newAchievement.title || ''}
-              onChange={(e) => setNewAchievement({ ...newAchievement, title: e.target.value })}
-              placeholder="e.g., First Place - Hackathon XYZ"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Year *</label>
-            <Input
-              type="number"
-              value={newAchievement.year || ''}
-              onChange={(e) => setNewAchievement({ ...newAchievement, year: parseInt(e.target.value) })}
-              placeholder="e.g., 2024"
-              min="1990"
-              max={new Date().getFullYear()}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
-            <Textarea
-              value={newAchievement.description || ''}
-              onChange={(e) => setNewAchievement({ ...newAchievement, description: e.target.value })}
-              placeholder="Brief description of the achievement"
-              rows={2}
-            />
-          </div>
-          <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={closeModal}>Cancel</Button>
-            <Button
-              onClick={handleAddAchievement}
-              disabled={!newAchievement.title?.trim() || !newAchievement.year || busyAction === 'save-achievement'}
-              className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold"
-            >
-              {busyAction === 'save-achievement' ? 'Saving...' : `${editingItem ? 'Update' : 'Add'} Achievement`}
             </Button>
           </div>
         </div>

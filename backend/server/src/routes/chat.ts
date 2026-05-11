@@ -67,6 +67,7 @@ const upload = multer({
 interface ConversationBaseRow {
   chat_id: string;
   is_request: boolean;
+  created_by_user_id: string | null;
   updated_at: Date;
   chat_type: string;
   chat_name: string | null;
@@ -138,10 +139,48 @@ async function fetchConversationBaseRows(
   userId: string,
   isRequest: boolean,
 ): Promise<ConversationBaseRow[]> {
+  if (isRequest) {
+    // Request list is inbox-style: only incoming requests for this viewer.
+    return prisma.$queryRaw<ConversationBaseRow[]>`
+      SELECT
+        c.chat_id,
+        c.is_request,
+        c.created_by_user_id,
+        c.updated_at,
+        c.chat_type,
+        c.name AS chat_name,
+        c.avatar_url,
+        cp_other.user_id AS other_user_id
+      FROM chats c
+      JOIN chat_participants cp_me
+        ON cp_me.chat_id = c.chat_id
+       AND cp_me.user_id = ${userId}
+       AND cp_me.left_at IS NULL
+      LEFT JOIN LATERAL (
+        SELECT cp.user_id
+        FROM chat_participants cp
+        WHERE cp.chat_id = c.chat_id
+          AND cp.user_id != ${userId}
+          AND cp.left_at IS NULL
+        ORDER BY cp.joined_at ASC
+        LIMIT 1
+      ) cp_other ON TRUE
+      WHERE c.is_request = TRUE
+        AND (c.created_by_user_id IS NULL OR c.created_by_user_id != ${userId})
+        AND (
+          c.chat_type != 'direct'
+          OR cp_other.user_id IS NOT NULL
+        )
+      ORDER BY c.updated_at DESC
+    `;
+  }
+
+  // Active list includes accepted chats + outgoing pending requests started by this viewer.
   return prisma.$queryRaw<ConversationBaseRow[]>`
     SELECT
       c.chat_id,
       c.is_request,
+      c.created_by_user_id,
       c.updated_at,
       c.chat_type,
       c.name AS chat_name,
@@ -161,7 +200,10 @@ async function fetchConversationBaseRows(
       ORDER BY cp.joined_at ASC
       LIMIT 1
     ) cp_other ON TRUE
-    WHERE c.is_request = ${isRequest}
+    WHERE (
+      c.is_request = FALSE
+      OR (c.is_request = TRUE AND c.created_by_user_id = ${userId})
+    )
       AND (
         c.chat_type != 'direct'
         OR cp_other.user_id IS NOT NULL
@@ -272,7 +314,7 @@ async function buildConversationListEntries(
             ? formatMessagePreview(latestMessage.type, latestMessage.content)
             : 'No messages yet',
           timestamp: latestMessage?.timestamp ?? row.updated_at.toISOString(),
-          isRequest: row.is_request,
+          isRequest,
           isGroup: true,
           groupMemberCount: Math.max(participantIds.length, 1),
         };
@@ -290,7 +332,7 @@ async function buildConversationListEntries(
           ? formatMessagePreview(latestMessage.type, latestMessage.content)
           : 'No messages yet',
         timestamp: latestMessage?.timestamp ?? row.updated_at.toISOString(),
-        isRequest: row.is_request,
+        isRequest,
       };
     })
     .filter((entry): entry is ChatConversationListEntry => entry !== null);

@@ -2220,6 +2220,9 @@ export default function App() {
       return;
     }
 
+    // Avoid flashing the previously selected chat while the new conversation is created.
+    appData.selectConversation(null);
+
     if (!authToken || !currentUserId) {
       return;
     }
@@ -2238,6 +2241,7 @@ export default function App() {
         timestamp: new Date().toISOString(),
         unread: 0,
         isOnline: true,
+        isRequest: false,
       });
       appData.selectConversation(chatId);
       void appData.ensureConversationMessages(chatId);

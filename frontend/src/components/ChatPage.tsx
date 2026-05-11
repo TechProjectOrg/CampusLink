@@ -334,6 +334,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     try {
       const token = auth.session?.token;
       if (!token) return;
+      appData.selectConversation(null);
       const { chatId } = await apiStartConversation(studentId, token);
 
       const student = students.find(s => s.id === studentId);
@@ -346,7 +347,8 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
           lastMessage: 'Start a conversation...',
           timestamp: new Date().toISOString(),
           unread: 0,
-          isOnline: true
+          isOnline: true,
+          isRequest: false,
         };
         appData.upsertConversation(conversation);
         onCreateChat?.(conversation);

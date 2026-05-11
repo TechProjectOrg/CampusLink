@@ -786,13 +786,20 @@ function createStore(): AppDataStore {
         };
       }
 
+      const conversationOrder = sortConversationsByTimestamp(conversations).map((conversation) => conversation.id);
+      const selectedConversationId =
+        current.chat.selectedConversationId && conversationOrder.includes(current.chat.selectedConversationId)
+          ? current.chat.selectedConversationId
+          : null;
+
       return {
         ...current,
         chat: {
           ...current.chat,
           conversationsById,
           presenceByUserId,
-          conversationOrder: sortConversationsByTimestamp(conversations).map((conversation) => conversation.id),
+          conversationOrder,
+          selectedConversationId,
           listLastFetchedAt: Date.now(),
           isListHydrated: true,
           isListRefreshing: false,
