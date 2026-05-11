@@ -293,6 +293,15 @@ export function ProfilePage({
     branch: student.branch || '',
     year: student.year ? String(student.year) : '',
   });
+  const [shareCertificationAsPost, setShareCertificationAsPost] = useState(false);
+  const [certPreview, setCertPreview] = useState<{
+    url: string;
+    title: string;
+    issuer?: string;
+    issueDate?: Date;
+    description?: string;
+    certificateUrl?: string;
+  } | null>(null);
   const [educationRecords, setEducationRecords] = useState<EducationRecord[]>([]);
   const [editingEducationId, setEditingEducationId] = useState<string | null>(null);
   const [educationForm, setEducationForm] = useState<EducationRecord | null>(null);
@@ -320,14 +329,14 @@ export function ProfilePage({
     }
   };
 
-  const loadCertifications = async () => {
+  const loadCertifications = async (mode: 'cache-first' | 'network-only' = 'cache-first') => {
     if (!student.id) return;
     setCertificationsLoading(true);
     try {
       const list = await fetchCachedValue({
         key: `page:user:${student.id}:profile:certifications`,
         policy: cachePolicies.userProfile,
-        mode: 'cache-first',
+        mode,
         fetcher: () => apiFetchUserCertifications(student.id, authToken),
       });
       setLoadedCertifications(
@@ -655,6 +664,7 @@ export function ProfilePage({
     setNewProjectTag('');
     setNewCertification({ name: '', issuer: '', issueDate: undefined, imageUrl: '', certificateUrl: '', description: '' });
     setCertImagePreview(null);
+    setShareCertificationAsPost(false);
     setNewSociety({ societyName: '', role: '', startDate: undefined, endDate: undefined });
     setNewAchievement({ title: '', year: new Date().getFullYear(), description: '' });
   };
@@ -1040,6 +1050,32 @@ export function ProfilePage({
             credentialUrl: newCertification.certificateUrl,
             issuedAt: newCertification.issueDate ? format(newCertification.issueDate, 'yyyy-MM-dd') : undefined,
           }, authToken);
+
+          if (shareCertificationAsPost) {
+            const certName = newCertification.name.trim();
+            const issuer = newCertification.issuer?.trim() || '';
+            const issuedLabel = newCertification.issueDate ? format(newCertification.issueDate, 'MMM yyyy') : '';
+            const credentialUrl = newCertification.certificateUrl?.trim() || '';
+            const lines = [
+              `Earned a new certification: ${certName}`,
+              issuer ? `Issuer: ${issuer}` : '',
+              issuedLabel ? `Issued: ${issuedLabel}` : '',
+              credentialUrl ? `Credential: ${credentialUrl}` : '',
+            ].filter(Boolean);
+
+            const createdPost = await apiCreateUserPost(
+              authUserId,
+              {
+                postType: 'general',
+                title: certName,
+                contentText: lines.join('\n'),
+                hashtags: ['certificate'],
+              },
+              authToken,
+            );
+
+            appData.prependPostToFeed(createdPost);
+          }
         } else {
           await apiUpdateUserCertification(
             authUserId,
@@ -1055,7 +1091,7 @@ export function ProfilePage({
             authToken,
           );
         }
-        await loadCertifications();
+        await loadCertifications('network-only');
         closeModal();
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
@@ -1083,7 +1119,7 @@ export function ProfilePage({
     setPendingDeleteByKey((prev) => ({ ...prev, [key]: true }));
     try {
       await apiDeleteUserCertification(authUserId, id, authToken);
-      await loadCertifications();
+      await loadCertifications('network-only');
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error('Error deleting certification:', errorMsg);
@@ -1727,26 +1763,51 @@ export function ProfilePage({
             ) : loadedCertifications.length > 0 ? (
               <div className="flex flex-col gap-3">
                 {loadedCertifications.map((cert) => (
-                  <div key={cert.id} className="group flex items-center gap-4 rounded-2xl p-3 transition hover:bg-slate-50">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
-                      <Trophy className="h-5 w-5" />
+                  <div key={cert.id} className="group rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm transition hover:border-blue-200">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="break-words font-medium text-slate-950">{cert.name}</h3>
+                        <p className="text-sm text-slate-500">{cert.issuer || 'Certification issuer'}</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {cert.certificateUrl ? (
+                          <a href={cert.certificateUrl} target="_blank" rel="noopener noreferrer" className="rounded-full p-2 text-slate-400 hover:bg-blue-50 hover:text-blue-600" aria-label="View certificate">
+                            <Eye className="h-4 w-4" />
+                          </a>
+                        ) : null}
+                        <ItemActions
+                          onEdit={() => handleEditCertification(cert)}
+                          onDelete={() => handleDeleteCertification(cert.id)}
+                          deleting={Boolean(pendingDeleteByKey[`certification:${cert.id}`])}
+                        />
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="break-words font-medium text-slate-950">{cert.name}</h3>
-                      <p className="text-sm text-slate-500">{cert.issuer || 'Certification issuer'}</p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {cert.certificateUrl ? (
-                        <a href={cert.certificateUrl} target="_blank" rel="noopener noreferrer" className="rounded-full p-2 text-slate-400 hover:bg-blue-50 hover:text-blue-600" aria-label="View certificate">
-                          <Eye className="h-4 w-4" />
-                        </a>
-                      ) : null}
-                      <ItemActions
-                        onEdit={() => handleEditCertification(cert)}
-                        onDelete={() => handleDeleteCertification(cert.id)}
-                        deleting={Boolean(pendingDeleteByKey[`certification:${cert.id}`])}
-                      />
-                    </div>
+                    {cert.imageUrl ? (
+                      <div
+                        className="relative mt-3 w-full overflow-hidden rounded-xl group cursor-pointer"
+                        onClick={() =>
+                          setCertPreview({
+                            url: cert.imageUrl as string,
+                            title: cert.name,
+                            issuer: cert.issuer,
+                            issueDate: cert.issueDate,
+                            description: cert.description,
+                            certificateUrl: cert.certificateUrl,
+                          })
+                        }
+                      >
+                        <ImageWithFallback
+                          src={cert.imageUrl}
+                          alt={cert.name}
+                          className="h-80 w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                      </div>
+                    ) : (
+                      <div className="mt-3 flex h-20 w-full items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                        <Trophy className="h-6 w-6" />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -2148,6 +2209,15 @@ export function ProfilePage({
               placeholder="Link to verify certificate"
             />
           </div>
+          {!editingItem ? (
+            <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+              <Checkbox
+                checked={shareCertificationAsPost}
+                onCheckedChange={(checked) => setShareCertificationAsPost(checked === true)}
+              />
+              Share this certificate as a post
+            </label>
+          ) : null}
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button
@@ -2386,6 +2456,39 @@ export function ProfilePage({
             </Button>
           </div>
         </div>
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(certPreview)}
+        onClose={() => setCertPreview(null)}
+        title={certPreview?.title || 'Certificate'}
+        className="w-[min(60rem,calc(100vw-2rem))]"
+        style={{ width: 'min(60rem, calc(100vw - 2rem))' }}
+      >
+        {certPreview ? (
+          <div className="w-full space-y-4">
+            <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm text-slate-600">{certPreview.issuer || 'Issuer not added'}</p>
+              {certPreview.issueDate ? (
+                <p className="text-sm text-slate-600">Issued: {format(certPreview.issueDate, 'MMM d, yyyy')}</p>
+              ) : null}
+              {certPreview.description ? (
+                <p className="text-sm leading-6 text-slate-700">{certPreview.description}</p>
+              ) : null}
+              {certPreview.certificateUrl ? (
+                <a
+                  href={certPreview.certificateUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100"
+                >
+                  View verification link
+                </a>
+              ) : null}
+            </div>
+            <ImageWithFallback src={certPreview.url} alt={certPreview.title} className="max-h-[80vh] w-full rounded-xl object-contain" />
+          </div>
+        ) : null}
       </Modal>
     </PageLayout>
   );
