@@ -155,6 +155,20 @@ interface Certification {
   description?: string;
 }
 
+type EducationLevel = '10th' | '12th' | "Bachelor's" | "Master's" | 'Other';
+
+interface EducationRecord {
+  id: string;
+  level: EducationLevel;
+  institution: string;
+  branch: string;
+  startYear: string;
+  endYear: string;
+  isPursuing: boolean;
+  scoreType: 'percentage' | 'cgpa';
+  score: string;
+}
+
 export function ProfilePage({
   student,
   isOwnProfile,
@@ -278,6 +292,9 @@ export function ProfilePage({
     branch: student.branch || '',
     year: student.year ? String(student.year) : '',
   });
+  const [educationRecords, setEducationRecords] = useState<EducationRecord[]>([]);
+  const [editingEducationId, setEditingEducationId] = useState<string | null>(null);
+  const [educationForm, setEducationForm] = useState<EducationRecord | null>(null);
 
   const authUserId = auth.currentUser?.id ?? auth.session?.userId;
   const authToken = auth.session?.token;
@@ -562,6 +579,38 @@ export function ProfilePage({
       year: student.year ? String(student.year) : '',
     });
   }, [student.branch, student.year]);
+
+  useEffect(() => {
+    const storageKey = `profile-education:${student.id}`;
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (!raw) {
+        setEducationRecords([]);
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        setEducationRecords([]);
+        return;
+      }
+      const normalized = parsed
+        .filter((item) => item && typeof item === 'object')
+        .map((item): EducationRecord => ({
+          id: typeof item.id === 'string' ? item.id : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          level: (['10th', '12th', "Bachelor's", "Master's", 'Other'].includes(item.level) ? item.level : 'Other') as EducationLevel,
+          institution: typeof item.institution === 'string' ? item.institution : '',
+          branch: typeof item.branch === 'string' ? item.branch : '',
+          startYear: typeof item.startYear === 'string' ? item.startYear : '',
+          endYear: typeof item.endYear === 'string' ? item.endYear : '',
+          isPursuing: Boolean(item.isPursuing),
+          scoreType: item.scoreType === 'cgpa' ? 'cgpa' : 'percentage',
+          score: typeof item.score === 'string' ? item.score : '',
+        }));
+      setEducationRecords(normalized);
+    } catch {
+      setEducationRecords([]);
+    }
+  }, [student.id]);
 
   useEffect(() => {
     setBannerImage((isOwnProfile ? auth.profile?.coverPhotoUrl : student.coverPhotoUrl) ?? null);
@@ -1190,6 +1239,9 @@ export function ProfilePage({
         },
         authToken,
       );
+      try {
+        window.localStorage.setItem(`profile-education:${student.id}`, JSON.stringify(educationRecords));
+      } catch {}
       onEdit?.({ branch, year });
       await auth.refreshProfile();
       setActiveModal(null);
@@ -1212,12 +1264,29 @@ export function ProfilePage({
   const showPostsSection = isOwnProfile || postsLoading || profilePosts.length > 0;
   const showProjectsSection = isOwnProfile || projectsLoading || loadedProjects.length > 0;
   const showExperienceSection = isOwnProfile || experiences.length > 0;
-  const showEducationSection = isOwnProfile || hasKnownBranch || hasKnownYear;
+  const showEducationSection = isOwnProfile || hasKnownBranch || hasKnownYear || educationRecords.length > 0;
   const showSkillsSection = isOwnProfile || skillsLoading || displaySkills.length > 0;
   const showCertificationsSection = isOwnProfile || certificationsLoading || loadedCertifications.length > 0;
   const showClubsSection = isOwnProfile || societies.length > 0;
   const showAchievementsSection = isOwnProfile || achievements.length > 0;
   const profileSectionCardClass = 'box-border flex w-full min-w-0 flex-col gap-4 overflow-hidden break-words rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5 lg:p-6';
+  const educationLevelOrder: Record<EducationLevel, number> = {
+    '10th': 1,
+    '12th': 2,
+    "Bachelor's": 3,
+    "Master's": 4,
+    Other: 5,
+  };
+  const orderedEducationRecords = [...educationRecords].sort((a, b) => {
+    const levelDiff = educationLevelOrder[a.level] - educationLevelOrder[b.level];
+    if (levelDiff !== 0) return levelDiff;
+    const aYear = Number.parseInt(a.startYear, 10);
+    const bYear = Number.parseInt(b.startYear, 10);
+    if (!Number.isNaN(aYear) && !Number.isNaN(bYear) && aYear !== bYear) {
+      return aYear - bYear;
+    }
+    return a.institution.localeCompare(b.institution);
+  });
 
   const SectionHeader = ({
     title,
@@ -1247,6 +1316,49 @@ export function ProfilePage({
       <p className="text-sm font-medium text-slate-600">{message}</p>
     </div>
   );
+
+  const addEducationRecord = () => {
+    setEditingEducationId('new');
+    setEducationForm({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      level: 'Other',
+      institution: '',
+      branch: '',
+      startYear: '',
+      endYear: '',
+      isPursuing: false,
+      scoreType: 'percentage',
+      score: '',
+    });
+  };
+
+  const updateEducationRecordForm = (updates: Partial<EducationRecord>) => {
+    setEducationForm((prev) => (prev ? { ...prev, ...updates } : prev));
+  };
+
+  const removeEducationRecord = (id: string) => {
+    setEducationRecords((prev) => prev.filter((record) => record.id !== id));
+  };
+
+  const startEditEducationRecord = (record: EducationRecord) => {
+    setEditingEducationId(record.id);
+    setEducationForm({ ...record });
+  };
+
+  const cancelEducationForm = () => {
+    setEditingEducationId(null);
+    setEducationForm(null);
+  };
+
+  const saveEducationRecordForm = () => {
+    if (!educationForm) return;
+    if (editingEducationId === 'new') {
+      setEducationRecords((prev) => [...prev, educationForm]);
+    } else {
+      setEducationRecords((prev) => prev.map((record) => (record.id === educationForm.id ? educationForm : record)));
+    }
+    cancelEducationForm();
+  };
 
   // Item Actions Component
   const ItemActions = ({ onEdit, onDelete, deleting = false }: { onEdit: () => void; onDelete: () => void; deleting?: boolean }) => (
@@ -1539,18 +1651,62 @@ export function ProfilePage({
               title="Education" 
               onAdd={() => setActiveModal('education')} 
             />
-            {hasKnownBranch || hasKnownYear ? (
+            {educationRecords.length > 0 || hasKnownBranch || hasKnownYear ? (
+              <div className="flex flex-col gap-3">
+                {orderedEducationRecords.map((record) => (
+                  <div key={record.id} className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="break-words text-base font-semibold text-slate-900">{record.level}</h3>
+                        <p className="mt-1 break-words text-sm text-slate-600">{record.institution || 'Institution not added'}</p>
+                        <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-500">
+                          {record.level === '10th' || record.level === '12th'
+                            ? `Year ${record.startYear || 'Not added'}`
+                            : `${record.isPursuing ? 'Currently pursuing' : 'Completed'}${record.startYear ? ` • ${record.startYear}` : ''}${record.endYear ? ` - ${record.endYear}` : ''}`}
+                        </p>
+                        {(record.branch || record.score) ? (
+                          <p className="mt-2 text-sm text-slate-700">
+                            {record.branch ? `${record.branch}` : ''}
+                            {record.branch && record.score ? ' • ' : ''}
+                            {record.score ? `${record.scoreType === 'cgpa' ? 'CGPA' : 'Percentage'}: ${record.score}` : ''}
+                          </p>
+                        ) : null}
+                        {(record.level === "Bachelor's" || record.level === "Master's") && record.isPursuing && hasKnownYear ? (
+                          <p className="mt-1 text-sm font-medium text-emerald-700">Current Year: {student.year}</p>
+                        ) : null}
+                      </div>
+                      {isOwnProfile ? (
+                        <button
+                          type="button"
+                          onClick={() => removeEducationRecord(record.id)}
+                          className="rounded-full p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                          aria-label="Remove education entry"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+                {(hasKnownBranch || hasKnownYear) ? (
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
+                    <p className="text-sm font-semibold text-emerald-900">Current Campus Profile</p>
+                    <p className="mt-1 text-sm text-emerald-800">
+                      {hasKnownBranch ? profileBranch : 'Branch not added'}
+                      {hasKnownYear ? ` • Year ${student.year}` : ''}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
               <div className="flex items-start gap-3">
                 <span className="mt-1 h-3.5 w-3.5 flex-shrink-0 rounded-full bg-emerald-500 shadow-sm" />
                 <div className="min-w-0">
-                  {hasKnownBranch && <h3 className="break-words font-semibold text-slate-950">{profileBranch}</h3>}
                   <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">
-                    {hasKnownYear ? `Year ${student.year}` : ''}
+                    Academic details not added yet
                   </p>
                 </div>
               </div>
-            ) : (
-              <EmptyState message="Highlight your academic background." />
             )}
           </div>
           ) : null}
@@ -2092,12 +2248,12 @@ export function ProfilePage({
         isOpen={activeModal === 'education'}
         onClose={closeModal}
         title="Update Education"
-        className="w-[min(32rem,calc(100vw-2rem))]"
-        style={{ width: 'min(32rem, calc(100vw - 2rem))' }}
+        className="w-[min(48rem,calc(100vw-2rem))]"
+        style={{ width: 'min(48rem, calc(100vw - 2rem))' }}
       >
-        <div className="space-y-4 max-w-[460px] w-full">
+        <div className="space-y-5 max-w-[760px] w-full">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Current Branch</label>
             <Input
               value={educationDraft.branch}
               onChange={(event) => setEducationDraft((prev) => ({ ...prev, branch: event.target.value }))}
@@ -2105,7 +2261,7 @@ export function ProfilePage({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Current Year</label>
             <Input
               type="number"
               value={educationDraft.year}
@@ -2114,6 +2270,117 @@ export function ProfilePage({
               max="4"
               placeholder="e.g., 3"
             />
+          </div>
+          <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+            <div className="mb-3">
+              <p className="text-sm font-semibold text-slate-900">Academic Records</p>
+            </div>
+            {educationRecords.length > 0 ? (
+              <div className="space-y-3">
+                {orderedEducationRecords.map((record) => (
+                  <div key={record.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-900">{record.level}</p>
+                        <p className="text-sm text-slate-600">{record.institution || 'Institution not added'}</p>
+                        <p className="text-xs text-slate-500">
+                          {record.level === '10th' || record.level === '12th'
+                            ? `Year ${record.startYear || 'Not added'}`
+                            : `${record.isPursuing ? 'Currently pursuing' : 'Completed'}${record.startYear ? ` • ${record.startYear}` : ''}${record.endYear ? ` - ${record.endYear}` : ''}`}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button type="button" onClick={() => startEditEducationRecord(record)} className="rounded-full p-2 text-slate-400 hover:bg-blue-50 hover:text-blue-600" aria-label="Edit education entry">
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                        <button type="button" onClick={() => removeEducationRecord(record.id)} className="rounded-full p-2 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete education entry">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">Add records for 10th, 12th, Bachelor's, Master's, or other education.</p>
+            )}
+            {educationForm ? (
+              <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
+                <div className="mb-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-700">Level</label>
+                    <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={educationForm.level} onChange={(event) => updateEducationRecordForm({ level: event.target.value as EducationLevel })}>
+                      <option value="10th">10th</option>
+                      <option value="12th">12th</option>
+                      <option value="Bachelor's">Bachelor's</option>
+                      <option value="Master's">Master's</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-700">Institute</label>
+                    <Input value={educationForm.institution} onChange={(event) => updateEducationRecordForm({ institution: event.target.value })} placeholder="School / College / University" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-700">Branch / Stream</label>
+                    <Input value={educationForm.branch} onChange={(event) => updateEducationRecordForm({ branch: event.target.value })} placeholder="e.g., Science, CSE" />
+                  </div>
+                  {educationForm.level === '10th' || educationForm.level === '12th' ? (
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-700">Year</label>
+                      <Input type="number" value={educationForm.startYear} onChange={(event) => updateEducationRecordForm({ startYear: event.target.value, endYear: '' })} placeholder="2020" />
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-700">From</label>
+                        <Input type="number" value={educationForm.startYear} onChange={(event) => updateEducationRecordForm({ startYear: event.target.value })} placeholder="2019" />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-700">To</label>
+                        <Input type="number" value={educationForm.endYear} onChange={(event) => updateEducationRecordForm({ endYear: event.target.value })} placeholder="2023" disabled={educationForm.isPursuing} />
+                      </div>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-700">Result Type</label>
+                      <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={educationForm.scoreType} onChange={(event) => updateEducationRecordForm({ scoreType: event.target.value as 'percentage' | 'cgpa' })}>
+                        <option value="percentage">Percentage</option>
+                        <option value="cgpa">CGPA</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-700">Score</label>
+                      <Input value={educationForm.score} onChange={(event) => updateEducationRecordForm({ score: event.target.value })} placeholder={educationForm.scoreType === 'cgpa' ? 'e.g., 8.6' : 'e.g., 86%'} />
+                    </div>
+                  </div>
+                </div>
+                {educationForm.level !== '10th' && educationForm.level !== '12th' ? (
+                  <div className="mb-3 flex items-center justify-between">
+                    <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                      <Checkbox checked={educationForm.isPursuing} onCheckedChange={(checked) => updateEducationRecordForm({ isPursuing: Boolean(checked), endYear: checked ? '' : educationForm.endYear })} />
+                      Currently pursuing
+                    </label>
+                    {(educationForm.level === "Bachelor's" || educationForm.level === "Master's") && educationForm.isPursuing && student.year > 0 ? (
+                      <span className="text-xs font-medium text-emerald-700">Auto year: {student.year}</span>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={cancelEducationForm}>Cancel</Button>
+                  <Button type="button" onClick={saveEducationRecordForm} className="rounded-full gradient-primary text-white border-none">Save record</Button>
+                </div>
+              </div>
+            ) : null}
+            {!educationForm ? (
+              <div className="mt-4">
+                <Button type="button" variant="outline" className="rounded-full" onClick={addEducationRecord}>
+                  <Plus className="mr-1 h-4 w-4" />
+                  Add record
+                </Button>
+              </div>
+            ) : null}
           </div>
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
