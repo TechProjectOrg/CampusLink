@@ -2204,19 +2204,46 @@ export default function App() {
   };
 
   const handleMessage = async (studentId: string) => {
-    if (!authToken || !currentUserId) {
-      navigate('chat');
+    if (!studentId || typeof studentId !== 'string') {
       return;
     }
+
+    // Move to chat immediately so the action feels instant.
+    navigate('chat');
+
+    // If we already have a direct conversation, open it right away.
+    const existingConvo = conversations.find((conversation) => !conversation.isGroup && conversation.participantId === studentId);
+    if (existingConvo) {
+      appData.selectConversation(existingConvo.id);
+      void appData.ensureConversationMessages(existingConvo.id);
+      void refreshConversations();
+      return;
+    }
+
+    if (!authToken || !currentUserId) {
+      return;
+    }
+
     try {
-      // Start the conversation on the backend using the real student UUID
-      await apiStartConversation(studentId, authToken);
-      // Refresh conversations so it appears in the list
-      await refreshConversations();
-      // Navigate to chat
-      navigate('chat');
+      // Create/reuse server conversation without blocking the initial navigation.
+      const { chatId } = await apiStartConversation(studentId, authToken);
+
+      const student = students.find((item) => item.id === studentId);
+      appData.upsertConversation({
+        id: chatId,
+        participantId: studentId,
+        participantName: student?.name ?? 'User',
+        participantAvatar: student?.avatar,
+        lastMessage: 'Start a conversation...',
+        timestamp: new Date().toISOString(),
+        unread: 0,
+        isOnline: true,
+      });
+      appData.selectConversation(chatId);
+      void appData.ensureConversationMessages(chatId);
+      void refreshConversations();
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to start conversation');
+      toast.error(err?.message || 'Failed to open chat');
     }
   };
 
