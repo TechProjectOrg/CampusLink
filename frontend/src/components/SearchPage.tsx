@@ -15,6 +15,7 @@ interface SearchPageProps {
   students: Student[];
   currentUserId: string;
   followGraph: FollowGraph;
+  suggestedUserIds?: string[];
   onFollow: (targetUserId: string, accountType?: 'public' | 'private') => void;
   onUnfollow: (targetUserId: string) => void;
   onCancelRequest: (targetUserId: string) => void;
@@ -49,6 +50,7 @@ export function SearchPage({
   students,
   currentUserId,
   followGraph,
+  suggestedUserIds = [],
   onFollow,
   onUnfollow,
   onCancelRequest,
@@ -67,6 +69,33 @@ export function SearchPage({
 
   const suggestedUsers = useMemo(() => {
     if (!currentUser) return [];
+
+    if (suggestedUserIds.length > 0) {
+      const fromApi = suggestedUserIds
+        .map((id) => students.find((s) => s.id === id))
+        .filter((s): s is Student => Boolean(s))
+        .filter((s) => {
+          if (s.id === currentUserId) return false;
+          const isFollowing = (followGraph.followingByUserId[currentUserId] ?? []).includes(s.id);
+          const isRequested = (followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(s.id);
+          return !isFollowing && !isRequested;
+        })
+        .map((student) => {
+          const sharedSkills = student.skills.filter((skill) => currentUser.skills.includes(skill));
+          const sharedInterests = student.interests.filter((interest) => currentUser.interests.includes(interest));
+          return {
+            student,
+            sharedSkills,
+            sharedInterests,
+            branchMatch: student.branch === currentUser.branch,
+            yearMatch: student.year === currentUser.year,
+            score: 0,
+            createdAtMs: 0,
+          };
+        });
+
+      if (fromApi.length > 0) return fromApi.slice(0, 6);
+    }
 
     return students
       .filter((student) => {
@@ -104,7 +133,7 @@ export function SearchPage({
         return left.student.name.localeCompare(right.student.name);
       })
       .slice(0, 6);
-  }, [currentUser, currentUserId, followGraph.followingByUserId, followGraph.outgoingRequestsByUserId, students]);
+  }, [currentUser, currentUserId, followGraph.followingByUserId, followGraph.outgoingRequestsByUserId, students, suggestedUserIds]);
 
   useEffect(() => {
     setSearchQuery(initialSearchQuery);
@@ -247,37 +276,30 @@ export function SearchPage({
                             </div>
                           </div>
 
-                          <div className="flex gap-4 text-sm text-gray-600 pt-2 border-t border-primary/10">
-                            <div>
-                              <span className="text-primary">{(followGraph.followersByUserId[student.id] ?? []).length}</span>
-                              <span className="ml-1">followers</span>
-                            </div>
-                            <div>
-                              <span className="text-primary">{student.projects.length}</span>
-                              <span className="ml-1">projects</span>
-                            </div>
-                          </div>
+                          {/* followers/projects counts hidden in search results */}
 
                           <div className="flex gap-2 items-center">
                             <button
                               type="button"
                               onClick={() => onViewProfile(student.id)}
-                              className="flex-1 border border-primary/20 hover:border-primary transition-all duration-300 hover:scale-105 rounded-xl px-3 py-2 text-sm"
+                              className="flex-1 border border-primary/20 hover:border-primary hover:bg-primary/10 text-primary transition-all duration-300 hover:scale-105 rounded-xl px-3 py-2 text-sm font-medium"
                             >
                               View Profile
                             </button>
-                            <div className="flex-shrink-0">
-                              <FollowButton
-                                targetName={student.name}
-                                accountType={student.accountType}
-                                isFollowing={(followGraph.followingByUserId[currentUserId] ?? []).includes(student.id)}
-                                isFollower={(followGraph.followersByUserId[currentUserId] ?? []).includes(student.id)}
-                                requestStatus={(followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id) ? 'requested' : 'none'}
-                                onFollow={() => onFollow(student.id, student.accountType)}
-                                onUnfollow={() => onUnfollow(student.id)}
-                                onCancelRequest={() => onCancelRequest(student.id)}
-                              />
-                            </div>
+                            {!((followGraph.followingByUserId[currentUserId] ?? []).includes(student.id)) && !((followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id)) && (
+                              <div className="flex-shrink-0">
+                                <FollowButton
+                                  targetName={student.name}
+                                  accountType={student.accountType}
+                                  isFollowing={(followGraph.followingByUserId[currentUserId] ?? []).includes(student.id)}
+                                  isFollower={(followGraph.followersByUserId[currentUserId] ?? []).includes(student.id)}
+                                  requestStatus={(followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id) ? 'requested' : 'none'}
+                                  onFollow={() => onFollow(student.id, student.accountType)}
+                                  onUnfollow={() => onUnfollow(student.id)}
+                                  onCancelRequest={() => onCancelRequest(student.id)}
+                                />
+                              </div>
+                            )}
                           </div>
                         </CardContent>
                       </Card>
@@ -314,37 +336,30 @@ export function SearchPage({
                     </div>
                   </div>
 
-                  <div className="flex gap-4 text-sm text-gray-600 pt-2 border-t border-primary/10">
-                    <div>
-                      <span className="text-primary">{(followGraph.followersByUserId[student.id] ?? []).length}</span>
-                      <span className="ml-1">followers</span>
-                    </div>
-                    <div>
-                      <span className="text-primary">{student.projects.length}</span>
-                      <span className="ml-1">projects</span>
-                    </div>
-                  </div>
+                  {/* followers/projects counts hidden in search results */}
 
                   <div className="flex gap-2 items-center">
                     <button
                       type="button"
                       onClick={() => onViewProfile(student.id)}
-                      className="flex-1 border border-primary/20 hover:border-primary transition-all duration-300 hover:scale-105 rounded-xl px-3 py-2 text-sm"
+                      className="flex-1 border border-primary/20 hover:border-primary hover:bg-primary/10 text-primary transition-all duration-300 hover:scale-105 rounded-xl px-3 py-2 text-sm font-medium"
                     >
                       View Profile
                     </button>
-                    <div className="flex-shrink-0">
-                      <FollowButton
-                        targetName={student.name}
-                        accountType={student.accountType}
-                        isFollowing={(followGraph.followingByUserId[currentUserId] ?? []).includes(student.id)}
-                        isFollower={(followGraph.followersByUserId[currentUserId] ?? []).includes(student.id)}
-                        requestStatus={(followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id) ? 'requested' : 'none'}
-                        onFollow={() => onFollow(student.id, student.accountType)}
-                        onUnfollow={() => onUnfollow(student.id)}
-                        onCancelRequest={() => onCancelRequest(student.id)}
-                      />
-                    </div>
+                    {!((followGraph.followingByUserId[currentUserId] ?? []).includes(student.id)) && !((followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id)) && (
+                      <div className="flex-shrink-0">
+                        <FollowButton
+                          targetName={student.name}
+                          accountType={student.accountType}
+                          isFollowing={(followGraph.followingByUserId[currentUserId] ?? []).includes(student.id)}
+                          isFollower={(followGraph.followersByUserId[currentUserId] ?? []).includes(student.id)}
+                          requestStatus={(followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id) ? 'requested' : 'none'}
+                          onFollow={() => onFollow(student.id, student.accountType)}
+                          onUnfollow={() => onUnfollow(student.id)}
+                          onCancelRequest={() => onCancelRequest(student.id)}
+                        />
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
