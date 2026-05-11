@@ -5028,6 +5028,11 @@ div[style*="width: 25%"]::webkit-scrollbar {
 }
 
 @media (min-width: 640px) and (max-width: 1023px) {
+  .cl-create-modal {
+    width: min(36rem, calc(100vw - 2rem));
+    max-width: calc(100vw - 2rem);
+  }
+
   .cl-create-tabs-list {
     min-width: 0;
     gap: .25rem;
@@ -5054,8 +5059,8 @@ div[style*="width: 25%"]::webkit-scrollbar {
     padding: .75rem .5rem;
     font-size: .875rem;
     line-height: 1.1;
-    white-space: normal;
-    overflow-wrap: anywhere;
+    white-space: nowrap;
+    overflow-wrap: normal;
   }
 
   .cl-opportunity-details-grid {
