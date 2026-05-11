@@ -360,7 +360,7 @@ export function ProfilePage({
     }
   };
 
-  const loadExperiences = async () => {
+  const loadExperiences = async (mode: 'cache-first' | 'network-only' = 'cache-first') => {
     if (!student.id) {
       console.warn('Cannot load experiences: student.id not set');
       return;
@@ -369,7 +369,7 @@ export function ProfilePage({
       const list = await fetchCachedValue({
         key: `page:user:${student.id}:profile:experiences`,
         policy: cachePolicies.userProfile,
-        mode: 'cache-first',
+        mode,
         fetcher: () => apiFetchUserExperiences(student.id, authToken),
       });
       setExperiences(
@@ -716,17 +716,18 @@ export function ProfilePage({
       console.error('Cannot add experience: authUserId not set');
       return;
     }
-    if (!newExperience.roleTitle?.trim() || !newExperience.organization?.trim()) {
+    if (!newExperience.roleTitle?.trim() || !newExperience.organization?.trim() || !newExperience.startDate) {
       console.error('Cannot add experience: missing required fields');
       return;
     }
 
+    setBusyAction('save-experience');
     try {
       const payload = {
         roleTitle: newExperience.roleTitle.trim(),
         organization: newExperience.organization.trim(),
         description: newExperience.description?.trim() || '',
-        startDate: (newExperience.startDate || new Date()).toISOString(),
+        startDate: newExperience.startDate.toISOString(),
         endDate: newExperience.isCurrentlyWorking ? null : newExperience.endDate?.toISOString() ?? null,
         isCurrentlyWorking: newExperience.isCurrentlyWorking || false,
       };
@@ -736,7 +737,7 @@ export function ProfilePage({
       } else {
         await apiCreateUserExperience(authUserId, payload, authToken);
       }
-      await loadExperiences();
+      await loadExperiences('network-only');
       closeModal();
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
@@ -762,7 +763,7 @@ export function ProfilePage({
     setPendingDeleteByKey((prev) => ({ ...prev, [key]: true }));
     try {
       await apiDeleteUserExperience(authUserId, id, authToken);
-      await loadExperiences();
+      await loadExperiences('network-only');
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error('Error deleting experience:', errorMsg);
@@ -1818,7 +1819,7 @@ export function ProfilePage({
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button
               onClick={handleAddExperience}
-              disabled={!newExperience.roleTitle?.trim() || !newExperience.organization?.trim() || busyAction === 'save-experience'}
+              disabled={!newExperience.roleTitle?.trim() || !newExperience.organization?.trim() || !newExperience.startDate || busyAction === 'save-experience'}
               className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold"
             >
               {busyAction === 'save-experience' ? 'Saving...' : `${editingItem ? 'Update' : 'Add'} Experience`}

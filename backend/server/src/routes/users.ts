@@ -1171,8 +1171,26 @@ router.post(
           created_at: Date;
         }[]
       >`
-        INSERT INTO user_certifications (user_id, name, issuer, description, credential_url, image_url, issued_at)
-        VALUES (${userId}, ${name.trim()}, ${issuerValue}, ${descriptionValue}, ${credentialUrlValue}, ${imageUrlValue}, ${issuedAtDate})
+        INSERT INTO user_certifications (
+          user_id,
+          name,
+          issuer,
+          description,
+          credential_url,
+          image_url,
+          issued_at,
+          updated_at
+        )
+        VALUES (
+          ${userId},
+          ${name.trim()},
+          ${issuerValue},
+          ${descriptionValue},
+          ${credentialUrlValue},
+          ${imageUrlValue},
+          ${issuedAtDate},
+          NOW()
+        )
         RETURNING certification_id, name, issuer, description, credential_url, image_url, issued_at, created_at
       `;
 
@@ -1710,7 +1728,16 @@ router.post(
           created_at: Date;
         }[]
       >`
-        INSERT INTO user_experiences (user_id, role_title, organization, description, start_date, end_date, is_current)
+        INSERT INTO user_experiences (
+          user_id,
+          role_title,
+          organization,
+          description,
+          start_date,
+          end_date,
+          is_current,
+          updated_at
+        )
         VALUES (
           ${userId},
           ${roleTitle.trim()},
@@ -1718,7 +1745,8 @@ router.post(
           ${description?.trim() || null},
           ${startDateValue},
           ${isCurrentlyWorking ? null : endDateValue},
-          ${Boolean(isCurrentlyWorking)}
+          ${Boolean(isCurrentlyWorking)},
+          NOW()
         )
         RETURNING experience_id, role_title, organization, description, start_date, end_date, is_current, created_at
       `;
@@ -1950,8 +1978,15 @@ router.post(
           created_at: Date;
         }[]
       >`
-        INSERT INTO user_societies (user_id, society_name, role_name, start_date, end_date)
-        VALUES (${userId}, ${societyName.trim()}, ${role.trim()}, ${startDateValue}, ${endDateValue})
+        INSERT INTO user_societies (
+          user_id,
+          society_name,
+          role_name,
+          start_date,
+          end_date,
+          updated_at
+        )
+        VALUES (${userId}, ${societyName.trim()}, ${role.trim()}, ${startDateValue}, ${endDateValue}, NOW())
         RETURNING user_society_id, society_name, role_name, start_date, end_date, created_at
       `;
 
@@ -2144,8 +2179,8 @@ router.post(
           created_at: Date;
         }[]
       >`
-        INSERT INTO user_achievements (user_id, title, description, achievement_year)
-        VALUES (${userId}, ${title.trim()}, ${description?.trim() || null}, ${year})
+        INSERT INTO user_achievements (user_id, title, description, achievement_year, updated_at)
+        VALUES (${userId}, ${title.trim()}, ${description?.trim() || null}, ${year}, NOW())
         RETURNING achievement_id, title, description, achievement_year, created_at
       `;
 
