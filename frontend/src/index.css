@@ -5098,7 +5098,7 @@ div[style*="width: 25%"]::webkit-scrollbar {
   }
 
   .cl-navbar-root {
-    position: static;
+    position: relative;
     height: 0;
     overflow: visible;
     background: transparent;
@@ -5115,6 +5115,46 @@ div[style*="width: 25%"]::webkit-scrollbar {
   .cl-navbar-row,
   .cl-navbar-shell > .animate-fade-in {
     display: none;
+  }
+
+  .cl-navbar-row:has(.cl-mobile-top-action) {
+    display: flex;
+    position: absolute;
+    top: .75rem;
+    right: .75rem;
+    z-index: 60;
+    width: auto;
+    height: auto;
+    gap: .25rem;
+    justify-content: flex-end;
+    pointer-events: none;
+  }
+
+  .cl-navbar-row > :not(.cl-mobile-top-action):not([data-radix-menu-anchor]) {
+    display: none;
+  }
+
+  .cl-navbar-row > [data-radix-menu-anchor] {
+    display: contents;
+  }
+
+  .cl-mobile-top-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    color: var(--primary);
+    background: rgba(255, 255, 255, .92);
+    border: 1px solid rgba(26, 115, 232, .14);
+    box-shadow: 0 8px 22px rgba(26, 115, 232, .14);
+    pointer-events: auto;
+  }
+
+  .cl-mobile-top-action:hover,
+  .cl-mobile-top-action:focus-visible {
+    background: #fff;
+    color: var(--primary);
   }
 
   .cl-mobile-bottom-nav {

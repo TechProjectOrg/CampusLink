@@ -171,20 +171,21 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
           {/* Search Icon - Mobile */}
           <button 
             onClick={handleSearchFocus}
-            className="md:hidden p-2 rounded-xl hover:bg-white/10 relative transition-all duration-300 hover:scale-110 ml-auto"
+            aria-label="Search"
+            className="cl-mobile-top-action md:hidden p-2 rounded-xl relative transition-all duration-300 hover:scale-110 ml-auto"
           >
-            <Search className="w-5 h-5 text-white" />
+            <Search className="w-5 h-5" />
           </button>
 
           {/* Notifications - Mobile */}
           <button 
             onClick={() => onTabChange('notifications')}
             aria-label="Notifications"
-            className={`md:hidden p-2 rounded-xl relative transition-all duration-300 hover:scale-110 ${
-              activeTab === 'notifications' ? 'bg-white/20' : 'hover:bg-white/10'
+            className={`cl-mobile-top-action md:hidden p-2 rounded-xl relative transition-all duration-300 hover:scale-110 ${
+              activeTab === 'notifications' ? 'bg-primary/10' : ''
             }`}
           >
-            <Bell className="w-5 h-5 text-white" />
+            <Bell className="w-5 h-5" />
             {unreadNotifications > 0 && (
               <Badge className="absolute -top-1 -right-1 bg-destructive text-white px-1 py-0 min-w-4 h-4 flex items-center justify-center text-xs animate-pulse">
                 {unreadNotifications}
@@ -197,7 +198,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
             <DropdownMenuTrigger asChild>
               <button
                 aria-label="Open navigation menu"
-                className="md:hidden p-2 rounded-xl text-white transition-all duration-300 hover:scale-110 hover:bg-white/10"
+                className="cl-mobile-top-action md:hidden p-2 rounded-xl transition-all duration-300 hover:scale-110"
               >
                 <Menu className="w-5 h-5" />
               </button>
