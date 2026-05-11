@@ -306,7 +306,7 @@ export function CreateUnifiedPostModal({
         }
       }}
     >
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto hide-scrollbar max-w-[95vw]">
+      <DialogContent className="cl-create-modal sm:max-w-lg max-h-[90vh] overflow-y-auto hide-scrollbar max-w-[95vw]">
         <DialogHeader>
           <DialogTitle>What would you like to share?</DialogTitle>
           <DialogDescription>
@@ -316,7 +316,7 @@ export function CreateUnifiedPostModal({
         
         <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'post' | 'event' | 'opportunity')} className="w-full">
           {!postOnly ? (
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="cl-create-tabs-list grid w-full grid-cols-3">
               <TabsTrigger value="post" disabled={isSubmitting}>Post</TabsTrigger>
               <TabsTrigger value="event" disabled={isSubmitting}>Create Event</TabsTrigger>
               <TabsTrigger value="opportunity" disabled={isSubmitting}>Post Opportunity</TabsTrigger>
@@ -474,11 +474,11 @@ export function CreateUnifiedPostModal({
                 <fieldset disabled={isSubmitting} className="space-y-4">
                 <div className="space-y-2">
                     <Label>Opportunity Type *</Label>
-                    <div className="grid grid-cols-4 gap-2">
+                    <div className="cl-opportunity-type-grid grid grid-cols-4 gap-2">
                     <button
                         type="button"
                         onClick={() => setOpportunityFormData({ ...opportunityFormData, type: 'internship' })}
-                        className={`p-3 rounded-xl border-2 transition-all ${ opportunityFormData.type === 'internship'
+                        className={`cl-opportunity-type-button p-3 rounded-xl border-2 transition-all ${ opportunityFormData.type === 'internship'
                             ? 'border-primary bg-primary/10 text-primary'
                             : 'border-gray-200 hover:border-gray-300'
                         }`}
@@ -488,7 +488,7 @@ export function CreateUnifiedPostModal({
                     <button
                         type="button"
                         onClick={() => setOpportunityFormData({ ...opportunityFormData, type: 'hackathon' })}
-                        className={`p-3 rounded-xl border-2 transition-all ${ opportunityFormData.type === 'hackathon'
+                        className={`cl-opportunity-type-button p-3 rounded-xl border-2 transition-all ${ opportunityFormData.type === 'hackathon'
                             ? 'border-primary bg-primary/10 text-primary'
                             : 'border-gray-200 hover:border-gray-300'
                         }`}
@@ -498,7 +498,7 @@ export function CreateUnifiedPostModal({
                     <button
                         type="button"
                         onClick={() => setOpportunityFormData({ ...opportunityFormData, type: 'event' })}
-                        className={`p-3 rounded-xl border-2 transition-all ${ opportunityFormData.type === 'event'
+                        className={`cl-opportunity-type-button p-3 rounded-xl border-2 transition-all ${ opportunityFormData.type === 'event'
                             ? 'border-primary bg-primary/10 text-primary'
                             : 'border-gray-200 hover:border-gray-300'
                         }`}
@@ -508,7 +508,7 @@ export function CreateUnifiedPostModal({
                     <button
                         type="button"
                         onClick={() => setOpportunityFormData({ ...opportunityFormData, type: 'contest' })}
-                        className={`p-3 rounded-xl border-2 transition-all ${ opportunityFormData.type === 'contest'
+                        className={`cl-opportunity-type-button p-3 rounded-xl border-2 transition-all ${ opportunityFormData.type === 'contest'
                             ? 'border-primary bg-primary/10 text-primary'
                             : 'border-gray-200 hover:border-gray-300'
                         }`}
@@ -568,7 +568,7 @@ export function CreateUnifiedPostModal({
                     />
                 </div>
                 <ImageUpload onFileChange={(file) => setOpportunityFormData({ ...opportunityFormData, imageFile: file })} disabled={isSubmitting} />
-                <div className="grid grid-cols-2 gap-4">
+                <div className="cl-opportunity-details-grid grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                         <Label htmlFor="link">
                             {opportunityFormData.type === 'contest' ? 'Registration Link' : 'Application Link'}
