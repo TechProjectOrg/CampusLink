@@ -118,6 +118,7 @@ export function SuggestionsCard({
   return (
     <div className="space-y-3">
       {/* ── Suggested For You ── */}
+      {suggestedStudents.length > 0 && (
       <div className="rounded-2xl border border-slate-200/80 bg-white/90 shadow-sm backdrop-blur-sm animate-slide-in-up">
         {/* Header */}
         <div className="flex items-center gap-2 px-4 pt-4 pb-3 border-b border-slate-100">
@@ -129,8 +130,7 @@ export function SuggestionsCard({
 
         {/* Suggestion rows */}
         <div className="divide-y divide-slate-100">
-          {suggestedStudents.length > 0 ? (
-            suggestedStudents.map(({ student, sharedSkills, sharedInterests }) => {
+          {suggestedStudents.map(({ student, sharedSkills, sharedInterests }) => {
               const socialProof =
                 sharedSkills.length > 0
                   ? `${sharedSkills[0]} in common`
@@ -215,14 +215,10 @@ export function SuggestionsCard({
                   </div>
                 </div>
               );
-            })
-          ) : (
-            <p className="px-4 py-5 text-xs text-slate-400 text-center leading-relaxed">
-              We'll suggest people once more profiles are available.
-            </p>
-          )}
+            })}
         </div>
       </div>
+      )}
 
       {/* ── Trending Topics ── */}
       <div className="rounded-2xl border border-slate-200/80 bg-white/90 shadow-sm backdrop-blur-sm animate-slide-in-up" style={{ animationDelay: '80ms' }}>

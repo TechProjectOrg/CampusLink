@@ -2448,7 +2448,10 @@ export default function App() {
           {activeTab === 'feed' ? (
           <div className="mx-auto flex w-full max-w-[1400px] justify-center">
             {/* Profile Section (Left) - Visible on XL screens and up */}
-            <div className="hide-scrollbar hidden xl:block flex-shrink-0 w-[280px] px-2 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)]" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <div
+              className="hide-scrollbar hidden xl:block flex-none px-2 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)]"
+              style={{ width: '280px', minWidth: '280px', maxWidth: '280px', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
               <ProfileCard
                 student={currentUserFromStore ?? currentUser}
                 followerCount={currentFollowerCount}
@@ -2458,11 +2461,11 @@ export default function App() {
                 onViewNetwork={() => navigate('network')}
               />
             </div>
-            {/* Feed Section (Center) - Expands to fill space */}
+            {/* Feed Section (Center) */}
             <div
               ref={feedViewportRef}
-              className="flex-1 min-w-0 max-w-[720px] px-2 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)]"
-              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+              className="flex-1 min-w-0 px-2 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)]"
+              style={{ maxWidth: '1000px', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               onScroll={handleFeedScroll}
             >
               <FeedPage
@@ -2492,7 +2495,10 @@ export default function App() {
               <div ref={feedLoadMoreTriggerRef} className="h-1 w-full" aria-hidden="true" />
             </div>
             {/* Suggestions Section (Right) - Visible on LG screens and up */}
-            <div className="hide-scrollbar hidden lg:block flex-shrink-0 w-[280px] px-2 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)]" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <div
+              className="hide-scrollbar hidden lg:block flex-none px-2 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)]"
+              style={{ width: '280px', minWidth: '280px', maxWidth: '280px', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
               <SuggestionsCard
                 students={students}
                 opportunities={opportunities}

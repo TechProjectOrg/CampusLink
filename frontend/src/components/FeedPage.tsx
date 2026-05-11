@@ -71,7 +71,7 @@ export function FeedPage({
   return (
     <>
       <PageLayout contentClassName="pb-6 pt-0">
-        <div className="space-y-6">
+        <div className="mx-auto w-full space-y-6" style={{ maxWidth: '1000px' }}>
           {/* Main Feed */}
           <div className="space-y-6">
             {/* Header */}
