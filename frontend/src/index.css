@@ -5092,6 +5092,44 @@ div[style*="width: 25%"]::webkit-scrollbar {
   }
 }
 
+@media (max-width: 767px) {
+  body {
+    padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
+  }
+
+  .cl-navbar-root {
+    position: static;
+    height: 0;
+    overflow: visible;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .cl-navbar-shell {
+    max-width: none;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .cl-navbar-row,
+  .cl-navbar-shell > .animate-fade-in {
+    display: none;
+  }
+
+  .cl-mobile-bottom-nav {
+    min-height: 4.75rem;
+    gap: clamp(.75rem, 6vw, 2rem);
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+
+  .cl-mobile-bottom-nav button {
+    flex: 0 1 5rem;
+    max-width: 5rem;
+  }
+}
+
 @media (min-width: 768px) and (max-width: 1023px) {
   .cl-navbar-shell {
     max-width: none;

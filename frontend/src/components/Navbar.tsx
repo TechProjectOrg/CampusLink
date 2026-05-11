@@ -45,7 +45,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
   };
 
   return (
-    <nav className="sticky top-0 z-50 w-full overflow-x-hidden backdrop-blur-xl bg-gradient-to-r from-primary via-secondary to-primary shadow-lg animate-slide-in-down">
+    <nav className="cl-navbar-root sticky top-0 z-50 w-full overflow-x-hidden backdrop-blur-xl bg-gradient-to-r from-primary via-secondary to-primary shadow-lg animate-slide-in-down">
       <div className="cl-navbar-shell max-w-7xl mx-auto px-4">
         <div className="cl-navbar-row flex items-center gap-4 h-16">
           {/* Logo */}
@@ -240,7 +240,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
         )}
 
         {/* Mobile Navigation */}
-        <div className="md:hidden fixed bottom-0 left-0 right-0 backdrop-blur-xl bg-gradient-to-r from-primary via-secondary to-primary border-t border-white/20 flex items-center justify-center gap-2 py-3 px-4 shadow-2xl z-50 safe-area-inset-bottom">
+        <div className="cl-mobile-bottom-nav md:hidden fixed bottom-0 left-0 right-0 backdrop-blur-xl bg-gradient-to-r from-primary via-secondary to-primary border-t border-white/20 flex items-center justify-center gap-2 py-3 px-4 shadow-2xl z-50 safe-area-inset-bottom">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
