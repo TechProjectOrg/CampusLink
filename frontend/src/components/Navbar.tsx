@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Home, Search, Users, MessageCircle, BookOpen, User, Bell, Settings, LogOut, Menu } from 'lucide-react';
+import { Home, Search, Users, MessageCircle, BookOpen, User, Bell, Settings, LogOut, Menu, Grid3X3 } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
 import {
@@ -29,6 +29,13 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
     { id: 'network', label: 'Network', icon: Users },
     { id: 'chat', label: 'Chat', icon: MessageCircle, badge: unreadCount },
     { id: 'clubs', label: 'Clubs', icon: BookOpen }
+  ];
+
+  const mobileNavItems = [
+    { id: 'feed', label: 'Home', icon: Home },
+    { id: 'network', label: 'Network', icon: Users },
+    { id: 'search', label: 'Discover', icon: Search },
+    { id: 'clubs', label: 'Activity', icon: Grid3X3 },
   ];
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -242,7 +249,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
 
         {/* Mobile Navigation */}
         <div className="cl-mobile-bottom-nav md:hidden fixed bottom-0 left-0 right-0 backdrop-blur-xl bg-gradient-to-r from-primary via-secondary to-primary border-t border-white/20 flex items-center justify-center gap-2 py-3 px-4 shadow-2xl z-50 safe-area-inset-bottom">
-          {navItems.map((item) => {
+          {mobileNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
             
@@ -259,7 +266,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
                 }`}
               >
                 <Icon className="w-6 h-6" />
-                <span className="sr-only">{item.label}</span>
+                <span className="cl-mobile-nav-label sr-only">{item.label}</span>
                 {(item.badge ?? 0) > 0 && (
                   <Badge className="absolute -top-1 -right-1 bg-destructive text-white px-1 py-0 min-w-4 h-4 flex items-center justify-center text-xs animate-pulse">
                     {item.badge}

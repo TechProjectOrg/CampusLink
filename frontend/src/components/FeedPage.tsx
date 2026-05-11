@@ -69,13 +69,13 @@ export function FeedPage({
 
   return (
     <>
-        <div className="mx-auto w-full space-y-4 sm:space-y-6 pb-24 md:pb-6" style={{ maxWidth: '1000px' }}>
+        <div className="cl-feed-page mx-auto w-full space-y-4 sm:space-y-6 pb-24 md:pb-6" style={{ maxWidth: '1000px' }}>
           {/* Main Feed */}
           <div className="space-y-6">
             {/* Header */}
             <div className="animate-slide-in-down">
-              <div className="rounded-3xl border border-slate-200/80 bg-white shadow-lg hover-lift overflow-hidden transition-all duration-300 hover:shadow-xl">
-                <div className="flex items-center sm:items-start gap-3 sm:gap-4 p-3 sm:p-4 md:p-5">
+              <div className="cl-feed-composer rounded-3xl border border-slate-200/80 bg-white shadow-lg hover-lift overflow-hidden transition-all duration-300 hover:shadow-xl">
+                <div className="cl-feed-composer-top flex items-center sm:items-start gap-3 sm:gap-4 p-3 sm:p-4 md:p-5">
                   <Avatar className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 flex-shrink-0 ring-2 ring-primary/10">
                     <AvatarImage src={currentUser?.avatar} alt={currentUser?.name} />
                     <AvatarFallback className="bg-slate-100 text-slate-700 text-base font-medium">
@@ -104,7 +104,7 @@ export function FeedPage({
                       setIsCreateUnifiedModalOpen(true);
                     }}
                   >
-                    <FileText className="w-4 h-4" />
+                    <FileText className="cl-feed-action-icon-post w-4 h-4" />
                     <span className="cl-feed-action-label text-[11px] sm:text-sm font-medium">Post</span>
                   </Button>
                   <Button
@@ -115,7 +115,7 @@ export function FeedPage({
                       setIsCreateUnifiedModalOpen(true);
                     }}
                   >
-                    <CalendarPlus className="w-4 h-4" />
+                    <CalendarPlus className="cl-feed-action-icon-event w-4 h-4" />
                     <span className="cl-feed-action-label cl-feed-action-label-full text-[11px] sm:text-sm font-medium">Create Event</span>
                     <span className="cl-feed-action-label cl-feed-action-label-mobile text-[11px] sm:text-sm font-medium">Event</span>
                   </Button>
@@ -127,9 +127,9 @@ export function FeedPage({
                       setIsCreateUnifiedModalOpen(true);
                     }}
                   >
-                    <BriefcaseBusiness className="w-4 h-4" />
+                    <BriefcaseBusiness className="cl-feed-action-icon-job w-4 h-4" />
                     <span className="cl-feed-action-label cl-feed-action-label-full text-[11px] sm:text-sm font-medium">Post Opportunity</span>
-                    <span className="cl-feed-action-label cl-feed-action-label-mobile text-[11px] sm:text-sm font-medium">Opportunity</span>
+                    <span className="cl-feed-action-label cl-feed-action-label-mobile text-[11px] sm:text-sm font-medium">Job</span>
                   </Button>
                 </div>
               </div>

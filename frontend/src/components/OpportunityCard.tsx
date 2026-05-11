@@ -265,8 +265,8 @@ export function OpportunityCard({
 
   return (
     <>
-      <div className="bg-white rounded-2xl border border-primary/10 overflow-hidden hover-lift animate-slide-in-up shadow-sm hover:shadow-xl transition-all duration-300">
-        <div className="p-4 sm:p-6 pb-3 sm:pb-4">
+      <div className="cl-opportunity-card bg-white rounded-2xl border border-primary/10 overflow-hidden hover-lift animate-slide-in-up shadow-sm hover:shadow-xl transition-all duration-300">
+        <div className="cl-opportunity-card-body p-4 sm:p-6 pb-3 sm:pb-4">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-3 cursor-pointer group" onClick={() => onViewProfile?.(opportunity.authorId)}>
               <Avatar className="w-10 h-10 ring-2 ring-primary/20 transition-all duration-300 group-hover:ring-primary/40 flex-shrink-0">
@@ -335,7 +335,7 @@ export function OpportunityCard({
           ) : postCore}
         </div>
 
-        <div className="flex items-center gap-1 sm:gap-2 px-4 sm:px-6 py-3 sm:py-4 border-t border-primary/5">
+        <div className="cl-opportunity-card-actions flex items-center gap-1 sm:gap-2 px-4 sm:px-6 py-3 sm:py-4 border-t border-primary/5">
           <button
             onClick={() => onLike(opportunity.id)}
             className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl transition-all duration-300 ${

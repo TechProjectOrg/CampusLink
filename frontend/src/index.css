@@ -4973,6 +4973,122 @@ div[style*="width: 25%"]::webkit-scrollbar {
 }
 
 @media (max-width: 639px) {
+  .cl-feed-page {
+    max-width: none !important;
+    padding-bottom: calc(5.75rem + env(safe-area-inset-bottom));
+    background: #fff;
+  }
+
+  .cl-feed-page > .space-y-6 {
+    gap: 0;
+  }
+
+  .cl-feed-composer {
+    border-radius: 0;
+    border: 0;
+    border-bottom: 1px solid #e5e7eb;
+    box-shadow: none;
+    overflow: visible;
+  }
+
+  .cl-feed-composer.hover-lift:hover,
+  .cl-opportunity-card.hover-lift:hover {
+    transform: none;
+    box-shadow: none;
+  }
+
+  .cl-feed-composer-top {
+    padding: 1rem 10.25rem .75rem 1.25rem;
+  }
+
+  .cl-feed-composer-top [data-slot="avatar"],
+  .cl-opportunity-card-body [data-slot="avatar"] {
+    background: #d1d5db;
+    border: 0;
+    box-shadow: none;
+    --tw-ring-shadow: 0 0 #0000;
+  }
+
+  .cl-start-post-trigger {
+    flex: 0 1 auto;
+    min-height: 3.25rem;
+    padding: 0 1.25rem;
+    background: #f3f4f6;
+    border: 0;
+    color: #64748b;
+    font-size: 1rem;
+    font-weight: 600;
+    box-shadow: none;
+  }
+
+  .cl-feed-action-row {
+    border-top: 0;
+    border-bottom: 1px solid #e5e7eb;
+    gap: .625rem;
+    padding: .75rem 1.25rem .875rem;
+  }
+
+  .cl-feed-action-button {
+    height: 3rem;
+    border-color: #cbd5e1;
+    border-radius: .625rem;
+    box-shadow: none;
+    gap: .5rem;
+    font-size: .875rem;
+  }
+
+  .cl-feed-action-label {
+    font-size: .9375rem;
+    color: #0f172a;
+  }
+
+  .cl-feed-action-icon-post {
+    color: #155dfc;
+  }
+
+  .cl-feed-action-icon-event {
+    color: #00a63e;
+  }
+
+  .cl-feed-action-icon-job {
+    color: #f4511e;
+  }
+
+  .cl-opportunity-card {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    border-bottom: 1px solid #e5e7eb;
+  }
+
+  .cl-opportunity-card-body {
+    padding: 1.25rem 1.25rem .75rem;
+  }
+
+  .cl-opportunity-card-body h3 {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: #020617;
+  }
+
+  .cl-opportunity-card-body p {
+    color: #020617;
+  }
+
+  .cl-opportunity-card-body img {
+    max-height: none;
+  }
+
+  .cl-opportunity-card-actions {
+    padding: 1rem 1.25rem;
+    border-top-color: #eef2f7;
+  }
+
+  .cl-opportunity-card-actions button {
+    padding-left: .25rem;
+    padding-right: .25rem;
+  }
+
   .cl-create-modal {
     min-width: 0;
     width: calc(100vw - 2rem);
@@ -5142,24 +5258,40 @@ div[style*="width: 25%"]::webkit-scrollbar {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 2.5rem;
-    height: 2.5rem;
-    color: var(--primary);
-    background: rgba(255, 255, 255, .92);
-    border: 1px solid rgba(26, 115, 232, .14);
-    box-shadow: 0 8px 22px rgba(26, 115, 232, .14);
+    width: 2.25rem;
+    height: 2.25rem;
+    color: #475569;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
     pointer-events: auto;
   }
 
   .cl-mobile-top-action:hover,
   .cl-mobile-top-action:focus-visible {
-    background: #fff;
-    color: var(--primary);
+    background: transparent;
+    color: #155dfc;
+  }
+
+  .cl-mobile-top-action [data-slot="badge"] {
+    top: .15rem;
+    right: .25rem;
+    width: .55rem;
+    min-width: .55rem;
+    height: .55rem;
+    padding: 0;
+    overflow: hidden;
+    color: transparent;
+    background: #155dfc;
+    border: 2px solid #fff;
   }
 
   .cl-mobile-bottom-nav {
-    min-height: 4.75rem;
-    gap: clamp(.75rem, 6vw, 2rem);
+    min-height: 4.5rem;
+    gap: clamp(.75rem, 7vw, 2.5rem);
+    background: #fff;
+    border-top: 1px solid #e5e7eb;
+    box-shadow: 0 -8px 24px rgba(15, 23, 42, .08);
     padding-left: max(1rem, env(safe-area-inset-left));
     padding-right: max(1rem, env(safe-area-inset-right));
   }
@@ -5167,6 +5299,38 @@ div[style*="width: 25%"]::webkit-scrollbar {
   .cl-mobile-bottom-nav button {
     flex: 0 1 5rem;
     max-width: 5rem;
+    height: 3.5rem;
+    flex-direction: column;
+    gap: .125rem;
+    color: #334155;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    transform: none;
+  }
+
+  .cl-mobile-bottom-nav button:first-child {
+    color: #155dfc;
+  }
+
+  .cl-mobile-bottom-nav button svg {
+    width: 1.55rem;
+    height: 1.55rem;
+  }
+
+  .cl-mobile-bottom-nav button .cl-mobile-nav-label {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    padding: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: nowrap;
+    border: 0;
+    font-size: .8125rem;
+    line-height: 1rem;
+    font-weight: 400;
   }
 }
 
