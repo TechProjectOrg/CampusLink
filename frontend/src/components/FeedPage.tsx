@@ -95,39 +95,41 @@ export function FeedPage({
                   </button>
                 </div>
 
-                <div className="grid grid-cols-3 gap-1.5 sm:gap-2 border-t border-slate-100 p-2 sm:p-3">
+                <div className="cl-feed-action-row grid grid-cols-3 gap-1.5 sm:gap-2 border-t border-slate-100 p-2 sm:p-3">
                   <Button
                     variant="ghost"
-                    className="flex h-10 sm:h-12 cursor-pointer items-center justify-center gap-1 sm:gap-2 rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:bg-slate-50 hover:text-slate-700 hover:shadow-xl px-2"
+                    className="cl-feed-action-button flex h-10 sm:h-12 cursor-pointer items-center justify-center gap-1 sm:gap-2 rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:bg-slate-50 hover:text-slate-700 hover:shadow-xl px-2"
                     onClick={() => {
                       setCreateTab('post');
                       setIsCreateUnifiedModalOpen(true);
                     }}
                   >
                     <FileText className="w-4 h-4" />
-                    <span className="text-[11px] sm:text-sm font-medium">Post</span>
+                    <span className="cl-feed-action-label text-[11px] sm:text-sm font-medium">Post</span>
                   </Button>
                   <Button
                     variant="ghost"
-                    className="flex h-10 sm:h-12 cursor-pointer items-center justify-center gap-1 sm:gap-2 rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:bg-slate-50 hover:text-slate-700 hover:shadow-xl px-2"
+                    className="cl-feed-action-button flex h-10 sm:h-12 cursor-pointer items-center justify-center gap-1 sm:gap-2 rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:bg-slate-50 hover:text-slate-700 hover:shadow-xl px-2"
                     onClick={() => {
                       setCreateTab('event');
                       setIsCreateUnifiedModalOpen(true);
                     }}
                   >
                     <CalendarPlus className="w-4 h-4" />
-                    <span className="text-[11px] sm:text-sm font-medium">Create Event</span>
+                    <span className="cl-feed-action-label cl-feed-action-label-full text-[11px] sm:text-sm font-medium">Create Event</span>
+                    <span className="cl-feed-action-label cl-feed-action-label-mobile text-[11px] sm:text-sm font-medium">Event</span>
                   </Button>
                   <Button
                     variant="ghost"
-                    className="flex h-10 sm:h-12 cursor-pointer items-center justify-center gap-1 sm:gap-2 rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:bg-slate-50 hover:text-slate-700 hover:shadow-xl px-2"
+                    className="cl-feed-action-button flex h-10 sm:h-12 cursor-pointer items-center justify-center gap-1 sm:gap-2 rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:bg-slate-50 hover:text-slate-700 hover:shadow-xl px-2"
                     onClick={() => {
                       setCreateTab('opportunity');
                       setIsCreateUnifiedModalOpen(true);
                     }}
                   >
                     <BriefcaseBusiness className="w-4 h-4" />
-                    <span className="text-[11px] sm:text-sm font-medium">Post Opportunity</span>
+                    <span className="cl-feed-action-label cl-feed-action-label-full text-[11px] sm:text-sm font-medium">Post Opportunity</span>
+                    <span className="cl-feed-action-label cl-feed-action-label-mobile text-[11px] sm:text-sm font-medium">Opportunity</span>
                   </Button>
                 </div>
               </div>
