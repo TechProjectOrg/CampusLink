@@ -89,7 +89,7 @@ export function FeedPage({
                       setCreateTab('post');
                       setIsCreateUnifiedModalOpen(true);
                     }}
-                    className="flex-1 min-h-12 sm:min-h-14 cursor-pointer rounded-full border border-slate-300 bg-white py-2 sm:py-3 pl-5 sm:pl-8 pr-4 sm:pr-5 text-left text-sm sm:text-base text-slate-500 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-slate-50 hover:shadow-xl"
+                    className="cl-start-post-trigger flex-1 min-h-12 sm:min-h-14 cursor-pointer rounded-full border border-slate-300 bg-white py-2 sm:py-3 pl-5 sm:pl-8 pr-4 sm:pr-5 text-left text-sm sm:text-base text-slate-500 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-slate-50 hover:shadow-xl"
                   >
                     Start a post
                   </button>
