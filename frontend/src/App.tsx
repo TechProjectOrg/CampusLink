@@ -2494,9 +2494,9 @@ export default function App() {
               />
               <div ref={feedLoadMoreTriggerRef} className="h-1 w-full" aria-hidden="true" />
             </div>
-            {/* Suggestions Section (Right) - Visible on LG screens and up */}
+            {/* Suggestions Section (Right) - Visible on MD screens and up */}
             <div
-              className="hide-scrollbar hidden lg:block flex-none px-2 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)]"
+              className="hide-scrollbar hidden md:block flex-none px-2 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)]"
               style={{ width: '280px', minWidth: '280px', maxWidth: '280px', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
               <SuggestionsCard

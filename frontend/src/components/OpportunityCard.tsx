@@ -240,7 +240,7 @@ export function OpportunityCard({
           <ImageWithFallback
             src={opportunity.image}
             alt={opportunity.title}
-            className="w-full h-80 object-cover transition-transform duration-500 group-hover:scale-105"
+            className="w-full h-48 sm:h-64 md:h-80 object-cover transition-transform duration-500 group-hover:scale-105"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
         </div>
@@ -266,7 +266,7 @@ export function OpportunityCard({
   return (
     <>
       <div className="bg-white rounded-2xl border border-primary/10 overflow-hidden hover-lift animate-slide-in-up shadow-sm hover:shadow-xl transition-all duration-300">
-        <div className="p-6 pb-4">
+        <div className="p-4 sm:p-6 pb-3 sm:pb-4">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-center gap-3 cursor-pointer group" onClick={() => onViewProfile?.(opportunity.authorId)}>
               <Avatar className="w-10 h-10 ring-2 ring-primary/20 transition-all duration-300 group-hover:ring-primary/40 flex-shrink-0">
@@ -335,40 +335,40 @@ export function OpportunityCard({
           ) : postCore}
         </div>
 
-        <div className="flex items-center gap-2 px-6 py-4 border-t border-primary/5">
+        <div className="flex items-center gap-1 sm:gap-2 px-4 sm:px-6 py-3 sm:py-4 border-t border-primary/5">
           <button
             onClick={() => onLike(opportunity.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl transition-all duration-300 ${
               isLiked ? 'text-red-600 bg-red-50 scale-105 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:scale-105'
             }`}
           >
             <Heart className={`w-5 h-5 transition-transform duration-300 ${isLiked ? 'fill-current scale-110' : ''}`} />
-            <span className="text-sm">{likeCount}</span>
+            <span className="text-xs sm:text-sm">{likeCount}</span>
           </button>
 
           <button
             onClick={() => setShowComments(!showComments)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all duration-300 ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl transition-all duration-300 ${
               showComments ? 'text-primary bg-primary/10 scale-105 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:scale-105'
             }`}
           >
             <MessageCircle className="w-5 h-5" />
-            <span className="text-sm">{commentCount}</span>
+            <span className="text-xs sm:text-sm">{commentCount}</span>
           </button>
 
           <button
             onClick={() => onSave(opportunity.id)}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl ml-auto transition-all duration-300 ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl ml-auto transition-all duration-300 ${
               isSaved ? 'text-primary bg-primary/10 scale-105 shadow-sm' : 'text-gray-600 hover:bg-gray-50 hover:scale-105'
             }`}
           >
             <Bookmark className={`w-5 h-5 transition-transform duration-300 ${isSaved ? 'fill-current scale-110' : ''}`} />
-            <span className="text-sm">{saveCount}</span>
+            <span className="text-xs sm:text-sm">{saveCount}</span>
           </button>
         </div>
 
         {showComments && (
-          <div className="px-6 pb-6 pt-2 space-y-4 border-t border-primary/5 animate-fade-in">
+          <div className="px-4 sm:px-6 pb-4 sm:pb-6 pt-2 space-y-4 border-t border-primary/5 animate-fade-in">
             {inlineTopLevelComments.map((comment) => renderCommentItem(comment))}
             {topLevelComments.length > 3 && (
               <button

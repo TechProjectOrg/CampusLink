@@ -11,7 +11,6 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { CreateUnifiedPostModal } from './CreateUnifiedPostModal';
 import { LoadingState } from './LoadingState';
 import { LoadingIndicator } from './ui/LoadingIndicator';
-import { PageLayout } from './PageLayout';
 
 interface FeedPageProps {
   opportunities: Opportunity[];
@@ -70,15 +69,14 @@ export function FeedPage({
 
   return (
     <>
-      <PageLayout contentClassName="pb-6 pt-0">
-        <div className="mx-auto w-full space-y-6" style={{ maxWidth: '1000px' }}>
+        <div className="mx-auto w-full space-y-4 sm:space-y-6 pb-24 md:pb-6" style={{ maxWidth: '1000px' }}>
           {/* Main Feed */}
           <div className="space-y-6">
             {/* Header */}
             <div className="animate-slide-in-down">
               <div className="rounded-3xl border border-slate-200/80 bg-white shadow-lg hover-lift overflow-hidden transition-all duration-300 hover:shadow-xl">
-                <div className="flex items-start gap-4 p-4 md:p-5">
-                  <Avatar className="w-14 h-14 md:w-16 md:h-16 flex-shrink-0 ring-2 ring-primary/10">
+                <div className="flex items-center sm:items-start gap-3 sm:gap-4 p-3 sm:p-4 md:p-5">
+                  <Avatar className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 flex-shrink-0 ring-2 ring-primary/10">
                     <AvatarImage src={currentUser?.avatar} alt={currentUser?.name} />
                     <AvatarFallback className="bg-slate-100 text-slate-700 text-base font-medium">
                       {currentUser?.name?.[0] ?? 'U'}
@@ -91,45 +89,47 @@ export function FeedPage({
                       setCreateTab('post');
                       setIsCreateUnifiedModalOpen(true);
                     }}
-                    className="flex-1 min-h-14 cursor-pointer rounded-full border border-slate-300 bg-white py-3 pl-8 pr-5 text-left text-slate-500 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-slate-50 hover:shadow-xl md:text-base"
+                    className="flex-1 min-h-12 sm:min-h-14 cursor-pointer rounded-full border border-slate-300 bg-white py-2 sm:py-3 pl-4 sm:pl-8 pr-4 sm:pr-5 text-left text-sm sm:text-base text-slate-500 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-slate-50 hover:shadow-xl"
                   >
                     Start a post
                   </button>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 border-t border-slate-100 p-3 sm:gap-3">
+                <div className="grid grid-cols-3 gap-1.5 sm:gap-2 border-t border-slate-100 p-2 sm:p-3">
                   <Button
                     variant="ghost"
-                    className="flex h-12 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:bg-slate-50 hover:text-slate-700 hover:shadow-xl"
+                    className="flex h-10 sm:h-12 cursor-pointer items-center justify-center gap-1 sm:gap-2 rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:bg-slate-50 hover:text-slate-700 hover:shadow-xl px-2"
                     onClick={() => {
                       setCreateTab('post');
                       setIsCreateUnifiedModalOpen(true);
                     }}
                   >
                     <FileText className="w-4 h-4" />
-                    Post
+                    <span className="text-[11px] sm:text-sm font-medium">Post</span>
                   </Button>
                   <Button
                     variant="ghost"
-                    className="flex h-12 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:bg-slate-50 hover:text-slate-700 hover:shadow-xl"
+                    className="flex h-10 sm:h-12 cursor-pointer items-center justify-center gap-1 sm:gap-2 rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:bg-slate-50 hover:text-slate-700 hover:shadow-xl px-2"
                     onClick={() => {
                       setCreateTab('event');
                       setIsCreateUnifiedModalOpen(true);
                     }}
                   >
                     <CalendarPlus className="w-4 h-4" />
-                    Create Event
+                    <span className="hidden sm:inline text-sm font-medium">Create Event</span>
+                    <span className="sm:hidden text-[11px] font-medium">Event</span>
                   </Button>
                   <Button
                     variant="ghost"
-                    className="flex h-12 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:bg-slate-50 hover:text-slate-700 hover:shadow-xl"
+                    className="flex h-10 sm:h-12 cursor-pointer items-center justify-center gap-1 sm:gap-2 rounded-2xl border border-slate-200 bg-white text-slate-700 shadow-lg transition-all duration-300 hover:-translate-y-0.5 hover:bg-slate-50 hover:text-slate-700 hover:shadow-xl px-2"
                     onClick={() => {
                       setCreateTab('opportunity');
                       setIsCreateUnifiedModalOpen(true);
                     }}
                   >
                     <BriefcaseBusiness className="w-4 h-4" />
-                    Post Opportunity
+                    <span className="hidden sm:inline text-sm font-medium">Post Opportunity</span>
+                    <span className="sm:hidden text-[11px] font-medium">Opportunity</span>
                   </Button>
                 </div>
               </div>
@@ -192,7 +192,6 @@ export function FeedPage({
             </div>
           </div>
         </div>
-      </PageLayout>
       <CreateUnifiedPostModal
         isOpen={isCreateUnifiedModalOpen}
         onClose={() => setIsCreateUnifiedModalOpen(false)}
