@@ -1016,13 +1016,33 @@ router.post(
     }
 
     try {
-      const rows = await prisma.$queryRaw<
-      { user_skill_id: string; name: string; created_at: Date }[]
-      >`
-        INSERT INTO user_skills (user_id, name)
-        VALUES (${userId}, ${name.trim()})
-        RETURNING user_skill_id, name, created_at
-      `;
+      let rows: { user_skill_id: string; name: string; created_at: Date }[];
+      try {
+        rows = await prisma.$queryRaw<
+          { user_skill_id: string; name: string; created_at: Date }[]
+        >`
+          INSERT INTO user_skills (user_id, name)
+          VALUES (${userId}, ${name.trim()})
+          RETURNING user_skill_id, name, created_at
+        `;
+      } catch (insertErr: any) {
+        const msg = String(insertErr?.message ?? '');
+        const needsUpdatedAtFallback =
+          msg.includes('updated_at') &&
+          (msg.includes('null value') || msg.includes('not-null constraint'));
+
+        if (!needsUpdatedAtFallback) {
+          throw insertErr;
+        }
+
+        rows = await prisma.$queryRaw<
+          { user_skill_id: string; name: string; created_at: Date }[]
+        >`
+          INSERT INTO user_skills (user_id, name, created_at, updated_at)
+          VALUES (${userId}, ${name.trim()}, NOW(), NOW())
+          RETURNING user_skill_id, name, created_at
+        `;
+      }
 
       const created = rows[0];
       return res.status(201).json({
@@ -1031,8 +1051,19 @@ router.post(
         createdAt: created.created_at.toISOString(),
       });
     } catch (err: any) {
-      // Unique violation (duplicate skill)
-      if (err?.code === '23505') {
+      // Unique violation (duplicate skill) can surface in different shapes:
+      // - Postgres code directly (`23505`)
+      // - Prisma wrapper (`P2010`) with duplicate key text in message/meta
+      const errorMessage = String(err?.message ?? '').toLowerCase();
+      const metaText = String(err?.meta?.driverAdapterError ?? '').toLowerCase();
+      const isDuplicateSkill =
+        err?.code === '23505' ||
+        (err?.code === 'P2010' &&
+          (errorMessage.includes('duplicate key value') ||
+            errorMessage.includes('uq_user_skills_user_id_name') ||
+            metaText.includes('uniqueconstraintviolation')));
+
+      if (isDuplicateSkill) {
         return res.status(409).json({ message: 'Skill already exists' });
       }
 

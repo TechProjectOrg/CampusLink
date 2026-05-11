@@ -202,6 +202,7 @@ export function ProfilePage({
   const [skills, setSkills] = useState<UserSkill[]>([]);
   const [skillsLoading, setSkillsLoading] = useState(false);
   const [newSkillName, setNewSkillName] = useState('');
+  const [skillFormError, setSkillFormError] = useState<string | null>(null);
 
   // Certifications state
   const [loadedCertifications, setLoadedCertifications] = useState<Certification[]>([]);
@@ -300,16 +301,14 @@ export function ProfilePage({
   const authToken = auth.session?.token;
 
   // Load data
-  const loadSkills = async () => {
+  const loadSkills = async (mode: 'cache-first' | 'network-only' = 'cache-first') => {
     if (!isOwnProfile || !authUserId) return;
     setSkillsLoading(true);
-    setBusyAction('save-experience');
-    setBusyAction('save-project');
     try {
       const list = await fetchCachedValue({
         key: `page:user:${authUserId}:profile:skills`,
         policy: cachePolicies.userProfile,
-        mode: 'cache-first',
+        mode,
         fetcher: () => apiFetchUserSkills(authUserId, authToken),
         onCached: (cached) => setSkills(cached),
       });
@@ -733,13 +732,16 @@ export function ProfilePage({
   // Skill handlers
   const handleAddSkill = async () => {
     if (!isOwnProfile || !authUserId || !newSkillName.trim()) return;
+    setSkillFormError(null);
     setBusyAction('save-skill');
     try {
       await apiAddUserSkill(authUserId, newSkillName.trim(), authToken);
       setNewSkillName('');
-      await loadSkills();
-      closeModal();
-    } catch {}
+      await loadSkills('network-only');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to add skill';
+      setSkillFormError(message);
+    }
     finally {
       setBusyAction(null);
     }
@@ -752,7 +754,7 @@ export function ProfilePage({
     setPendingDeleteByKey((prev) => ({ ...prev, [key]: true }));
     try {
       await apiDeleteUserSkill(authUserId, skillId, authToken);
-      await loadSkills();
+      await loadSkills('network-only');
     } catch {}
     finally {
       setPendingDeleteByKey((prev) => ({ ...prev, [key]: false }));
@@ -1217,33 +1219,11 @@ export function ProfilePage({
   };
 
   const handleSaveEducation = async () => {
-    if (!authUserId) {
-      console.error('Cannot save education: authUserId not set');
-      return;
-    }
-    const branch = educationDraft.branch.trim();
-    const year = Number.parseInt(educationDraft.year, 10);
-    if (!branch || Number.isNaN(year)) {
-      console.error('Cannot save education: missing or invalid fields');
-      return;
-    }
-
     setBusyAction('save-education');
     try {
-      await apiUpdateUserProfile(
-        authUserId,
-        {
-          username: student.username,
-          branch,
-          year,
-        },
-        authToken,
-      );
       try {
         window.localStorage.setItem(`profile-education:${student.id}`, JSON.stringify(educationRecords));
       } catch {}
-      onEdit?.({ branch, year });
-      await auth.refreshProfile();
       setActiveModal(null);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
@@ -1898,19 +1878,50 @@ export function ProfilePage({
       </Modal>
 
       {/* Skill Modal */}
-      <Modal isOpen={activeModal === 'skill'} onClose={closeModal} title="Add Skill" className="w-[min(28rem,calc(100vw-2rem))]" style={{ width: 'min(28rem, calc(100vw - 2rem))' }}>
-        <div className="space-y-4 max-w-[420px] w-full">
+      <Modal isOpen={activeModal === 'skill'} onClose={closeModal} title="Manage Skills" className="w-[min(34rem,calc(100vw-2rem))]" style={{ width: 'min(34rem, calc(100vw - 2rem))' }}>
+        <div className="space-y-5 max-w-[520px] w-full">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Skill Name</label>
+            <p className="mb-2 text-sm font-medium text-gray-700">Added Skills</p>
+            {skillsLoading ? (
+              <LoadingIndicator label="Loading skills..." className="justify-start" size={18} />
+            ) : skills.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {skills.map((skill) => (
+                  <Badge key={skill.id} className="group/skill rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 shadow-none">
+                    {skill.name}
+                    <button
+                      type="button"
+                      disabled={Boolean(pendingDeleteByKey[`skill:${skill.id}`])}
+                      onClick={() => handleRemoveSkill(skill.id)}
+                      className="ml-2 opacity-70 transition hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      aria-label={`Remove ${skill.name}`}
+                    >
+                      {pendingDeleteByKey[`skill:${skill.id}`] ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">No skills added yet.</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Add New Skill</label>
             <Input
               value={newSkillName}
               onChange={(e) => setNewSkillName(e.target.value)}
               placeholder="e.g., Python, React, Machine Learning"
-              onKeyPress={(e) => e.key === 'Enter' && handleAddSkill()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void handleAddSkill();
+                }
+              }}
             />
+            {skillFormError ? <p className="mt-2 text-sm text-red-600">{skillFormError}</p> : null}
           </div>
-          <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={closeModal}>Cancel</Button>
+          <div className="mt-2 flex flex-wrap justify-end gap-3 pt-1">
+            <Button variant="outline" onClick={closeModal}>Close</Button>
             <Button onClick={handleAddSkill} disabled={!newSkillName.trim() || busyAction === 'save-skill'} className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold disabled:opacity-70">
               {busyAction === 'save-skill' ? 'Adding...' : 'Add Skill'}
             </Button>
@@ -2252,26 +2263,12 @@ export function ProfilePage({
         style={{ width: 'min(48rem, calc(100vw - 2rem))' }}
       >
         <div className="space-y-5 max-w-[760px] w-full">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Current Branch</label>
-            <Input
-              value={educationDraft.branch}
-              onChange={(event) => setEducationDraft((prev) => ({ ...prev, branch: event.target.value }))}
-              placeholder="e.g., Computer Engineering"
-            />
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current Campus Profile</p>
+            <p className="mt-1 text-sm font-medium text-slate-900">{hasKnownBranch ? profileBranch : 'Branch not added'}</p>
+            <p className="text-sm text-slate-700">{hasKnownYear ? `Year ${student.year}` : 'Year not added'}</p>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Current Year</label>
-            <Input
-              type="number"
-              value={educationDraft.year}
-              onChange={(event) => setEducationDraft((prev) => ({ ...prev, year: event.target.value }))}
-              min="1"
-              max="4"
-              placeholder="e.g., 3"
-            />
-          </div>
-          <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
             <div className="mb-3">
               <p className="text-sm font-semibold text-slate-900">Academic Records</p>
             </div>
