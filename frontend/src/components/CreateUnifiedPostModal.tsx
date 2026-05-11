@@ -391,11 +391,11 @@ export function CreateUnifiedPostModal({
                 </div>
                 <div className="space-y-2">
                   <Label>Mode *</Label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="cl-create-choice-grid grid grid-cols-2 gap-2">
                     <button
                       type="button"
                       onClick={() => setEventFormData({ ...eventFormData, mode: 'Online' })}
-                      className={`p-3 rounded-xl border-2 transition-all ${ eventFormData.mode === 'Online'
+                      className={`cl-create-choice-button p-3 rounded-xl border-2 transition-all ${ eventFormData.mode === 'Online'
                           ? 'border-primary bg-primary/10 text-primary'
                           : 'border-gray-200 hover:border-gray-300'
                       }`}
@@ -405,7 +405,7 @@ export function CreateUnifiedPostModal({
                     <button
                       type="button"
                       onClick={() => setEventFormData({ ...eventFormData, mode: 'Offline' })}
-                      className={`p-3 rounded-xl border-2 transition-all ${ eventFormData.mode === 'Offline'
+                      className={`cl-create-choice-button p-3 rounded-xl border-2 transition-all ${ eventFormData.mode === 'Offline'
                           ? 'border-primary bg-primary/10 text-primary'
                           : 'border-gray-200 hover:border-gray-300'
                       }`}

@@ -4997,6 +4997,11 @@ div[style*="width: 25%"]::webkit-scrollbar {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .cl-create-choice-button {
+    min-width: 0;
+    padding: .75rem .5rem;
+  }
+
   .cl-feed-action-row {
     gap: .5rem;
   }
@@ -5019,6 +5024,43 @@ div[style*="width: 25%"]::webkit-scrollbar {
 
   .cl-feed-action-label-mobile {
     display: inline;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  .cl-create-tabs-list {
+    min-width: 0;
+    gap: .25rem;
+    padding: .25rem;
+  }
+
+  .cl-create-tabs-list [data-slot="tabs-trigger"] {
+    min-width: 0;
+    padding-left: .5rem;
+    padding-right: .5rem;
+    font-size: .875rem;
+    line-height: 1.1;
+    text-align: center;
+  }
+
+  .cl-opportunity-type-grid,
+  .cl-create-choice-grid {
+    gap: .625rem;
+  }
+
+  .cl-opportunity-type-button,
+  .cl-create-choice-button {
+    min-width: 0;
+    padding: .75rem .5rem;
+    font-size: .875rem;
+    line-height: 1.1;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .cl-opportunity-details-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .75rem;
   }
 }
 
