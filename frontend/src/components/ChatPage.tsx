@@ -89,6 +89,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   const readMessageByChatRef = useRef<Record<string, string>>({});
 
   const selectedConversation = conversations.find(c => c.id === selectedChat);
+  const isPendingConversation = Boolean(selectedConversation?.isPending);
   const activeConversations = conversations.filter((conversation) => !conversation.isRequest);
   const requestConversations = conversations.filter((conversation) => conversation.isRequest);
   const visibleConversations = showMessageRequests ? requestConversations : activeConversations;
@@ -141,11 +142,13 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     onLoadOlder: handleLoadOlderMessages,
     bottomAnchorKey: Boolean(typingStatusLabel),
   });
+  const showChatLoadingOverlay = isPendingConversation || (Boolean(selectedChat) && !isChatReady && isLoadingMessages);
 
   useEffect(() => {
     if (!selectedChat) return;
+    if (isPendingConversation) return;
     void appData.ensureConversationMessages(selectedChat);
-  }, [appData, selectedChat, selectedChatState?.isHydrated]);
+  }, [appData, selectedChat, selectedChatState?.isHydrated, isPendingConversation]);
 
   useEffect(() => () => {
     appData.clearLocalTyping(selectedChat);
@@ -178,6 +181,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
 
   useEffect(() => {
     if (!selectedChat) return;
+    if (isPendingConversation) return;
     const latestIncoming = [...chatMessages].reverse().find(msg => !msg.isOwn && !msg.id.startsWith('temp-'));
     if (!latestIncoming) return;
     if (readMessageByChatRef.current[selectedChat] === latestIncoming.id) return;
@@ -189,7 +193,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
         console.error('Failed to mark chat as read', err);
         delete readMessageByChatRef.current[selectedChat];
       });
-  }, [appData, selectedChat, chatMessages, onChatRead]);
+  }, [appData, selectedChat, chatMessages, onChatRead, isPendingConversation]);
 
   const appendEmoji = (emoji: string) => {
     const input = inputRef.current;
@@ -238,6 +242,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   };
 
   const handleSendMessage = async () => {
+    if (isPendingConversation) return;
     if (!message.trim() || !selectedChat) return;
 
     const content = message.trim();
@@ -253,6 +258,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   };
 
   const handleSendImage = async (file: File | undefined) => {
+    if (isPendingConversation) return;
     if (!file || !selectedChat) return;
     if (!file.type.startsWith('image/')) {
       window.alert('Please choose an image file.');
@@ -782,9 +788,9 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                   <span className="text-sm font-medium">New Messages</span>
                 </button>
               )}
-              {selectedChat && !isChatReady && isLoadingMessages && (
+              {showChatLoadingOverlay && (
                 <div className="absolute inset-0 flex items-center justify-center bg-white z-10">
-                  <LoadingIndicator label="Loading messages..." />
+                  <LoadingIndicator label={isPendingConversation ? 'Opening chat...' : 'Loading messages...'} />
                 </div>
               )}
               {isLoadingOlder && (
@@ -798,7 +804,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                 ref={messagesViewportRef}
                 style={{ overflowAnchor: 'auto' }}
                 className={`absolute inset-0 overflow-y-auto transition-opacity duration-300 ${
-                  !selectedChat || isChatReady || !isLoadingMessages ? 'opacity-100' : 'opacity-0'
+                  !selectedChat || !showChatLoadingOverlay || isChatReady ? 'opacity-100' : 'opacity-0'
                 }`}
               >
                 <div className="p-4 md:p-6 space-y-3">
@@ -1059,15 +1065,16 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                   className="hidden"
                   onChange={(event) => handleSendImage(event.target.files?.[0])}
                 />
-                <Button onClick={() => fileInputRef.current?.click()} variant="ghost" size="sm" className="hover:bg-gray-100 rounded-full w-8 h-8 md:w-9 md:h-9 p-0 flex-shrink-0">
+                <Button onClick={() => fileInputRef.current?.click()} variant="ghost" size="sm" disabled={isPendingConversation} className="hover:bg-gray-100 rounded-full w-8 h-8 md:w-9 md:h-9 p-0 flex-shrink-0">
                   <Image className="w-4 h-4 md:w-5 md:h-5 text-gray-700" />
                 </Button>
                 <div className="flex-1 relative">
                   <Input
                     type="text"
-                    placeholder="Message..."
+                    placeholder={isPendingConversation ? 'Opening chat...' : 'Message...'}
                     value={message}
                     ref={inputRef}
+                    disabled={isPendingConversation}
                     onChange={(e) => {
                       const nextValue = e.target.value;
                       setMessage(nextValue);
@@ -1099,6 +1106,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                 {message.trim() && (
                   <Button 
                     onClick={handleSendMessage}
+                    disabled={isPendingConversation}
                     className="bg-transparent hover:bg-transparent text-primary p-0 h-auto text-sm md:text-base transition-all duration-300 hover:scale-110"
                   >
                     Send

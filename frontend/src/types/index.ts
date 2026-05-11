@@ -170,6 +170,7 @@ export interface ChatConversation {
   isOnline?: boolean;
   lastSeenAt?: string | null;
   isRequest?: boolean;
+  isPending?: boolean;
   isGroup?: boolean;
   groupMembers?: string[];
   groupMemberCount?: number;

@@ -2220,18 +2220,31 @@ export default function App() {
       return;
     }
 
-    // Avoid flashing the previously selected chat while the new conversation is created.
-    appData.selectConversation(null);
-
     if (!authToken || !currentUserId) {
       return;
     }
+
+    const student = students.find((item) => item.id === studentId);
+    const pendingChatId = `pending:${currentUserId}:${studentId}`;
+    appData.upsertConversation({
+      id: pendingChatId,
+      participantId: studentId,
+      participantName: student?.name ?? 'User',
+      participantAvatar: student?.avatar,
+      lastMessage: 'Opening chat...',
+      timestamp: new Date().toISOString(),
+      unread: 0,
+      isOnline: true,
+      isRequest: false,
+      isPending: true,
+    });
+    appData.selectConversation(pendingChatId);
 
     try {
       // Create/reuse server conversation without blocking the initial navigation.
       const { chatId } = await apiStartConversation(studentId, authToken);
 
-      const student = students.find((item) => item.id === studentId);
+      appData.removeConversation(pendingChatId);
       appData.upsertConversation({
         id: chatId,
         participantId: studentId,
@@ -2242,11 +2255,14 @@ export default function App() {
         unread: 0,
         isOnline: true,
         isRequest: false,
+        isPending: false,
       });
       appData.selectConversation(chatId);
       void appData.ensureConversationMessages(chatId);
       void refreshConversations();
     } catch (err: any) {
+      appData.removeConversation(pendingChatId);
+      appData.selectConversation(null);
       toast.error(err?.message || 'Failed to open chat');
     }
   };

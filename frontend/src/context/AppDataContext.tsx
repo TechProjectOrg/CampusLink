@@ -149,6 +149,7 @@ interface AppDataStore {
   reactToMessage: (chatId: string, messageId: string, emoji: string) => Promise<void>;
   deleteMessage: (chatId: string, messageId: string) => Promise<void>;
   upsertConversation: (conversation: ChatConversation) => void;
+  removeConversation: (chatId: string) => void;
   applyRealtimeEvent: (event: { type?: string; payload?: any }, currentUserId: string) => void;
 }
 
@@ -1380,6 +1381,40 @@ function createStore(): AppDataStore {
       ]);
       setConversations(nextConversations);
       void cacheConversationList(nextConversations as unknown as ConversationApiResponse[]);
+    },
+    removeConversation: (chatId) => {
+      if (!chatId) return;
+
+      const nextConversations = state.chat.conversationOrder
+        .map((id) => state.chat.conversationsById[id])
+        .filter((item): item is ChatConversation => Boolean(item) && item.id !== chatId);
+
+      setConversations(nextConversations);
+
+      setState((current) => {
+        const nextMessages = { ...current.chat.messagesByConversationId };
+        delete nextMessages[chatId];
+
+        const nextTyping = { ...current.chat.typingByConversationId };
+        delete nextTyping[chatId];
+
+        const nextRead = { ...current.chat.lastReadMessageIdByConversationId };
+        delete nextRead[chatId];
+
+        return {
+          ...current,
+          chat: {
+            ...current.chat,
+            messagesByConversationId: nextMessages,
+            typingByConversationId: nextTyping,
+            lastReadMessageIdByConversationId: nextRead,
+            selectedConversationId:
+              current.chat.selectedConversationId === chatId
+                ? null
+                : current.chat.selectedConversationId,
+          },
+        };
+      });
     },
     applyRealtimeEvent: (event, currentUserId) => {
       if (!event?.type || !event.payload) return;
