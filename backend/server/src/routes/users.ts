@@ -488,7 +488,8 @@ router.patch(
             weekly_digest_enabled,
             show_email,
             show_projects,
-            allow_messages
+            allow_messages,
+            updated_at
           )
           VALUES (
             ${userId},
@@ -500,7 +501,8 @@ router.patch(
             ${next.notifications.newPostAlerts},
             ${next.privacy.showEmail},
             ${next.privacy.showProjects},
-            ${next.privacy.allowMessages}
+            ${next.privacy.allowMessages},
+            now()
           )
           ON CONFLICT (user_id)
           DO UPDATE SET
@@ -512,7 +514,8 @@ router.patch(
             weekly_digest_enabled = EXCLUDED.weekly_digest_enabled,
             show_email = EXCLUDED.show_email,
             show_projects = EXCLUDED.show_projects,
-            allow_messages = EXCLUDED.allow_messages
+            allow_messages = EXCLUDED.allow_messages,
+            updated_at = now()
         `;
       });
 
