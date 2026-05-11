@@ -45,19 +45,19 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
   };
 
   return (
-    <nav className="sticky top-0 z-50 backdrop-blur-xl bg-gradient-to-r from-primary via-secondary to-primary shadow-lg animate-slide-in-down">
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="flex items-center gap-4 h-16">
+    <nav className="sticky top-0 z-50 w-full overflow-x-hidden backdrop-blur-xl bg-gradient-to-r from-primary via-secondary to-primary shadow-lg animate-slide-in-down">
+      <div className="cl-navbar-shell max-w-7xl mx-auto px-4">
+        <div className="cl-navbar-row flex items-center gap-4 h-16">
           {/* Logo */}
           <div className="flex items-center gap-2 flex-shrink-0 cursor-pointer" onClick={() => onTabChange('feed')}>
             <div className="bg-white/20 backdrop-blur-lg text-white rounded-xl p-2 shadow-lg hover-lift border border-white/30">
               <Users className="w-6 h-6" />
             </div>
-            <span className="text-white text-xl tracking-tight hidden sm:inline">CampusLynk</span>
+            <span className="cl-navbar-logo-text text-white text-xl tracking-tight hidden sm:inline">CampusLynk</span>
           </div>
 
           {/* Search Bar - Desktop */}
-          <div className="hidden md:flex flex-1 max-w-2xl mx-4">
+          <div className="cl-navbar-search hidden md:flex flex-1 max-w-2xl mx-4">
             <div className="relative w-full">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/70" />
               <Input
@@ -82,7 +82,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
                   key={item.id}
                   onClick={() => onTabChange(item.id)}
                   aria-label={item.label}
-                  className={`relative flex flex-col items-center justify-center gap-1 w-24 h-14 rounded-xl border transition-all duration-300 ${
+                  className={`cl-navbar-nav-button relative flex flex-col items-center justify-center gap-1 w-24 h-14 rounded-xl border transition-all duration-300 ${
                     isActive
                       ? 'text-white bg-white/20 shadow-lg border-white/30'
                       : 'text-white/80 border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20'
@@ -102,7 +102,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
             <button 
               onClick={() => onTabChange('notifications')}
               aria-label="Notifications"
-              className={`flex flex-col items-center justify-center gap-1 w-24 h-14 rounded-xl border relative transition-all duration-300 ${
+              className={`cl-navbar-nav-button flex flex-col items-center justify-center gap-1 w-24 h-14 rounded-xl border relative transition-all duration-300 ${
                 activeTab === 'notifications' ? 'text-white bg-white/20 shadow-lg border-white/30' : 'text-white/80 border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20'
               }`}
             >

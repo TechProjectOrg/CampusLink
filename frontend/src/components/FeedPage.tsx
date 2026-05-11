@@ -116,8 +116,7 @@ export function FeedPage({
                     }}
                   >
                     <CalendarPlus className="w-4 h-4" />
-                    <span className="hidden sm:inline text-sm font-medium">Create Event</span>
-                    <span className="sm:hidden text-[11px] font-medium">Event</span>
+                    <span className="text-[11px] sm:text-sm font-medium">Create Event</span>
                   </Button>
                   <Button
                     variant="ghost"
@@ -128,8 +127,7 @@ export function FeedPage({
                     }}
                   >
                     <BriefcaseBusiness className="w-4 h-4" />
-                    <span className="hidden sm:inline text-sm font-medium">Post Opportunity</span>
-                    <span className="sm:hidden text-[11px] font-medium">Opportunity</span>
+                    <span className="text-[11px] sm:text-sm font-medium">Post Opportunity</span>
                   </Button>
                 </div>
               </div>
