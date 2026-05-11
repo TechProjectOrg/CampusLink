@@ -129,7 +129,7 @@ export function FeedPage({
                   >
                     <BriefcaseBusiness className="cl-feed-action-icon-job w-4 h-4" />
                     <span className="cl-feed-action-label cl-feed-action-label-full text-[11px] sm:text-sm font-medium">Post Opportunity</span>
-                    <span className="cl-feed-action-label cl-feed-action-label-mobile text-[11px] sm:text-sm font-medium">Job</span>
+                    <span className="cl-feed-action-label cl-feed-action-label-mobile text-[11px] sm:text-sm font-medium">Opportunity</span>
                   </Button>
                 </div>
               </div>

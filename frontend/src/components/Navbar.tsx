@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Home, Search, Users, MessageCircle, BookOpen, User, Bell, Settings, LogOut, Menu, Grid3X3 } from 'lucide-react';
+import { Home, Search, Users, MessageCircle, BookOpen, User, Bell, Settings, LogOut, Menu } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
 import {
@@ -34,8 +34,8 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
   const mobileNavItems = [
     { id: 'feed', label: 'Home', icon: Home },
     { id: 'network', label: 'Network', icon: Users },
-    { id: 'search', label: 'Discover', icon: Search },
-    { id: 'clubs', label: 'Activity', icon: Grid3X3 },
+    { id: 'chat', label: 'Chat', icon: MessageCircle, badge: unreadCount },
+    { id: 'clubs', label: 'Clubs', icon: BookOpen },
   ];
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -261,7 +261,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
                 title={item.label}
                 className={`relative flex h-12 flex-1 max-w-[72px] items-center justify-center rounded-2xl transition-all duration-300 ${
                   isActive 
-                    ? 'text-white bg-white/25 scale-105 shadow-xl border border-white/40 backdrop-blur-sm' 
+                    ? 'cl-mobile-nav-active text-white bg-white/25 scale-105 shadow-xl border border-white/40 backdrop-blur-sm' 
                     : 'text-white/70 hover:text-white hover:bg-white/10 active:scale-95'
                 }`}
               >

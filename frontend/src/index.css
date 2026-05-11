@@ -4998,7 +4998,7 @@ div[style*="width: 25%"]::webkit-scrollbar {
   }
 
   .cl-feed-composer-top {
-    padding: 1rem 10.25rem .75rem 1.25rem;
+    padding: 1rem clamp(8.5rem, 38vw, 10.25rem) .75rem 1rem;
   }
 
   .cl-feed-composer-top [data-slot="avatar"],
@@ -5012,12 +5012,14 @@ div[style*="width: 25%"]::webkit-scrollbar {
   .cl-start-post-trigger {
     flex: 0 1 auto;
     min-height: 3.25rem;
+    min-width: 7.75rem;
     padding: 0 1.25rem;
     background: #f3f4f6;
     border: 0;
     color: #64748b;
     font-size: 1rem;
     font-weight: 600;
+    white-space: nowrap;
     box-shadow: none;
   }
 
@@ -5137,14 +5139,15 @@ div[style*="width: 25%"]::webkit-scrollbar {
 
   .cl-feed-action-button {
     min-width: 0;
-    gap: .25rem;
-    padding-left: .25rem;
-    padding-right: .25rem;
+    gap: .35rem;
+    padding-left: .35rem;
+    padding-right: .35rem;
   }
 
   .cl-feed-action-label {
-    font-size: 10px;
+    font-size: 11px;
     line-height: 1;
+    white-space: nowrap;
   }
 
   .cl-feed-action-label-full {
@@ -5309,7 +5312,8 @@ div[style*="width: 25%"]::webkit-scrollbar {
     transform: none;
   }
 
-  .cl-mobile-bottom-nav button:first-child {
+  .cl-mobile-bottom-nav button:first-child,
+  .cl-mobile-bottom-nav button.cl-mobile-nav-active {
     color: #155dfc;
   }
 
