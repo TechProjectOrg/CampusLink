@@ -1503,15 +1503,17 @@ export function ProfilePage({
           <div className={profileSectionCardClass}>
             <SectionHeader title="Experience" onAdd={() => setActiveModal('experience')} />
             {experiences.length > 0 ? (
-              <div className="flex flex-col gap-5">
+              <div className="flex flex-col gap-4">
                 {experiences.map((exp) => (
-                  <div key={exp.id} className="group relative border-l-2 border-blue-100 pl-5">
-                    <span className="absolute -left-[9px] top-1 h-4 w-4 rounded-full border-4 border-white bg-blue-500 shadow" />
+                  <div
+                    key={exp.id}
+                    className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4 shadow-sm transition-colors duration-200 hover:border-blue-200 hover:bg-white"
+                  >
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className="break-words font-semibold text-slate-950">{exp.roleTitle}</h3>
-                        <p className="text-sm text-slate-600">{exp.organization}</p>
-                        <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                      <div className="min-w-0">
+                        <h3 className="break-words text-lg font-semibold text-slate-900">{exp.roleTitle}</h3>
+                        <p className="mt-1 text-sm font-medium text-slate-600">{exp.organization}</p>
+                        <p className="mt-2 inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
                           {format(exp.startDate, 'MMM yyyy')} - {exp.isCurrentlyWorking ? 'Present' : exp.endDate ? format(exp.endDate, 'MMM yyyy') : 'Present'}
                         </p>
                       </div>
@@ -1521,7 +1523,7 @@ export function ProfilePage({
                         deleting={Boolean(pendingDeleteByKey[`experience:${exp.id}`])}
                       />
                     </div>
-                    {exp.description ? <p className="mt-2 text-sm leading-6 text-slate-600">{exp.description}</p> : null}
+                    {exp.description ? <p className="mt-3 text-sm leading-6 text-slate-700">{exp.description}</p> : null}
                   </div>
                 ))}
               </div>
