@@ -733,6 +733,44 @@ async function updateConversationListsForMeta(
   );
 }
 
+async function autoAcceptRequestOnReply(
+  chatId: string,
+  senderUserId: string,
+): Promise<void> {
+  const rows = await prisma.$queryRaw<
+    Array<{ is_request: boolean; created_by_user_id: string | null }>
+  >`
+    SELECT is_request, created_by_user_id
+    FROM chats
+    WHERE chat_id = ${chatId}
+    LIMIT 1
+  `;
+  const chat = rows[0];
+  if (!chat?.is_request) return;
+
+  // Auto-accept only when the non-creator replies to the request thread.
+  if (!chat.created_by_user_id || chat.created_by_user_id === senderUserId) return;
+
+  await markChatAccepted(chatId);
+  const participantIds = await getChatParticipantIds(chatId);
+
+  try {
+    await patchConversationMeta(chatId, (meta) => ({
+      ...meta,
+      isRequest: false,
+    }));
+  } catch (err) {
+    console.warn('Failed to patch request meta during auto-accept:', err);
+  }
+
+  await invalidateConversationLists(participantIds, ['active', 'requests']);
+  participantIds.forEach((participantId) => {
+    if (participantId !== senderUserId) {
+      emitChatRequestAccepted(participantId, chatId);
+    }
+  });
+}
+
 async function persistMessage(
   chatId: string,
   userId: string,
@@ -1004,6 +1042,8 @@ router.post(
         return res.status(403).json({ message: 'Not a participant' });
       }
 
+      await autoAcceptRequestOnReply(chatId, userId);
+
       const replyTo = await fetchReplyPreview(chatId, replyToMessageId);
       if (replyToMessageId && !replyTo) {
         return res
@@ -1067,6 +1107,8 @@ router.post(
       if (!(await isChatParticipant(userId, chatId))) {
         return res.status(403).json({ message: 'Not a participant' });
       }
+
+      await autoAcceptRequestOnReply(chatId, userId);
 
       const replyTo = await fetchReplyPreview(chatId, replyToMessageId);
       if (replyToMessageId && !replyTo) {
@@ -1351,6 +1393,52 @@ router.post('/requests/:chatId/accept', async (req: Request, res: Response) => {
     return res.status(200).json({ message: 'Request accepted' });
   } catch (err) {
     console.error('Error accepting request:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.post('/requests/:chatId/reject', async (req: Request, res: Response) => {
+  const authed = req as unknown as AuthedRequest;
+  const userId = authed.auth!.userId;
+  const chatId = req.params.chatId as string;
+
+  if (!isValidUUID(chatId)) {
+    return res.status(400).json({ message: 'Invalid chat ID format' });
+  }
+
+  try {
+    if (!(await isChatParticipant(userId, chatId))) {
+      return res.status(403).json({ message: 'Not a participant' });
+    }
+
+    const rows = await prisma.$queryRaw<Array<{ chat_id: string; is_request: boolean }>>`
+      SELECT chat_id, is_request
+      FROM chats
+      WHERE chat_id = ${chatId}
+      LIMIT 1
+    `;
+    const chat = rows[0];
+    if (!chat) {
+      return res.status(404).json({ message: 'Chat not found' });
+    }
+    if (!chat.is_request) {
+      return res.status(400).json({ message: 'Chat request is already accepted' });
+    }
+
+    const participantIds = await getChatParticipantIds(chatId);
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`
+        DELETE FROM chats
+        WHERE chat_id = ${chatId}
+      `;
+    });
+
+    await invalidateConversationLists(participantIds, ['active', 'requests']);
+    noteConversationActivity(chatId);
+
+    return res.status(200).json({ message: 'Request rejected' });
+  } catch (err) {
+    console.error('Error rejecting request:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });

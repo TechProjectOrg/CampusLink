@@ -1053,7 +1053,14 @@ function createStore(): AppDataStore {
 
       const request = (async () => {
         try {
-          const conversations = (await apiFetchConversations(authToken, 'active')) as ConversationApiResponse[];
+          const [activeConversations, requestConversations] = await Promise.all([
+            apiFetchConversations(authToken, 'active'),
+            apiFetchConversations(authToken, 'requests'),
+          ]);
+          const conversations = [
+            ...(activeConversations as ConversationApiResponse[]),
+            ...(requestConversations as ConversationApiResponse[]),
+          ];
           await cacheConversationList(conversations);
           const mapped = sortConversationsByTimestamp(conversations as ChatConversation[]);
           const users = mapped
@@ -1392,6 +1399,41 @@ function createStore(): AppDataStore {
           currentUserId,
         );
         setConversations(mergedConversations);
+        if (!existingConversations.some((conversation) => conversation.id === payload.chatId)) {
+          void apiFetchConversations(authToken ?? '', 'requests')
+            .then((requests) => {
+              const withIncoming = sortConversationsByTimestamp([
+                ...mergedConversations,
+                ...(requests as ChatConversation[]).filter(
+                  (conversation) => !mergedConversations.some((current) => current.id === conversation.id),
+                ),
+              ]);
+              setConversations(withIncoming);
+            })
+            .catch(() => {
+              // Ignore optimistic refresh failures; a normal refresh will correct state.
+            });
+        }
+        return;
+      }
+
+      if (event.type === 'chat:request_accepted') {
+        void (async () => {
+          if (!authToken) return;
+          try {
+            const [activeConversations, requestConversations] = await Promise.all([
+              apiFetchConversations(authToken, 'active'),
+              apiFetchConversations(authToken, 'requests'),
+            ]);
+            const merged = sortConversationsByTimestamp([
+              ...(activeConversations as ChatConversation[]),
+              ...(requestConversations as ChatConversation[]),
+            ]);
+            setConversations(merged);
+          } catch {
+            // Ignore transient sync errors.
+          }
+        })();
         return;
       }
 

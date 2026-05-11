@@ -115,6 +115,10 @@ export function PostPage({
     () => (post.comments ?? []).filter((comment) => !comment.parentCommentId),
     [post.comments],
   );
+  const visibleTags = useMemo(
+    () => (post.tags ?? []).filter((tag) => tag.trim().toLowerCase() !== 'general'),
+    [post.tags],
+  );
 
   const parentCommentById = useMemo(() => {
     const parentMap = new Map<string, string | null>();
@@ -306,9 +310,11 @@ export function PostPage({
                 <p className="text-sm text-gray-500">{new Date(post.date).toLocaleString()}</p>
               </div>
             </button>
-            <Badge className={`${typeColors[post.type]} border ml-auto`}>
-              {post.type.charAt(0).toUpperCase() + post.type.slice(1)}
-            </Badge>
+            {post.type !== 'general' ? (
+              <Badge className={`${typeColors[post.type]} border ml-auto`}>
+                {post.type.charAt(0).toUpperCase() + post.type.slice(1)}
+              </Badge>
+            ) : null}
           </div>
 
           <div className="space-y-2">
@@ -330,9 +336,9 @@ export function PostPage({
             {post.link && <div className="break-all">Link: {post.link}</div>}
           </div>
 
-          {post.tags && post.tags.length > 0 && (
+          {visibleTags.length > 0 && (
             <div className="flex flex-wrap gap-2">
-              {post.tags.map((tag) => (
+              {visibleTags.map((tag) => (
                 <Badge key={`${post.id}-${tag}`} className="bg-primary/10 text-primary border-primary/20">
                   #{tag}
                 </Badge>
