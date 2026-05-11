@@ -4998,7 +4998,10 @@ div[style*="width: 25%"]::webkit-scrollbar {
   }
 
   .cl-feed-composer-top {
-    padding: 1rem clamp(8.5rem, 38vw, 10.25rem) .75rem 1rem;
+    align-items: center;
+    gap: .75rem;
+    min-height: 5.75rem;
+    padding: 1rem clamp(8rem, 36vw, 9.75rem) .75rem 1rem;
   }
 
   .cl-feed-composer-top [data-slot="avatar"],
@@ -5011,9 +5014,9 @@ div[style*="width: 25%"]::webkit-scrollbar {
 
   .cl-start-post-trigger {
     flex: 0 1 auto;
-    min-height: 3.25rem;
-    min-width: 7.75rem;
-    padding: 0 1.25rem;
+    min-height: 3.625rem;
+    min-width: 8.25rem;
+    padding: 0 1.375rem;
     background: #f3f4f6;
     border: 0;
     color: #64748b;
@@ -5024,14 +5027,17 @@ div[style*="width: 25%"]::webkit-scrollbar {
   }
 
   .cl-feed-action-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     border-top: 0;
     border-bottom: 1px solid #e5e7eb;
     gap: .625rem;
-    padding: .75rem 1.25rem .875rem;
+    padding: .75rem 1rem .875rem;
   }
 
   .cl-feed-action-button {
     height: 3rem;
+    width: 100%;
+    min-width: 0;
     border-color: #cbd5e1;
     border-radius: .625rem;
     box-shadow: none;
@@ -5139,13 +5145,14 @@ div[style*="width: 25%"]::webkit-scrollbar {
 
   .cl-feed-action-button {
     min-width: 0;
-    gap: .35rem;
-    padding-left: .35rem;
-    padding-right: .35rem;
+    gap: .375rem;
+    padding-left: .25rem;
+    padding-right: .25rem;
   }
 
   .cl-feed-action-label {
-    font-size: 11px;
+    min-width: 0;
+    font-size: clamp(10px, 2.8vw, 11px);
     line-height: 1;
     white-space: nowrap;
   }
@@ -5239,12 +5246,13 @@ div[style*="width: 25%"]::webkit-scrollbar {
   .cl-navbar-row:has(.cl-mobile-top-action) {
     display: flex;
     position: absolute;
-    top: .75rem;
-    right: .75rem;
+    top: 1.05rem;
+    right: .85rem;
     z-index: 60;
     width: auto;
-    height: auto;
+    height: 3.625rem;
     gap: .25rem;
+    align-items: center;
     justify-content: flex-end;
     pointer-events: none;
   }
@@ -5261,8 +5269,8 @@ div[style*="width: 25%"]::webkit-scrollbar {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 2.25rem;
-    height: 2.25rem;
+    width: 2rem;
+    height: 2rem;
     color: #475569;
     background: transparent;
     border: 0;
@@ -5274,6 +5282,11 @@ div[style*="width: 25%"]::webkit-scrollbar {
   .cl-mobile-top-action:focus-visible {
     background: transparent;
     color: #155dfc;
+  }
+
+  .cl-mobile-top-action svg {
+    width: 1.35rem;
+    height: 1.35rem;
   }
 
   .cl-mobile-top-action [data-slot="badge"] {
@@ -5305,16 +5318,19 @@ div[style*="width: 25%"]::webkit-scrollbar {
     height: 3.5rem;
     flex-direction: column;
     gap: .125rem;
-    color: #334155;
+    color: #155dfc;
     border: 0;
     background: transparent;
     box-shadow: none;
     transform: none;
   }
 
-  .cl-mobile-bottom-nav button:first-child,
   .cl-mobile-bottom-nav button.cl-mobile-nav-active {
-    color: #155dfc;
+    color: #0f172a;
+    background: transparent;
+    border: 0;
+    box-shadow: none;
+    transform: none;
   }
 
   .cl-mobile-bottom-nav button svg {

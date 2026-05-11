@@ -175,60 +175,62 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
 
 
 
-          {/* Search Icon - Mobile */}
-          <button 
-            onClick={handleSearchFocus}
-            aria-label="Search"
-            className="cl-mobile-top-action md:hidden p-2 rounded-xl relative transition-all duration-300 hover:scale-110 ml-auto"
-          >
-            <Search className="w-5 h-5" />
-          </button>
-
-          {/* Notifications - Mobile */}
-          <button 
-            onClick={() => onTabChange('notifications')}
-            aria-label="Notifications"
-            className={`cl-mobile-top-action md:hidden p-2 rounded-xl relative transition-all duration-300 hover:scale-110 ${
-              activeTab === 'notifications' ? 'bg-primary/10' : ''
-            }`}
-          >
-            <Bell className="w-5 h-5" />
-            {unreadNotifications > 0 && (
-              <Badge className="absolute -top-1 -right-1 bg-destructive text-white px-1 py-0 min-w-4 h-4 flex items-center justify-center text-xs animate-pulse">
-                {unreadNotifications}
-              </Badge>
-            )}
-          </button>
-
-          {/* More Menu - Mobile */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                aria-label="Open navigation menu"
-                className="cl-mobile-top-action md:hidden p-2 rounded-xl transition-all duration-300 hover:scale-110"
+          {activeTab === 'feed' && (
+            <>
+              {/* Search Icon - Mobile */}
+              <button 
+                onClick={handleSearchFocus}
+                aria-label="Search"
+                className="cl-mobile-top-action md:hidden p-2 rounded-xl relative transition-all duration-300 hover:scale-110 ml-auto"
               >
-                <Menu className="w-5 h-5" />
+                <Search className="w-5 h-5" />
               </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-52" align="end">
-              <DropdownMenuItem onClick={() => onTabChange('profile')}>
-                <User className="mr-2 h-4 w-4" />
-                <span>Profile</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onTabChange('settings')}>
-                <Settings className="mr-2 h-4 w-4" />
-                <span>Settings</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={logout}
-                className="text-red-600 focus:text-red-600 focus:bg-red-50"
+
+              {/* Notifications - Mobile */}
+              <button 
+                onClick={() => onTabChange('notifications')}
+                aria-label="Notifications"
+                className="cl-mobile-top-action md:hidden p-2 rounded-xl relative transition-all duration-300 hover:scale-110"
               >
-                <LogOut className="mr-2 h-4 w-4" />
-                <span>Sign Out</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <Bell className="w-5 h-5" />
+                {unreadNotifications > 0 && (
+                  <Badge className="absolute -top-1 -right-1 bg-destructive text-white px-1 py-0 min-w-4 h-4 flex items-center justify-center text-xs animate-pulse">
+                    {unreadNotifications}
+                  </Badge>
+                )}
+              </button>
+
+              {/* More Menu - Mobile */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    aria-label="Open navigation menu"
+                    className="cl-mobile-top-action md:hidden p-2 rounded-xl transition-all duration-300 hover:scale-110"
+                  >
+                    <Menu className="w-5 h-5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-52" align="end">
+                  <DropdownMenuItem onClick={() => onTabChange('profile')}>
+                    <User className="mr-2 h-4 w-4" />
+                    <span>Profile</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onTabChange('settings')}>
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Settings</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={logout}
+                    className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Sign Out</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          )}
         </div>
 
         {/* Mobile Search Bar */}
