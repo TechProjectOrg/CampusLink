@@ -886,7 +886,7 @@ export function ProfilePage({
             title: created.title,
             contentText: created.description,
             externalUrl: created.demoUrl ?? created.sourceUrl ?? undefined,
-            hashtags: Array.from(new Set(['project', ...(created.tags ?? [])])),
+            hashtags: Array.from(new Set(['project', `project-${created.id}`, ...(created.tags ?? [])])),
             media: created.imageUrl
               ? [{ mediaUrl: created.imageUrl, mediaType: 'image', sortOrder: 0 }]
               : [],

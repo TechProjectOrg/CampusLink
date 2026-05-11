@@ -16,6 +16,7 @@ import {
   getPostFeedRecipientIds,
   invalidateUserFeedCache,
   refreshPostCaches,
+  removePostFromCaches,
 } from '../lib/feedCache';
 import {
   getCachedClubPermissionSnapshot,
@@ -1649,19 +1650,113 @@ router.delete(
     const { userId, projectId } = req.params;
 
     try {
-      const result = await prisma.$queryRaw<{ count: number }[]>`
+      const result = await prisma.$queryRaw<
+        {
+          project_id: string;
+          title: string;
+          description: string;
+          source_url: string | null;
+          demo_url: string | null;
+          image_url: string | null;
+        }[]
+      >`
         WITH deleted AS (
           DELETE FROM user_projects
           WHERE user_id = ${userId} AND project_id = ${projectId}
-          RETURNING 1
+          RETURNING project_id, title, description, source_url, demo_url, image_url
         )
-        SELECT COUNT(*)::int AS count FROM deleted
+        SELECT project_id, title, description, source_url, demo_url, image_url
+        FROM deleted
+        LIMIT 1
       `;
 
-      const count = result[0]?.count ?? 0;
-      if (count === 0) {
+      const deletedProject = result[0];
+      if (!deletedProject) {
         return res.status(404).json({ message: 'Project not found' });
       }
+
+      const linkedPostRows = await prisma.$queryRaw<{ post_id: string }[]>`
+        SELECT p.post_id
+        FROM posts p
+        JOIN post_hashtags ph ON ph.post_id = p.post_id
+        JOIN hashtags h ON h.hashtag_id = ph.hashtag_id
+        WHERE p.author_user_id = ${userId}
+          AND h.tag_name = ${`project-${projectId}`}
+        LIMIT 1
+      `;
+      let linkedPostId = linkedPostRows[0]?.post_id ?? null;
+
+      if (!linkedPostId) {
+        const signatureRows = await prisma.$queryRaw<{ post_id: string }[]>`
+          SELECT p.post_id
+          FROM posts p
+          LEFT JOIN post_media pm ON pm.post_id = p.post_id
+          WHERE p.author_user_id = ${userId}
+            AND p.title = ${deletedProject.title}
+            AND p.content_text = ${deletedProject.description}
+            AND (
+              (${deletedProject.demo_url ?? deletedProject.source_url}::text IS NULL AND p.external_url IS NULL)
+              OR p.external_url = ${deletedProject.demo_url ?? deletedProject.source_url}
+            )
+            AND (
+              ${deletedProject.image_url ?? null}::text IS NULL
+              OR pm.media_url = ${deletedProject.image_url ?? null}
+            )
+            AND EXISTS(
+              SELECT 1
+              FROM post_hashtags ph
+              JOIN hashtags h ON h.hashtag_id = ph.hashtag_id
+              WHERE ph.post_id = p.post_id
+                AND h.tag_name = 'project'
+            )
+          LIMIT 1
+        `;
+        linkedPostId = signatureRows[0]?.post_id ?? null;
+      }
+
+      if (linkedPostId) {
+        const postRows = await prisma.$queryRaw<
+          Array<{ author_user_id: string; club_id: string | null }>
+        >`
+          SELECT author_user_id, club_id
+          FROM posts
+          WHERE post_id = ${linkedPostId}
+          LIMIT 1
+        `;
+        const post = postRows[0];
+
+        if (post && post.author_user_id === userId) {
+          const mediaRows = await prisma.$queryRaw<{ media_url: string }[]>`
+            SELECT media_url
+            FROM post_media
+            WHERE post_id = ${linkedPostId}
+          `;
+          const recipients = await getPostFeedRecipientIds(linkedPostId);
+
+          await prisma.$queryRaw`
+            DELETE FROM posts
+            WHERE post_id = ${linkedPostId}
+          `;
+          await removePostFromCaches(linkedPostId, recipients);
+          if (post.club_id) {
+            await invalidateClubFeedCaches(post.club_id);
+            await incrementClubStat(post.club_id, 'postCount', -1);
+          }
+          emitFeedEvent(recipients, {
+            type: 'feed:post_deleted',
+            payload: { postId: linkedPostId, deletedAt: new Date().toISOString() },
+          });
+
+          await Promise.allSettled(
+            mediaRows.map(async (item) => {
+              await deleteManagedPostMediaByUrl(item.media_url);
+            }),
+          );
+          await incrementUserStat(userId, 'postCount', -1);
+        }
+      }
+
+      await deleteManagedPostMediaByUrl(deletedProject.image_url);
 
       return res.status(204).send();
     } catch (err) {
