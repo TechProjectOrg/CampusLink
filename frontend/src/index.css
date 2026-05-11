@@ -5112,16 +5112,16 @@ div[style*="width: 25%"]::webkit-scrollbar {
     max-width: 56px;
     margin-left: .25rem;
     margin-right: .25rem;
-    overflow: hidden;
   }
 
-  .cl-navbar-search input {
-    color: transparent;
-    caret-color: white;
+  .cl-navbar-search-field {
+    display: none;
   }
 
-  .cl-navbar-search input::placeholder {
-    color: transparent;
+  .cl-navbar-tablet-search-button {
+    display: inline-flex;
+    width: 56px;
+    height: 50px;
   }
 
   .cl-navbar-nav-button {

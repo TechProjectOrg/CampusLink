@@ -58,7 +58,15 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
 
           {/* Search Bar - Desktop */}
           <div className="cl-navbar-search hidden md:flex flex-1 max-w-2xl mx-4">
-            <div className="relative w-full">
+            <button
+              type="button"
+              onClick={handleSearchFocus}
+              aria-label="Search"
+              className="cl-navbar-tablet-search-button hidden items-center justify-center rounded-2xl bg-white/20 backdrop-blur-lg border border-white/30 text-white transition-all duration-300 hover:bg-white/25 focus:bg-white/30 focus:border-white/50"
+            >
+              <Search className="w-5 h-5" />
+            </button>
+            <div className="cl-navbar-search-field relative w-full">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/70" />
               <Input
                 type="text"
