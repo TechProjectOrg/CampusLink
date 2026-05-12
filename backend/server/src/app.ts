@@ -9,6 +9,7 @@ import notificationsRouter from './routes/notifications';
 import chatRouter from './routes/chat';
 import clubsRouter from './routes/clubs';
 import groupChatRouter from './routes/groupChat';
+import adminRouter from './routes/admin';
 import cors from 'cors';
 
 const app: Application = express();
@@ -64,5 +65,6 @@ app.use('/notifications', notificationsRouter);
 app.use('/chat', chatRouter);
 app.use('/clubs', clubsRouter);
 app.use('/group-chat', groupChatRouter);
+app.use('/admin', adminRouter);
 
 export default app;

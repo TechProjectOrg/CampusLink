@@ -4,6 +4,7 @@ import prisma from '../prisma';
 import { getUserProfileById } from '../services/userProfile';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
 import { hashPassword, signPasswordChangeToken, verifyPassword, verifyPasswordChangeToken } from '../lib/auth';
+import { setAdminMustChangePassword } from '../lib/admin';
 import {
   deleteManagedPhotoByUrl,
   deleteManagedPostMediaByUrl,
@@ -922,6 +923,10 @@ router.patch(
         SET password_hash = ${hashPassword(newPassword)}, updated_at = NOW()
         WHERE user_id = ${userId}
       `;
+
+      await setAdminMustChangePassword(userId, false).catch(() => {
+        // Not all users are admins; ignore when no admin account exists.
+      });
 
       return res.status(200).json({ message: 'Password updated successfully' });
     } catch (err) {
