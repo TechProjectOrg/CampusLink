@@ -1,4 +1,4 @@
-About 60% of the admin UI is truly implemented as a usable MVP, and about 40% is still partial, simplified, or demo-level.
+bout 60% of the admin UI is truly implemented as a usable MVP, and about 40% is still partial, simplified, or demo-level.
 
 What’s genuinely done
 

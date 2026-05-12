@@ -161,6 +161,23 @@ function EmptyPanel({ title, body }: { title: string; body: string }) {
   );
 }
 
+function SessionLoadingScreen() {
+  return (
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center">
+      <div className="text-center">
+        <div className="inline-flex items-center justify-center mb-6">
+          <div className="relative w-16 h-16">
+            <div className="absolute inset-0 rounded-full border-4 border-slate-200"></div>
+            <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-slate-900 border-r-slate-900 animate-spin"></div>
+          </div>
+        </div>
+        <p className="text-lg font-semibold text-slate-900">Verifying session...</p>
+        <p className="mt-2 text-sm text-slate-600">Restoring your admin dashboard</p>
+      </div>
+    </div>
+  );
+}
+
 function AdminLogin({
   onLogin,
   isLoading,
@@ -478,6 +495,10 @@ export default function AdminRoot() {
   if (!token || !admin) {
     return <AdminLogin onLogin={handleLogin} isLoading={authLoading} error={authError} />;
   }
+    // Show loading screen while verifying existing session
+    if (authLoading && token) {
+      return <SessionLoadingScreen />;
+    }
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
