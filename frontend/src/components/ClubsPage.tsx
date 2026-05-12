@@ -41,12 +41,12 @@ export function ClubsPage({ students, currentUserId, initialClubSlug = null, onC
 
   useEffect(() => {
     let isMounted = true;
+    setIsLoading(true);
     void (async () => {
       const key = cacheKeys.list.clubs();
       const cached = await readCachedClubsList(key);
       if (isMounted && cached.length > 0) {
         setClubs(cached);
-        setIsLoading(false);
       }
 
       try {
@@ -55,20 +55,14 @@ export function ClubsPage({ students, currentUserId, initialClubSlug = null, onC
         if (isMounted) {
           setClubs(items);
           setError(null);
-          setIsLoading(false);
         }
       } catch (err) {
         if (isMounted) {
-          if (cached.length === 0) {
-            setError(err instanceof Error ? err.message : 'Unable to load clubs');
-            setIsLoading(false);
-          }
+          setError(err instanceof Error ? err.message : 'Unable to load clubs');
         }
       } finally {
         if (isMounted) {
-          if (cached.length === 0) {
-            setIsLoading(false);
-          }
+          setIsLoading(false);
         }
       }
     })();
@@ -112,19 +106,15 @@ export function ClubsPage({ students, currentUserId, initialClubSlug = null, onC
     );
   }
 
-  if (isLoading) {
-    return <LoadingState type="page" />;
-  }
-
   return (
     <PageLayout maxWidth="6xl" contentClassName="px-4 py-6 md:px-6 md:py-8 space-y-6 md:space-y-8">
-        <div className="animate-slide-in-down flex items-end justify-between gap-3">
+        <div className="animate-slide-in-down flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-3">
           <div>
             <h1 className="text-3xl md:text-4xl text-gray-900 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">Campus Clubs</h1>
             <p className="text-gray-600 mt-2 text-sm md:text-base">Join clubs and groups to connect with like-minded peers.</p>
           </div>
-          <Button onClick={() => setIsCreateModalOpen(true)} className="bg-gradient-to-r from-primary to-secondary hover:shadow-xl transition-all duration-300 shrink-0">
-            <Users className="w-4 h-4 mr-2" />
+          <Button onClick={() => setIsCreateModalOpen(true)} className="w-full md:w-auto h-12 md:h-10 text-base md:text-sm mt-2 md:mt-0 rounded-xl md:rounded-md bg-gradient-to-r from-primary to-secondary hover:shadow-xl transition-all duration-300 shrink-0">
+            <Users className="w-5 h-5 md:w-4 md:h-4 mr-2" />
             Create Club
           </Button>
         </div>
