@@ -181,7 +181,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
               <button 
                 onClick={handleSearchFocus}
                 aria-label="Search"
-                className="cl-mobile-top-action md:hidden p-2 rounded-xl relative transition-all duration-300 hover:scale-110 ml-auto"
+                className="cl-mobile-top-action md:hidden p-2 rounded-xl relative transition-all duration-300 hover:scale-110"
               >
                 <Search className="w-5 h-5" />
               </button>
