@@ -481,8 +481,10 @@ export default function AdminRoot() {
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
-      <div className="flex min-h-screen">
-        <aside className={`${collapsed ? 'w-[84px]' : 'w-[246px]'} fixed inset-y-0 left-0 z-30 border-r border-slate-200 bg-slate-50 transition-all duration-200`}>
+      <aside
+        style={{ width: collapsed ? 84 : 246 }}
+        className="fixed inset-y-0 left-0 z-30 border-r border-slate-200 bg-slate-50 transition-all duration-200"
+      >
           <div className="flex h-full flex-col">
             <div className="border-b border-slate-200 px-4 py-4">
               <div className="flex items-center justify-between">
@@ -536,7 +538,10 @@ export default function AdminRoot() {
           </div>
         </aside>
 
-        <div className={`flex-1 ${collapsed ? 'ml-[84px]' : 'ml-[246px]'}`}>
+        <div
+          style={{ marginLeft: collapsed ? 84 : 246 }}
+          className="min-h-screen transition-all duration-200"
+        >
           <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
             <div className="flex items-center gap-4 px-6 py-4">
               <div className="min-w-0 flex-1">
@@ -1104,7 +1109,6 @@ export default function AdminRoot() {
             ) : null}
           </main>
         </div>
-      </div>
 
       <RightDrawer
         open={Boolean(selectedUser && selectedUserDetail)}

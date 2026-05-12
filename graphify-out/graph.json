@@ -21822,8 +21822,8 @@
       "source_file": "frontend\\src\\context\\AuthContext.tsx",
       "source_location": "L61",
       "weight": 1.0,
-      "_src": "authcontext_handoffadminsession",
-      "_tgt": "session_writeadminsession",
+      "_src": "session_writeadminsession",
+      "_tgt": "authcontext_handoffadminsession",
       "source": "session_writeadminsession",
       "target": "authcontext_handoffadminsession"
     },
