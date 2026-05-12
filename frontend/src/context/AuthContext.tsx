@@ -15,6 +15,7 @@ import {
   writeStoredSession,
   type StoredAuthSession,
 } from '../lib/authStorage';
+import { clearAdminSession, writeAdminSession } from '../admin/session';
 
 interface AuthContextValue {
   isLoading: boolean;
@@ -34,8 +35,6 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function profileToStudent(profile: ApiUserProfile): Student {
-  const seed = encodeURIComponent(profile.username || profile.email || profile.userId);
-
   return {
     id: profile.userId,
     name: profile.username,
@@ -55,6 +54,15 @@ function profileToStudent(profile: ApiUserProfile): Student {
   };
 }
 
+function handOffAdminSession(profile: ApiUserProfile, token?: string): boolean {
+  if (!profile.adminAccess || !token) return false;
+
+  clearStoredSession();
+  writeAdminSession({ token });
+  window.location.replace('/admin');
+  return true;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [session, setSession] = useState<StoredAuthSession | null>(null);
@@ -67,6 +75,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [profile]);
 
   const persistAndSet = (nextProfile: ApiUserProfile, token?: string) => {
+    if (handOffAdminSession(nextProfile, token)) {
+      return;
+    }
+
     const nextSession: StoredAuthSession = {
       userId: nextProfile.userId,
       token,
@@ -79,6 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = () => {
     clearStoredSession();
+    clearAdminSession();
     setSession(null);
     setProfile(null);
   };
@@ -126,6 +139,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       try {
         const p = await apiFetchUserProfile(stored.userId, stored.token);
+        if (handOffAdminSession(p, stored.token)) {
+          return;
+        }
         setProfile(p);
       } catch {
         // Session is invalid/expired or user no longer exists.

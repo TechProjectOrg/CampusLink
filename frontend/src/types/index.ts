@@ -242,6 +242,11 @@ export interface ApiUserProfile {
     followingCount: number;
     postCount: number;
   };
+  adminAccess?: {
+    role: 'super_admin';
+    mustChangePassword: boolean;
+    lastLoginAt: string | null;
+  } | null;
 }
 
 export interface ApiUserSession {
