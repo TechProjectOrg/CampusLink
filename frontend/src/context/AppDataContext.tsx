@@ -149,6 +149,7 @@ interface AppDataStore {
   reactToMessage: (chatId: string, messageId: string, emoji: string) => Promise<void>;
   deleteMessage: (chatId: string, messageId: string) => Promise<void>;
   upsertConversation: (conversation: ChatConversation) => void;
+  removeConversation: (chatId: string) => void;
   applyRealtimeEvent: (event: { type?: string; payload?: any }, currentUserId: string) => void;
 }
 
@@ -238,6 +239,7 @@ export function apiProfileToStudent(profile: ApiUserProfile): Student {
     achievements: [],
     projects: [],
     accountType: profile.isPublic ? 'public' : 'private',
+    stats: profile.stats,
   };
 }
 
@@ -294,6 +296,7 @@ function mergeStudents(current: Student | undefined, incoming: Student): Student
     achievements:
       incomingAchievements.length > 0 ? incomingAchievements : current?.achievements ?? [],
     projects: incomingProjects.length > 0 ? incomingProjects : current?.projects ?? [],
+    stats: incoming.stats ?? current?.stats,
   };
 }
 
@@ -786,13 +789,20 @@ function createStore(): AppDataStore {
         };
       }
 
+      const conversationOrder = sortConversationsByTimestamp(conversations).map((conversation) => conversation.id);
+      const selectedConversationId =
+        current.chat.selectedConversationId && conversationOrder.includes(current.chat.selectedConversationId)
+          ? current.chat.selectedConversationId
+          : null;
+
       return {
         ...current,
         chat: {
           ...current.chat,
           conversationsById,
           presenceByUserId,
-          conversationOrder: sortConversationsByTimestamp(conversations).map((conversation) => conversation.id),
+          conversationOrder,
+          selectedConversationId,
           listLastFetchedAt: Date.now(),
           isListHydrated: true,
           isListRefreshing: false,
@@ -1053,7 +1063,14 @@ function createStore(): AppDataStore {
 
       const request = (async () => {
         try {
-          const conversations = (await apiFetchConversations(authToken, 'active')) as ConversationApiResponse[];
+          const [activeConversations, requestConversations] = await Promise.all([
+            apiFetchConversations(authToken, 'active'),
+            apiFetchConversations(authToken, 'requests'),
+          ]);
+          const conversations = [
+            ...(activeConversations as ConversationApiResponse[]),
+            ...(requestConversations as ConversationApiResponse[]),
+          ];
           await cacheConversationList(conversations);
           const mapped = sortConversationsByTimestamp(conversations as ChatConversation[]);
           const users = mapped
@@ -1367,6 +1384,40 @@ function createStore(): AppDataStore {
       setConversations(nextConversations);
       void cacheConversationList(nextConversations as unknown as ConversationApiResponse[]);
     },
+    removeConversation: (chatId) => {
+      if (!chatId) return;
+
+      const nextConversations = state.chat.conversationOrder
+        .map((id) => state.chat.conversationsById[id])
+        .filter((item): item is ChatConversation => Boolean(item) && item.id !== chatId);
+
+      setConversations(nextConversations);
+
+      setState((current) => {
+        const nextMessages = { ...current.chat.messagesByConversationId };
+        delete nextMessages[chatId];
+
+        const nextTyping = { ...current.chat.typingByConversationId };
+        delete nextTyping[chatId];
+
+        const nextRead = { ...current.chat.lastReadMessageIdByConversationId };
+        delete nextRead[chatId];
+
+        return {
+          ...current,
+          chat: {
+            ...current.chat,
+            messagesByConversationId: nextMessages,
+            typingByConversationId: nextTyping,
+            lastReadMessageIdByConversationId: nextRead,
+            selectedConversationId:
+              current.chat.selectedConversationId === chatId
+                ? null
+                : current.chat.selectedConversationId,
+          },
+        };
+      });
+    },
     applyRealtimeEvent: (event, currentUserId) => {
       if (!event?.type || !event.payload) return;
 
@@ -1392,6 +1443,41 @@ function createStore(): AppDataStore {
           currentUserId,
         );
         setConversations(mergedConversations);
+        if (!existingConversations.some((conversation) => conversation.id === payload.chatId)) {
+          void apiFetchConversations(authToken ?? '', 'requests')
+            .then((requests) => {
+              const withIncoming = sortConversationsByTimestamp([
+                ...mergedConversations,
+                ...(requests as ChatConversation[]).filter(
+                  (conversation) => !mergedConversations.some((current) => current.id === conversation.id),
+                ),
+              ]);
+              setConversations(withIncoming);
+            })
+            .catch(() => {
+              // Ignore optimistic refresh failures; a normal refresh will correct state.
+            });
+        }
+        return;
+      }
+
+      if (event.type === 'chat:request_accepted') {
+        void (async () => {
+          if (!authToken) return;
+          try {
+            const [activeConversations, requestConversations] = await Promise.all([
+              apiFetchConversations(authToken, 'active'),
+              apiFetchConversations(authToken, 'requests'),
+            ]);
+            const merged = sortConversationsByTimestamp([
+              ...(activeConversations as ChatConversation[]),
+              ...(requestConversations as ChatConversation[]),
+            ]);
+            setConversations(merged);
+          } catch {
+            // Ignore transient sync errors.
+          }
+        })();
         return;
       }
 

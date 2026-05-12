@@ -989,8 +989,16 @@ router.delete('/posts/:postId', async (req: Request<{ postId: string }>, res: Re
   const { postId } = req.params;
 
   try {
-    const postRows = await prisma.$queryRaw<Array<{ author_user_id: string; club_id: string | null }>>`
-      SELECT author_user_id, club_id
+    const postRows = await prisma.$queryRaw<
+      Array<{
+        author_user_id: string;
+        club_id: string | null;
+        title: string | null;
+        content_text: string | null;
+        external_url: string | null;
+      }>
+    >`
+      SELECT author_user_id, club_id, title, content_text, external_url
       FROM posts
       WHERE post_id = ${postId}
       LIMIT 1
@@ -1006,6 +1014,49 @@ router.delete('/posts/:postId', async (req: Request<{ postId: string }>, res: Re
       FROM post_media
       WHERE post_id = ${postId}
     `;
+    const linkedProjectTagRows = await prisma.$queryRaw<{ tag_name: string }[]>`
+      SELECT h.tag_name
+      FROM post_hashtags ph
+      JOIN hashtags h ON h.hashtag_id = ph.hashtag_id
+      WHERE ph.post_id = ${postId}
+        AND h.tag_name LIKE 'project-%'
+      LIMIT 1
+    `;
+    const linkedProjectId = linkedProjectTagRows[0]?.tag_name?.startsWith('project-')
+      ? linkedProjectTagRows[0].tag_name.slice('project-'.length)
+      : null;
+
+    let linkedProjectRow: { project_id: string; image_url: string | null } | undefined;
+    if (linkedProjectId) {
+      const projectRows = await prisma.$queryRaw<{ project_id: string; image_url: string | null }[]>`
+        SELECT project_id, image_url
+        FROM user_projects
+        WHERE user_id = ${viewerUserId}
+          AND project_id = ${linkedProjectId}
+        LIMIT 1
+      `;
+      linkedProjectRow = projectRows[0];
+    } else {
+      const signatureRows = await prisma.$queryRaw<{ project_id: string; image_url: string | null }[]>`
+        SELECT project_id, image_url
+        FROM user_projects
+        WHERE user_id = ${viewerUserId}
+          AND title = ${post.title}
+          AND description = ${post.content_text}
+          AND (
+            (${post.external_url}::text IS NULL AND source_url IS NULL AND demo_url IS NULL)
+            OR source_url = ${post.external_url}
+            OR demo_url = ${post.external_url}
+          )
+          AND (
+            ${mediaRows[0]?.media_url ?? null}::text IS NULL
+            OR image_url = ${mediaRows[0]?.media_url ?? null}
+          )
+        LIMIT 1
+      `;
+      linkedProjectRow = signatureRows[0];
+    }
+
     const recipients = await getPostFeedRecipientIds(postId);
 
     await prisma.$queryRaw`
@@ -1027,6 +1078,15 @@ router.delete('/posts/:postId', async (req: Request<{ postId: string }>, res: Re
         await deleteManagedPostMediaByUrl(item.media_url);
       }),
     );
+
+    if (linkedProjectRow) {
+      await prisma.$queryRaw`
+        DELETE FROM user_projects
+        WHERE project_id = ${linkedProjectRow.project_id}
+      `;
+      await deleteManagedPostMediaByUrl(linkedProjectRow.image_url);
+    }
+
     await incrementUserStat(viewerUserId, 'postCount', -1);
 
     return res.status(204).send();

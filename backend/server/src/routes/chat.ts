@@ -67,6 +67,7 @@ const upload = multer({
 interface ConversationBaseRow {
   chat_id: string;
   is_request: boolean;
+  created_by_user_id: string | null;
   updated_at: Date;
   chat_type: string;
   chat_name: string | null;
@@ -138,10 +139,48 @@ async function fetchConversationBaseRows(
   userId: string,
   isRequest: boolean,
 ): Promise<ConversationBaseRow[]> {
+  if (isRequest) {
+    // Request list is inbox-style: only incoming requests for this viewer.
+    return prisma.$queryRaw<ConversationBaseRow[]>`
+      SELECT
+        c.chat_id,
+        c.is_request,
+        c.created_by_user_id,
+        c.updated_at,
+        c.chat_type,
+        c.name AS chat_name,
+        c.avatar_url,
+        cp_other.user_id AS other_user_id
+      FROM chats c
+      JOIN chat_participants cp_me
+        ON cp_me.chat_id = c.chat_id
+       AND cp_me.user_id = ${userId}
+       AND cp_me.left_at IS NULL
+      LEFT JOIN LATERAL (
+        SELECT cp.user_id
+        FROM chat_participants cp
+        WHERE cp.chat_id = c.chat_id
+          AND cp.user_id != ${userId}
+          AND cp.left_at IS NULL
+        ORDER BY cp.joined_at ASC
+        LIMIT 1
+      ) cp_other ON TRUE
+      WHERE c.is_request = TRUE
+        AND (c.created_by_user_id IS NULL OR c.created_by_user_id != ${userId})
+        AND (
+          c.chat_type != 'direct'
+          OR cp_other.user_id IS NOT NULL
+        )
+      ORDER BY c.updated_at DESC
+    `;
+  }
+
+  // Active list includes accepted chats + outgoing pending requests started by this viewer.
   return prisma.$queryRaw<ConversationBaseRow[]>`
     SELECT
       c.chat_id,
       c.is_request,
+      c.created_by_user_id,
       c.updated_at,
       c.chat_type,
       c.name AS chat_name,
@@ -161,7 +200,10 @@ async function fetchConversationBaseRows(
       ORDER BY cp.joined_at ASC
       LIMIT 1
     ) cp_other ON TRUE
-    WHERE c.is_request = ${isRequest}
+    WHERE (
+      c.is_request = FALSE
+      OR (c.is_request = TRUE AND c.created_by_user_id = ${userId})
+    )
       AND (
         c.chat_type != 'direct'
         OR cp_other.user_id IS NOT NULL
@@ -272,7 +314,7 @@ async function buildConversationListEntries(
             ? formatMessagePreview(latestMessage.type, latestMessage.content)
             : 'No messages yet',
           timestamp: latestMessage?.timestamp ?? row.updated_at.toISOString(),
-          isRequest: row.is_request,
+          isRequest,
           isGroup: true,
           groupMemberCount: Math.max(participantIds.length, 1),
         };
@@ -290,7 +332,7 @@ async function buildConversationListEntries(
           ? formatMessagePreview(latestMessage.type, latestMessage.content)
           : 'No messages yet',
         timestamp: latestMessage?.timestamp ?? row.updated_at.toISOString(),
-        isRequest: row.is_request,
+        isRequest,
       };
     })
     .filter((entry): entry is ChatConversationListEntry => entry !== null);
@@ -733,6 +775,44 @@ async function updateConversationListsForMeta(
   );
 }
 
+async function autoAcceptRequestOnReply(
+  chatId: string,
+  senderUserId: string,
+): Promise<void> {
+  const rows = await prisma.$queryRaw<
+    Array<{ is_request: boolean; created_by_user_id: string | null }>
+  >`
+    SELECT is_request, created_by_user_id
+    FROM chats
+    WHERE chat_id = ${chatId}
+    LIMIT 1
+  `;
+  const chat = rows[0];
+  if (!chat?.is_request) return;
+
+  // Auto-accept only when the non-creator replies to the request thread.
+  if (!chat.created_by_user_id || chat.created_by_user_id === senderUserId) return;
+
+  await markChatAccepted(chatId);
+  const participantIds = await getChatParticipantIds(chatId);
+
+  try {
+    await patchConversationMeta(chatId, (meta) => ({
+      ...meta,
+      isRequest: false,
+    }));
+  } catch (err) {
+    console.warn('Failed to patch request meta during auto-accept:', err);
+  }
+
+  await invalidateConversationLists(participantIds, ['active', 'requests']);
+  participantIds.forEach((participantId) => {
+    if (participantId !== senderUserId) {
+      emitChatRequestAccepted(participantId, chatId);
+    }
+  });
+}
+
 async function persistMessage(
   chatId: string,
   userId: string,
@@ -1004,6 +1084,8 @@ router.post(
         return res.status(403).json({ message: 'Not a participant' });
       }
 
+      await autoAcceptRequestOnReply(chatId, userId);
+
       const replyTo = await fetchReplyPreview(chatId, replyToMessageId);
       if (replyToMessageId && !replyTo) {
         return res
@@ -1067,6 +1149,8 @@ router.post(
       if (!(await isChatParticipant(userId, chatId))) {
         return res.status(403).json({ message: 'Not a participant' });
       }
+
+      await autoAcceptRequestOnReply(chatId, userId);
 
       const replyTo = await fetchReplyPreview(chatId, replyToMessageId);
       if (replyToMessageId && !replyTo) {
@@ -1351,6 +1435,52 @@ router.post('/requests/:chatId/accept', async (req: Request, res: Response) => {
     return res.status(200).json({ message: 'Request accepted' });
   } catch (err) {
     console.error('Error accepting request:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.post('/requests/:chatId/reject', async (req: Request, res: Response) => {
+  const authed = req as unknown as AuthedRequest;
+  const userId = authed.auth!.userId;
+  const chatId = req.params.chatId as string;
+
+  if (!isValidUUID(chatId)) {
+    return res.status(400).json({ message: 'Invalid chat ID format' });
+  }
+
+  try {
+    if (!(await isChatParticipant(userId, chatId))) {
+      return res.status(403).json({ message: 'Not a participant' });
+    }
+
+    const rows = await prisma.$queryRaw<Array<{ chat_id: string; is_request: boolean }>>`
+      SELECT chat_id, is_request
+      FROM chats
+      WHERE chat_id = ${chatId}
+      LIMIT 1
+    `;
+    const chat = rows[0];
+    if (!chat) {
+      return res.status(404).json({ message: 'Chat not found' });
+    }
+    if (!chat.is_request) {
+      return res.status(400).json({ message: 'Chat request is already accepted' });
+    }
+
+    const participantIds = await getChatParticipantIds(chatId);
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`
+        DELETE FROM chats
+        WHERE chat_id = ${chatId}
+      `;
+    });
+
+    await invalidateConversationLists(participantIds, ['active', 'requests']);
+    noteConversationActivity(chatId);
+
+    return res.status(200).json({ message: 'Request rejected' });
+  } catch (err) {
+    console.error('Error rejecting request:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });

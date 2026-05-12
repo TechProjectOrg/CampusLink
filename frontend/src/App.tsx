@@ -45,6 +45,7 @@ import {
   type NetworkUserWithRequest,
   type SuggestedUserResult,
 } from './lib/networkApi';
+import { apiFetchUserProfile } from './lib/authApi';
 import {
   apiFetchNotifications,
   apiFetchPushPublicKey,
@@ -970,20 +971,102 @@ export default function App() {
       setSuggestedUserIds(ids);
 
       const existingUsers = appData.getSnapshot().usersById;
-      const missingUsers: NetworkUser[] = suggestions
-        .filter((item) => !existingUsers[item.id])
-        .map((item: SuggestedUserResult) => ({
-          userId: item.id,
-          username: item.name,
-          profilePictureUrl: null,
-          isPrivate: false,
-          type: 'student',
-          branch: null,
-          year: null,
+      const missingIds = suggestions.filter((item) => !existingUsers[item.id]).map((item) => item.id);
+
+      if (missingIds.length > 0) {
+        const fetched = await Promise.all(
+          missingIds.map((id) => apiFetchUserProfile(id, authToken).catch(() => null))
+        );
+
+        const profiles = fetched.filter((p): p is any => Boolean(p));
+
+        // Upsert full profiles so students have correct branch/year/avatar
+        for (const profile of profiles) {
+          try {
+            const student = appData.upsertUserProfile(profile as any);
+            // If backend exposes postCount, set placeholder project entries so UI shows count
+            const postCount = (profile as any).stats?.postCount ?? (profile as any).postCount ?? 0;
+            if (postCount > 0) {
+              const withProjects = { ...student, projects: new Array(postCount).fill({}) };
+              appData.mergeUsers([withProjects]);
+            }
+          } catch (e) {
+            // ignore individual failures
+          }
+        }
+
+        const fromProfiles: NetworkUser[] = profiles.map((p: any) => ({
+          userId: p.userId,
+          username: p.username,
+          profilePictureUrl: p.profilePictureUrl ?? null,
+          isPrivate: !(p.isPublic ?? true),
+          type: p.type ?? 'student',
+          branch: p.details?.branch ?? null,
+          year: p.details?.year ?? p.details?.passingYear ?? null,
         }));
 
-      if (missingUsers.length > 0) {
-        appData.mergeUsers(networkUsersToStudents(missingUsers));
+        const stillMissing = missingIds.filter((id) => !fromProfiles.find((u) => u.userId === id));
+        const fallback = suggestions
+          .filter((item) => stillMissing.includes(item.id))
+          .map((item: SuggestedUserResult) => ({
+            userId: item.id,
+            username: item.name,
+            profilePictureUrl: null,
+            isPrivate: false,
+            type: 'student',
+            branch: null,
+            year: null,
+          }));
+
+        const toMerge = [...fromProfiles, ...fallback];
+        if (toMerge.length > 0) {
+          appData.mergeUsers(networkUsersToStudents(toMerge));
+
+          // Add placeholder follower arrays to followGraph for accurate counts
+          setFollowGraph((prev) => {
+            const next = { ...prev };
+            next.followersByUserId = { ...next.followersByUserId };
+            next.followingByUserId = { ...next.followingByUserId };
+            next.incomingRequestsByUserId = { ...next.incomingRequestsByUserId };
+            next.outgoingRequestsByUserId = { ...next.outgoingRequestsByUserId };
+
+            for (const p of profiles) {
+              const uid = p.userId;
+              const followerCount = (p as any).stats?.followerCount ?? (p as any).followerCount ?? 0;
+              if (followerCount > 0) {
+                // populate an array of placeholders so length shows correctly
+                next.followersByUserId[uid] = new Array(followerCount).fill('__');
+              } else if (!next.followersByUserId[uid]) {
+                next.followersByUserId[uid] = next.followersByUserId[uid] ?? [];
+              }
+
+              // ensure other maps have entries to avoid undefined checks in UI
+              next.followingByUserId[uid] = next.followingByUserId[uid] ?? [];
+              next.incomingRequestsByUserId[uid] = next.incomingRequestsByUserId[uid] ?? [];
+              next.outgoingRequestsByUserId[uid] = next.outgoingRequestsByUserId[uid] ?? [];
+            }
+
+            // Also invalidate caches for these users so subsequent reads pick up fresh data
+            try {
+              toMerge.forEach((u) => {
+                try {
+                  invalidateCache(cacheKeys.entity.userProfile(u.userId));
+                } catch (e) {
+                  // ignore cache invalidation errors
+                }
+              });
+              try {
+                invalidateCache(cacheKeys.list.followGraph(currentUserId));
+              } catch (e) {
+                // ignore
+              }
+            } catch (e) {
+              // noop
+            }
+
+            return next;
+          });
+        }
       }
     } catch (err) {
       console.error('Failed to fetch suggested users:', err);
@@ -2204,19 +2287,66 @@ export default function App() {
   };
 
   const handleMessage = async (studentId: string) => {
-    if (!authToken || !currentUserId) {
-      navigate('chat');
+    if (!studentId || typeof studentId !== 'string') {
       return;
     }
+
+    // Move to chat immediately so the action feels instant.
+    navigate('chat');
+
+    // If we already have a direct conversation, open it right away.
+    const existingConvo = conversations.find((conversation) => !conversation.isGroup && conversation.participantId === studentId);
+    if (existingConvo) {
+      appData.selectConversation(existingConvo.id);
+      void appData.ensureConversationMessages(existingConvo.id);
+      void refreshConversations();
+      return;
+    }
+
+    if (!authToken || !currentUserId) {
+      return;
+    }
+
+    const student = students.find((item) => item.id === studentId);
+    const pendingChatId = `pending:${currentUserId}:${studentId}`;
+    appData.upsertConversation({
+      id: pendingChatId,
+      participantId: studentId,
+      participantName: student?.name ?? 'User',
+      participantAvatar: student?.avatar,
+      lastMessage: 'Opening chat...',
+      timestamp: new Date().toISOString(),
+      unread: 0,
+      isOnline: true,
+      isRequest: false,
+      isPending: true,
+    });
+    appData.selectConversation(pendingChatId);
+
     try {
-      // Start the conversation on the backend using the real student UUID
-      await apiStartConversation(studentId, authToken);
-      // Refresh conversations so it appears in the list
-      await refreshConversations();
-      // Navigate to chat
-      navigate('chat');
+      // Create/reuse server conversation without blocking the initial navigation.
+      const { chatId } = await apiStartConversation(studentId, authToken);
+
+      appData.removeConversation(pendingChatId);
+      appData.upsertConversation({
+        id: chatId,
+        participantId: studentId,
+        participantName: student?.name ?? 'User',
+        participantAvatar: student?.avatar,
+        lastMessage: 'Start a conversation...',
+        timestamp: new Date().toISOString(),
+        unread: 0,
+        isOnline: true,
+        isRequest: false,
+        isPending: false,
+      });
+      appData.selectConversation(chatId);
+      void appData.ensureConversationMessages(chatId);
+      void refreshConversations();
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to start conversation');
+      appData.removeConversation(pendingChatId);
+      appData.selectConversation(null);
+      toast.error(err?.message || 'Failed to open chat');
     }
   };
 
@@ -2526,6 +2656,7 @@ export default function App() {
               navigate('hashtag', undefined, undefined, { hashtag });
             }}
             initialSearchQuery={searchQuery}
+            suggestedUserIds={suggestedUserIds}
           />
           ) : activeTab === 'hashtag' ? (
           <HashtagPostsPage

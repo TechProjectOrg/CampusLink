@@ -53,6 +53,11 @@ export interface Student {
   projects: Project[];
   resumeUrl?: string;
   accountType: AccountType;
+  stats?: {
+    followerCount: number;
+    followingCount: number;
+    postCount: number;
+  };
 }
 
 export interface Project {
@@ -170,6 +175,7 @@ export interface ChatConversation {
   isOnline?: boolean;
   lastSeenAt?: string | null;
   isRequest?: boolean;
+  isPending?: boolean;
   isGroup?: boolean;
   groupMembers?: string[];
   groupMemberCount?: number;
@@ -236,6 +242,11 @@ export interface ApiUserProfile {
     followingCount: number;
     postCount: number;
   };
+  adminAccess?: {
+    role: 'super_admin';
+    mustChangePassword: boolean;
+    lastLoginAt: string | null;
+  } | null;
 }
 
 export interface ApiUserSession {

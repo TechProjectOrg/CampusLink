@@ -106,6 +106,7 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
     showProjects: true,
     allowMessages: true,
   });
+  const isPrivateAccount = privacySettings.accountType === 'private';
 
   useEffect(() => {
     if (!auth.session?.userId) return;
@@ -511,10 +512,18 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
       setNotificationSettings(updated.notifications);
       setPrivacySettings(updated.privacy);
       onEdit({ accountType: updated.privacy.accountType });
-      await auth.refreshProfile();
       onUpdateSettings({ privacy: updated.privacy });
+      try {
+        await auth.refreshProfile();
+      } catch (refreshError) {
+        console.warn('Settings saved but failed to refresh profile cache:', refreshError);
+      }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Unable to save privacy settings');
+      toast.error(
+        err instanceof Error
+          ? `Could not update account visibility. ${err.message}`
+          : 'Could not update account visibility. Please try again.',
+      );
     } finally {
       setSavingPrivacy(false);
     }
@@ -1219,14 +1228,22 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                   <div className="flex items-center justify-between rounded-xl border bg-white px-4 py-3">
                     <div className="space-y-1">
                       <p className="text-gray-900">
-                        {privacySettings.accountType === 'private' ? 'Private' : 'Public'}
+                        {isPrivateAccount ? 'Private' : 'Public'}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        {isPrivateAccount
+                          ? 'Your account is private right now. Turn this off to make your profile public and discoverable to everyone.'
+                          : 'Your account is public right now. Turn this on if you want only approved followers to see your profile.'}
                       </p>
                     </div>
                     <Switch
-                      checked={privacySettings.accountType === 'private'}
+                      checked={isPrivateAccount}
                       disabled={settingsLoading || savingPrivacy}
                       onCheckedChange={(checked) => {
-                        const next = { ...privacySettings, accountType: checked ? 'private' : 'public' as const };
+                        const next = {
+                          ...privacySettings,
+                          accountType: (checked ? 'private' : 'public') as 'private' | 'public',
+                        };
                         setPrivacySettings(next);
                         void persistPrivacySettings(next);
                       }}

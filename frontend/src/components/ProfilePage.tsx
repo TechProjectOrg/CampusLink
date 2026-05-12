@@ -8,7 +8,6 @@ import {
   Plus,
   X,
   MessageCircle,
-  Award,
   Users,
   Trophy,
   Pencil,
@@ -59,6 +58,7 @@ import { apiCreateUserPost, apiFetchProfilePosts, type UserPost } from '../lib/p
 import { LoadingIndicator } from './ui/LoadingIndicator';
 import { fetchCachedValue } from '../cache/socialCache';
 import { cachePolicies } from '../cache/policies';
+import { invalidateCache } from '../cache/client';
 import { PageLayout } from './PageLayout';
 import {
   apiCreateUserExperience,
@@ -72,12 +72,6 @@ import {
   apiFetchUserSocieties,
   apiUpdateUserSociety,
 } from '../lib/societiesApi';
-import {
-  apiCreateUserAchievement,
-  apiDeleteUserAchievement,
-  apiFetchUserAchievements,
-  apiUpdateUserAchievement,
-} from '../lib/achievementsApi';
 
 interface ProfilePageProps {
   student: Student;
@@ -125,14 +119,6 @@ interface Society {
   duration?: string;
 }
 
-// Achievement type
-interface Achievement {
-  id: string;
-  title: string;
-  year: number;
-  description?: string;
-}
-
 // Project type with image
 interface Project {
   id: string;
@@ -153,6 +139,20 @@ interface Certification {
   imageUrl?: string;
   certificateUrl?: string;
   description?: string;
+}
+
+type EducationLevel = '10th' | '12th' | "Bachelor's" | "Master's" | 'Other';
+
+interface EducationRecord {
+  id: string;
+  level: EducationLevel;
+  institution: string;
+  branch: string;
+  startYear: string;
+  endYear: string;
+  isPursuing: boolean;
+  scoreType: 'percentage' | 'cgpa';
+  score: string;
 }
 
 export function ProfilePage({
@@ -188,6 +188,7 @@ export function ProfilePage({
   const [skills, setSkills] = useState<UserSkill[]>([]);
   const [skillsLoading, setSkillsLoading] = useState(false);
   const [newSkillName, setNewSkillName] = useState('');
+  const [skillFormError, setSkillFormError] = useState<string | null>(null);
 
   // Certifications state
   const [loadedCertifications, setLoadedCertifications] = useState<Certification[]>([]);
@@ -206,9 +207,6 @@ export function ProfilePage({
   // Societies state
   const [societies, setSocieties] = useState<Society[]>([]);
 
-  // Achievements state
-  const [achievements, setAchievements] = useState<Achievement[]>([]);
-
   // Modal states
   const [activeModal, setActiveModal] = useState<
     | 'editProfile'
@@ -219,7 +217,6 @@ export function ProfilePage({
     | 'project'
     | 'certification'
     | 'society'
-    | 'achievement'
     | 'education'
     | null
   >(null);
@@ -268,31 +265,35 @@ export function ProfilePage({
     endDate: undefined,
   });
 
-  const [newAchievement, setNewAchievement] = useState<Partial<Achievement>>({
-    title: '',
-    year: new Date().getFullYear(),
-    description: '',
-  });
-
   const [educationDraft, setEducationDraft] = useState({
     branch: student.branch || '',
     year: student.year ? String(student.year) : '',
   });
+  const [shareCertificationAsPost, setShareCertificationAsPost] = useState(false);
+  const [certPreview, setCertPreview] = useState<{
+    url: string;
+    title: string;
+    issuer?: string;
+    issueDate?: Date;
+    description?: string;
+    certificateUrl?: string;
+  } | null>(null);
+  const [educationRecords, setEducationRecords] = useState<EducationRecord[]>([]);
+  const [editingEducationId, setEditingEducationId] = useState<string | null>(null);
+  const [educationForm, setEducationForm] = useState<EducationRecord | null>(null);
 
   const authUserId = auth.currentUser?.id ?? auth.session?.userId;
   const authToken = auth.session?.token;
 
   // Load data
-  const loadSkills = async () => {
+  const loadSkills = async (mode: 'cache-first' | 'network-only' = 'cache-first') => {
     if (!isOwnProfile || !authUserId) return;
     setSkillsLoading(true);
-    setBusyAction('save-experience');
-    setBusyAction('save-project');
     try {
       const list = await fetchCachedValue({
         key: `page:user:${authUserId}:profile:skills`,
         policy: cachePolicies.userProfile,
-        mode: 'cache-first',
+        mode,
         fetcher: () => apiFetchUserSkills(authUserId, authToken),
         onCached: (cached) => setSkills(cached),
       });
@@ -304,14 +305,14 @@ export function ProfilePage({
     }
   };
 
-  const loadCertifications = async () => {
+  const loadCertifications = async (mode: 'cache-first' | 'network-only' = 'cache-first') => {
     if (!student.id) return;
     setCertificationsLoading(true);
     try {
       const list = await fetchCachedValue({
         key: `page:user:${student.id}:profile:certifications`,
         policy: cachePolicies.userProfile,
-        mode: 'cache-first',
+        mode,
         fetcher: () => apiFetchUserCertifications(student.id, authToken),
       });
       setLoadedCertifications(
@@ -339,7 +340,7 @@ export function ProfilePage({
       const list = await fetchCachedValue({
         key: `page:user:${student.id}:profile:projects`,
         policy: cachePolicies.userProfile,
-        mode: 'cache-first',
+        mode: 'network-only',
         fetcher: () => apiFetchUserProjects(student.id, authToken),
       });
       setLoadedProjects(
@@ -360,7 +361,7 @@ export function ProfilePage({
     }
   };
 
-  const loadExperiences = async () => {
+  const loadExperiences = async (mode: 'cache-first' | 'network-only' = 'cache-first') => {
     if (!student.id) {
       console.warn('Cannot load experiences: student.id not set');
       return;
@@ -369,7 +370,7 @@ export function ProfilePage({
       const list = await fetchCachedValue({
         key: `page:user:${student.id}:profile:experiences`,
         policy: cachePolicies.userProfile,
-        mode: 'cache-first',
+        mode,
         fetcher: () => apiFetchUserExperiences(student.id, authToken),
       });
       setExperiences(
@@ -400,7 +401,7 @@ export function ProfilePage({
       const list = await fetchCachedValue({
         key: `page:user:${student.id}:profile:societies`,
         policy: cachePolicies.userProfile,
-        mode: 'cache-first',
+        mode: 'network-only',
         fetcher: () => apiFetchUserSocieties(student.id, authToken),
       });
       setSocieties(
@@ -417,34 +418,6 @@ export function ProfilePage({
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error('✗ Error loading societies:', errorMsg);
       setSocieties([]);
-    }
-  };
-
-  const loadAchievements = async () => {
-    if (!student.id) {
-      console.warn('Cannot load achievements: student.id not set');
-      return;
-    }
-    try {
-      const list = await fetchCachedValue({
-        key: `page:user:${student.id}:profile:achievements`,
-        policy: cachePolicies.userProfile,
-        mode: 'cache-first',
-        fetcher: () => apiFetchUserAchievements(student.id, authToken),
-      });
-      setAchievements(
-        list.map((item) => ({
-          id: item.id,
-          title: item.title,
-          description: item.description || undefined,
-          year: item.year,
-        })),
-      );
-      console.log('✓ Loaded achievements:', list.length);
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      console.error('✗ Error loading achievements:', errorMsg);
-      setAchievements([]);
     }
   };
 
@@ -549,7 +522,6 @@ export function ProfilePage({
     loadProjects();
     loadExperiences();
     loadSocieties();
-    loadAchievements();
   }, [student.id, authToken]);
 
   useEffect(() => {
@@ -564,12 +536,44 @@ export function ProfilePage({
   }, [student.branch, student.year]);
 
   useEffect(() => {
+    const storageKey = `profile-education:${student.id}`;
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (!raw) {
+        setEducationRecords([]);
+        return;
+      }
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        setEducationRecords([]);
+        return;
+      }
+      const normalized = parsed
+        .filter((item) => item && typeof item === 'object')
+        .map((item): EducationRecord => ({
+          id: typeof item.id === 'string' ? item.id : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          level: (['10th', '12th', "Bachelor's", "Master's", 'Other'].includes(item.level) ? item.level : 'Other') as EducationLevel,
+          institution: typeof item.institution === 'string' ? item.institution : '',
+          branch: typeof item.branch === 'string' ? item.branch : '',
+          startYear: typeof item.startYear === 'string' ? item.startYear : '',
+          endYear: typeof item.endYear === 'string' ? item.endYear : '',
+          isPursuing: Boolean(item.isPursuing),
+          scoreType: item.scoreType === 'cgpa' ? 'cgpa' : 'percentage',
+          score: typeof item.score === 'string' ? item.score : '',
+        }));
+      setEducationRecords(normalized);
+    } catch {
+      setEducationRecords([]);
+    }
+  }, [student.id]);
+
+  useEffect(() => {
     setBannerImage((isOwnProfile ? auth.profile?.coverPhotoUrl : student.coverPhotoUrl) ?? null);
   }, [isOwnProfile, auth.profile?.coverPhotoUrl, student.coverPhotoUrl]);
 
   // Follow counts
-  const followersCount = (followGraph.followersByUserId[student.id] ?? []).length;
-  const followingCount = (followGraph.followingByUserId[student.id] ?? []).length;
+  const followersCount = student.stats?.followerCount ?? (followGraph.followersByUserId[student.id] ?? []).length;
+  const followingCount = student.stats?.followingCount ?? (followGraph.followingByUserId[student.id] ?? []).length;
   const isFollowing = (followGraph.followingByUserId[currentUserId] ?? []).includes(student.id);
   const isFollower = (followGraph.followersByUserId[currentUserId] ?? []).includes(student.id);
   const requestStatus = (followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id)
@@ -607,8 +611,8 @@ export function ProfilePage({
     setNewProjectTag('');
     setNewCertification({ name: '', issuer: '', issueDate: undefined, imageUrl: '', certificateUrl: '', description: '' });
     setCertImagePreview(null);
+    setShareCertificationAsPost(false);
     setNewSociety({ societyName: '', role: '', startDate: undefined, endDate: undefined });
-    setNewAchievement({ title: '', year: new Date().getFullYear(), description: '' });
   };
 
   const handleSaveProfile = async () => {
@@ -684,13 +688,16 @@ export function ProfilePage({
   // Skill handlers
   const handleAddSkill = async () => {
     if (!isOwnProfile || !authUserId || !newSkillName.trim()) return;
+    setSkillFormError(null);
     setBusyAction('save-skill');
     try {
       await apiAddUserSkill(authUserId, newSkillName.trim(), authToken);
       setNewSkillName('');
-      await loadSkills();
-      closeModal();
-    } catch {}
+      await loadSkills('network-only');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unable to add skill';
+      setSkillFormError(message);
+    }
     finally {
       setBusyAction(null);
     }
@@ -703,7 +710,7 @@ export function ProfilePage({
     setPendingDeleteByKey((prev) => ({ ...prev, [key]: true }));
     try {
       await apiDeleteUserSkill(authUserId, skillId, authToken);
-      await loadSkills();
+      await loadSkills('network-only');
     } catch {}
     finally {
       setPendingDeleteByKey((prev) => ({ ...prev, [key]: false }));
@@ -716,17 +723,18 @@ export function ProfilePage({
       console.error('Cannot add experience: authUserId not set');
       return;
     }
-    if (!newExperience.roleTitle?.trim() || !newExperience.organization?.trim()) {
+    if (!newExperience.roleTitle?.trim() || !newExperience.organization?.trim() || !newExperience.startDate) {
       console.error('Cannot add experience: missing required fields');
       return;
     }
 
+    setBusyAction('save-experience');
     try {
       const payload = {
         roleTitle: newExperience.roleTitle.trim(),
         organization: newExperience.organization.trim(),
         description: newExperience.description?.trim() || '',
-        startDate: (newExperience.startDate || new Date()).toISOString(),
+        startDate: newExperience.startDate.toISOString(),
         endDate: newExperience.isCurrentlyWorking ? null : newExperience.endDate?.toISOString() ?? null,
         isCurrentlyWorking: newExperience.isCurrentlyWorking || false,
       };
@@ -736,7 +744,7 @@ export function ProfilePage({
       } else {
         await apiCreateUserExperience(authUserId, payload, authToken);
       }
-      await loadExperiences();
+      await loadExperiences('network-only');
       closeModal();
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
@@ -762,7 +770,7 @@ export function ProfilePage({
     setPendingDeleteByKey((prev) => ({ ...prev, [key]: true }));
     try {
       await apiDeleteUserExperience(authUserId, id, authToken);
-      await loadExperiences();
+      await loadExperiences('network-only');
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error('Error deleting experience:', errorMsg);
@@ -824,7 +832,7 @@ export function ProfilePage({
             title: created.title,
             contentText: created.description,
             externalUrl: created.demoUrl ?? created.sourceUrl ?? undefined,
-            hashtags: Array.from(new Set(['project', ...(created.tags ?? [])])),
+            hashtags: Array.from(new Set(['project', `project-${created.id}`, ...(created.tags ?? [])])),
             media: created.imageUrl
               ? [{ mediaUrl: created.imageUrl, mediaType: 'image', sortOrder: 0 }]
               : [],
@@ -988,6 +996,32 @@ export function ProfilePage({
             credentialUrl: newCertification.certificateUrl,
             issuedAt: newCertification.issueDate ? format(newCertification.issueDate, 'yyyy-MM-dd') : undefined,
           }, authToken);
+
+          if (shareCertificationAsPost) {
+            const certName = newCertification.name.trim();
+            const issuer = newCertification.issuer?.trim() || '';
+            const issuedLabel = newCertification.issueDate ? format(newCertification.issueDate, 'MMM yyyy') : '';
+            const credentialUrl = newCertification.certificateUrl?.trim() || '';
+            const lines = [
+              `Earned a new certification: ${certName}`,
+              issuer ? `Issuer: ${issuer}` : '',
+              issuedLabel ? `Issued: ${issuedLabel}` : '',
+              credentialUrl ? `Credential: ${credentialUrl}` : '',
+            ].filter(Boolean);
+
+            const createdPost = await apiCreateUserPost(
+              authUserId,
+              {
+                postType: 'general',
+                title: certName,
+                contentText: lines.join('\n'),
+                hashtags: ['certificate'],
+              },
+              authToken,
+            );
+
+            appData.prependPostToFeed(createdPost);
+          }
         } else {
           await apiUpdateUserCertification(
             authUserId,
@@ -1003,7 +1037,7 @@ export function ProfilePage({
             authToken,
           );
         }
-        await loadCertifications();
+        await loadCertifications('network-only');
         closeModal();
       } catch (err) {
         const errorMsg = err instanceof Error ? err.message : String(err);
@@ -1031,7 +1065,7 @@ export function ProfilePage({
     setPendingDeleteByKey((prev) => ({ ...prev, [key]: true }));
     try {
       await apiDeleteUserCertification(authUserId, id, authToken);
-      await loadCertifications();
+      await loadCertifications('network-only');
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       console.error('Error deleting certification:', errorMsg);
@@ -1077,6 +1111,10 @@ export function ProfilePage({
         await apiUpdateUserSociety(authUserId, editingItem, payload, authToken);
       }
 
+      await invalidateCache({
+        reason: 'profile-society-updated',
+        keys: [`page:user:${student.id}:profile:societies`],
+      });
       await loadSocieties();
       closeModal();
     } catch (err) {
@@ -1103,6 +1141,10 @@ export function ProfilePage({
     setPendingDeleteByKey((prev) => ({ ...prev, [key]: true }));
     try {
       await apiDeleteUserSociety(authUserId, id, authToken);
+      await invalidateCache({
+        reason: 'profile-society-deleted',
+        keys: [`page:user:${student.id}:profile:societies`],
+      });
       await loadSocieties();
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
@@ -1112,85 +1154,12 @@ export function ProfilePage({
     }
   };
 
-  // Achievement handlers
-  const handleAddAchievement = async () => {
-    if (!authUserId) return;
-    if (!newAchievement.title?.trim()) return;
-
-    setBusyAction('save-achievement');
-    try {
-      const payload = {
-        title: newAchievement.title.trim(),
-        year: newAchievement.year || new Date().getFullYear(),
-        description: newAchievement.description?.trim(),
-      };
-
-      if (!editingItem) {
-        await apiCreateUserAchievement(authUserId, payload, authToken);
-      } else {
-        await apiUpdateUserAchievement(authUserId, editingItem, payload, authToken);
-      }
-
-      await loadAchievements();
-      closeModal();
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      console.error('Error adding/updating achievement:', errorMsg);
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
-  const handleEditAchievement = (ach: Achievement) => {
-    setEditingItem(ach.id);
-    setNewAchievement(ach);
-    setActiveModal('achievement');
-  };
-
-  const handleDeleteAchievement = async (id: string) => {
-    if (!authUserId) {
-      console.error('Cannot delete achievement: authUserId not set');
-      return;
-    }
-    if (!window.confirm('Delete this achievement?')) return;
-    const key = `achievement:${id}`;
-    setPendingDeleteByKey((prev) => ({ ...prev, [key]: true }));
-    try {
-      await apiDeleteUserAchievement(authUserId, id, authToken);
-      await loadAchievements();
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      console.error('Error deleting achievement:', errorMsg);
-    } finally {
-      setPendingDeleteByKey((prev) => ({ ...prev, [key]: false }));
-    }
-  };
-
   const handleSaveEducation = async () => {
-    if (!authUserId) {
-      console.error('Cannot save education: authUserId not set');
-      return;
-    }
-    const branch = educationDraft.branch.trim();
-    const year = Number.parseInt(educationDraft.year, 10);
-    if (!branch || Number.isNaN(year)) {
-      console.error('Cannot save education: missing or invalid fields');
-      return;
-    }
-
     setBusyAction('save-education');
     try {
-      await apiUpdateUserProfile(
-        authUserId,
-        {
-          username: student.username,
-          branch,
-          year,
-        },
-        authToken,
-      );
-      onEdit?.({ branch, year });
-      await auth.refreshProfile();
+      try {
+        window.localStorage.setItem(`profile-education:${student.id}`, JSON.stringify(educationRecords));
+      } catch {}
       setActiveModal(null);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
@@ -1211,12 +1180,28 @@ export function ProfilePage({
   const showPostsSection = isOwnProfile || postsLoading || profilePosts.length > 0;
   const showProjectsSection = isOwnProfile || projectsLoading || loadedProjects.length > 0;
   const showExperienceSection = isOwnProfile || experiences.length > 0;
-  const showEducationSection = isOwnProfile || hasKnownBranch || hasKnownYear;
+  const showEducationSection = isOwnProfile || hasKnownBranch || hasKnownYear || educationRecords.length > 0;
   const showSkillsSection = isOwnProfile || skillsLoading || displaySkills.length > 0;
   const showCertificationsSection = isOwnProfile || certificationsLoading || loadedCertifications.length > 0;
   const showClubsSection = isOwnProfile || societies.length > 0;
-  const showAchievementsSection = isOwnProfile || achievements.length > 0;
   const profileSectionCardClass = 'box-border flex w-full min-w-0 flex-col gap-4 overflow-hidden break-words rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5 lg:p-6';
+  const educationLevelOrder: Record<EducationLevel, number> = {
+    '10th': 1,
+    '12th': 2,
+    "Bachelor's": 3,
+    "Master's": 4,
+    Other: 5,
+  };
+  const orderedEducationRecords = [...educationRecords].sort((a, b) => {
+    const levelDiff = educationLevelOrder[a.level] - educationLevelOrder[b.level];
+    if (levelDiff !== 0) return levelDiff;
+    const aYear = Number.parseInt(a.startYear, 10);
+    const bYear = Number.parseInt(b.startYear, 10);
+    if (!Number.isNaN(aYear) && !Number.isNaN(bYear) && aYear !== bYear) {
+      return aYear - bYear;
+    }
+    return a.institution.localeCompare(b.institution);
+  });
 
   const SectionHeader = ({
     title,
@@ -1246,6 +1231,49 @@ export function ProfilePage({
       <p className="text-sm font-medium text-slate-600">{message}</p>
     </div>
   );
+
+  const addEducationRecord = () => {
+    setEditingEducationId('new');
+    setEducationForm({
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      level: 'Other',
+      institution: '',
+      branch: '',
+      startYear: '',
+      endYear: '',
+      isPursuing: false,
+      scoreType: 'percentage',
+      score: '',
+    });
+  };
+
+  const updateEducationRecordForm = (updates: Partial<EducationRecord>) => {
+    setEducationForm((prev) => (prev ? { ...prev, ...updates } : prev));
+  };
+
+  const removeEducationRecord = (id: string) => {
+    setEducationRecords((prev) => prev.filter((record) => record.id !== id));
+  };
+
+  const startEditEducationRecord = (record: EducationRecord) => {
+    setEditingEducationId(record.id);
+    setEducationForm({ ...record });
+  };
+
+  const cancelEducationForm = () => {
+    setEditingEducationId(null);
+    setEducationForm(null);
+  };
+
+  const saveEducationRecordForm = () => {
+    if (!educationForm) return;
+    if (editingEducationId === 'new') {
+      setEducationRecords((prev) => [...prev, educationForm]);
+    } else {
+      setEducationRecords((prev) => prev.map((record) => (record.id === educationForm.id ? educationForm : record)));
+    }
+    cancelEducationForm();
+  };
 
   // Item Actions Component
   const ItemActions = ({ onEdit, onDelete, deleting = false }: { onEdit: () => void; onDelete: () => void; deleting?: boolean }) => (
@@ -1502,15 +1530,17 @@ export function ProfilePage({
           <div className={profileSectionCardClass}>
             <SectionHeader title="Experience" onAdd={() => setActiveModal('experience')} />
             {experiences.length > 0 ? (
-              <div className="flex flex-col gap-5">
+              <div className="flex flex-col gap-4">
                 {experiences.map((exp) => (
-                  <div key={exp.id} className="group relative border-l-2 border-blue-100 pl-5">
-                    <span className="absolute -left-[9px] top-1 h-4 w-4 rounded-full border-4 border-white bg-blue-500 shadow" />
+                  <div
+                    key={exp.id}
+                    className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4 shadow-sm transition-colors duration-200 hover:border-blue-200 hover:bg-white"
+                  >
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className="break-words font-semibold text-slate-950">{exp.roleTitle}</h3>
-                        <p className="text-sm text-slate-600">{exp.organization}</p>
-                        <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">
+                      <div className="min-w-0">
+                        <h3 className="break-words text-lg font-semibold text-slate-900">{exp.roleTitle}</h3>
+                        <p className="mt-1 text-sm font-medium text-slate-600">{exp.organization}</p>
+                        <p className="mt-2 inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
                           {format(exp.startDate, 'MMM yyyy')} - {exp.isCurrentlyWorking ? 'Present' : exp.endDate ? format(exp.endDate, 'MMM yyyy') : 'Present'}
                         </p>
                       </div>
@@ -1520,7 +1550,7 @@ export function ProfilePage({
                         deleting={Boolean(pendingDeleteByKey[`experience:${exp.id}`])}
                       />
                     </div>
-                    {exp.description ? <p className="mt-2 text-sm leading-6 text-slate-600">{exp.description}</p> : null}
+                    {exp.description ? <p className="mt-3 text-sm leading-6 text-slate-700">{exp.description}</p> : null}
                   </div>
                 ))}
               </div>
@@ -1536,18 +1566,62 @@ export function ProfilePage({
               title="Education" 
               onAdd={() => setActiveModal('education')} 
             />
-            {hasKnownBranch || hasKnownYear ? (
+            {educationRecords.length > 0 || hasKnownBranch || hasKnownYear ? (
+              <div className="flex flex-col gap-3">
+                {orderedEducationRecords.map((record) => (
+                  <div key={record.id} className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4 shadow-sm">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="break-words text-base font-semibold text-slate-900">{record.level}</h3>
+                        <p className="mt-1 break-words text-sm text-slate-600">{record.institution || 'Institution not added'}</p>
+                        <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-500">
+                          {record.level === '10th' || record.level === '12th'
+                            ? `Year ${record.startYear || 'Not added'}`
+                            : `${record.isPursuing ? 'Currently pursuing' : 'Completed'}${record.startYear ? ` • ${record.startYear}` : ''}${record.endYear ? ` - ${record.endYear}` : ''}`}
+                        </p>
+                        {(record.branch || record.score) ? (
+                          <p className="mt-2 text-sm text-slate-700">
+                            {record.branch ? `${record.branch}` : ''}
+                            {record.branch && record.score ? ' • ' : ''}
+                            {record.score ? `${record.scoreType === 'cgpa' ? 'CGPA' : 'Percentage'}: ${record.score}` : ''}
+                          </p>
+                        ) : null}
+                        {(record.level === "Bachelor's" || record.level === "Master's") && record.isPursuing && hasKnownYear ? (
+                          <p className="mt-1 text-sm font-medium text-emerald-700">Current Year: {student.year}</p>
+                        ) : null}
+                      </div>
+                      {isOwnProfile ? (
+                        <button
+                          type="button"
+                          onClick={() => removeEducationRecord(record.id)}
+                          className="rounded-full p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                          aria-label="Remove education entry"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+                {(hasKnownBranch || hasKnownYear) ? (
+                  <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
+                    <p className="text-sm font-semibold text-emerald-900">Current Campus Profile</p>
+                    <p className="mt-1 text-sm text-emerald-800">
+                      {hasKnownBranch ? profileBranch : 'Branch not added'}
+                      {hasKnownYear ? ` • Year ${student.year}` : ''}
+                    </p>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
               <div className="flex items-start gap-3">
                 <span className="mt-1 h-3.5 w-3.5 flex-shrink-0 rounded-full bg-emerald-500 shadow-sm" />
                 <div className="min-w-0">
-                  {hasKnownBranch && <h3 className="break-words font-semibold text-slate-950">{profileBranch}</h3>}
                   <p className="mt-1 text-xs font-medium uppercase tracking-wide text-slate-400">
-                    {hasKnownYear ? `Year ${student.year}` : ''}
+                    Academic details not added yet
                   </p>
                 </div>
               </div>
-            ) : (
-              <EmptyState message="Highlight your academic background." />
             )}
           </div>
           ) : null}
@@ -1588,26 +1662,51 @@ export function ProfilePage({
             ) : loadedCertifications.length > 0 ? (
               <div className="flex flex-col gap-3">
                 {loadedCertifications.map((cert) => (
-                  <div key={cert.id} className="group flex items-center gap-4 rounded-2xl p-3 transition hover:bg-slate-50">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
-                      <Trophy className="h-5 w-5" />
+                  <div key={cert.id} className="group rounded-2xl border border-slate-200/80 bg-white p-3 shadow-sm transition hover:border-blue-200">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="break-words font-medium text-slate-950">{cert.name}</h3>
+                        <p className="text-sm text-slate-500">{cert.issuer || 'Certification issuer'}</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {cert.certificateUrl ? (
+                          <a href={cert.certificateUrl} target="_blank" rel="noopener noreferrer" className="rounded-full p-2 text-slate-400 hover:bg-blue-50 hover:text-blue-600" aria-label="View certificate">
+                            <Eye className="h-4 w-4" />
+                          </a>
+                        ) : null}
+                        <ItemActions
+                          onEdit={() => handleEditCertification(cert)}
+                          onDelete={() => handleDeleteCertification(cert.id)}
+                          deleting={Boolean(pendingDeleteByKey[`certification:${cert.id}`])}
+                        />
+                      </div>
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <h3 className="break-words font-medium text-slate-950">{cert.name}</h3>
-                      <p className="text-sm text-slate-500">{cert.issuer || 'Certification issuer'}</p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {cert.certificateUrl ? (
-                        <a href={cert.certificateUrl} target="_blank" rel="noopener noreferrer" className="rounded-full p-2 text-slate-400 hover:bg-blue-50 hover:text-blue-600" aria-label="View certificate">
-                          <Eye className="h-4 w-4" />
-                        </a>
-                      ) : null}
-                      <ItemActions
-                        onEdit={() => handleEditCertification(cert)}
-                        onDelete={() => handleDeleteCertification(cert.id)}
-                        deleting={Boolean(pendingDeleteByKey[`certification:${cert.id}`])}
-                      />
-                    </div>
+                    {cert.imageUrl ? (
+                      <div
+                        className="relative mt-3 w-full overflow-hidden rounded-xl group cursor-pointer"
+                        onClick={() =>
+                          setCertPreview({
+                            url: cert.imageUrl as string,
+                            title: cert.name,
+                            issuer: cert.issuer,
+                            issueDate: cert.issueDate,
+                            description: cert.description,
+                            certificateUrl: cert.certificateUrl,
+                          })
+                        }
+                      >
+                        <ImageWithFallback
+                          src={cert.imageUrl}
+                          alt={cert.name}
+                          className="h-80 w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+                      </div>
+                    ) : (
+                      <div className="mt-3 flex h-20 w-full items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                        <Trophy className="h-6 w-6" />
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1651,36 +1750,6 @@ export function ProfilePage({
         </section>
         ) : null}
 
-        {showAchievementsSection ? (
-        <section className={profileSectionCardClass}>
-          <SectionHeader title="Achievements" onAdd={() => setActiveModal('achievement')} />
-          {achievements.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {achievements.map((ach) => (
-                <div key={ach.id} className="group rounded-2xl border border-orange-100 bg-orange-50/70 p-4 transition hover:bg-white hover:shadow-sm">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="mb-3 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-100 text-orange-700">
-                        <Award className="h-5 w-5" />
-                      </div>
-                      <h3 className="break-words font-semibold text-slate-950">{ach.title}</h3>
-                      <p className="text-sm text-slate-500">{ach.year}</p>
-                      {ach.description ? <p className="mt-2 text-sm leading-6 text-slate-600">{ach.description}</p> : null}
-                    </div>
-                    <ItemActions
-                      onEdit={() => handleEditAchievement(ach)}
-                      onDelete={() => handleDeleteAchievement(ach.id)}
-                      deleting={Boolean(pendingDeleteByKey[`achievement:${ach.id}`])}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState message="Highlight awards and accomplishments." />
-          )}
-        </section>
-        ) : null}
       </div>
 
       {/* ===== MODALS ===== */}
@@ -1739,19 +1808,50 @@ export function ProfilePage({
       </Modal>
 
       {/* Skill Modal */}
-      <Modal isOpen={activeModal === 'skill'} onClose={closeModal} title="Add Skill" className="w-[min(28rem,calc(100vw-2rem))]" style={{ width: 'min(28rem, calc(100vw - 2rem))' }}>
-        <div className="space-y-4 max-w-[420px] w-full">
+      <Modal isOpen={activeModal === 'skill'} onClose={closeModal} title="Manage Skills" className="w-[min(34rem,calc(100vw-2rem))]" style={{ width: 'min(34rem, calc(100vw - 2rem))' }}>
+        <div className="space-y-5 max-w-[520px] w-full">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Skill Name</label>
+            <p className="mb-2 text-sm font-medium text-gray-700">Added Skills</p>
+            {skillsLoading ? (
+              <LoadingIndicator label="Loading skills..." className="justify-start" size={18} />
+            ) : skills.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {skills.map((skill) => (
+                  <Badge key={skill.id} className="group/skill rounded-full border border-blue-100 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 shadow-none">
+                    {skill.name}
+                    <button
+                      type="button"
+                      disabled={Boolean(pendingDeleteByKey[`skill:${skill.id}`])}
+                      onClick={() => handleRemoveSkill(skill.id)}
+                      className="ml-2 opacity-70 transition hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
+                      aria-label={`Remove ${skill.name}`}
+                    >
+                      {pendingDeleteByKey[`skill:${skill.id}`] ? <Loader2 className="h-3 w-3 animate-spin" /> : <X className="h-3 w-3" />}
+                    </button>
+                  </Badge>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">No skills added yet.</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Add New Skill</label>
             <Input
               value={newSkillName}
               onChange={(e) => setNewSkillName(e.target.value)}
               placeholder="e.g., Python, React, Machine Learning"
-              onKeyPress={(e) => e.key === 'Enter' && handleAddSkill()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void handleAddSkill();
+                }
+              }}
             />
+            {skillFormError ? <p className="mt-2 text-sm text-red-600">{skillFormError}</p> : null}
           </div>
-          <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={closeModal}>Cancel</Button>
+          <div className="mt-2 flex flex-wrap justify-end gap-3 pt-1">
+            <Button variant="outline" onClick={closeModal}>Close</Button>
             <Button onClick={handleAddSkill} disabled={!newSkillName.trim() || busyAction === 'save-skill'} className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold disabled:opacity-70">
               {busyAction === 'save-skill' ? 'Adding...' : 'Add Skill'}
             </Button>
@@ -1818,7 +1918,7 @@ export function ProfilePage({
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button
               onClick={handleAddExperience}
-              disabled={!newExperience.roleTitle?.trim() || !newExperience.organization?.trim() || busyAction === 'save-experience'}
+              disabled={!newExperience.roleTitle?.trim() || !newExperience.organization?.trim() || !newExperience.startDate || busyAction === 'save-experience'}
               className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold"
             >
               {busyAction === 'save-experience' ? 'Saving...' : `${editingItem ? 'Update' : 'Add'} Experience`}
@@ -1978,6 +2078,15 @@ export function ProfilePage({
               placeholder="Link to verify certificate"
             />
           </div>
+          {!editingItem ? (
+            <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+              <Checkbox
+                checked={shareCertificationAsPost}
+                onCheckedChange={(checked) => setShareCertificationAsPost(checked === true)}
+              />
+              Share this certificate as a post
+            </label>
+          ) : null}
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
             <Button
@@ -2041,76 +2150,129 @@ export function ProfilePage({
         </div>
       </Modal>
 
-      {/* Achievement Modal */}
-      <Modal isOpen={activeModal === 'achievement'} onClose={closeModal} title={editingItem ? 'Edit Achievement' : 'Add Achievement'} className="w-[min(36rem,calc(100vw-2rem))]" style={{ width: 'min(36rem, calc(100vw - 2rem))' }}>
-        <div className="space-y-4 max-w-[520px] w-full">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Achievement Title *</label>
-            <Input
-              value={newAchievement.title || ''}
-              onChange={(e) => setNewAchievement({ ...newAchievement, title: e.target.value })}
-              placeholder="e.g., First Place - Hackathon XYZ"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Year *</label>
-            <Input
-              type="number"
-              value={newAchievement.year || ''}
-              onChange={(e) => setNewAchievement({ ...newAchievement, year: parseInt(e.target.value) })}
-              placeholder="e.g., 2024"
-              min="1990"
-              max={new Date().getFullYear()}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
-            <Textarea
-              value={newAchievement.description || ''}
-              onChange={(e) => setNewAchievement({ ...newAchievement, description: e.target.value })}
-              placeholder="Brief description of the achievement"
-              rows={2}
-            />
-          </div>
-          <div className="flex justify-end gap-2 pt-4">
-            <Button variant="outline" onClick={closeModal}>Cancel</Button>
-            <Button
-              onClick={handleAddAchievement}
-              disabled={!newAchievement.title?.trim() || !newAchievement.year || busyAction === 'save-achievement'}
-              className="rounded-full gradient-primary text-white shadow-md hover:shadow-lg transition-all border-none font-bold"
-            >
-              {busyAction === 'save-achievement' ? 'Saving...' : `${editingItem ? 'Update' : 'Add'} Achievement`}
-            </Button>
-          </div>
-        </div>
-      </Modal>
-
       <Modal
         isOpen={activeModal === 'education'}
         onClose={closeModal}
         title="Update Education"
-        className="w-[min(32rem,calc(100vw-2rem))]"
-        style={{ width: 'min(32rem, calc(100vw - 2rem))' }}
+        className="w-[min(48rem,calc(100vw-2rem))]"
+        style={{ width: 'min(48rem, calc(100vw - 2rem))' }}
       >
-        <div className="space-y-4 max-w-[460px] w-full">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
-            <Input
-              value={educationDraft.branch}
-              onChange={(event) => setEducationDraft((prev) => ({ ...prev, branch: event.target.value }))}
-              placeholder="e.g., Computer Engineering"
-            />
+        <div className="space-y-5 max-w-[760px] w-full">
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current Campus Profile</p>
+            <p className="mt-1 text-sm font-medium text-slate-900">{hasKnownBranch ? profileBranch : 'Branch not added'}</p>
+            <p className="text-sm text-slate-700">{hasKnownYear ? `Year ${student.year}` : 'Year not added'}</p>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Year</label>
-            <Input
-              type="number"
-              value={educationDraft.year}
-              onChange={(event) => setEducationDraft((prev) => ({ ...prev, year: event.target.value }))}
-              min="1"
-              max="4"
-              placeholder="e.g., 3"
-            />
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
+            <div className="mb-3">
+              <p className="text-sm font-semibold text-slate-900">Academic Records</p>
+            </div>
+            {educationRecords.length > 0 ? (
+              <div className="space-y-3">
+                {orderedEducationRecords.map((record) => (
+                  <div key={record.id} className="rounded-xl border border-slate-200 bg-white p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-slate-900">{record.level}</p>
+                        <p className="text-sm text-slate-600">{record.institution || 'Institution not added'}</p>
+                        <p className="text-xs text-slate-500">
+                          {record.level === '10th' || record.level === '12th'
+                            ? `Year ${record.startYear || 'Not added'}`
+                            : `${record.isPursuing ? 'Currently pursuing' : 'Completed'}${record.startYear ? ` • ${record.startYear}` : ''}${record.endYear ? ` - ${record.endYear}` : ''}`}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button type="button" onClick={() => startEditEducationRecord(record)} className="rounded-full p-2 text-slate-400 hover:bg-blue-50 hover:text-blue-600" aria-label="Edit education entry">
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                        <button type="button" onClick={() => removeEducationRecord(record.id)} className="rounded-full p-2 text-slate-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete education entry">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">Add records for 10th, 12th, Bachelor's, Master's, or other education.</p>
+            )}
+            {educationForm ? (
+              <div className="mt-4 rounded-xl border border-slate-200 bg-white p-3">
+                <div className="mb-3 grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-700">Level</label>
+                    <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={educationForm.level} onChange={(event) => updateEducationRecordForm({ level: event.target.value as EducationLevel })}>
+                      <option value="10th">10th</option>
+                      <option value="12th">12th</option>
+                      <option value="Bachelor's">Bachelor's</option>
+                      <option value="Master's">Master's</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-700">Institute</label>
+                    <Input value={educationForm.institution} onChange={(event) => updateEducationRecordForm({ institution: event.target.value })} placeholder="School / College / University" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-gray-700">Branch / Stream</label>
+                    <Input value={educationForm.branch} onChange={(event) => updateEducationRecordForm({ branch: event.target.value })} placeholder="e.g., Science, CSE" />
+                  </div>
+                  {educationForm.level === '10th' || educationForm.level === '12th' ? (
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-700">Year</label>
+                      <Input type="number" value={educationForm.startYear} onChange={(event) => updateEducationRecordForm({ startYear: event.target.value, endYear: '' })} placeholder="2020" />
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-700">From</label>
+                        <Input type="number" value={educationForm.startYear} onChange={(event) => updateEducationRecordForm({ startYear: event.target.value })} placeholder="2019" />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs font-medium text-gray-700">To</label>
+                        <Input type="number" value={educationForm.endYear} onChange={(event) => updateEducationRecordForm({ endYear: event.target.value })} placeholder="2023" disabled={educationForm.isPursuing} />
+                      </div>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-700">Result Type</label>
+                      <select className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={educationForm.scoreType} onChange={(event) => updateEducationRecordForm({ scoreType: event.target.value as 'percentage' | 'cgpa' })}>
+                        <option value="percentage">Percentage</option>
+                        <option value="cgpa">CGPA</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-gray-700">Score</label>
+                      <Input value={educationForm.score} onChange={(event) => updateEducationRecordForm({ score: event.target.value })} placeholder={educationForm.scoreType === 'cgpa' ? 'e.g., 8.6' : 'e.g., 86%'} />
+                    </div>
+                  </div>
+                </div>
+                {educationForm.level !== '10th' && educationForm.level !== '12th' ? (
+                  <div className="mb-3 flex items-center justify-between">
+                    <label className="inline-flex items-center gap-2 text-sm text-slate-700">
+                      <Checkbox checked={educationForm.isPursuing} onCheckedChange={(checked) => updateEducationRecordForm({ isPursuing: Boolean(checked), endYear: checked ? '' : educationForm.endYear })} />
+                      Currently pursuing
+                    </label>
+                    {(educationForm.level === "Bachelor's" || educationForm.level === "Master's") && educationForm.isPursuing && student.year > 0 ? (
+                      <span className="text-xs font-medium text-emerald-700">Auto year: {student.year}</span>
+                    ) : null}
+                  </div>
+                ) : null}
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={cancelEducationForm}>Cancel</Button>
+                  <Button type="button" onClick={saveEducationRecordForm} className="rounded-full gradient-primary text-white border-none">Save record</Button>
+                </div>
+              </div>
+            ) : null}
+            {!educationForm ? (
+              <div className="mt-4">
+                <Button type="button" variant="outline" className="rounded-full" onClick={addEducationRecord}>
+                  <Plus className="mr-1 h-4 w-4" />
+                  Add record
+                </Button>
+              </div>
+            ) : null}
           </div>
           <div className="flex justify-end gap-2 pt-4">
             <Button variant="outline" onClick={closeModal}>Cancel</Button>
@@ -2119,6 +2281,39 @@ export function ProfilePage({
             </Button>
           </div>
         </div>
+      </Modal>
+
+      <Modal
+        isOpen={Boolean(certPreview)}
+        onClose={() => setCertPreview(null)}
+        title={certPreview?.title || 'Certificate'}
+        className="w-[min(60rem,calc(100vw-2rem))]"
+        style={{ width: 'min(60rem, calc(100vw - 2rem))' }}
+      >
+        {certPreview ? (
+          <div className="w-full space-y-4">
+            <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm text-slate-600">{certPreview.issuer || 'Issuer not added'}</p>
+              {certPreview.issueDate ? (
+                <p className="text-sm text-slate-600">Issued: {format(certPreview.issueDate, 'MMM d, yyyy')}</p>
+              ) : null}
+              {certPreview.description ? (
+                <p className="text-sm leading-6 text-slate-700">{certPreview.description}</p>
+              ) : null}
+              {certPreview.certificateUrl ? (
+                <a
+                  href={certPreview.certificateUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 hover:bg-blue-100"
+                >
+                  View verification link
+                </a>
+              ) : null}
+            </div>
+            <ImageWithFallback src={certPreview.url} alt={certPreview.title} className="max-h-[80vh] w-full rounded-xl object-contain" />
+          </div>
+        ) : null}
       </Modal>
     </PageLayout>
   );

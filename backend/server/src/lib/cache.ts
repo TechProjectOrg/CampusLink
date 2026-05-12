@@ -13,8 +13,13 @@ type RedisSubscriber = {
 };
 
 type RedisCommandValue = string | number | boolean;
+type RedisCommandOptions = {
+  onHttpError?: (status: number, responseText: string) => void;
+};
 
 const STREAM_POLL_INTERVAL_MS = 1000;
+let redisStreamsRuntimeDisabled = false;
+let redisStreamsDisabledWarningShown = false;
 
 function getUpstashConfig(): { url: string; token: string } | null {
   const url = process.env.UPSTASH_REDIS_REST_URL?.trim().replace(/\/+$/, '');
@@ -23,11 +28,30 @@ function getUpstashConfig(): { url: string; token: string } | null {
   return { url, token };
 }
 
+function areRedisStreamsEnabled(): boolean {
+  const configuredValue = process.env.UPSTASH_REDIS_STREAMS_ENABLED?.trim().toLowerCase();
+  if (configuredValue === 'false' || configuredValue === '0' || configuredValue === 'no') {
+    return false;
+  }
+
+  return !redisStreamsRuntimeDisabled;
+}
+
+function disableRedisStreams(reason: string): void {
+  redisStreamsRuntimeDisabled = true;
+  if (redisStreamsDisabledWarningShown) return;
+  redisStreamsDisabledWarningShown = true;
+  console.warn(reason);
+}
+
 export function isRedisConfigured(): boolean {
   return getUpstashConfig() !== null;
 }
 
-async function runCommand<T>(command: Array<string | number>): Promise<T | null> {
+async function runCommand<T>(
+  command: Array<string | number>,
+  options: RedisCommandOptions = {},
+): Promise<T | null> {
   const config = getUpstashConfig();
   if (!config) return null;
 
@@ -42,6 +66,8 @@ async function runCommand<T>(command: Array<string | number>): Promise<T | null>
     });
 
     if (!response.ok) {
+      const responseText = await response.text();
+      options.onHttpError?.(response.status, responseText);
       console.warn(`Upstash Redis command failed with status ${response.status}`);
       return null;
     }
@@ -248,7 +274,17 @@ export async function cacheSetCardinality(key: string): Promise<number> {
 }
 
 async function appendStreamMessage(channel: string, payload: string): Promise<void> {
-  await runCommand(['XADD', channel, '*', 'payload', payload]);
+  if (!areRedisStreamsEnabled()) return;
+
+  await runCommand(['XADD', channel, '*', 'payload', payload], {
+    onHttpError: (status, responseText) => {
+      if (status === 400) {
+        disableRedisStreams(
+          `Disabling Upstash Redis realtime streams after XADD was rejected with status 400${responseText ? `: ${responseText}` : ''}`,
+        );
+      }
+    },
+  });
 }
 
 class PollingRedisSubscriber implements RedisSubscriber {
@@ -272,13 +308,13 @@ class PollingRedisSubscriber implements RedisSubscriber {
   }
 
   private start(): void {
-    if (this.polling || this.disposed || this.channels.size === 0) return;
+    if (this.polling || this.disposed || this.channels.size === 0 || !areRedisStreamsEnabled()) return;
     this.polling = true;
     void this.pollLoop();
   }
 
   private async pollLoop(): Promise<void> {
-    while (!this.disposed && this.channels.size > 0) {
+    while (!this.disposed && this.channels.size > 0 && areRedisStreamsEnabled()) {
       try {
         await Promise.all(Array.from(this.channels).map((channel) => this.pollChannel(channel)));
       } catch (err) {
@@ -300,7 +336,17 @@ class PollingRedisSubscriber implements RedisSubscriber {
       '+',
       'COUNT',
       100,
-    ]);
+    ], {
+      onHttpError: (status, responseText) => {
+        if (status === 400) {
+          this.disposed = true;
+          this.channels.clear();
+          disableRedisStreams(
+            `Disabling Upstash Redis realtime streams after XRANGE was rejected with status 400${responseText ? `: ${responseText}` : ''}`,
+          );
+        }
+      },
+    });
 
     if (!Array.isArray(result) || result.length === 0) {
       if (cursor === '$') {
@@ -311,7 +357,17 @@ class PollingRedisSubscriber implements RedisSubscriber {
           '-',
           'COUNT',
           1,
-        ]);
+        ], {
+          onHttpError: (status, responseText) => {
+            if (status === 400) {
+              this.disposed = true;
+              this.channels.clear();
+              disableRedisStreams(
+                `Disabling Upstash Redis realtime streams after XREVRANGE was rejected with status 400${responseText ? `: ${responseText}` : ''}`,
+              );
+            }
+          },
+        });
         const latestEntry = Array.isArray(latest) ? latest[0] : null;
         if (latestEntry?.[0]) {
           this.cursors.set(channel, String(latestEntry[0]));
@@ -337,12 +393,12 @@ class PollingRedisSubscriber implements RedisSubscriber {
 }
 
 export function createRedisSubscriber(): RedisSubscriber | null {
-  if (!getUpstashConfig()) return null;
+  if (!getUpstashConfig() || !areRedisStreamsEnabled()) return null;
   return new PollingRedisSubscriber();
 }
 
 export function createRedisPublisher(): RedisPublisher | null {
-  if (!getUpstashConfig()) return null;
+  if (!getUpstashConfig() || !areRedisStreamsEnabled()) return null;
   return {
     async publish(channel: string, payload: string): Promise<void> {
       await appendStreamMessage(channel, payload);

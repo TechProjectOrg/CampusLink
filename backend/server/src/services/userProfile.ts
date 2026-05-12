@@ -1,3 +1,4 @@
+import prisma from '../prisma';
 import { getUserStatsById, getUserSummaryById } from '../lib/userCache';
 
 export type UserType = 'student' | 'alumni';
@@ -26,11 +27,33 @@ export interface UserProfile {
     followingCount: number;
     postCount: number;
   };
+  adminAccess?: {
+    role: 'super_admin';
+    mustChangePassword: boolean;
+    lastLoginAt: string | null;
+  } | null;
 }
 
 export async function getUserProfileById(userId: string): Promise<UserProfile | null> {
-  const [summary, stats] = await Promise.all([getUserSummaryById(userId), getUserStatsById(userId)]);
+  const [summary, stats, adminRows] = await Promise.all([
+    getUserSummaryById(userId),
+    getUserStatsById(userId),
+    prisma.$queryRaw<
+      Array<{
+        role: 'super_admin';
+        must_change_password: boolean;
+        last_login_at: Date | null;
+      }>
+    >`
+      SELECT role::text AS role, must_change_password, last_login_at
+      FROM admin_accounts
+      WHERE user_id = ${userId}
+      LIMIT 1
+    `,
+  ]);
   if (!summary || !stats) return null;
+
+  const admin = adminRows[0];
 
   return {
     userId: summary.userId,
@@ -52,5 +75,12 @@ export async function getUserProfileById(userId: string): Promise<UserProfile | 
       followingCount: stats.followingCount,
       postCount: stats.postCount,
     },
+    adminAccess: admin
+      ? {
+          role: admin.role,
+          mustChangePassword: admin.must_change_password,
+          lastLoginAt: admin.last_login_at ? new Date(admin.last_login_at).toISOString() : null,
+        }
+      : null,
   };
 }

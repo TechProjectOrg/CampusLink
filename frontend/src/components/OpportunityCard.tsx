@@ -71,6 +71,7 @@ export function OpportunityCard({
 
   const isLiked = opportunity.isLikedByMe ?? opportunity.likes.includes(currentUserId);
   const isSaved = opportunity.isSavedByMe ?? opportunity.saved.includes(currentUserId);
+  const hasCertificateTag = (opportunity.tags ?? []).some((tag) => tag.trim().toLowerCase() === 'certificate');
 
   const typeColors = {
     internship: 'bg-accent/10 text-accent border-accent/20',
@@ -282,9 +283,16 @@ export function OpportunityCard({
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Badge className={`${typeColors[opportunity.type]} border transition-all duration-300 hover:scale-110`}>
-                {opportunity.type.charAt(0).toUpperCase() + opportunity.type.slice(1)}
-              </Badge>
+              {hasCertificateTag ? (
+                <Badge className="border border-amber-200 bg-amber-50 text-amber-700 transition-all duration-300 hover:scale-110">
+                  Certificate
+                </Badge>
+              ) : null}
+              {opportunity.type !== 'general' ? (
+                <Badge className={`${typeColors[opportunity.type]} border transition-all duration-300 hover:scale-110`}>
+                  {opportunity.type.charAt(0).toUpperCase() + opportunity.type.slice(1)}
+                </Badge>
+              ) : null}
               {showManagementControls && opportunity.canEdit && (
                 <button type="button" className="text-gray-400 hover:text-gray-700" onClick={() => setEditingPost((prev) => !prev)}>
                   <Pencil className="w-4 h-4" />

@@ -41,12 +41,12 @@ export function ClubsPage({ students, currentUserId, initialClubSlug = null, onC
 
   useEffect(() => {
     let isMounted = true;
-    setIsLoading(true);
     void (async () => {
       const key = cacheKeys.list.clubs();
       const cached = await readCachedClubsList(key);
       if (isMounted && cached.length > 0) {
         setClubs(cached);
+        setIsLoading(false);
       }
 
       try {
@@ -55,14 +55,20 @@ export function ClubsPage({ students, currentUserId, initialClubSlug = null, onC
         if (isMounted) {
           setClubs(items);
           setError(null);
+          setIsLoading(false);
         }
       } catch (err) {
         if (isMounted) {
-          setError(err instanceof Error ? err.message : 'Unable to load clubs');
+          if (cached.length === 0) {
+            setError(err instanceof Error ? err.message : 'Unable to load clubs');
+            setIsLoading(false);
+          }
         }
       } finally {
         if (isMounted) {
-          setIsLoading(false);
+          if (cached.length === 0) {
+            setIsLoading(false);
+          }
         }
       }
     })();
@@ -104,6 +110,10 @@ export function ClubsPage({ students, currentUserId, initialClubSlug = null, onC
         onViewProfile={onViewProfile}
       />
     );
+  }
+
+  if (isLoading) {
+    return <LoadingState type="page" />;
   }
 
   return (
