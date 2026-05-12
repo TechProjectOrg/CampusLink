@@ -35,9 +35,9 @@ interface GetUserParams {
   userId: string;
 }
 
-const requireOwnUser: RequestHandler = (req, res, next: NextFunction) => {
+const requireOwnUser: RequestHandler<GetUserParams> = (req, res, next: NextFunction) => {
   const authedRequest = req as unknown as AuthedRequest;
-  const { userId } = req.params as unknown as GetUserParams;
+  const { userId } = req.params;
 
   if (!authedRequest.auth || authedRequest.auth.userId !== userId) {
     return res.status(403).json({ message: 'You can only access your own account data' });
@@ -672,7 +672,11 @@ router.patch(
 router.patch(
   '/:userId/profile-picture',
   requireOwnUser,
-  profilePhotoUpload.single('image') as unknown as RequestHandler<GetUserParams>,
+  profilePhotoUpload.single('image') as unknown as RequestHandler<
+    GetUserParams,
+    unknown,
+    UpdateProfilePictureBody
+  >,
   async (
     req: Request<GetUserParams, unknown, UpdateProfilePictureBody> & { file?: Express.Multer.File },
     res: Response,
@@ -756,7 +760,11 @@ router.patch(
 router.patch(
   '/:userId/cover-photo',
   requireOwnUser,
-  profilePhotoUpload.single('image') as unknown as RequestHandler<GetUserParams>,
+  profilePhotoUpload.single('image') as unknown as RequestHandler<
+    GetUserParams,
+    unknown,
+    UpdateCoverPhotoBody
+  >,
   async (
     req: Request<GetUserParams, unknown, UpdateCoverPhotoBody> & { file?: Express.Multer.File },
     res: Response,
@@ -937,45 +945,46 @@ router.delete(
   '/:userId',
   requireOwnUser,
   async (req: Request<GetUserParams, unknown, Partial<DeleteUserBody>>, res: Response) => {
-  const { userId } = req.params;
-  const { password } = req.body;
+    const { userId } = req.params;
+    const { password } = req.body;
 
-  if (!userId) {
-    return res.status(400).json({ message: 'Missing userId' });
-  }
-
-  if (!password) {
-    return res.status(400).json({ message: 'Password is required to delete account' });
-  }
-
-  try {
-    const rows = await prisma.$queryRaw<{ password_hash: string }[]>`
-      SELECT password_hash
-      FROM users
-      WHERE user_id = ${userId}
-    `;
-
-    const row = rows[0];
-    if (!row) {
-      return res.status(404).json({ message: 'User not found' });
+    if (!userId) {
+      return res.status(400).json({ message: 'Missing userId' });
     }
 
-    const passwordMatches = await verifyPassword(password, row.password_hash);
-    if (!passwordMatches) {
-      return res.status(401).json({ message: 'Invalid password' });
+    if (!password) {
+      return res.status(400).json({ message: 'Password is required to delete account' });
     }
 
-    await prisma.$queryRaw`
-      DELETE FROM users
-      WHERE user_id = ${userId}
-    `;
+    try {
+      const rows = await prisma.$queryRaw<{ password_hash: string }[]>`
+        SELECT password_hash
+        FROM users
+        WHERE user_id = ${userId}
+      `;
 
-    return res.status(204).send();
-  } catch (err) {
-    console.error('Error deleting user account:', err);
-    return res.status(500).json({ message: 'Internal server error' });
+      const row = rows[0];
+      if (!row) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      const passwordMatches = await verifyPassword(password, row.password_hash);
+      if (!passwordMatches) {
+        return res.status(401).json({ message: 'Invalid password' });
+      }
+
+      await prisma.$queryRaw`
+        DELETE FROM users
+        WHERE user_id = ${userId}
+      `;
+
+      return res.status(204).send();
+    } catch (err) {
+      console.error('Error deleting user account:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
   }
-});
+);
 
 // ==============================
 // Profile: Skills
