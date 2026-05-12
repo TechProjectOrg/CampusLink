@@ -501,7 +501,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                                     {formatMenuTimestamp(msg.timestamp)}
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem onClick={() => setReplyingTo(msg)} className="hidden sm:flex">
+                                  <DropdownMenuItem onClick={() => setReplyingTo(msg)}>
                                     <Reply className="w-4 h-4 mr-2" />
                                     Reply
                                   </DropdownMenuItem>
