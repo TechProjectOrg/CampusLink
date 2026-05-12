@@ -511,13 +511,13 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   }
 
   return (
-    <div className="flex flex-col w-full max-w-7xl mx-auto bg-white overflow-hidden pb-16 md:pb-0" style={{ height: 'calc(100vh - 4rem)' }}>
-      <div className="flex flex-1 min-h-0 border-x border-gray-200">
+    <div className="cl-chat-page flex flex-col w-full max-w-7xl mx-auto bg-white overflow-hidden pb-16 md:pb-0" style={{ height: 'calc(100vh - 4rem)' }}>
+      <div className="cl-chat-frame flex flex-1 min-h-0 border-x border-gray-200">
         {/* LEFT: Conversations List */}
-        <div className={`${selectedChat ? 'hidden md:flex' : 'flex'} w-full md:w-96 flex-shrink-0 border-r border-gray-200 flex-col min-h-0 bg-white`}>
+        <div className={`cl-chat-conversation-list ${selectedChat ? 'hidden md:flex' : 'flex'} w-full md:w-96 flex-shrink-0 border-r border-gray-200 flex-col min-h-0 bg-white`}>
           {/* Fixed Header — never scrolls */}
-          <div className="p-4 md:p-6 border-b border-gray-200 flex-shrink-0">
-            <div className="flex items-center justify-between mb-4">
+          <div className="cl-chat-list-header p-4 md:p-6 border-b border-gray-200 flex-shrink-0">
+            <div className="cl-chat-list-header-row flex items-center justify-between mb-4">
               <h2 className="text-gray-900 mb-4">Messages</h2>
               <Button
                 onClick={() => setIsNewChatOpen(true)}
@@ -541,7 +541,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
           {/* Scrollable Conversation List */}
           <div className="flex-1 relative">
             <div className="absolute inset-0 overflow-y-auto">
-              <div className="p-2 w-full">
+              <div className="cl-chat-conversation-list-inner p-2 w-full">
               {conversations.map(conversation => (
                 <button
                   key={conversation.id}
@@ -551,7 +551,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                     }
                     appData.selectConversation(conversation.id);
                   }}
-                  className={`w-full p-3 text-left rounded-xl transition-all duration-300 mb-1 ${
+                  className={`cl-chat-conversation-item w-full p-3 text-left rounded-xl transition-all duration-300 mb-1 ${
                     selectedChat === conversation.id 
                       ? 'bg-gray-100' 
                       : 'hover:bg-gray-50'
@@ -597,9 +597,9 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
 
         {/* Chat Area - Instagram Style */}
         {selectedConversation ? (
-          <div className={`${selectedChat ? 'flex' : 'hidden md:flex'} flex-1 flex-col min-w-0 min-h-0 bg-white`}>
+          <div className={`cl-chat-panel ${selectedChat ? 'flex' : 'hidden md:flex'} flex-1 flex-col min-w-0 min-h-0 bg-white`}>
             {/* Fixed Chat Header */}
-            <div className="px-4 md:px-6 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+            <div className="cl-chat-panel-header px-4 md:px-6 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-3">
                 <button 
                   onClick={() => appData.selectConversation(null)}
@@ -705,7 +705,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
             </div>
 
             {/* Scrollable Messages Area */}
-            <div className="flex-1 relative bg-white min-h-0">
+            <div className="cl-chat-messages-area flex-1 relative bg-white min-h-0">
               {showNewMessageBanner && (
                 <button
                   onClick={() => {
@@ -737,7 +737,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                   !selectedChat || isChatReady || !isLoadingMessages ? 'opacity-100' : 'opacity-0'
                 }`}
               >
-                <div className="p-4 md:p-6 space-y-3">
+                <div className="cl-chat-messages-inner p-4 md:p-6 space-y-3">
                 <div ref={topSentinelRef} className="h-px w-full" aria-hidden="true" />
                 <div className="space-y-3">
                   {/* "Beginning of conversation" marker */}
@@ -791,7 +791,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                             <AvatarFallback>{msg.senderName[0]}</AvatarFallback>
                           </Avatar>
                         )}
-                        <div className={`group min-w-0 w-fit max-w-[78%] md:max-w-[70%] xl:max-w-[40rem] ${msg.isOwn ? 'order-2' : 'order-1'}`}>
+                        <div className={`cl-chat-message-group group min-w-0 w-fit max-w-[78%] md:max-w-[70%] xl:max-w-[40rem] ${msg.isOwn ? 'order-2' : 'order-1'}`}>
                           {selectedConversation.isGroup && !msg.isOwn && startsSenderGroup && (
                             <p className="mb-1 px-2 text-xs font-medium text-gray-500">
                               {msg.senderName}
@@ -945,7 +945,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
             </div>
 
             {/* Fixed Input Footer */}
-            <div className="px-4 md:px-6 py-3 md:py-4 border-t border-gray-200 flex-shrink-0">
+            <div className="cl-chat-input-footer px-4 md:px-6 py-3 md:py-4 border-t border-gray-200 flex-shrink-0">
               {replyingTo && (
                 <div className="mb-3 flex items-center justify-between rounded-xl bg-gray-50 px-3 py-2">
                   <div className="min-w-0">

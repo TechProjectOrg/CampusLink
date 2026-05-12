@@ -72,7 +72,7 @@ export function NewChatModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col p-0">
+      <DialogContent className="cl-new-chat-modal max-w-2xl max-h-[90vh] flex flex-col p-0">
         <DialogHeader className="p-6 pb-4 border-b">
           <DialogTitle>New Message</DialogTitle>
           <DialogDescription>Select a person or create a group to start a chat.</DialogDescription>
