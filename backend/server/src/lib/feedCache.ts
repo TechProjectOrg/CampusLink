@@ -395,12 +395,6 @@ function postSelectSql(viewerUserId: string): Prisma.Sql {
 function visibilitySql(viewerUserId: string): Prisma.Sql {
   return Prisma.sql`
     (
-      au.is_banned = FALSE
-      AND (au.suspended_until IS NULL OR au.suspended_until < NOW())
-      AND p.deleted_at IS NULL
-      AND p.hidden_at IS NULL
-      AND (p.club_id IS NULL OR c.deleted_at IS NULL)
-      AND (
       p.author_user_id = ${viewerUserId}
       OR (
         p.club_id IS NOT NULL
@@ -457,7 +451,6 @@ function visibilitySql(viewerUserId: string): Prisma.Sql {
         )
       )
     )
-    )
   `;
 }
 
@@ -499,11 +492,6 @@ async function fetchFeedIdRowsFromDb(viewerUserId: string, limit: number, offset
         )
       )
     )
-    AND au.is_banned = FALSE
-    AND (au.suspended_until IS NULL OR au.suspended_until < NOW())
-    AND p.deleted_at IS NULL
-    AND p.hidden_at IS NULL
-    AND (p.club_id IS NULL OR c.deleted_at IS NULL)
     AND (
       p.author_user_id = ${viewerUserId}
       OR (
@@ -587,11 +575,6 @@ export async function fetchPostIdsByQuery(
           )
         )
       )
-      AND au.is_banned = FALSE
-      AND (au.suspended_until IS NULL OR au.suspended_until < NOW())
-      AND p.deleted_at IS NULL
-      AND p.hidden_at IS NULL
-      AND (p.club_id IS NULL OR c.deleted_at IS NULL)
       AND (
         ${hashtagPattern}::text IS NULL
         OR EXISTS (

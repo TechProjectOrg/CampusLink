@@ -1,30 +1,64 @@
-CREATE TYPE "AdminRole" AS ENUM ('super_admin');
-CREATE TYPE "AdminSeverity" AS ENUM ('info', 'warning', 'critical');
-CREATE TYPE "AdminReportTargetType" AS ENUM ('user', 'post', 'club');
-CREATE TYPE "AdminReportStatus" AS ENUM ('open', 'reviewing', 'resolved', 'rejected', 'escalated');
-CREATE TYPE "VerificationRequestType" AS ENUM ('student', 'club');
-CREATE TYPE "VerificationRequestStatus" AS ENUM ('pending', 'approved', 'rejected', 'more_info');
-CREATE TYPE "AnnouncementStatus" AS ENUM ('draft', 'scheduled', 'published');
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'AdminRole') THEN
+    CREATE TYPE "AdminRole" AS ENUM ('super_admin');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'AdminSeverity') THEN
+    CREATE TYPE "AdminSeverity" AS ENUM ('info', 'warning', 'critical');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'AdminReportTargetType') THEN
+    CREATE TYPE "AdminReportTargetType" AS ENUM ('user', 'post', 'club');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'AdminReportStatus') THEN
+    CREATE TYPE "AdminReportStatus" AS ENUM ('open', 'reviewing', 'resolved', 'rejected', 'escalated');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'VerificationRequestType') THEN
+    CREATE TYPE "VerificationRequestType" AS ENUM ('student', 'club');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'VerificationRequestStatus') THEN
+    CREATE TYPE "VerificationRequestStatus" AS ENUM ('pending', 'approved', 'rejected', 'more_info');
+  END IF;
+END $$;
+
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'AnnouncementStatus') THEN
+    CREATE TYPE "AnnouncementStatus" AS ENUM ('draft', 'scheduled', 'published');
+  END IF;
+END $$;
 
 ALTER TABLE "users"
-  ADD COLUMN "is_banned" BOOLEAN NOT NULL DEFAULT FALSE,
-  ADD COLUMN "suspended_until" TIMESTAMP(6),
-  ADD COLUMN "verified_at" TIMESTAMP(6);
+  ADD COLUMN IF NOT EXISTS "is_banned" BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS "suspended_until" TIMESTAMP(6),
+  ADD COLUMN IF NOT EXISTS "verified_at" TIMESTAMP(6);
 
 ALTER TABLE "clubs"
-  ADD COLUMN "is_verified" BOOLEAN NOT NULL DEFAULT FALSE,
-  ADD COLUMN "featured_at" TIMESTAMP(6),
-  ADD COLUMN "frozen_at" TIMESTAMP(6),
-  ADD COLUMN "deleted_at" TIMESTAMP(6);
+  ADD COLUMN IF NOT EXISTS "is_verified" BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS "featured_at" TIMESTAMP(6),
+  ADD COLUMN IF NOT EXISTS "frozen_at" TIMESTAMP(6),
+  ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP(6);
 
 ALTER TABLE "posts"
-  ADD COLUMN "hidden_at" TIMESTAMP(6),
-  ADD COLUMN "hidden_reason" TEXT,
-  ADD COLUMN "hidden_by_user_id" UUID,
-  ADD COLUMN "deleted_at" TIMESTAMP(6),
-  ADD COLUMN "deleted_by_user_id" UUID;
+  ADD COLUMN IF NOT EXISTS "hidden_at" TIMESTAMP(6),
+  ADD COLUMN IF NOT EXISTS "hidden_reason" TEXT,
+  ADD COLUMN IF NOT EXISTS "hidden_by_user_id" UUID,
+  ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP(6),
+  ADD COLUMN IF NOT EXISTS "deleted_by_user_id" UUID;
 
-CREATE TABLE "admin_accounts" (
+CREATE TABLE IF NOT EXISTS "admin_accounts" (
   "admin_account_id" UUID NOT NULL DEFAULT gen_random_uuid(),
   "user_id" UUID NOT NULL,
   "role" "AdminRole" NOT NULL DEFAULT 'super_admin',
@@ -37,7 +71,7 @@ CREATE TABLE "admin_accounts" (
   CONSTRAINT "admin_accounts_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("user_id") ON DELETE CASCADE ON UPDATE NO ACTION
 );
 
-CREATE TABLE "admin_audit_logs" (
+CREATE TABLE IF NOT EXISTS "admin_audit_logs" (
   "audit_log_id" UUID NOT NULL DEFAULT gen_random_uuid(),
   "actor_user_id" UUID NOT NULL,
   "action_type" VARCHAR(100) NOT NULL,
@@ -51,7 +85,7 @@ CREATE TABLE "admin_audit_logs" (
   CONSTRAINT "admin_audit_logs_actor_user_id_fkey" FOREIGN KEY ("actor_user_id") REFERENCES "users"("user_id") ON DELETE CASCADE ON UPDATE NO ACTION
 );
 
-CREATE TABLE "admin_reports" (
+CREATE TABLE IF NOT EXISTS "admin_reports" (
   "report_id" UUID NOT NULL DEFAULT gen_random_uuid(),
   "reporter_user_id" UUID,
   "target_type" "AdminReportTargetType" NOT NULL,
@@ -71,7 +105,7 @@ CREATE TABLE "admin_reports" (
   CONSTRAINT "admin_reports_assigned_admin_user_id_fkey" FOREIGN KEY ("assigned_admin_user_id") REFERENCES "users"("user_id") ON DELETE SET NULL ON UPDATE NO ACTION
 );
 
-CREATE TABLE "admin_report_notes" (
+CREATE TABLE IF NOT EXISTS "admin_report_notes" (
   "report_note_id" UUID NOT NULL DEFAULT gen_random_uuid(),
   "report_id" UUID NOT NULL,
   "admin_user_id" UUID NOT NULL,
@@ -82,7 +116,7 @@ CREATE TABLE "admin_report_notes" (
   CONSTRAINT "admin_report_notes_admin_user_id_fkey" FOREIGN KEY ("admin_user_id") REFERENCES "users"("user_id") ON DELETE CASCADE ON UPDATE NO ACTION
 );
 
-CREATE TABLE "admin_verification_requests" (
+CREATE TABLE IF NOT EXISTS "admin_verification_requests" (
   "verification_request_id" UUID NOT NULL DEFAULT gen_random_uuid(),
   "request_type" "VerificationRequestType" NOT NULL,
   "target_user_id" UUID,
@@ -98,7 +132,7 @@ CREATE TABLE "admin_verification_requests" (
   CONSTRAINT "admin_verification_requests_reviewed_by_user_id_fkey" FOREIGN KEY ("reviewed_by_user_id") REFERENCES "users"("user_id") ON DELETE SET NULL ON UPDATE NO ACTION
 );
 
-CREATE TABLE "admin_announcements" (
+CREATE TABLE IF NOT EXISTS "admin_announcements" (
   "announcement_id" UUID NOT NULL DEFAULT gen_random_uuid(),
   "title" VARCHAR(255) NOT NULL,
   "content" TEXT NOT NULL,
@@ -115,17 +149,17 @@ CREATE TABLE "admin_announcements" (
   CONSTRAINT "admin_announcements_created_by_user_id_fkey" FOREIGN KEY ("created_by_user_id") REFERENCES "users"("user_id") ON DELETE CASCADE ON UPDATE NO ACTION
 );
 
-CREATE INDEX "idx_admin_audit_logs_actor_user_id" ON "admin_audit_logs"("actor_user_id");
-CREATE INDEX "idx_admin_audit_logs_created_at" ON "admin_audit_logs"("created_at");
-CREATE INDEX "idx_admin_reports_status" ON "admin_reports"("status");
-CREATE INDEX "idx_admin_reports_assigned_admin_user_id" ON "admin_reports"("assigned_admin_user_id");
-CREATE INDEX "idx_admin_reports_target_type" ON "admin_reports"("target_type");
-CREATE INDEX "idx_admin_report_notes_report_id" ON "admin_report_notes"("report_id");
-CREATE INDEX "idx_admin_report_notes_admin_user_id" ON "admin_report_notes"("admin_user_id");
-CREATE INDEX "idx_admin_verification_requests_status" ON "admin_verification_requests"("status");
-CREATE INDEX "idx_admin_verification_requests_request_type" ON "admin_verification_requests"("request_type");
-CREATE INDEX "idx_admin_announcements_status" ON "admin_announcements"("status");
-CREATE INDEX "idx_admin_announcements_created_by_user_id" ON "admin_announcements"("created_by_user_id");
+CREATE INDEX IF NOT EXISTS "idx_admin_audit_logs_actor_user_id" ON "admin_audit_logs"("actor_user_id");
+CREATE INDEX IF NOT EXISTS "idx_admin_audit_logs_created_at" ON "admin_audit_logs"("created_at");
+CREATE INDEX IF NOT EXISTS "idx_admin_reports_status" ON "admin_reports"("status");
+CREATE INDEX IF NOT EXISTS "idx_admin_reports_assigned_admin_user_id" ON "admin_reports"("assigned_admin_user_id");
+CREATE INDEX IF NOT EXISTS "idx_admin_reports_target_type" ON "admin_reports"("target_type");
+CREATE INDEX IF NOT EXISTS "idx_admin_report_notes_report_id" ON "admin_report_notes"("report_id");
+CREATE INDEX IF NOT EXISTS "idx_admin_report_notes_admin_user_id" ON "admin_report_notes"("admin_user_id");
+CREATE INDEX IF NOT EXISTS "idx_admin_verification_requests_status" ON "admin_verification_requests"("status");
+CREATE INDEX IF NOT EXISTS "idx_admin_verification_requests_request_type" ON "admin_verification_requests"("request_type");
+CREATE INDEX IF NOT EXISTS "idx_admin_announcements_status" ON "admin_announcements"("status");
+CREATE INDEX IF NOT EXISTS "idx_admin_announcements_created_by_user_id" ON "admin_announcements"("created_by_user_id");
 
 WITH existing_user AS (
   SELECT user_id FROM users WHERE email = 'admin.campuslynk@gbpuat.ac.in' LIMIT 1
@@ -162,8 +196,8 @@ admin_user AS (
   UNION ALL
   SELECT user_id FROM inserted_user
 )
-INSERT INTO alumni_profiles (user_id, branch, passing_year, current_status)
-SELECT user_id, 'Administration', EXTRACT(YEAR FROM CURRENT_DATE)::int, 'Platform Admin'
+INSERT INTO alumni_profiles (user_id, branch, passing_year, current_status, created_at, updated_at)
+SELECT user_id, 'Administration', EXTRACT(YEAR FROM CURRENT_DATE)::int, 'Platform Admin', NOW(), NOW()
 FROM admin_user
 ON CONFLICT (user_id) DO NOTHING;
 
