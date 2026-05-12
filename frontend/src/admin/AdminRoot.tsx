@@ -484,32 +484,42 @@ export default function AdminRoot() {
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
       <aside
-        style={{ width: collapsed ? 84 : 246 }}
+        style={{ width: collapsed ? 64 : 246 }}
         className="fixed inset-y-0 left-0 z-30 border-r border-slate-200 bg-slate-50 transition-all duration-200"
       >
           <div className="flex h-full flex-col">
             <div className="border-b border-slate-200 px-4 py-4">
               <div className="flex items-center justify-between">
-                <div className="overflow-hidden">
-                  <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">CampusLink</p>
-                  {!collapsed ? <p className="mt-1 text-sm font-semibold text-slate-900">Admin Console</p> : null}
-                </div>
+                {!collapsed ? (
+                  <div className="overflow-hidden">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">CampusLink</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-900">Admin Console</p>
+                  </div>
+                ) : (
+                  <div className="w-3" />
+                )}
                 <Button variant="ghost" size="icon" onClick={() => setCollapsed((value) => !value)}>
                   <ChevronRight className={`h-4 w-4 transition-transform ${collapsed ? '' : 'rotate-180'}`} />
                 </Button>
               </div>
             </div>
 
-            <nav className="flex-1 space-y-1 px-3 py-4">
+              <nav className="flex-1 space-y-1 px-3 py-4">
               {NAV_ITEMS.map((item) => {
                 const Icon = item.icon;
                 const active = page === item.key;
+                const base = `flex w-full items-center gap-3 rounded-md border text-sm transition `;
+                const collapsedClasses = 'justify-center px-0 py-2';
+                const expandedClasses = 'px-3 py-2 text-left';
                 return (
                   <button
                     key={item.key}
                     type="button"
                     onClick={() => goTo(item.key)}
-                    className={`flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left text-sm transition ${active ? 'border-slate-300 bg-white font-medium text-slate-900' : 'border-transparent text-slate-600 hover:border-slate-200 hover:bg-white hover:text-slate-900'}`}
+                    className={
+                      base + (collapsed ? collapsedClasses : expandedClasses) +
+                      (active ? ' border-slate-300 bg-white font-medium text-slate-900' : ' border-transparent text-slate-600 hover:border-slate-200 hover:bg-white hover:text-slate-900')
+                    }
                   >
                     <Icon className="h-4 w-4 shrink-0" />
                     {!collapsed ? <span className="truncate">{item.label}</span> : null}
@@ -519,22 +529,28 @@ export default function AdminRoot() {
             </nav>
 
             <div className="border-t border-slate-200 p-3">
-              <div className="rounded-lg border border-slate-200 bg-white p-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
-                    {admin?.username ? admin.username.slice(0, 2).toUpperCase() : 'AD'}
-                  </div>
-                  {!collapsed ? (
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-slate-900">{admin?.username ?? 'Loading...'}</p>
-                      <p className="truncate text-xs text-slate-500">{admin?.role ? admin.role.replace('_', ' ') : ''}</p>
+              <div className={collapsed ? 'flex items-center justify-center py-3' : 'rounded-lg border border-slate-200 bg-white p-3'}>
+                {!collapsed ? (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+                        {admin?.username ? admin.username.slice(0, 2).toUpperCase() : 'AD'}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-slate-900">{admin?.username ?? 'Loading...'}</p>
+                        <p className="truncate text-xs text-slate-500">{admin?.role ? admin.role.replace('_', ' ') : ''}</p>
+                      </div>
                     </div>
-                  ) : null}
-                </div>
-                <Button variant="outline" size="sm" className="mt-3 w-full justify-start border-slate-200 text-slate-700" onClick={handleLogout}>
-                  <LogOut className="h-4 w-4" />
-                  {!collapsed ? 'Logout' : null}
-                </Button>
+                    <Button variant="outline" size="sm" className="mt-3 w-full justify-start border-slate-200 text-slate-700" onClick={handleLogout}>
+                      <LogOut className="h-4 w-4" />
+                      Logout
+                    </Button>
+                  </>
+                ) : (
+                  <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full border border-slate-200 bg-white text-slate-700" onClick={handleLogout}>
+                    <LogOut className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -554,12 +570,12 @@ export default function AdminRoot() {
               </div>
 
               <div className="relative hidden w-[320px] xl:block">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 pointer-events-none z-10" />
                 <Input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="Search current page"
-                  className="h-10 rounded-md border-slate-300 bg-slate-50 pl-9"
+                  className="h-10 rounded-md border-slate-300 bg-slate-50 pl-10"
                 />
               </div>
 
