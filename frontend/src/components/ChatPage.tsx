@@ -704,7 +704,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
           <div className={`cl-chat-panel ${selectedChat ? 'flex' : 'hidden md:flex'} flex-1 flex-col min-w-0 min-h-0 bg-white`}>
             {/* Fixed Chat Header */}
             <div className="cl-chat-panel-header px-4 md:px-6 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 items-center gap-3">
                 <button 
                   onClick={() => appData.selectConversation(null)}
                   className="md:hidden text-gray-600 hover:text-gray-900 mr-2"
@@ -722,14 +722,14 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                       onViewProfile?.(selectedConversation.participantId);
                     }
                   }}
-                  className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                  className="flex min-w-0 items-center gap-3 hover:opacity-80 transition-opacity"
                 >
                     <Avatar className="w-10 h-10">
                     <AvatarImage src={selectedConversation.participantAvatar} />
                     <AvatarFallback className="bg-pink-500 text-white">{selectedConversation.participantName[0]}</AvatarFallback>
                   </Avatar>
-                  <div className="text-left">
-                    <p className="text-xl font-semibold leading-tight text-gray-950 md:text-2xl">{selectedConversation.participantName}</p>
+                  <div className="min-w-0 text-left">
+                    <p className="truncate text-base font-semibold leading-tight text-gray-950">{selectedConversation.participantName}</p>
                     <div className="flex items-center gap-1">
                       {typingStatusLabel ? (
                         <>
