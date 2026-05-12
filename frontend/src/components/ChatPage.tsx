@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Search, MoreVertical, Info, Image, Smile, CircleDot, Plus, Flag, Ban, Eye, Reply, X, Trash2, Copy, ChevronDown } from 'lucide-react';
+import type { MouseEvent } from 'react';
+import { Send, Search, MoreVertical, Info, Image, Smile, CircleDot, Plus, Flag, Ban, Eye, Reply, X, Trash2, Copy, ChevronDown, Phone, Video } from 'lucide-react';
 import { ChatConversation, Student } from '../types';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
@@ -8,12 +9,14 @@ import { Badge } from './ui/badge';
 import { NewChatModal } from './NewChatModal';
 import { GroupInfoPage } from './GroupInfoPage';
 import {
+  apiAcceptChatRequest,
   apiAddGroupMember,
   apiChangeGroupMemberRole,
   apiCreateGroupConversation,
   apiDeleteGroupChat,
   apiFetchGroupChatDetails,
   apiLeaveGroupChat,
+  apiRejectChatRequest,
   apiRemoveGroupAvatar,
   apiRemoveGroupMember,
   apiStartConversation,
@@ -76,16 +79,23 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   const selectedChat = selectedConversationId;
   const [message, setMessage] = useState('');
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
+  const [showMessageRequests, setShowMessageRequests] = useState(false);
   const [viewingGroupInfo, setViewingGroupInfo] = useState<string | null>(null);
   const [groupInfo, setGroupInfo] = useState<GroupChatDetailsApi | null>(null);
   const [isGroupInfoLoading, setIsGroupInfoLoading] = useState(false);
   const [replyingTo, setReplyingTo] = useState<ChatMessageApi | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [mobileActionMessageId, setMobileActionMessageId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
   const readMessageByChatRef = useRef<Record<string, string>>({});
 
   const selectedConversation = conversations.find(c => c.id === selectedChat);
+  const isPendingConversation = Boolean(selectedConversation?.isPending);
+  const activeConversations = conversations.filter((conversation) => !conversation.isRequest);
+  const requestConversations = conversations.filter((conversation) => conversation.isRequest);
+  const visibleConversations = showMessageRequests ? requestConversations : activeConversations;
   const selectedChatState = useAppDataSelector((state) =>
     selectedChat ? state.chat.messagesByConversationId[selectedChat] ?? null : null,
   );
@@ -135,11 +145,13 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     onLoadOlder: handleLoadOlderMessages,
     bottomAnchorKey: Boolean(typingStatusLabel),
   });
+  const showChatLoadingOverlay = isPendingConversation || (Boolean(selectedChat) && !isChatReady && isLoadingMessages);
 
   useEffect(() => {
     if (!selectedChat) return;
+    if (isPendingConversation) return;
     void appData.ensureConversationMessages(selectedChat);
-  }, [appData, selectedChat, selectedChatState?.isHydrated]);
+  }, [appData, selectedChat, selectedChatState?.isHydrated, isPendingConversation]);
 
   useEffect(() => () => {
     appData.clearLocalTyping(selectedChat);
@@ -172,6 +184,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
 
   useEffect(() => {
     if (!selectedChat) return;
+    if (isPendingConversation) return;
     const latestIncoming = [...chatMessages].reverse().find(msg => !msg.isOwn && !msg.id.startsWith('temp-'));
     if (!latestIncoming) return;
     if (readMessageByChatRef.current[selectedChat] === latestIncoming.id) return;
@@ -183,7 +196,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
         console.error('Failed to mark chat as read', err);
         delete readMessageByChatRef.current[selectedChat];
       });
-  }, [appData, selectedChat, chatMessages, onChatRead]);
+  }, [appData, selectedChat, chatMessages, onChatRead, isPendingConversation]);
 
   const appendEmoji = (emoji: string) => {
     const input = inputRef.current;
@@ -232,6 +245,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   };
 
   const handleSendMessage = async () => {
+    if (isPendingConversation) return;
     if (!message.trim() || !selectedChat) return;
 
     const content = message.trim();
@@ -247,6 +261,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   };
 
   const handleSendImage = async (file: File | undefined) => {
+    if (isPendingConversation) return;
     if (!file || !selectedChat) return;
     if (!file.type.startsWith('image/')) {
       window.alert('Please choose an image file.');
@@ -273,6 +288,37 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     } catch (err) {
       console.error('Failed to react to message:', err);
     }
+  };
+
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current === null) return;
+    window.clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = null;
+  };
+
+  const shouldUseMobileMessageActions = () => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(hover: none), (pointer: coarse)').matches || window.innerWidth <= 640;
+  };
+
+  const handleMessagePressStart = (messageId: string) => {
+    clearLongPressTimer();
+    if (!shouldUseMobileMessageActions()) return;
+    longPressTimerRef.current = window.setTimeout(() => {
+      setMobileActionMessageId(messageId);
+      longPressTimerRef.current = null;
+    }, 360);
+  };
+
+  const handleMessagePressEnd = () => {
+    clearLongPressTimer();
+  };
+
+  const handleMessageContextMenu = (event: MouseEvent, messageId: string) => {
+    if (!shouldUseMobileMessageActions()) return;
+    event.preventDefault();
+    clearLongPressTimer();
+    setMobileActionMessageId(messageId);
   };
 
   const formatTime = (timestamp: string) => {
@@ -328,6 +374,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     try {
       const token = auth.session?.token;
       if (!token) return;
+      appData.selectConversation(null);
       const { chatId } = await apiStartConversation(studentId, token);
 
       const student = students.find(s => s.id === studentId);
@@ -340,7 +387,8 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
           lastMessage: 'Start a conversation...',
           timestamp: new Date().toISOString(),
           unread: 0,
-          isOnline: true
+          isOnline: true,
+          isRequest: false,
         };
         appData.upsertConversation(conversation);
         onCreateChat?.(conversation);
@@ -375,6 +423,36 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
       window.alert(err.message || 'Failed to delete message');
     }
   };
+
+  const handleAcceptRequest = useCallback(async (chatId: string) => {
+    const token = auth.session?.token;
+    if (!token) return;
+    try {
+      await apiAcceptChatRequest(chatId, token);
+      await appData.ensureConversations({ force: true });
+      setShowMessageRequests(false);
+      appData.selectConversation(chatId);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Failed to accept chat request');
+    }
+  }, [appData, auth.session?.token]);
+
+  const handleRejectRequest = useCallback(async (chatId: string, shouldBlock = false) => {
+    const token = auth.session?.token;
+    if (!token) return;
+    try {
+      await apiRejectChatRequest(chatId, token);
+      await appData.ensureConversations({ force: true });
+      if (selectedChat === chatId) {
+        appData.selectConversation(null);
+      }
+      if (shouldBlock) {
+        window.alert('User blocked from your message requests.');
+      }
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Failed to remove chat request');
+    }
+  }, [appData, auth.session?.token, selectedChat]);
 
   const refreshGroupConversationData = useCallback(async (chatId: string) => {
     await appData.ensureConversations({ force: true });
@@ -511,13 +589,13 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   }
 
   return (
-    <div className="flex flex-col w-full max-w-7xl mx-auto bg-white overflow-hidden pb-16 md:pb-0" style={{ height: 'calc(100vh - 4rem)' }}>
-      <div className="flex flex-1 min-h-0 border-x border-gray-200">
+    <div className="cl-chat-page flex flex-col w-full max-w-7xl mx-auto bg-white overflow-hidden pb-16 md:pb-0" style={{ height: 'calc(100vh - 4rem)' }}>
+      <div className="cl-chat-frame flex flex-1 min-h-0 border-x border-gray-200">
         {/* LEFT: Conversations List */}
-        <div className={`${selectedChat ? 'hidden md:flex' : 'flex'} w-full md:w-96 flex-shrink-0 border-r border-gray-200 flex-col min-h-0 bg-white`}>
+        <div className={`cl-chat-conversation-list ${selectedChat ? 'hidden md:flex' : 'flex'} w-full md:w-96 flex-shrink-0 border-r border-gray-200 flex-col min-h-0 bg-white`}>
           {/* Fixed Header — never scrolls */}
-          <div className="p-4 md:p-6 border-b border-gray-200 flex-shrink-0">
-            <div className="flex items-center justify-between mb-4">
+          <div className="cl-chat-list-header p-4 md:p-6 border-b border-gray-200 flex-shrink-0">
+            <div className="cl-chat-list-header-row flex items-center justify-between mb-4">
               <h2 className="text-gray-900 mb-4">Messages</h2>
               <Button
                 onClick={() => setIsNewChatOpen(true)}
@@ -536,13 +614,34 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                 className="pl-10 bg-gray-50 border-gray-200 rounded-xl focus:bg-white transition-all duration-300"
               />
             </div>
+            {requestConversations.length > 0 && (
+              <div className="mt-3 flex justify-end">
+                {showMessageRequests ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowMessageRequests(false)}
+                    className="text-sm font-medium text-primary hover:underline"
+                  >
+                    Back to Messages
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowMessageRequests(true)}
+                    className="text-sm font-medium text-primary hover:underline"
+                  >
+                    Message Requests ({requestConversations.length})
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Scrollable Conversation List */}
           <div className="flex-1 relative">
             <div className="absolute inset-0 overflow-y-auto">
-              <div className="p-2 w-full">
-              {conversations.map(conversation => (
+              <div className="cl-chat-conversation-list-inner p-2 w-full">
+              {visibleConversations.map(conversation => (
                 <button
                   key={conversation.id}
                   onClick={() => {
@@ -551,7 +650,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                     }
                     appData.selectConversation(conversation.id);
                   }}
-                  className={`w-full p-3 text-left rounded-xl transition-all duration-300 mb-1 ${
+                  className={`cl-chat-conversation-item w-full p-3 text-left rounded-xl transition-all duration-300 mb-1 ${
                     selectedChat === conversation.id 
                       ? 'bg-gray-100' 
                       : 'hover:bg-gray-50'
@@ -590,6 +689,11 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                   </div>
                 </button>
               ))}
+              {visibleConversations.length === 0 && (
+                <div className="px-4 py-8 text-center text-sm text-gray-500">
+                  {showMessageRequests ? 'No message requests right now.' : 'No chats yet.'}
+                </div>
+              )}
               </div>
             </div>
           </div>
@@ -597,9 +701,9 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
 
         {/* Chat Area - Instagram Style */}
         {selectedConversation ? (
-          <div className={`${selectedChat ? 'flex' : 'hidden md:flex'} flex-1 flex-col min-w-0 min-h-0 bg-white`}>
+          <div className={`cl-chat-panel ${selectedChat ? 'flex' : 'hidden md:flex'} flex-1 flex-col min-w-0 min-h-0 bg-white`}>
             {/* Fixed Chat Header */}
-            <div className="px-4 md:px-6 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+            <div className="cl-chat-panel-header px-4 md:px-6 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-3">
                 <button 
                   onClick={() => appData.selectConversation(null)}
@@ -622,10 +726,10 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                 >
                     <Avatar className="w-10 h-10">
                     <AvatarImage src={selectedConversation.participantAvatar} />
-                    <AvatarFallback>{selectedConversation.participantName[0]}</AvatarFallback>
+                    <AvatarFallback className="bg-pink-500 text-white">{selectedConversation.participantName[0]}</AvatarFallback>
                   </Avatar>
                   <div className="text-left">
-                    <p className="text-sm text-gray-900">{selectedConversation.participantName}</p>
+                    <p className="text-xl font-semibold leading-tight text-gray-950 md:text-2xl">{selectedConversation.participantName}</p>
                     <div className="flex items-center gap-1">
                       {typingStatusLabel ? (
                         <>
@@ -648,7 +752,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                           {selectedConversation.isOnline ? (
                             <>
                               <CircleDot className="w-2 h-2 text-green-500 fill-green-500" />
-                              <p className="text-xs text-gray-500">Active now</p>
+                              <p className="text-xs text-green-600">Active now</p>
                             </>
                           ) : (
                             <p className="text-xs text-gray-500">
@@ -663,6 +767,12 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
               </div>
               <div className="flex items-center gap-1 md:gap-2">
 
+                <Button variant="ghost" size="sm" className="hover:bg-gray-100 rounded-full w-8 h-8 md:w-9 md:h-9 p-0" aria-label="Voice call">
+                  <Phone className="w-4 h-4 md:w-5 md:h-5 text-gray-700" />
+                </Button>
+                <Button variant="ghost" size="sm" className="hover:bg-gray-100 rounded-full w-8 h-8 md:w-9 md:h-9 p-0" aria-label="Video call">
+                  <Video className="w-4 h-4 md:w-5 md:h-5 text-gray-700" />
+                </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm" className="hover:bg-gray-100 rounded-full w-8 h-8 md:w-9 md:h-9 p-0">
@@ -705,7 +815,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
             </div>
 
             {/* Scrollable Messages Area */}
-            <div className="flex-1 relative bg-white min-h-0">
+            <div className="cl-chat-messages-area flex-1 relative bg-white min-h-0">
               {showNewMessageBanner && (
                 <button
                   onClick={() => {
@@ -718,9 +828,9 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                   <span className="text-sm font-medium">New Messages</span>
                 </button>
               )}
-              {selectedChat && !isChatReady && isLoadingMessages && (
+              {showChatLoadingOverlay && (
                 <div className="absolute inset-0 flex items-center justify-center bg-white z-10">
-                  <LoadingIndicator label="Loading messages..." />
+                  <LoadingIndicator label={isPendingConversation ? 'Opening chat...' : 'Loading messages...'} />
                 </div>
               )}
               {isLoadingOlder && (
@@ -733,11 +843,16 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
               <div
                 ref={messagesViewportRef}
                 style={{ overflowAnchor: 'auto' }}
+                onPointerDown={(event) => {
+                  if ((event.target as HTMLElement).closest('[data-chat-message-actions]')) return;
+                  if ((event.target as HTMLElement).closest('[data-chat-scroll-message]')) return;
+                  setMobileActionMessageId(null);
+                }}
                 className={`absolute inset-0 overflow-y-auto transition-opacity duration-300 ${
-                  !selectedChat || isChatReady || !isLoadingMessages ? 'opacity-100' : 'opacity-0'
+                  !selectedChat || !showChatLoadingOverlay || isChatReady ? 'opacity-100' : 'opacity-0'
                 }`}
               >
-                <div className="p-4 md:p-6 space-y-3">
+                <div className="cl-chat-messages-inner p-4 md:p-6 space-y-3">
                 <div ref={topSentinelRef} className="h-px w-full" aria-hidden="true" />
                 <div className="space-y-3">
                   {/* "Beginning of conversation" marker */}
@@ -784,14 +899,21 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                           </span>
                         </div>
                       ) : (
-                      <div className={`flex items-end gap-2 ${msg.isOwn ? 'justify-end' : 'justify-start'}`}>
+                      <div
+                        className={`flex items-end gap-2 ${msg.isOwn ? 'justify-end' : 'justify-start'} ${mobileActionMessageId === msg.id ? 'pb-12 md:pb-0' : ''}`}
+                        onPointerDown={() => handleMessagePressStart(msg.id)}
+                        onPointerUp={handleMessagePressEnd}
+                        onPointerLeave={handleMessagePressEnd}
+                        onPointerCancel={handleMessagePressEnd}
+                        onContextMenu={(event) => handleMessageContextMenu(event, msg.id)}
+                      >
                         {!msg.isOwn && (
                           <Avatar className="w-6 h-6 md:w-7 md:h-7 flex-shrink-0 mb-1">
                             <AvatarImage src={msg.senderAvatar ?? undefined} />
                             <AvatarFallback>{msg.senderName[0]}</AvatarFallback>
                           </Avatar>
                         )}
-                        <div className={`group min-w-0 w-fit max-w-[78%] md:max-w-[70%] xl:max-w-[40rem] ${msg.isOwn ? 'order-2' : 'order-1'}`}>
+                        <div className={`cl-chat-message-group group relative min-w-0 w-fit max-w-[78%] md:max-w-[70%] xl:max-w-[40rem] ${msg.isOwn ? 'order-2' : 'order-1'}`}>
                           {selectedConversation.isGroup && !msg.isOwn && startsSenderGroup && (
                             <p className="mb-1 px-2 text-xs font-medium text-gray-500">
                               {msg.senderName}
@@ -799,9 +921,9 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                           )}
                           <div className="flex items-center gap-2">
                             <div
-                              className={`${msg.isOwn ? 'order-2' : 'order-1'} min-w-0 w-fit max-w-full rounded-3xl px-3 py-2 transition-shadow duration-200 md:px-4 md:py-2.5 ${
+                              className={`cl-chat-bubble ${msg.isOwn ? 'order-2 cl-chat-bubble-own' : 'order-1 cl-chat-bubble-other'} min-w-0 w-fit max-w-full rounded-3xl px-3 py-2 transition-shadow duration-200 md:px-4 md:py-2.5 ${
                                 msg.isOwn
-                                  ? 'bg-gradient-to-br from-primary to-secondary text-white'
+                                  ? 'bg-primary text-white'
                                   : 'bg-gray-100 text-gray-900'
                               } ${highlightedMessageId === msg.id ? 'ring-2 ring-amber-300 ring-offset-2 ring-offset-white' : ''}`}
                             >
@@ -832,7 +954,10 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                                 <p className="text-sm break-words">{msg.content}</p>
                               )}
                             </div>
-                            <div className={`mt-1 flex shrink-0 items-center gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100 ${msg.isOwn ? 'order-1 flex-row-reverse' : 'order-2 flex-row'}`}>
+                            <div
+                              data-chat-message-actions
+                              className={`cl-chat-message-actions mt-1 flex shrink-0 items-center gap-1 transition-opacity duration-200 ${mobileActionMessageId === msg.id ? 'cl-chat-message-actions-open' : ''} ${msg.isOwn ? 'order-1 flex-row-reverse' : 'order-2 flex-row'}`}
+                            >
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <button type="button" className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-gray-700 shadow-sm ring-1 ring-gray-200 hover:bg-gray-50" aria-label="React to message">
@@ -855,7 +980,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                                   </div>
                                 </PopoverContent>
                               </Popover>
-                              <button type="button" onClick={() => setReplyingTo(msg)} className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-gray-700 shadow-sm ring-1 ring-gray-200 hover:bg-gray-50" aria-label="Reply">
+                              <button type="button" onClick={() => setReplyingTo(msg)} className="hidden sm:flex h-8 w-8 items-center justify-center rounded-full bg-white text-gray-700 shadow-sm ring-1 ring-gray-200 hover:bg-gray-50" aria-label="Reply">
                                 <Reply className="h-4 w-4" />
                               </button>
                               <DropdownMenu>
@@ -945,7 +1070,37 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
             </div>
 
             {/* Fixed Input Footer */}
-            <div className="px-4 md:px-6 py-3 md:py-4 border-t border-gray-200 flex-shrink-0">
+            <div className="cl-chat-input-footer px-4 md:px-6 py-3 md:py-4 border-t border-gray-200 flex-shrink-0">
+              {selectedConversation?.isRequest && (
+                <div className="mb-3 flex items-center justify-center gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="h-8 rounded-lg px-4 text-xs"
+                    onClick={() => void handleAcceptRequest(selectedConversation.id)}
+                  >
+                    Accept
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 rounded-lg px-4 text-xs"
+                    onClick={() => void handleRejectRequest(selectedConversation.id, false)}
+                  >
+                    Delete
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 rounded-lg px-3 text-xs text-destructive"
+                    onClick={() => void handleRejectRequest(selectedConversation.id, true)}
+                  >
+                    Block
+                  </Button>
+                </div>
+              )}
               {replyingTo && (
                 <div className="mb-3 flex items-center justify-between rounded-xl bg-gray-50 px-3 py-2">
                   <div className="min-w-0">
@@ -965,15 +1120,16 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                   className="hidden"
                   onChange={(event) => handleSendImage(event.target.files?.[0])}
                 />
-                <Button onClick={() => fileInputRef.current?.click()} variant="ghost" size="sm" className="hover:bg-gray-100 rounded-full w-8 h-8 md:w-9 md:h-9 p-0 flex-shrink-0">
+                <Button onClick={() => fileInputRef.current?.click()} variant="ghost" size="sm" disabled={isPendingConversation} className="hover:bg-gray-100 rounded-full w-8 h-8 md:w-9 md:h-9 p-0 flex-shrink-0">
                   <Image className="w-4 h-4 md:w-5 md:h-5 text-gray-700" />
                 </Button>
                 <div className="flex-1 relative">
                   <Input
                     type="text"
-                    placeholder="Message..."
+                    placeholder={isPendingConversation ? 'Opening chat...' : 'Message...'}
                     value={message}
                     ref={inputRef}
+                    disabled={isPendingConversation}
                     onChange={(e) => {
                       const nextValue = e.target.value;
                       setMessage(nextValue);
@@ -1005,6 +1161,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                 {message.trim() && (
                   <Button 
                     onClick={handleSendMessage}
+                    disabled={isPendingConversation}
                     className="bg-transparent hover:bg-transparent text-primary p-0 h-auto text-sm md:text-base transition-all duration-300 hover:scale-110"
                   >
                     Send

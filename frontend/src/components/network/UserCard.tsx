@@ -15,12 +15,12 @@ export function UserCard({ user, onClick, mutualFollowersCount, secondaryLabel, 
   const showMutual = typeof mutualFollowersCount === 'number' && mutualFollowersCount > 0;
 
   return (
-    <Card className="border-primary/10 rounded-2xl shadow-lg hover:shadow-xl transition-all">
+    <Card className="cl-network-user-card border-primary/10 rounded-2xl shadow-lg hover:shadow-xl transition-all">
       <CardContent className="p-4">
-        <div className="flex items-center gap-3">
+        <div className="cl-network-user-card-row flex items-center gap-3">
           <button
             type="button"
-            className="flex items-center gap-3 flex-1 min-w-0 text-left"
+            className="cl-network-user-card-profile flex items-center gap-3 flex-1 min-w-0 text-left"
             onClick={onClick}
           >
             <Avatar className="w-12 h-12 ring-2 ring-primary/10">
@@ -42,7 +42,7 @@ export function UserCard({ user, onClick, mutualFollowersCount, secondaryLabel, 
             </div>
           </button>
 
-          {action ? <div className="flex-shrink-0">{action}</div> : null}
+          {action ? <div className="cl-network-user-card-action flex-shrink-0">{action}</div> : null}
         </div>
       </CardContent>
     </Card>

@@ -236,6 +236,19 @@ export async function apiAcceptChatRequest(chatId: string, token: string): Promi
   }
 }
 
+export async function apiRejectChatRequest(chatId: string, token: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/chat/requests/${chatId}/reject`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`
+    }
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.message || 'Failed to reject chat request');
+  }
+}
+
 export async function apiDeleteMessage(chatId: string, messageId: string, token: string): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/chat/conversations/${chatId}/messages/${messageId}`, {
     method: 'DELETE',

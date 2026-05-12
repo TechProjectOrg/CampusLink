@@ -76,6 +76,48 @@ enum ChatParticipantRole {
   MEMBER @map("member")
 }
 
+enum AdminRole {
+  SUPER_ADMIN @map("super_admin")
+}
+
+enum AdminSeverity {
+  INFO     @map("info")
+  WARNING  @map("warning")
+  CRITICAL @map("critical")
+}
+
+enum AdminReportTargetType {
+  USER @map("user")
+  POST @map("post")
+  CLUB @map("club")
+}
+
+enum AdminReportStatus {
+  OPEN      @map("open")
+  REVIEWING @map("reviewing")
+  RESOLVED  @map("resolved")
+  REJECTED  @map("rejected")
+  ESCALATED @map("escalated")
+}
+
+enum VerificationRequestType {
+  STUDENT @map("student")
+  CLUB    @map("club")
+}
+
+enum VerificationRequestStatus {
+  PENDING   @map("pending")
+  APPROVED  @map("approved")
+  REJECTED  @map("rejected")
+  MORE_INFO @map("more_info")
+}
+
+enum AnnouncementStatus {
+  DRAFT     @map("draft")
+  SCHEDULED @map("scheduled")
+  PUBLISHED @map("published")
+}
+
 enum MessageType {
   TEXT   @map("text")
   IMAGE  @map("image")
@@ -95,6 +137,9 @@ model User {
   coverPhotoUrl          String?             @map("cover_photo_url") @db.Text
   isPrivate              Boolean             @default(false) @map("is_private")
   isActive               Boolean             @default(true) @map("is_active")
+  isBanned               Boolean             @default(false) @map("is_banned")
+  suspendedUntil         DateTime?           @map("suspended_until") @db.Timestamp(6)
+  verifiedAt             DateTime?           @map("verified_at") @db.Timestamp(6)
   isOnline               Boolean             @default(false) @map("is_online")
   lastSeenAt             DateTime?           @map("last_seen_at") @db.Timestamp(6)
   createdAt              DateTime            @default(now()) @map("created_at") @db.Timestamp(6)
@@ -129,6 +174,12 @@ model User {
   notifications          Notification[]      @relation("NotificationUser")
   notificationsActed     Notification[]      @relation("NotificationActor")
   pushSubscriptions      UserPushSubscription[]
+  adminAccount           AdminAccount?
+  adminAuditLogs         AdminAuditLog[]     @relation("AdminAuditActor")
+  adminAssignedReports   AdminReport[]       @relation("AdminAssignedReports")
+  adminReportNotes       AdminReportNote[]   @relation("AdminReportNoteAuthor")
+  reviewedVerificationRequests AdminVerificationRequest[] @relation("AdminVerificationReviewer")
+  announcementsCreated   AdminAnnouncement[] @relation("AdminAnnouncementCreator")
 
   @@index([email], map: "idx_users_email")
   @@index([username], map: "idx_users_username")
@@ -341,6 +392,10 @@ model Club {
   linkedChatId     String?          @map("linked_chat_id") @db.Uuid
   createdByUserId  String           @map("created_by_user_id") @db.Uuid
   primaryCategoryId String?         @map("primary_category_id") @db.Uuid
+  isVerified       Boolean          @default(false) @map("is_verified")
+  featuredAt       DateTime?        @map("featured_at") @db.Timestamp(6)
+  frozenAt         DateTime?        @map("frozen_at") @db.Timestamp(6)
+  deletedAt        DateTime?        @map("deleted_at") @db.Timestamp(6)
   createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamp(6)
   createdBy        User             @relation("ClubCreator", fields: [createdByUserId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
@@ -451,6 +506,11 @@ model Post {
   location         String?         @db.VarChar(255)
   externalUrl      String?         @map("external_url") @db.Text
   visibility       PostVisibility  @default(PUBLIC)
+  hiddenAt         DateTime?       @map("hidden_at") @db.Timestamp(6)
+  hiddenReason     String?         @map("hidden_reason") @db.Text
+  hiddenByUserId   String?         @map("hidden_by_user_id") @db.Uuid
+  deletedAt        DateTime?       @map("deleted_at") @db.Timestamp(6)
+  deletedByUserId  String?         @map("deleted_by_user_id") @db.Uuid
   createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamp(6)
   author           User            @relation("PostAuthor", fields: [authorUserId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
@@ -667,4 +727,112 @@ model UserPushSubscription {
   @@index([userId], map: "idx_user_push_subscriptions_user_id")
   @@index([revokedAt], map: "idx_user_push_subscriptions_revoked_at")
   @@map("user_push_subscriptions")
+}
+
+model AdminAccount {
+  adminAccountId      String    @id @default(dbgenerated("gen_random_uuid()")) @map("admin_account_id") @db.Uuid
+  userId              String    @unique @map("user_id") @db.Uuid
+  role                AdminRole @default(SUPER_ADMIN)
+  mustChangePassword  Boolean   @default(true) @map("must_change_password")
+  lastLoginAt         DateTime? @map("last_login_at") @db.Timestamp(6)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+  user                User      @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@map("admin_accounts")
+}
+
+model AdminAuditLog {
+  auditLogId   String        @id @default(dbgenerated("gen_random_uuid()")) @map("audit_log_id") @db.Uuid
+  actorUserId  String        @map("actor_user_id") @db.Uuid
+  actionType   String        @map("action_type") @db.VarChar(100)
+  targetType   String?       @map("target_type") @db.VarChar(50)
+  targetId     String?       @map("target_id") @db.Text
+  severity     AdminSeverity @default(INFO)
+  summary      String        @db.VarChar(255)
+  metadata     Json          @default("{}") @db.JsonB
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamp(6)
+  actor        User          @relation("AdminAuditActor", fields: [actorUserId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([actorUserId], map: "idx_admin_audit_logs_actor_user_id")
+  @@index([createdAt], map: "idx_admin_audit_logs_created_at")
+  @@map("admin_audit_logs")
+}
+
+model AdminReport {
+  reportId             String                @id @default(dbgenerated("gen_random_uuid()")) @map("report_id") @db.Uuid
+  reporterUserId       String?               @map("reporter_user_id") @db.Uuid
+  targetType           AdminReportTargetType @map("target_type")
+  targetId             String                @map("target_id") @db.Text
+  targetUserId         String?               @map("target_user_id") @db.Uuid
+  reason               String                @db.VarChar(255)
+  evidence             String?               @db.Text
+  severity             AdminSeverity         @default(WARNING)
+  status               AdminReportStatus     @default(OPEN)
+  reportCount          Int                   @default(1) @map("report_count")
+  assignedAdminUserId  String?               @map("assigned_admin_user_id") @db.Uuid
+  internalNotes        String?               @map("internal_notes") @db.Text
+  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt            DateTime              @updatedAt @map("updated_at") @db.Timestamp(6)
+  resolvedAt           DateTime?             @map("resolved_at") @db.Timestamp(6)
+  assignedAdmin        User?                 @relation("AdminAssignedReports", fields: [assignedAdminUserId], references: [userId], onDelete: SetNull, onUpdate: NoAction)
+  notes                AdminReportNote[]
+
+  @@index([status], map: "idx_admin_reports_status")
+  @@index([assignedAdminUserId], map: "idx_admin_reports_assigned_admin_user_id")
+  @@index([targetType], map: "idx_admin_reports_target_type")
+  @@map("admin_reports")
+}
+
+model AdminReportNote {
+  reportNoteId  String      @id @default(dbgenerated("gen_random_uuid()")) @map("report_note_id") @db.Uuid
+  reportId      String      @map("report_id") @db.Uuid
+  adminUserId   String      @map("admin_user_id") @db.Uuid
+  note          String      @db.Text
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamp(6)
+  report        AdminReport @relation(fields: [reportId], references: [reportId], onDelete: Cascade, onUpdate: NoAction)
+  adminUser     User        @relation("AdminReportNoteAuthor", fields: [adminUserId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([reportId], map: "idx_admin_report_notes_report_id")
+  @@index([adminUserId], map: "idx_admin_report_notes_admin_user_id")
+  @@map("admin_report_notes")
+}
+
+model AdminVerificationRequest {
+  verificationRequestId String                    @id @default(dbgenerated("gen_random_uuid()")) @map("verification_request_id") @db.Uuid
+  requestType           VerificationRequestType   @map("request_type")
+  targetUserId          String?                   @map("target_user_id") @db.Uuid
+  targetClubId          String?                   @map("target_club_id") @db.Uuid
+  documentUrls          Json                      @default("[]") @map("document_urls") @db.JsonB
+  profilePreview        Json?                     @map("profile_preview") @db.JsonB
+  notes                 String?                   @db.Text
+  status                VerificationRequestStatus @default(PENDING)
+  requestedAt           DateTime                  @default(now()) @map("requested_at") @db.Timestamp(6)
+  reviewedAt            DateTime?                 @map("reviewed_at") @db.Timestamp(6)
+  reviewedByUserId      String?                   @map("reviewed_by_user_id") @db.Uuid
+  reviewedBy            User?                     @relation("AdminVerificationReviewer", fields: [reviewedByUserId], references: [userId], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([status], map: "idx_admin_verification_requests_status")
+  @@index([requestType], map: "idx_admin_verification_requests_request_type")
+  @@map("admin_verification_requests")
+}
+
+model AdminAnnouncement {
+  announcementId  String             @id @default(dbgenerated("gen_random_uuid()")) @map("announcement_id") @db.Uuid
+  title           String             @db.VarChar(255)
+  content         String             @db.Text
+  audienceType    String             @map("audience_type") @db.VarChar(50)
+  audienceIds     Json               @default("[]") @map("audience_ids") @db.JsonB
+  scheduledFor    DateTime?          @map("scheduled_for") @db.Timestamp(6)
+  pinned          Boolean            @default(false)
+  pushEnabled     Boolean            @default(false) @map("push_enabled")
+  status          AnnouncementStatus @default(DRAFT)
+  createdByUserId String             @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamp(6)
+  createdBy       User               @relation("AdminAnnouncementCreator", fields: [createdByUserId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([status], map: "idx_admin_announcements_status")
+  @@index([createdByUserId], map: "idx_admin_announcements_created_by_user_id")
+  @@map("admin_announcements")
 }

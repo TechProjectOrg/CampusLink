@@ -4,6 +4,7 @@ import prisma from '../prisma';
 import { getUserProfileById } from '../services/userProfile';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
 import { hashPassword, signPasswordChangeToken, verifyPassword, verifyPasswordChangeToken } from '../lib/auth';
+import { setAdminMustChangePassword } from '../lib/admin';
 import {
   deleteManagedPhotoByUrl,
   deleteManagedPostMediaByUrl,
@@ -16,6 +17,7 @@ import {
   getPostFeedRecipientIds,
   invalidateUserFeedCache,
   refreshPostCaches,
+  removePostFromCaches,
 } from '../lib/feedCache';
 import {
   getCachedClubPermissionSnapshot,
@@ -34,9 +36,9 @@ interface GetUserParams {
   userId: string;
 }
 
-const requireOwnUser: RequestHandler = (req, res, next: NextFunction) => {
+const requireOwnUser: RequestHandler<GetUserParams> = (req, res, next: NextFunction) => {
   const authedRequest = req as unknown as AuthedRequest;
-  const { userId } = req.params as unknown as GetUserParams;
+  const { userId } = req.params;
 
   if (!authedRequest.auth || authedRequest.auth.userId !== userId) {
     return res.status(403).json({ message: 'You can only access your own account data' });
@@ -488,7 +490,8 @@ router.patch(
             weekly_digest_enabled,
             show_email,
             show_projects,
-            allow_messages
+            allow_messages,
+            updated_at
           )
           VALUES (
             ${userId},
@@ -500,7 +503,8 @@ router.patch(
             ${next.notifications.newPostAlerts},
             ${next.privacy.showEmail},
             ${next.privacy.showProjects},
-            ${next.privacy.allowMessages}
+            ${next.privacy.allowMessages},
+            now()
           )
           ON CONFLICT (user_id)
           DO UPDATE SET
@@ -512,7 +516,8 @@ router.patch(
             weekly_digest_enabled = EXCLUDED.weekly_digest_enabled,
             show_email = EXCLUDED.show_email,
             show_projects = EXCLUDED.show_projects,
-            allow_messages = EXCLUDED.allow_messages
+            allow_messages = EXCLUDED.allow_messages,
+            updated_at = now()
         `;
       });
 
@@ -668,7 +673,11 @@ router.patch(
 router.patch(
   '/:userId/profile-picture',
   requireOwnUser,
-  profilePhotoUpload.single('image') as unknown as RequestHandler<GetUserParams>,
+  profilePhotoUpload.single('image') as unknown as RequestHandler<
+    GetUserParams,
+    unknown,
+    UpdateProfilePictureBody
+  >,
   async (
     req: Request<GetUserParams, unknown, UpdateProfilePictureBody> & { file?: Express.Multer.File },
     res: Response,
@@ -752,7 +761,11 @@ router.patch(
 router.patch(
   '/:userId/cover-photo',
   requireOwnUser,
-  profilePhotoUpload.single('image') as unknown as RequestHandler<GetUserParams>,
+  profilePhotoUpload.single('image') as unknown as RequestHandler<
+    GetUserParams,
+    unknown,
+    UpdateCoverPhotoBody
+  >,
   async (
     req: Request<GetUserParams, unknown, UpdateCoverPhotoBody> & { file?: Express.Multer.File },
     res: Response,
@@ -911,6 +924,10 @@ router.patch(
         WHERE user_id = ${userId}
       `;
 
+      await setAdminMustChangePassword(userId, false).catch(() => {
+        // Not all users are admins; ignore when no admin account exists.
+      });
+
       return res.status(200).json({ message: 'Password updated successfully' });
     } catch (err) {
       if (err instanceof Error && err.message === 'Invalid password change token') {
@@ -933,45 +950,46 @@ router.delete(
   '/:userId',
   requireOwnUser,
   async (req: Request<GetUserParams, unknown, Partial<DeleteUserBody>>, res: Response) => {
-  const { userId } = req.params;
-  const { password } = req.body;
+    const { userId } = req.params;
+    const { password } = req.body;
 
-  if (!userId) {
-    return res.status(400).json({ message: 'Missing userId' });
-  }
-
-  if (!password) {
-    return res.status(400).json({ message: 'Password is required to delete account' });
-  }
-
-  try {
-    const rows = await prisma.$queryRaw<{ password_hash: string }[]>`
-      SELECT password_hash
-      FROM users
-      WHERE user_id = ${userId}
-    `;
-
-    const row = rows[0];
-    if (!row) {
-      return res.status(404).json({ message: 'User not found' });
+    if (!userId) {
+      return res.status(400).json({ message: 'Missing userId' });
     }
 
-    const passwordMatches = await verifyPassword(password, row.password_hash);
-    if (!passwordMatches) {
-      return res.status(401).json({ message: 'Invalid password' });
+    if (!password) {
+      return res.status(400).json({ message: 'Password is required to delete account' });
     }
 
-    await prisma.$queryRaw`
-      DELETE FROM users
-      WHERE user_id = ${userId}
-    `;
+    try {
+      const rows = await prisma.$queryRaw<{ password_hash: string }[]>`
+        SELECT password_hash
+        FROM users
+        WHERE user_id = ${userId}
+      `;
 
-    return res.status(204).send();
-  } catch (err) {
-    console.error('Error deleting user account:', err);
-    return res.status(500).json({ message: 'Internal server error' });
+      const row = rows[0];
+      if (!row) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      const passwordMatches = await verifyPassword(password, row.password_hash);
+      if (!passwordMatches) {
+        return res.status(401).json({ message: 'Invalid password' });
+      }
+
+      await prisma.$queryRaw`
+        DELETE FROM users
+        WHERE user_id = ${userId}
+      `;
+
+      return res.status(204).send();
+    } catch (err) {
+      console.error('Error deleting user account:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
   }
-});
+);
 
 // ==============================
 // Profile: Skills
@@ -1016,13 +1034,33 @@ router.post(
     }
 
     try {
-      const rows = await prisma.$queryRaw<
-      { user_skill_id: string; name: string; created_at: Date }[]
-      >`
-        INSERT INTO user_skills (user_id, name)
-        VALUES (${userId}, ${name.trim()})
-        RETURNING user_skill_id, name, created_at
-      `;
+      let rows: { user_skill_id: string; name: string; created_at: Date }[];
+      try {
+        rows = await prisma.$queryRaw<
+          { user_skill_id: string; name: string; created_at: Date }[]
+        >`
+          INSERT INTO user_skills (user_id, name)
+          VALUES (${userId}, ${name.trim()})
+          RETURNING user_skill_id, name, created_at
+        `;
+      } catch (insertErr: any) {
+        const msg = String(insertErr?.message ?? '');
+        const needsUpdatedAtFallback =
+          msg.includes('updated_at') &&
+          (msg.includes('null value') || msg.includes('not-null constraint'));
+
+        if (!needsUpdatedAtFallback) {
+          throw insertErr;
+        }
+
+        rows = await prisma.$queryRaw<
+          { user_skill_id: string; name: string; created_at: Date }[]
+        >`
+          INSERT INTO user_skills (user_id, name, created_at, updated_at)
+          VALUES (${userId}, ${name.trim()}, NOW(), NOW())
+          RETURNING user_skill_id, name, created_at
+        `;
+      }
 
       const created = rows[0];
       return res.status(201).json({
@@ -1031,8 +1069,19 @@ router.post(
         createdAt: created.created_at.toISOString(),
       });
     } catch (err: any) {
-      // Unique violation (duplicate skill)
-      if (err?.code === '23505') {
+      // Unique violation (duplicate skill) can surface in different shapes:
+      // - Postgres code directly (`23505`)
+      // - Prisma wrapper (`P2010`) with duplicate key text in message/meta
+      const errorMessage = String(err?.message ?? '').toLowerCase();
+      const metaText = String(err?.meta?.driverAdapterError ?? '').toLowerCase();
+      const isDuplicateSkill =
+        err?.code === '23505' ||
+        (err?.code === 'P2010' &&
+          (errorMessage.includes('duplicate key value') ||
+            errorMessage.includes('uq_user_skills_user_id_name') ||
+            metaText.includes('uniqueconstraintviolation')));
+
+      if (isDuplicateSkill) {
         return res.status(409).json({ message: 'Skill already exists' });
       }
 
@@ -1171,8 +1220,26 @@ router.post(
           created_at: Date;
         }[]
       >`
-        INSERT INTO user_certifications (user_id, name, issuer, description, credential_url, image_url, issued_at)
-        VALUES (${userId}, ${name.trim()}, ${issuerValue}, ${descriptionValue}, ${credentialUrlValue}, ${imageUrlValue}, ${issuedAtDate})
+        INSERT INTO user_certifications (
+          user_id,
+          name,
+          issuer,
+          description,
+          credential_url,
+          image_url,
+          issued_at,
+          updated_at
+        )
+        VALUES (
+          ${userId},
+          ${name.trim()},
+          ${issuerValue},
+          ${descriptionValue},
+          ${credentialUrlValue},
+          ${imageUrlValue},
+          ${issuedAtDate},
+          NOW()
+        )
         RETURNING certification_id, name, issuer, description, credential_url, image_url, issued_at, created_at
       `;
 
@@ -1597,19 +1664,113 @@ router.delete(
     const { userId, projectId } = req.params;
 
     try {
-      const result = await prisma.$queryRaw<{ count: number }[]>`
+      const result = await prisma.$queryRaw<
+        {
+          project_id: string;
+          title: string;
+          description: string;
+          source_url: string | null;
+          demo_url: string | null;
+          image_url: string | null;
+        }[]
+      >`
         WITH deleted AS (
           DELETE FROM user_projects
           WHERE user_id = ${userId} AND project_id = ${projectId}
-          RETURNING 1
+          RETURNING project_id, title, description, source_url, demo_url, image_url
         )
-        SELECT COUNT(*)::int AS count FROM deleted
+        SELECT project_id, title, description, source_url, demo_url, image_url
+        FROM deleted
+        LIMIT 1
       `;
 
-      const count = result[0]?.count ?? 0;
-      if (count === 0) {
+      const deletedProject = result[0];
+      if (!deletedProject) {
         return res.status(404).json({ message: 'Project not found' });
       }
+
+      const linkedPostRows = await prisma.$queryRaw<{ post_id: string }[]>`
+        SELECT p.post_id
+        FROM posts p
+        JOIN post_hashtags ph ON ph.post_id = p.post_id
+        JOIN hashtags h ON h.hashtag_id = ph.hashtag_id
+        WHERE p.author_user_id = ${userId}
+          AND h.tag_name = ${`project-${projectId}`}
+        LIMIT 1
+      `;
+      let linkedPostId = linkedPostRows[0]?.post_id ?? null;
+
+      if (!linkedPostId) {
+        const signatureRows = await prisma.$queryRaw<{ post_id: string }[]>`
+          SELECT p.post_id
+          FROM posts p
+          LEFT JOIN post_media pm ON pm.post_id = p.post_id
+          WHERE p.author_user_id = ${userId}
+            AND p.title = ${deletedProject.title}
+            AND p.content_text = ${deletedProject.description}
+            AND (
+              (${deletedProject.demo_url ?? deletedProject.source_url}::text IS NULL AND p.external_url IS NULL)
+              OR p.external_url = ${deletedProject.demo_url ?? deletedProject.source_url}
+            )
+            AND (
+              ${deletedProject.image_url ?? null}::text IS NULL
+              OR pm.media_url = ${deletedProject.image_url ?? null}
+            )
+            AND EXISTS(
+              SELECT 1
+              FROM post_hashtags ph
+              JOIN hashtags h ON h.hashtag_id = ph.hashtag_id
+              WHERE ph.post_id = p.post_id
+                AND h.tag_name = 'project'
+            )
+          LIMIT 1
+        `;
+        linkedPostId = signatureRows[0]?.post_id ?? null;
+      }
+
+      if (linkedPostId) {
+        const postRows = await prisma.$queryRaw<
+          Array<{ author_user_id: string; club_id: string | null }>
+        >`
+          SELECT author_user_id, club_id
+          FROM posts
+          WHERE post_id = ${linkedPostId}
+          LIMIT 1
+        `;
+        const post = postRows[0];
+
+        if (post && post.author_user_id === userId) {
+          const mediaRows = await prisma.$queryRaw<{ media_url: string }[]>`
+            SELECT media_url
+            FROM post_media
+            WHERE post_id = ${linkedPostId}
+          `;
+          const recipients = await getPostFeedRecipientIds(linkedPostId);
+
+          await prisma.$queryRaw`
+            DELETE FROM posts
+            WHERE post_id = ${linkedPostId}
+          `;
+          await removePostFromCaches(linkedPostId, recipients);
+          if (post.club_id) {
+            await invalidateClubFeedCaches(post.club_id);
+            await incrementClubStat(post.club_id, 'postCount', -1);
+          }
+          emitFeedEvent(recipients, {
+            type: 'feed:post_deleted',
+            payload: { postId: linkedPostId, deletedAt: new Date().toISOString() },
+          });
+
+          await Promise.allSettled(
+            mediaRows.map(async (item) => {
+              await deleteManagedPostMediaByUrl(item.media_url);
+            }),
+          );
+          await incrementUserStat(userId, 'postCount', -1);
+        }
+      }
+
+      await deleteManagedPostMediaByUrl(deletedProject.image_url);
 
       return res.status(204).send();
     } catch (err) {
@@ -1710,7 +1871,16 @@ router.post(
           created_at: Date;
         }[]
       >`
-        INSERT INTO user_experiences (user_id, role_title, organization, description, start_date, end_date, is_current)
+        INSERT INTO user_experiences (
+          user_id,
+          role_title,
+          organization,
+          description,
+          start_date,
+          end_date,
+          is_current,
+          updated_at
+        )
         VALUES (
           ${userId},
           ${roleTitle.trim()},
@@ -1718,7 +1888,8 @@ router.post(
           ${description?.trim() || null},
           ${startDateValue},
           ${isCurrentlyWorking ? null : endDateValue},
-          ${Boolean(isCurrentlyWorking)}
+          ${Boolean(isCurrentlyWorking)},
+          NOW()
         )
         RETURNING experience_id, role_title, organization, description, start_date, end_date, is_current, created_at
       `;
@@ -1950,8 +2121,15 @@ router.post(
           created_at: Date;
         }[]
       >`
-        INSERT INTO user_societies (user_id, society_name, role_name, start_date, end_date)
-        VALUES (${userId}, ${societyName.trim()}, ${role.trim()}, ${startDateValue}, ${endDateValue})
+        INSERT INTO user_societies (
+          user_id,
+          society_name,
+          role_name,
+          start_date,
+          end_date,
+          updated_at
+        )
+        VALUES (${userId}, ${societyName.trim()}, ${role.trim()}, ${startDateValue}, ${endDateValue}, NOW())
         RETURNING user_society_id, society_name, role_name, start_date, end_date, created_at
       `;
 
@@ -2144,8 +2322,8 @@ router.post(
           created_at: Date;
         }[]
       >`
-        INSERT INTO user_achievements (user_id, title, description, achievement_year)
-        VALUES (${userId}, ${title.trim()}, ${description?.trim() || null}, ${year})
+        INSERT INTO user_achievements (user_id, title, description, achievement_year, updated_at)
+        VALUES (${userId}, ${title.trim()}, ${description?.trim() || null}, ${year}, NOW())
         RETURNING achievement_id, title, description, achievement_year, created_at
       `;
 

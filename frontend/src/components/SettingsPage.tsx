@@ -75,6 +75,7 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
 
   const [passwordChangeStatus, setPasswordChangeStatus] = useState<'idle' | 'verifying' | 'changing'>('idle');
   const [securityView, setSecurityView] = useState<'menu' | 'password' | 'sessions'>('menu');
+  const [openMobileSection, setOpenMobileSection] = useState<'account' | 'security' | 'notifications' | 'privacy' | null>(null);
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
     newPassword: '',
@@ -105,6 +106,7 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
     showProjects: true,
     allowMessages: true,
   });
+  const isPrivateAccount = privacySettings.accountType === 'private';
 
   useEffect(() => {
     if (!auth.session?.userId) return;
@@ -510,10 +512,18 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
       setNotificationSettings(updated.notifications);
       setPrivacySettings(updated.privacy);
       onEdit({ accountType: updated.privacy.accountType });
-      await auth.refreshProfile();
       onUpdateSettings({ privacy: updated.privacy });
+      try {
+        await auth.refreshProfile();
+      } catch (refreshError) {
+        console.warn('Settings saved but failed to refresh profile cache:', refreshError);
+      }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Unable to save privacy settings');
+      toast.error(
+        err instanceof Error
+          ? `Could not update account visibility. ${err.message}`
+          : 'Could not update account visibility. Please try again.',
+      );
     } finally {
       setSavingPrivacy(false);
     }
@@ -595,29 +605,345 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
     }
   };
 
+  const mobileSections = [
+    { id: 'account' as const, label: 'Account', icon: User },
+    { id: 'security' as const, label: 'Security', icon: Lock },
+    { id: 'notifications' as const, label: 'Notifications', icon: Bell },
+    { id: 'privacy' as const, label: 'Privacy', icon: Shield },
+  ];
+
+  const renderMobileAccountSettings = () => (
+    <Card>
+      <CardHeader className="flex flex-row items-start justify-between gap-4">
+        <div>
+          <h2 className="text-gray-900">Account Information</h2>
+          <p className="text-gray-600">Update your account details</p>
+        </div>
+        {!isEditingAccount ? (
+          <Button type="button" variant="outline" size="sm" onClick={() => setIsEditingAccount(true)}>
+            <Edit2 className="w-4 h-4 mr-2" />
+            Edit
+          </Button>
+        ) : (
+          <Button type="button" variant="outline" size="sm" onClick={handleCancelAccountEdit}>
+            <X className="w-4 h-4 mr-2" />
+            Cancel
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSaveAccount} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="mobile-username">Username</Label>
+            {isEditingAccount ? (
+              <Input
+                id="mobile-username"
+                value={accountData.username}
+                onChange={(e) => setAccountData({ ...accountData, username: e.target.value })}
+              />
+            ) : (
+              <div className="rounded-xl border bg-white px-4 py-2 text-gray-900">{accountStudent.username}</div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="mobile-email">Email Address</Label>
+            <Input id="mobile-email" type="email" value={accountStudent.email} disabled />
+            <p className="text-xs text-gray-500">Email cannot be changed</p>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="mobile-branch">Branch</Label>
+            {isEditingAccount ? (
+              <select
+                id="mobile-branch"
+                value={accountData.branch}
+                onChange={(e) => setAccountData({ ...accountData, branch: e.target.value })}
+                className="w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50"
+              >
+                {BRANCH_OPTIONS.map((branch) => (
+                  <option key={branch} value={branch}>
+                    {branch}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <div className="rounded-xl border bg-white px-4 py-2 text-gray-900">{accountStudent.branch}</div>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="mobile-year">{isAlumni ? 'Passing Year' : 'Current Year'}</Label>
+            {isEditingAccount ? (
+              <select
+                id="mobile-year"
+                value={accountData.year}
+                onChange={(e) => setAccountData({ ...accountData, year: e.target.value })}
+                className="w-full px-4 py-2 border rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50"
+              >
+                {isAlumni ? (
+                  passingYearOptions.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))
+                ) : (
+                  <>
+                    <option value="1">1st Year</option>
+                    <option value="2">2nd Year</option>
+                    <option value="3">3rd Year</option>
+                    <option value="4">4th Year</option>
+                  </>
+                )}
+              </select>
+            ) : (
+              <div className="rounded-xl border bg-white px-4 py-2 text-gray-900">
+                {isAlumni
+                  ? `Passing Year ${yearValue}`
+                  : `${yearValue}${yearValue === 1 ? 'st' : yearValue === 2 ? 'nd' : yearValue === 3 ? 'rd' : 'th'} Year`}
+              </div>
+            )}
+          </div>
+
+          {isEditingAccount && (
+            <Button type="submit" className="w-full gradient-primary" disabled={isSavingAccount}>
+              <Save className="w-4 h-4 mr-2" />
+              {isSavingAccount ? 'Saving...' : 'Save Changes'}
+            </Button>
+          )}
+        </form>
+      </CardContent>
+    </Card>
+  );
+
+  const renderMobileSecuritySettings = () => (
+    <div className="space-y-4">
+      {securityView === 'menu' && (
+        <Card>
+          <CardHeader>
+            <h2 className="text-gray-900">Security</h2>
+            <p className="text-gray-600">Choose what you want to manage</p>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <button
+              type="button"
+              onClick={() => setSecurityView('password')}
+              className="flex w-full items-center justify-between rounded-2xl border bg-white px-4 py-4 text-left transition hover:border-primary/40 hover:bg-primary/5"
+            >
+              <span className="flex items-center gap-3">
+                <span className="rounded-full bg-primary/10 p-2 text-primary">
+                  <KeyRound className="h-5 w-5" />
+                </span>
+                <span>
+                  <span className="block text-gray-900">Change Password</span>
+                  <span className="block text-sm text-gray-600">Update your account password</span>
+                </span>
+              </span>
+              <ChevronRight className="h-5 w-5 text-gray-400" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSecurityView('sessions')}
+              className="flex w-full items-center justify-between rounded-2xl border bg-white px-4 py-4 text-left transition hover:border-primary/40 hover:bg-primary/5"
+            >
+              <span className="flex items-center gap-3">
+                <span className="rounded-full bg-primary/10 p-2 text-primary">
+                  <MonitorSmartphone className="h-5 w-5" />
+                </span>
+                <span>
+                  <span className="block text-gray-900">Where You Are Logged In</span>
+                  <span className="block text-sm text-gray-600">See devices, browsers, and locations</span>
+                </span>
+              </span>
+              <ChevronRight className="h-5 w-5 text-gray-400" />
+            </button>
+          </CardContent>
+        </Card>
+      )}
+
+      {securityView === 'password' && renderPasswordForm()}
+      {securityView === 'sessions' && renderSessionsView()}
+    </div>
+  );
+
+  const renderMobileNotificationSettings = () => (
+    <Card>
+      <CardHeader>
+        <h2 className="text-gray-900">Notification Preferences</h2>
+        <p className="text-gray-600">Choose what notifications you want to receive</p>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {[
+          ['Email Notifications', 'Receive notifications via email', 'emailNotifications'],
+          ['Follow Requests', 'When someone requests to follow you', 'followRequests'],
+          ['New Messages', 'When you receive a new message', 'newMessages'],
+          ['Post Interactions', 'Likes, comments, and replies on your posts/comments', 'opportunityAlerts'],
+          ['Club Updates', "Updates from clubs you've joined", 'clubUpdates'],
+          ['New Post Alerts', 'Get alerts when people you follow publish a new post', 'newPostAlerts'],
+        ].map(([title, description, key], index) => (
+          <div key={key}>
+            {index === 1 ? <Separator className="mb-6" /> : null}
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-1">
+                <p className="text-gray-900">{title}</p>
+                <p className="text-sm text-gray-600">{description}</p>
+              </div>
+              <Switch
+                checked={notificationSettings[key as keyof typeof notificationSettings]}
+                disabled={settingsLoading || savingNotifications}
+                onCheckedChange={(checked) => {
+                  const next = { ...notificationSettings, [key]: checked };
+                  setNotificationSettings(next);
+                  void persistNotificationSettings(next);
+                }}
+              />
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+
+  const renderMobilePrivacySettings = () => (
+    <Card>
+      <CardHeader>
+        <h2 className="text-gray-900">Privacy Settings</h2>
+        <p className="text-gray-600">Control who can see your information</p>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="space-y-2">
+          <Label htmlFor="mobile-account-type">Account Type</Label>
+          <div className="flex items-center justify-between rounded-xl border bg-white px-4 py-3">
+            <div className="space-y-1">
+              <p className="text-gray-900">
+                {privacySettings.accountType === 'private' ? 'Private' : 'Public'}
+              </p>
+            </div>
+            <Switch
+              id="mobile-account-type"
+              checked={privacySettings.accountType === 'private'}
+              disabled={settingsLoading || savingPrivacy}
+              onCheckedChange={(checked) => {
+                const next = { ...privacySettings, accountType: checked ? 'private' : 'public' as const };
+                setPrivacySettings(next);
+                void persistPrivacySettings(next);
+              }}
+            />
+          </div>
+        </div>
+
+        <Separator />
+
+        {[
+          ['Show Email Address', 'Display your email on your profile', 'showEmail'],
+          ['Show Projects', 'Display your projects on your profile', 'showProjects'],
+          ['Allow Messages', 'Let others send you messages', 'allowMessages'],
+        ].map(([title, description, key]) => (
+          <div key={key} className="flex items-center justify-between gap-4">
+            <div className="space-y-1">
+              <p className="text-gray-900">{title}</p>
+              <p className="text-sm text-gray-600">{description}</p>
+            </div>
+            <Switch
+              checked={privacySettings[key as keyof typeof privacySettings] as boolean}
+              disabled={settingsLoading || savingPrivacy}
+              onCheckedChange={(checked) => {
+                const next = { ...privacySettings, [key]: checked };
+                setPrivacySettings(next);
+                void persistPrivacySettings(next);
+              }}
+            />
+          </div>
+        ))}
+
+        <Separator className="my-6" />
+
+        <div className="space-y-4">
+          <h3 className="text-gray-900 text-red-600">Danger Zone</h3>
+          <div className="p-4 border-2 border-red-200 rounded-lg bg-red-50">
+            <h4 className="text-gray-900 mb-2">Delete Account</h4>
+            <p className="text-sm text-gray-600 mb-4">
+              Once you delete your account, there is no going back. Please be certain.
+            </p>
+            <Button onClick={handleDeleteAccount} variant="destructive" className="gradient-danger">
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete My Account
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  const renderMobileSectionDetails = () => {
+    if (openMobileSection === 'account') return renderMobileAccountSettings();
+    if (openMobileSection === 'security') return renderMobileSecuritySettings();
+    if (openMobileSection === 'notifications') return renderMobileNotificationSettings();
+    if (openMobileSection === 'privacy') return renderMobilePrivacySettings();
+    return null;
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+    <div className="cl-settings-page min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
+      <div className="cl-settings-shell max-w-4xl mx-auto px-4 py-6 space-y-6">
         <div className="mb-6">
           <h1 className="text-gray-900">Settings</h1>
           <p className="text-gray-600">Manage your account settings and preferences</p>
         </div>
 
-        <Tabs defaultValue="account" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 bg-white border rounded-xl p-1">
-            <TabsTrigger value="account" className="data-[state=active]:bg-primary data-[state=active]:text-white">
+        <div className="cl-settings-mobile-accordion">
+          <div className="space-y-3">
+            {mobileSections.map((section) => {
+              const Icon = section.icon;
+              const isOpen = openMobileSection === section.id;
+
+              return (
+                <div key={section.id} className="cl-settings-mobile-section">
+                  <button
+                    type="button"
+                    className={`cl-settings-mobile-section-button ${isOpen ? 'cl-settings-mobile-section-button-active' : ''}`}
+                    onClick={() => {
+                      setOpenMobileSection((current) => (current === section.id ? null : section.id));
+                      if (section.id === 'security') {
+                        setSecurityView('menu');
+                      }
+                    }}
+                    aria-expanded={isOpen}
+                  >
+                    <span className="flex items-center gap-3">
+                      <Icon className="h-5 w-5" />
+                      <span>{section.label}</span>
+                    </span>
+                    {isOpen ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
+                  </button>
+
+                  {isOpen && (
+                    <div className="cl-settings-mobile-section-panel animate-fade-in">
+                      {renderMobileSectionDetails()}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <Tabs defaultValue="account" className="cl-settings-tabs space-y-6">
+          <TabsList className="cl-settings-tabs-list grid w-full grid-cols-4 bg-white border rounded-xl p-1">
+            <TabsTrigger value="account" className="cl-settings-tab-trigger data-[state=active]:bg-primary data-[state=active]:text-white">
               <User className="w-4 h-4 mr-2" />
               Account
             </TabsTrigger>
-            <TabsTrigger value="security" className="data-[state=active]:bg-primary data-[state=active]:text-white">
+            <TabsTrigger value="security" className="cl-settings-tab-trigger data-[state=active]:bg-primary data-[state=active]:text-white">
               <Lock className="w-4 h-4 mr-2" />
               Security
             </TabsTrigger>
-            <TabsTrigger value="notifications" className="data-[state=active]:bg-primary data-[state=active]:text-white">
+            <TabsTrigger value="notifications" className="cl-settings-tab-trigger data-[state=active]:bg-primary data-[state=active]:text-white">
               <Bell className="w-4 h-4 mr-2" />
               Notifications
             </TabsTrigger>
-            <TabsTrigger value="privacy" className="data-[state=active]:bg-primary data-[state=active]:text-white">
+            <TabsTrigger value="privacy" className="cl-settings-tab-trigger data-[state=active]:bg-primary data-[state=active]:text-white">
               <Shield className="w-4 h-4 mr-2" />
               Privacy
             </TabsTrigger>
@@ -902,14 +1228,22 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                   <div className="flex items-center justify-between rounded-xl border bg-white px-4 py-3">
                     <div className="space-y-1">
                       <p className="text-gray-900">
-                        {privacySettings.accountType === 'private' ? 'Private' : 'Public'}
+                        {isPrivateAccount ? 'Private' : 'Public'}
+                      </p>
+                      <p className="text-sm text-gray-600">
+                        {isPrivateAccount
+                          ? 'Your account is private right now. Turn this off to make your profile public and discoverable to everyone.'
+                          : 'Your account is public right now. Turn this on if you want only approved followers to see your profile.'}
                       </p>
                     </div>
                     <Switch
-                      checked={privacySettings.accountType === 'private'}
+                      checked={isPrivateAccount}
                       disabled={settingsLoading || savingPrivacy}
                       onCheckedChange={(checked) => {
-                        const next = { ...privacySettings, accountType: checked ? 'private' : 'public' as const };
+                        const next = {
+                          ...privacySettings,
+                          accountType: (checked ? 'private' : 'public') as 'private' | 'public',
+                        };
                         setPrivacySettings(next);
                         void persistPrivacySettings(next);
                       }}

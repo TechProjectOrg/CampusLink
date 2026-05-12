@@ -258,7 +258,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
           appData.selectConversation(null);
           setIsOpen(true);
         }}
-        className="fixed bottom-24 md:bottom-6 right-6 z-40 w-14 h-14 bg-gradient-to-br from-primary to-secondary rounded-full shadow-2xl flex items-center justify-center hover:scale-110 transition-all duration-300 animate-float"
+        className="hidden md:flex fixed bottom-24 md:bottom-6 right-6 z-40 w-14 h-14 bg-gradient-to-br from-primary to-secondary rounded-full shadow-2xl items-center justify-center hover:scale-110 transition-all duration-300 animate-float"
         aria-label="Open chat"
       >
         <MessageCircle className="w-6 h-6 text-white" />
@@ -273,7 +273,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
 
   if (isMinimized) {
     return (
-      <div className="fixed bottom-24 md:bottom-6 right-6 z-40 animate-slide-in-up">
+      <div className="hidden md:block fixed bottom-24 md:bottom-6 right-6 z-40 animate-slide-in-up">
         <button
           onClick={() => setIsMinimized(false)}
           className="w-64 h-14 bg-gradient-to-r from-primary to-secondary rounded-t-2xl shadow-2xl flex items-center justify-between px-4 hover:shadow-3xl transition-all duration-300"
@@ -294,7 +294,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
   }
 
   return (
-    <div className="fixed bottom-24 md:bottom-6 right-4 md:right-6 z-40 animate-slide-in-up">
+    <div className="hidden md:block fixed bottom-24 md:bottom-6 right-4 md:right-6 z-40 animate-slide-in-up">
       <div className="w-[calc(100vw-2rem)] md:w-96 h-[600px] max-h-[calc(100vh-12rem)] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-gray-200 min-h-0">
         {/* Header */}
         <div className="bg-gradient-to-r from-primary to-secondary p-4 flex items-center justify-between">
@@ -487,7 +487,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                                   </div>
                                 </PopoverContent>
                               </Popover>
-                              <button type="button" onClick={() => setReplyingTo(msg)} className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-gray-700 shadow-sm ring-1 ring-gray-200 hover:bg-gray-50" aria-label="Reply">
+                              <button type="button" onClick={() => setReplyingTo(msg)} className="hidden sm:flex h-8 w-8 items-center justify-center rounded-full bg-white text-gray-700 shadow-sm ring-1 ring-gray-200 hover:bg-gray-50" aria-label="Reply">
                                 <Reply className="h-4 w-4" />
                               </button>
                               <DropdownMenu>

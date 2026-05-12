@@ -31,6 +31,13 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
     { id: 'clubs', label: 'Clubs', icon: BookOpen }
   ];
 
+  const mobileNavItems = [
+    { id: 'feed', label: 'Home', icon: Home },
+    { id: 'network', label: 'Network', icon: Users },
+    { id: 'chat', label: 'Chat', icon: MessageCircle, badge: unreadCount },
+    { id: 'clubs', label: 'Clubs', icon: BookOpen },
+  ];
+
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchQuery(e.target.value);
     if (onSearch) {
@@ -45,20 +52,28 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
   };
 
   return (
-    <nav className="sticky top-0 z-50 backdrop-blur-xl bg-gradient-to-r from-primary via-secondary to-primary shadow-lg animate-slide-in-down">
-      <div className="max-w-7xl mx-auto px-4">
-        <div className="flex items-center gap-4 h-16">
+    <nav className="cl-navbar-root sticky top-0 z-50 w-full overflow-x-hidden backdrop-blur-xl bg-gradient-to-r from-primary via-secondary to-primary shadow-lg animate-slide-in-down">
+      <div className="cl-navbar-shell max-w-7xl mx-auto px-4">
+        <div className="cl-navbar-row flex items-center gap-4 h-16">
           {/* Logo */}
           <div className="flex items-center gap-2 flex-shrink-0 cursor-pointer" onClick={() => onTabChange('feed')}>
             <div className="bg-white/20 backdrop-blur-lg text-white rounded-xl p-2 shadow-lg hover-lift border border-white/30">
               <Users className="w-6 h-6" />
             </div>
-            <span className="text-white text-xl tracking-tight hidden sm:inline">CampusLynk</span>
+            <span className="cl-navbar-logo-text text-white text-xl tracking-tight hidden sm:inline">CampusLynk</span>
           </div>
 
           {/* Search Bar - Desktop */}
-          <div className="hidden md:flex flex-1 max-w-2xl mx-4">
-            <div className="relative w-full">
+          <div className="cl-navbar-search hidden md:flex flex-1 max-w-2xl mx-4">
+            <button
+              type="button"
+              onClick={handleSearchFocus}
+              aria-label="Search"
+              className="cl-navbar-tablet-search-button hidden items-center justify-center rounded-2xl bg-white/20 backdrop-blur-lg border border-white/30 text-white transition-all duration-300 hover:bg-white/25 focus:bg-white/30 focus:border-white/50"
+            >
+              <Search className="w-5 h-5" />
+            </button>
+            <div className="cl-navbar-search-field relative w-full">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/70" />
               <Input
                 type="text"
@@ -82,7 +97,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
                   key={item.id}
                   onClick={() => onTabChange(item.id)}
                   aria-label={item.label}
-                  className={`relative flex flex-col items-center justify-center gap-1 w-24 h-14 rounded-xl border transition-all duration-300 ${
+                  className={`cl-navbar-nav-button relative flex flex-col items-center justify-center gap-1 w-24 h-14 rounded-xl border transition-all duration-300 ${
                     isActive
                       ? 'text-white bg-white/20 shadow-lg border-white/30'
                       : 'text-white/80 border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20'
@@ -102,7 +117,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
             <button 
               onClick={() => onTabChange('notifications')}
               aria-label="Notifications"
-              className={`flex flex-col items-center justify-center gap-1 w-24 h-14 rounded-xl border relative transition-all duration-300 ${
+              className={`cl-navbar-nav-button flex flex-col items-center justify-center gap-1 w-24 h-14 rounded-xl border relative transition-all duration-300 ${
                 activeTab === 'notifications' ? 'text-white bg-white/20 shadow-lg border-white/30' : 'text-white/80 border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20'
               }`}
             >
@@ -160,59 +175,62 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
 
 
 
-          {/* Search Icon - Mobile */}
-          <button 
-            onClick={handleSearchFocus}
-            className="md:hidden p-2 rounded-xl hover:bg-white/10 relative transition-all duration-300 hover:scale-110 ml-auto"
-          >
-            <Search className="w-5 h-5 text-white" />
-          </button>
-
-          {/* Notifications - Mobile */}
-          <button 
-            onClick={() => onTabChange('notifications')}
-            aria-label="Notifications"
-            className={`md:hidden p-2 rounded-xl relative transition-all duration-300 hover:scale-110 ${
-              activeTab === 'notifications' ? 'bg-white/20' : 'hover:bg-white/10'
-            }`}
-          >
-            <Bell className="w-5 h-5 text-white" />
-            {unreadNotifications > 0 && (
-              <Badge className="absolute -top-1 -right-1 bg-destructive text-white px-1 py-0 min-w-4 h-4 flex items-center justify-center text-xs animate-pulse">
-                {unreadNotifications}
-              </Badge>
-            )}
-          </button>
-
-          {/* More Menu - Mobile */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                aria-label="Open navigation menu"
-                className="md:hidden p-2 rounded-xl text-white transition-all duration-300 hover:scale-110 hover:bg-white/10"
+          {activeTab === 'feed' && (
+            <>
+              {/* Search Icon - Mobile */}
+              <button 
+                onClick={handleSearchFocus}
+                aria-label="Search"
+                className="cl-mobile-top-action md:hidden p-2 rounded-xl relative transition-all duration-300 hover:scale-110"
               >
-                <Menu className="w-5 h-5" />
+                <Search className="w-5 h-5" />
               </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-52" align="end">
-              <DropdownMenuItem onClick={() => onTabChange('profile')}>
-                <User className="mr-2 h-4 w-4" />
-                <span>Profile</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onTabChange('settings')}>
-                <Settings className="mr-2 h-4 w-4" />
-                <span>Settings</span>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={logout}
-                className="text-red-600 focus:text-red-600 focus:bg-red-50"
+
+              {/* Notifications - Mobile */}
+              <button 
+                onClick={() => onTabChange('notifications')}
+                aria-label="Notifications"
+                className="cl-mobile-top-action md:hidden p-2 rounded-xl relative transition-all duration-300 hover:scale-110"
               >
-                <LogOut className="mr-2 h-4 w-4" />
-                <span>Sign Out</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+                <Bell className="w-5 h-5" />
+                {unreadNotifications > 0 && (
+                  <Badge className="absolute -top-1 -right-1 bg-destructive text-white px-1 py-0 min-w-4 h-4 flex items-center justify-center text-xs animate-pulse">
+                    {unreadNotifications}
+                  </Badge>
+                )}
+              </button>
+
+              {/* More Menu - Mobile */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    aria-label="Open navigation menu"
+                    className="cl-mobile-top-action md:hidden p-2 rounded-xl transition-all duration-300 hover:scale-110"
+                  >
+                    <Menu className="w-5 h-5" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-52" align="end">
+                  <DropdownMenuItem onClick={() => onTabChange('profile')}>
+                    <User className="mr-2 h-4 w-4" />
+                    <span>Profile</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onTabChange('settings')}>
+                    <Settings className="mr-2 h-4 w-4" />
+                    <span>Settings</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={logout}
+                    className="text-red-600 focus:text-red-600 focus:bg-red-50"
+                  >
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Sign Out</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
+          )}
         </div>
 
         {/* Mobile Search Bar */}
@@ -232,8 +250,8 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
         )}
 
         {/* Mobile Navigation */}
-        <div className="md:hidden fixed bottom-0 left-0 right-0 backdrop-blur-xl bg-gradient-to-r from-primary via-secondary to-primary border-t border-white/20 flex items-center justify-center gap-2 py-3 px-4 shadow-2xl z-50 safe-area-inset-bottom">
-          {navItems.map((item) => {
+        <div className="cl-mobile-bottom-nav md:hidden fixed bottom-0 left-0 right-0 backdrop-blur-xl bg-gradient-to-r from-primary via-secondary to-primary border-t border-white/20 flex items-center justify-center gap-2 py-3 px-4 shadow-2xl z-50 safe-area-inset-bottom">
+          {mobileNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
             
@@ -245,12 +263,12 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
                 title={item.label}
                 className={`relative flex h-12 flex-1 max-w-[72px] items-center justify-center rounded-2xl transition-all duration-300 ${
                   isActive 
-                    ? 'text-white bg-white/25 scale-105 shadow-xl border border-white/40 backdrop-blur-sm' 
+                    ? 'cl-mobile-nav-active text-white bg-white/25 scale-105 shadow-xl border border-white/40 backdrop-blur-sm' 
                     : 'text-white/70 hover:text-white hover:bg-white/10 active:scale-95'
                 }`}
               >
                 <Icon className="w-6 h-6" />
-                <span className="sr-only">{item.label}</span>
+                <span className="cl-mobile-nav-label sr-only">{item.label}</span>
                 {(item.badge ?? 0) > 0 && (
                   <Badge className="absolute -top-1 -right-1 bg-destructive text-white px-1 py-0 min-w-4 h-4 flex items-center justify-center text-xs animate-pulse">
                     {item.badge}

@@ -37,7 +37,7 @@ async function searchUsers(currentUserId: string, q: string, limit: number, offs
       u.user_id
     FROM users u
     WHERE u.user_id <> ${currentUserId}
-      AND (u.username ILIKE ${pattern} OR u.email ILIKE ${pattern})
+      AND (u.username ILIKE ${pattern} OR SPLIT_PART(u.email, '@', 1) ILIKE ${pattern})
     ORDER BY u.username
     LIMIT ${limit}
     OFFSET ${offset}
