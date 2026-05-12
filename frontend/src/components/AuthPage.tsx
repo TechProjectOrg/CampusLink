@@ -150,16 +150,16 @@ export function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary via-secondary to-purple-600 flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="cl-auth-page min-h-screen bg-gradient-to-br from-primary via-secondary to-purple-600 flex items-center justify-center p-4 relative overflow-hidden">
       {/* Animated background elements */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute top-20 left-10 w-72 h-72 bg-white/10 rounded-full blur-3xl animate-pulse"></div>
         <div className="absolute bottom-20 right-10 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }}></div>
       </div>
 
-      <div className="w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 gap-8 items-center relative z-10">
+      <div className="cl-auth-layout w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 gap-8 items-center relative z-10">
         {/* Left Side - Branding */}
-        <div className="space-y-6 text-center md:text-left animate-slide-in-up">
+        <div className="cl-auth-branding space-y-6 text-center md:text-left animate-slide-in-up">
           <div className="inline-flex items-center gap-3 glass-morphism-solid rounded-2xl p-4 shadow-2xl hover-lift">
             <div className="gradient-primary text-white rounded-xl p-3 shadow-lg">
               <Users className="w-8 h-8" />
@@ -209,7 +209,7 @@ export function AuthPage() {
         </div>
 
         {/* Right Side - Auth Forms */}
-        <Card className="shadow-2xl border-0 backdrop-blur-lg bg-white/95 animate-slide-in-up">
+        <Card className="cl-auth-card shadow-2xl border-0 backdrop-blur-lg bg-white/95 animate-slide-in-up">
           <CardHeader>
             <div className="flex items-center justify-center gap-2 mb-2">
               <Zap className="w-6 h-6 text-primary" />

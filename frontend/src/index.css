@@ -5215,6 +5215,73 @@ div[style*="width: 25%"]::webkit-scrollbar {
 }
 
 @media (max-width: 767px) {
+  .cl-auth-page {
+    align-items: flex-start;
+    justify-content: flex-start;
+    min-height: 100dvh;
+    padding: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .cl-auth-page > .absolute {
+    display: none;
+  }
+
+  .cl-auth-layout {
+    display: block;
+    width: 100%;
+    max-width: none;
+    min-height: 100dvh;
+  }
+
+  .cl-auth-branding {
+    display: none;
+  }
+
+  .cl-auth-card {
+    width: 100%;
+    min-height: 100dvh;
+    border-radius: 0;
+    box-shadow: none;
+    gap: 1rem;
+  }
+
+  .cl-auth-card [data-slot="card-header"] {
+    padding: 1rem 1rem .5rem;
+  }
+
+  .cl-auth-card [data-slot="card-header"] h2 {
+    font-size: 1.25rem;
+    line-height: 1.5rem;
+  }
+
+  .cl-auth-card [data-slot="card-header"] p {
+    font-size: .875rem;
+    line-height: 1.25rem;
+  }
+
+  .cl-auth-card [data-slot="card-content"] {
+    padding: 0 1rem 1rem;
+  }
+
+  .cl-auth-card form,
+  .cl-auth-card [data-slot="card-content"] > div {
+    gap: .75rem;
+  }
+
+  .cl-auth-card .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: .75rem;
+  }
+
+  .cl-auth-card .space-y-2 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: .375rem;
+  }
+
+  .cl-auth-card .grid.grid-cols-2.gap-4 {
+    gap: .75rem;
+  }
+
   body {
     padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
   }
