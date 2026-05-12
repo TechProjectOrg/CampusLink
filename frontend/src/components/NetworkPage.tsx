@@ -85,7 +85,7 @@ export function NetworkPage({
   };
 
   return (
-    <PageLayout maxWidth="4xl" contentClassName="py-6 space-y-6">
+    <PageLayout maxWidth="4xl" className="cl-network-page" contentClassName="cl-network-content py-6 space-y-6">
         <div className="animate-slide-in-down">
           <h1 className="text-gray-900 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
             Network
@@ -93,11 +93,11 @@ export function NetworkPage({
           <p className="text-gray-600">Followers and following - simple and student-first</p>
         </div>
 
-        <Tabs value={activeTab} onValueChange={(v: string) => setActiveTab(v as any)} className="space-y-6">
-          <TabsList className="bg-white/80 backdrop-blur-lg p-1 rounded-2xl border border-primary/10 shadow-lg">
+        <Tabs value={activeTab} onValueChange={(v: string) => setActiveTab(v as any)} className="cl-network-tabs space-y-6">
+          <TabsList className="cl-network-tabs-list bg-white/80 backdrop-blur-lg p-1 rounded-2xl border border-primary/10 shadow-lg">
             <TabsTrigger
               value="followers"
-              className={`flex items-center gap-2 rounded-xl data-[state=active]:gradient-primary data-[state=active]:text-white transition-all duration-300 ${
+              className={`cl-network-tab-trigger flex items-center gap-2 rounded-xl data-[state=active]:gradient-primary data-[state=active]:text-white transition-all duration-300 ${
                 activeTab === 'followers' ? 'gradient-primary text-white' : ''
               }`}
             >
@@ -108,7 +108,7 @@ export function NetworkPage({
 
             <TabsTrigger
               value="following"
-              className={`flex items-center gap-2 rounded-xl data-[state=active]:gradient-primary data-[state=active]:text-white transition-all duration-300 ${
+              className={`cl-network-tab-trigger flex items-center gap-2 rounded-xl data-[state=active]:gradient-primary data-[state=active]:text-white transition-all duration-300 ${
                 activeTab === 'following' ? 'gradient-primary text-white' : ''
               }`}
             >
@@ -234,7 +234,7 @@ export function NetworkPage({
           }
         }}
       >
-        <AlertDialogContent>
+        <AlertDialogContent className="cl-network-alert-dialog">
           <AlertDialogHeader>
             <AlertDialogTitle>
               {removeFollowerId !== null
