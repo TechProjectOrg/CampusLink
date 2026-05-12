@@ -5001,7 +5001,7 @@ div[style*="width: 25%"]::webkit-scrollbar {
     align-items: center;
     gap: .75rem;
     min-height: 5.75rem;
-    padding: 1rem 8.75rem .75rem 1rem;
+    padding: 1rem;
   }
 
   .cl-feed-composer-top [data-slot="avatar"],
@@ -5019,19 +5019,7 @@ div[style*="width: 25%"]::webkit-scrollbar {
   }
 
   .cl-start-post-trigger {
-    flex: 1 1 auto;
-    height: 3.5rem;
-    min-height: 3.5rem;
-    min-width: 0;
-    padding: 0 .875rem;
-    background: #f3f4f6;
-    border: 0;
-    color: #64748b;
-    font-size: clamp(.875rem, 4vw, 1rem);
-    font-weight: 600;
-    text-align: center;
-    white-space: nowrap;
-    box-shadow: none;
+    display: none;
   }
 
   .cl-feed-action-row {
@@ -5257,9 +5245,9 @@ div[style*="width: 25%"]::webkit-scrollbar {
     top: 1rem;
     right: 1rem;
     z-index: 60;
-    width: 7.75rem;
+    width: 12rem;
     height: 3.5rem;
-    gap: .5rem;
+    gap: .75rem;
     align-items: center;
     justify-content: space-between;
     pointer-events: none;
@@ -5277,9 +5265,9 @@ div[style*="width: 25%"]::webkit-scrollbar {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 2.25rem;
-    height: 2.25rem;
-    flex: 0 0 2.25rem;
+    width: 3.5rem;
+    height: 3.5rem;
+    flex: 0 0 3.5rem;
     padding: 0;
     color: #475569;
     background: transparent;
@@ -5295,8 +5283,8 @@ div[style*="width: 25%"]::webkit-scrollbar {
   }
 
   .cl-mobile-top-action svg {
-    width: 1.25rem;
-    height: 1.25rem;
+    width: 1.45rem;
+    height: 1.45rem;
   }
 
   .cl-mobile-top-action [data-slot="badge"] {
@@ -5328,7 +5316,7 @@ div[style*="width: 25%"]::webkit-scrollbar {
     height: 3.5rem;
     flex-direction: column;
     gap: .125rem;
-    color: #155dfc;
+    color: #0f172a;
     border: 0;
     background: transparent;
     box-shadow: none;
@@ -5336,7 +5324,7 @@ div[style*="width: 25%"]::webkit-scrollbar {
   }
 
   .cl-mobile-bottom-nav button.cl-mobile-nav-active {
-    color: #0f172a;
+    color: #155dfc;
     background: transparent;
     border: 0;
     box-shadow: none;
