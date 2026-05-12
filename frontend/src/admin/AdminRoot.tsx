@@ -647,23 +647,23 @@ export default function AdminRoot() {
                         <table className="min-w-full text-sm">
                           <thead>
                             <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-[0.12em] text-slate-500">
-                              <th className="pb-3 pr-4">Reported item</th>
-                              <th className="pb-3 pr-4">User</th>
-                              <th className="pb-3 pr-4">Reason</th>
-                              <th className="pb-3 pr-4">Severity</th>
-                              <th className="pb-3 pr-4">Count</th>
-                              <th className="pb-3">Time</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Reported item</th>
+                              <th className="px-3 py-3 whitespace-nowrap">User</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Reason</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Severity</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Count</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Time</th>
                             </tr>
                           </thead>
                           <tbody>
                             {(dashboard.moderationQueue ?? []).map((item: any) => (
                               <tr key={item.id} className="border-b border-slate-100 align-top">
-                                <td className="py-3 pr-4 font-medium text-slate-800">{item.reportedItem}</td>
-                                <td className="py-3 pr-4 text-slate-600">{item.user}</td>
-                                <td className="py-3 pr-4 text-slate-600">{item.reason}</td>
-                                <td className="py-3 pr-4"><StatusBadge value={item.severity} /></td>
-                                <td className="py-3 pr-4 text-slate-600">{item.reportsCount}</td>
-                                <td className="py-3 text-slate-500">{formatDate(item.time)}</td>
+                                <td className="px-3 py-3 font-medium text-slate-800">{item.reportedItem}</td>
+                                <td className="px-3 py-3 text-slate-600">{item.user}</td>
+                                <td className="px-3 py-3 text-slate-600">{item.reason}</td>
+                                <td className="px-3 py-3"><StatusBadge value={item.severity} /></td>
+                                <td className="px-3 py-3 text-slate-600">{item.reportsCount}</td>
+                                <td className="px-3 py-3 text-slate-500">{formatDate(item.time)}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -722,21 +722,21 @@ export default function AdminRoot() {
                     <table className="min-w-full text-sm">
                       <thead>
                         <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-[0.12em] text-slate-500">
-                          <th className="pb-3 pr-3"></th>
-                          <th className="pb-3 pr-3">User</th>
-                          <th className="pb-3 pr-3">College</th>
-                          <th className="pb-3 pr-3">Followers</th>
-                          <th className="pb-3 pr-3">Posts</th>
-                          <th className="pb-3 pr-3">Reports</th>
-                          <th className="pb-3 pr-3">Last active</th>
-                          <th className="pb-3 pr-3">Status</th>
-                          <th className="pb-3">Actions</th>
+                          <th className="px-3 py-3 whitespace-nowrap"></th>
+                          <th className="px-3 py-3 whitespace-nowrap">User</th>
+                          <th className="px-3 py-3 whitespace-nowrap">College</th>
+                          <th className="px-3 py-3 whitespace-nowrap">Followers</th>
+                          <th className="px-3 py-3 whitespace-nowrap">Posts</th>
+                          <th className="px-3 py-3 whitespace-nowrap">Reports</th>
+                          <th className="px-3 py-3 whitespace-nowrap">Last active</th>
+                          <th className="px-3 py-3 whitespace-nowrap">Status</th>
+                          <th className="px-3 py-3 whitespace-nowrap">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {users.map((user) => (
                           <tr key={user.id} className="border-b border-slate-100 hover:bg-slate-50">
-                            <td className="py-3 pr-3">
+                            <td className="px-3 py-3">
                               <input
                                 type="checkbox"
                                 checked={selectedUserIds.includes(user.id)}
@@ -745,19 +745,19 @@ export default function AdminRoot() {
                                 }}
                               />
                             </td>
-                            <td className="py-3 pr-3">
+                            <td className="px-3 py-3">
                               <button type="button" onClick={() => void openUserDrawer(user)} className="text-left">
                                 <p className="font-medium text-slate-800">{user.username}</p>
                                 <p className="text-xs text-slate-500">{user.email}</p>
                               </button>
                             </td>
-                            <td className="py-3 pr-3 text-slate-600">{user.college}</td>
-                            <td className="py-3 pr-3 text-slate-600">{formatNumber(user.followers)}</td>
-                            <td className="py-3 pr-3 text-slate-600">{formatNumber(user.postsCount)}</td>
-                            <td className="py-3 pr-3 text-slate-600">{formatNumber(user.reportsCount)}</td>
-                            <td className="py-3 pr-3 text-slate-500">{formatDate(user.lastActive)}</td>
-                            <td className="py-3 pr-3"><StatusBadge value={user.status} /></td>
-                            <td className="py-3">
+                            <td className="px-3 py-3 text-slate-600">{user.college}</td>
+                            <td className="px-3 py-3 text-slate-600">{formatNumber(user.followers)}</td>
+                            <td className="px-3 py-3 text-slate-600">{formatNumber(user.postsCount)}</td>
+                            <td className="px-3 py-3 text-slate-600">{formatNumber(user.reportsCount)}</td>
+                            <td className="px-3 py-3 text-slate-500">{formatDate(user.lastActive)}</td>
+                            <td className="px-3 py-3"><StatusBadge value={user.status} /></td>
+                            <td className="px-3 py-3">
                               <div className="flex flex-wrap gap-2">
                                 <Button variant="outline" size="sm" onClick={() => void runUserAction(user.id, 'warn', 'Admin warning issued')}>Warn</Button>
                                 <Button variant="outline" size="sm" onClick={() => void runUserAction(user.id, 'suspend')}>Suspend</Button>
@@ -780,32 +780,32 @@ export default function AdminRoot() {
                   <table className="min-w-full text-sm">
                     <thead>
                       <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-[0.12em] text-slate-500">
-                        <th className="pb-3 pr-3">Club</th>
-                        <th className="pb-3 pr-3">Members</th>
-                        <th className="pb-3 pr-3">Activity</th>
-                        <th className="pb-3 pr-3">Posts</th>
-                        <th className="pb-3 pr-3">Reports</th>
-                        <th className="pb-3 pr-3">Created by</th>
-                        <th className="pb-3 pr-3">Verification</th>
-                        <th className="pb-3">Actions</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Club</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Members</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Activity</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Posts</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Reports</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Created by</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Verification</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {clubs.map((club) => (
                         <tr key={club.id} className="border-b border-slate-100 hover:bg-slate-50">
-                          <td className="py-3 pr-3">
+                          <td className="px-3 py-3">
                             <button type="button" onClick={() => void openClubDrawer(club)} className="text-left">
                               <p className="font-medium text-slate-800">{club.name}</p>
                               <p className="text-xs text-slate-500">{club.status}</p>
                             </button>
                           </td>
-                          <td className="py-3 pr-3 text-slate-600">{formatNumber(club.members)}</td>
-                          <td className="py-3 pr-3 text-slate-600">{formatNumber(club.activityScore)}</td>
-                          <td className="py-3 pr-3 text-slate-600">{formatNumber(club.postsCount)}</td>
-                          <td className="py-3 pr-3 text-slate-600">{formatNumber(club.reports)}</td>
-                          <td className="py-3 pr-3 text-slate-600">{club.createdBy}</td>
-                          <td className="py-3 pr-3"><StatusBadge value={club.verificationStatus} /></td>
-                          <td className="py-3">
+                          <td className="px-3 py-3 text-slate-600">{formatNumber(club.members)}</td>
+                          <td className="px-3 py-3 text-slate-600">{formatNumber(club.activityScore)}</td>
+                          <td className="px-3 py-3 text-slate-600">{formatNumber(club.postsCount)}</td>
+                          <td className="px-3 py-3 text-slate-600">{formatNumber(club.reports)}</td>
+                          <td className="px-3 py-3 text-slate-600">{club.createdBy}</td>
+                          <td className="px-3 py-3"><StatusBadge value={club.verificationStatus} /></td>
+                          <td className="px-3 py-3">
                             <div className="flex flex-wrap gap-2">
                               <Button variant="outline" size="sm" onClick={() => void runClubAction(club.id, 'verify')}>Verify</Button>
                               <Button variant="outline" size="sm" onClick={() => void runClubAction(club.id, 'feature')}>Feature</Button>
@@ -858,27 +858,27 @@ export default function AdminRoot() {
                   <table className="min-w-full text-sm">
                     <thead>
                       <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-[0.12em] text-slate-500">
-                        <th className="pb-3 pr-3">Reporter</th>
-                        <th className="pb-3 pr-3">Target</th>
-                        <th className="pb-3 pr-3">Reason</th>
-                        <th className="pb-3 pr-3">Evidence</th>
-                        <th className="pb-3 pr-3">Frequency</th>
-                        <th className="pb-3 pr-3">Severity</th>
-                        <th className="pb-3 pr-3">Status</th>
-                        <th className="pb-3">Actions</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Reporter</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Target</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Reason</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Evidence</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Frequency</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Severity</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Status</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {reports.map((report) => (
                         <tr key={report.id} className="border-b border-slate-100 align-top hover:bg-slate-50">
-                          <td className="py-3 pr-3 text-slate-700">{report.reporter}</td>
-                          <td className="py-3 pr-3 text-slate-600">{report.targetType}: {report.targetContent}</td>
-                          <td className="py-3 pr-3 text-slate-600">{report.reason}</td>
-                          <td className="py-3 pr-3 text-slate-500">{report.evidence || '—'}</td>
-                          <td className="py-3 pr-3 text-slate-600">{report.reportFrequency}</td>
-                          <td className="py-3 pr-3"><StatusBadge value={report.severity} /></td>
-                          <td className="py-3 pr-3"><StatusBadge value={report.status} /></td>
-                          <td className="py-3">
+                          <td className="px-3 py-3 text-slate-700">{report.reporter}</td>
+                          <td className="px-3 py-3 text-slate-600">{report.targetType}: {report.targetContent}</td>
+                          <td className="px-3 py-3 text-slate-600">{report.reason}</td>
+                          <td className="px-3 py-3 text-slate-500">{report.evidence || '—'}</td>
+                          <td className="px-3 py-3 text-slate-600">{report.reportFrequency}</td>
+                          <td className="px-3 py-3"><StatusBadge value={report.severity} /></td>
+                          <td className="px-3 py-3"><StatusBadge value={report.status} /></td>
+                          <td className="px-3 py-3">
                             <div className="flex flex-wrap gap-2">
                               <Button variant="outline" size="sm" onClick={() => void apiAdminPost(`/admin/reports/${report.id}`, token!, { status: 'reviewing', assignToMe: true }, 'PATCH').then(refreshCurrentPage)}>Review</Button>
                               <Button variant="outline" size="sm" onClick={() => void apiAdminPost(`/admin/reports/${report.id}`, token!, { status: 'resolved' }, 'PATCH').then(refreshCurrentPage)}>Resolve</Button>
@@ -1042,21 +1042,21 @@ export default function AdminRoot() {
                   <table className="min-w-full text-sm">
                     <thead>
                       <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-[0.12em] text-slate-500">
-                        <th className="pb-3 pr-3">Timestamp</th>
-                        <th className="pb-3 pr-3">Severity</th>
-                        <th className="pb-3 pr-3">Actor</th>
-                        <th className="pb-3 pr-3">Action</th>
-                        <th className="pb-3">Summary</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Timestamp</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Severity</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Actor</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Action</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Summary</th>
                       </tr>
                     </thead>
                     <tbody>
                       {logs.map((log) => (
                         <tr key={log.id} className="border-b border-slate-100">
-                          <td className="py-3 pr-3 text-slate-500">{formatDate(log.createdAt)}</td>
-                          <td className="py-3 pr-3"><StatusBadge value={log.severity} /></td>
-                          <td className="py-3 pr-3 text-slate-700">{log.actor}</td>
-                          <td className="py-3 pr-3 text-slate-600">{log.actionType}</td>
-                          <td className="py-3 text-slate-600">{log.summary}</td>
+                          <td className="px-3 py-3 text-slate-500">{formatDate(log.createdAt)}</td>
+                          <td className="px-3 py-3"><StatusBadge value={log.severity} /></td>
+                          <td className="px-3 py-3 text-slate-700">{log.actor}</td>
+                          <td className="px-3 py-3 text-slate-600">{log.actionType}</td>
+                          <td className="px-3 py-3 text-slate-600">{log.summary}</td>
                         </tr>
                       ))}
                     </tbody>
