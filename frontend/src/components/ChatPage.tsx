@@ -910,7 +910,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                                   </div>
                                 </PopoverContent>
                               </Popover>
-                              <button type="button" onClick={() => setReplyingTo(msg)} className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-gray-700 shadow-sm ring-1 ring-gray-200 hover:bg-gray-50" aria-label="Reply">
+                              <button type="button" onClick={() => setReplyingTo(msg)} className="hidden sm:flex h-8 w-8 items-center justify-center rounded-full bg-white text-gray-700 shadow-sm ring-1 ring-gray-200 hover:bg-gray-50" aria-label="Reply">
                                 <Reply className="h-4 w-4" />
                               </button>
                               <DropdownMenu>
@@ -924,7 +924,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                                     {formatMenuTimestamp(msg.timestamp)}
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
-                                  <DropdownMenuItem onClick={() => setReplyingTo(msg)}>
+                                  <DropdownMenuItem onClick={() => setReplyingTo(msg)} className="hidden sm:flex">
                                     <Reply className="w-4 h-4 mr-2" />
                                     Reply
                                   </DropdownMenuItem>
