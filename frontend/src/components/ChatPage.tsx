@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Search, MoreVertical, Info, Image, Smile, CircleDot, Plus, Flag, Ban, Eye, Reply, X, Trash2, Copy, ChevronDown } from 'lucide-react';
+import type { MouseEvent } from 'react';
+import { Send, Search, MoreVertical, Info, Image, Smile, CircleDot, Plus, Flag, Ban, Eye, Reply, X, Trash2, Copy, ChevronDown, Phone, Video } from 'lucide-react';
 import { ChatConversation, Student } from '../types';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
@@ -81,8 +82,10 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   const [isGroupInfoLoading, setIsGroupInfoLoading] = useState(false);
   const [replyingTo, setReplyingTo] = useState<ChatMessageApi | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
+  const [mobileActionMessageId, setMobileActionMessageId] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const longPressTimerRef = useRef<number | null>(null);
   const readMessageByChatRef = useRef<Record<string, string>>({});
 
   const selectedConversation = conversations.find(c => c.id === selectedChat);
@@ -273,6 +276,37 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     } catch (err) {
       console.error('Failed to react to message:', err);
     }
+  };
+
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current === null) return;
+    window.clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = null;
+  };
+
+  const shouldUseMobileMessageActions = () => {
+    if (typeof window === 'undefined') return false;
+    return window.matchMedia('(hover: none), (pointer: coarse)').matches || window.innerWidth <= 640;
+  };
+
+  const handleMessagePressStart = (messageId: string) => {
+    clearLongPressTimer();
+    if (!shouldUseMobileMessageActions()) return;
+    longPressTimerRef.current = window.setTimeout(() => {
+      setMobileActionMessageId(messageId);
+      longPressTimerRef.current = null;
+    }, 360);
+  };
+
+  const handleMessagePressEnd = () => {
+    clearLongPressTimer();
+  };
+
+  const handleMessageContextMenu = (event: MouseEvent, messageId: string) => {
+    if (!shouldUseMobileMessageActions()) return;
+    event.preventDefault();
+    clearLongPressTimer();
+    setMobileActionMessageId(messageId);
   };
 
   const formatTime = (timestamp: string) => {
@@ -622,10 +656,10 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                 >
                     <Avatar className="w-10 h-10">
                     <AvatarImage src={selectedConversation.participantAvatar} />
-                    <AvatarFallback>{selectedConversation.participantName[0]}</AvatarFallback>
+                    <AvatarFallback className="bg-pink-500 text-white">{selectedConversation.participantName[0]}</AvatarFallback>
                   </Avatar>
                   <div className="text-left">
-                    <p className="text-sm text-gray-900">{selectedConversation.participantName}</p>
+                    <p className="text-xl font-semibold leading-tight text-gray-950 md:text-2xl">{selectedConversation.participantName}</p>
                     <div className="flex items-center gap-1">
                       {typingStatusLabel ? (
                         <>
@@ -648,7 +682,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                           {selectedConversation.isOnline ? (
                             <>
                               <CircleDot className="w-2 h-2 text-green-500 fill-green-500" />
-                              <p className="text-xs text-gray-500">Active now</p>
+                              <p className="text-xs text-green-600">Active now</p>
                             </>
                           ) : (
                             <p className="text-xs text-gray-500">
@@ -663,6 +697,12 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
               </div>
               <div className="flex items-center gap-1 md:gap-2">
 
+                <Button variant="ghost" size="sm" className="hover:bg-gray-100 rounded-full w-8 h-8 md:w-9 md:h-9 p-0" aria-label="Voice call">
+                  <Phone className="w-4 h-4 md:w-5 md:h-5 text-gray-700" />
+                </Button>
+                <Button variant="ghost" size="sm" className="hover:bg-gray-100 rounded-full w-8 h-8 md:w-9 md:h-9 p-0" aria-label="Video call">
+                  <Video className="w-4 h-4 md:w-5 md:h-5 text-gray-700" />
+                </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm" className="hover:bg-gray-100 rounded-full w-8 h-8 md:w-9 md:h-9 p-0">
@@ -733,6 +773,11 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
               <div
                 ref={messagesViewportRef}
                 style={{ overflowAnchor: 'auto' }}
+                onPointerDown={(event) => {
+                  if ((event.target as HTMLElement).closest('[data-chat-message-actions]')) return;
+                  if ((event.target as HTMLElement).closest('[data-chat-scroll-message]')) return;
+                  setMobileActionMessageId(null);
+                }}
                 className={`absolute inset-0 overflow-y-auto transition-opacity duration-300 ${
                   !selectedChat || isChatReady || !isLoadingMessages ? 'opacity-100' : 'opacity-0'
                 }`}
@@ -784,14 +829,21 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                           </span>
                         </div>
                       ) : (
-                      <div className={`flex items-end gap-2 ${msg.isOwn ? 'justify-end' : 'justify-start'}`}>
+                      <div
+                        className={`flex items-end gap-2 ${msg.isOwn ? 'justify-end' : 'justify-start'} ${mobileActionMessageId === msg.id ? 'pb-12 md:pb-0' : ''}`}
+                        onPointerDown={() => handleMessagePressStart(msg.id)}
+                        onPointerUp={handleMessagePressEnd}
+                        onPointerLeave={handleMessagePressEnd}
+                        onPointerCancel={handleMessagePressEnd}
+                        onContextMenu={(event) => handleMessageContextMenu(event, msg.id)}
+                      >
                         {!msg.isOwn && (
                           <Avatar className="w-6 h-6 md:w-7 md:h-7 flex-shrink-0 mb-1">
                             <AvatarImage src={msg.senderAvatar ?? undefined} />
                             <AvatarFallback>{msg.senderName[0]}</AvatarFallback>
                           </Avatar>
                         )}
-                        <div className={`cl-chat-message-group group min-w-0 w-fit max-w-[78%] md:max-w-[70%] xl:max-w-[40rem] ${msg.isOwn ? 'order-2' : 'order-1'}`}>
+                        <div className={`cl-chat-message-group group relative min-w-0 w-fit max-w-[78%] md:max-w-[70%] xl:max-w-[40rem] ${msg.isOwn ? 'order-2' : 'order-1'}`}>
                           {selectedConversation.isGroup && !msg.isOwn && startsSenderGroup && (
                             <p className="mb-1 px-2 text-xs font-medium text-gray-500">
                               {msg.senderName}
@@ -799,9 +851,9 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                           )}
                           <div className="flex items-center gap-2">
                             <div
-                              className={`${msg.isOwn ? 'order-2' : 'order-1'} min-w-0 w-fit max-w-full rounded-3xl px-3 py-2 transition-shadow duration-200 md:px-4 md:py-2.5 ${
+                              className={`cl-chat-bubble ${msg.isOwn ? 'order-2 cl-chat-bubble-own' : 'order-1 cl-chat-bubble-other'} min-w-0 w-fit max-w-full rounded-3xl px-3 py-2 transition-shadow duration-200 md:px-4 md:py-2.5 ${
                                 msg.isOwn
-                                  ? 'bg-gradient-to-br from-primary to-secondary text-white'
+                                  ? 'bg-primary text-white'
                                   : 'bg-gray-100 text-gray-900'
                               } ${highlightedMessageId === msg.id ? 'ring-2 ring-amber-300 ring-offset-2 ring-offset-white' : ''}`}
                             >
@@ -832,7 +884,10 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                                 <p className="text-sm break-words">{msg.content}</p>
                               )}
                             </div>
-                            <div className={`mt-1 flex shrink-0 items-center gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100 ${msg.isOwn ? 'order-1 flex-row-reverse' : 'order-2 flex-row'}`}>
+                            <div
+                              data-chat-message-actions
+                              className={`cl-chat-message-actions mt-1 flex shrink-0 items-center gap-1 transition-opacity duration-200 ${mobileActionMessageId === msg.id ? 'cl-chat-message-actions-open' : ''} ${msg.isOwn ? 'order-1 flex-row-reverse' : 'order-2 flex-row'}`}
+                            >
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <button type="button" className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-gray-700 shadow-sm ring-1 ring-gray-200 hover:bg-gray-50" aria-label="React to message">

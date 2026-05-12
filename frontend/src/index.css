@@ -4976,6 +4976,29 @@ div[style*="width: 25%"]::webkit-scrollbar {
   display: none;
 }
 
+.cl-chat-message-actions {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.cl-chat-message-actions:focus-within,
+.cl-chat-message-actions-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cl-chat-message-group:hover .cl-chat-message-actions,
+  .cl-chat-message-group:focus-within .cl-chat-message-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.cl-chat-bubble-own {
+  background: #2f7df6;
+}
+
 @media (max-width: 639px) {
   .cl-feed-page {
     max-width: none !important;
@@ -5271,12 +5294,13 @@ div[style*="width: 25%"]::webkit-scrollbar {
   }
 
   .cl-chat-panel-header {
+    min-height: 5.75rem;
     padding: .75rem 1rem;
   }
 
   .cl-chat-panel-header [data-slot="avatar"] {
-    width: 2.5rem;
-    height: 2.5rem;
+    width: 3.125rem;
+    height: 3.125rem;
   }
 
   .cl-chat-panel-header button {
@@ -5284,15 +5308,35 @@ div[style*="width: 25%"]::webkit-scrollbar {
   }
 
   .cl-chat-messages-inner {
-    padding: 1rem .75rem;
+    padding: 1rem .75rem 1.75rem;
   }
 
   .cl-chat-message-group {
-    max-width: 86%;
+    max-width: min(86%, 34rem);
   }
 
-  .cl-chat-message-group .group-hover\:opacity-100 {
-    opacity: 1;
+  .cl-chat-message-actions {
+    position: absolute;
+    right: .25rem;
+    bottom: -3.25rem;
+    z-index: 20;
+    gap: .75rem;
+    padding: .5rem .75rem;
+    border-radius: 9999px;
+    background: #fff;
+    box-shadow: 0 14px 34px rgba(15, 23, 42, .18);
+  }
+
+  .cl-chat-message-actions button {
+    width: 2.25rem;
+    height: 2.25rem;
+    box-shadow: none;
+  }
+
+  .cl-chat-bubble {
+    padding: .75rem 1.125rem;
+    font-size: 1rem;
+    line-height: 1.45;
   }
 
   .cl-chat-input-footer {
