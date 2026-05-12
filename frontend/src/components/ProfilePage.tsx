@@ -340,7 +340,7 @@ export function ProfilePage({
       const list = await fetchCachedValue({
         key: `page:user:${student.id}:profile:projects`,
         policy: cachePolicies.userProfile,
-        mode: 'cache-first',
+        mode: 'network-only',
         fetcher: () => apiFetchUserProjects(student.id, authToken),
       });
       setLoadedProjects(
@@ -401,7 +401,7 @@ export function ProfilePage({
       const list = await fetchCachedValue({
         key: `page:user:${student.id}:profile:societies`,
         policy: cachePolicies.userProfile,
-        mode: 'cache-first',
+        mode: 'network-only',
         fetcher: () => apiFetchUserSocieties(student.id, authToken),
       });
       setSocieties(
@@ -572,8 +572,8 @@ export function ProfilePage({
   }, [isOwnProfile, auth.profile?.coverPhotoUrl, student.coverPhotoUrl]);
 
   // Follow counts
-  const followersCount = (followGraph.followersByUserId[student.id] ?? []).length;
-  const followingCount = (followGraph.followingByUserId[student.id] ?? []).length;
+  const followersCount = student.stats?.followerCount ?? (followGraph.followersByUserId[student.id] ?? []).length;
+  const followingCount = student.stats?.followingCount ?? (followGraph.followingByUserId[student.id] ?? []).length;
   const isFollowing = (followGraph.followingByUserId[currentUserId] ?? []).includes(student.id);
   const isFollower = (followGraph.followersByUserId[currentUserId] ?? []).includes(student.id);
   const requestStatus = (followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id)

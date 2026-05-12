@@ -239,6 +239,7 @@ export function apiProfileToStudent(profile: ApiUserProfile): Student {
     achievements: [],
     projects: [],
     accountType: profile.isPublic ? 'public' : 'private',
+    stats: profile.stats,
   };
 }
 
@@ -295,6 +296,7 @@ function mergeStudents(current: Student | undefined, incoming: Student): Student
     achievements:
       incomingAchievements.length > 0 ? incomingAchievements : current?.achievements ?? [],
     projects: incomingProjects.length > 0 ? incomingProjects : current?.projects ?? [],
+    stats: incoming.stats ?? current?.stats,
   };
 }
 

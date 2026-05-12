@@ -53,6 +53,11 @@ export interface Student {
   projects: Project[];
   resumeUrl?: string;
   accountType: AccountType;
+  stats?: {
+    followerCount: number;
+    followingCount: number;
+    postCount: number;
+  };
 }
 
 export interface Project {
