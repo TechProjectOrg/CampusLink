@@ -184,7 +184,7 @@ export function SearchPage({
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
       <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-        <div className="animate-slide-in-down">
+        <div className="hidden lg:block animate-slide-in-down">
           <h1 className="text-gray-900 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
             Search
           </h1>
