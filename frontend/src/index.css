@@ -5915,6 +5915,13 @@ div[style*="width: 25%"]::webkit-scrollbar {
 }
 
 @media (min-width: 768px) and (max-width: 1023px) {
+  .cl-navbar-root {
+    background: transparent;
+    box-shadow: none;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
   .cl-navbar-shell {
     max-width: none;
     padding-left: .5rem;
@@ -5923,6 +5930,12 @@ div[style*="width: 25%"]::webkit-scrollbar {
 
   .cl-navbar-row {
     gap: .375rem;
+    margin-left: -.5rem;
+    margin-right: -.5rem;
+    padding-left: .5rem;
+    padding-right: .5rem;
+    background: linear-gradient(to right, var(--primary), var(--secondary), var(--primary));
+    box-shadow: 0 10px 24px rgba(15, 23, 42, .14);
   }
 
   .cl-navbar-logo-text {
