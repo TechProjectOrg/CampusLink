@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Home, Search, Users, MessageCircle, BookOpen, User, Bell, Settings, LogOut, Menu } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
@@ -53,6 +53,13 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
     }
   };
 
+  const handleTabNavigate = (tab: string) => {
+    if (tab !== 'search') {
+      setIsMobileSearchOpen(false);
+    }
+    onTabChange(tab);
+  };
+
   const handleMobileSearchToggle = () => {
     setIsMobileSearchOpen((current) => !current);
     if (!isMobileSearchOpen && activeTab !== 'search') {
@@ -67,12 +74,18 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
     }
   };
 
+  useEffect(() => {
+    if (activeTab !== 'search') {
+      setIsMobileSearchOpen(false);
+    }
+  }, [activeTab]);
+
   return (
     <nav className="cl-navbar-root sticky top-0 z-50 w-full overflow-x-hidden backdrop-blur-xl bg-gradient-to-r from-primary via-secondary to-primary shadow-lg animate-slide-in-down">
       <div className="cl-navbar-shell max-w-7xl mx-auto px-4">
         <div className="cl-navbar-row flex items-center gap-4 h-16">
           {/* Logo */}
-          <div className="flex items-center gap-2 flex-shrink-0 cursor-pointer" onClick={() => onTabChange('feed')}>
+          <div className="flex items-center gap-2 flex-shrink-0 cursor-pointer" onClick={() => handleTabNavigate('feed')}>
             <div className="bg-white/20 backdrop-blur-lg text-white rounded-xl p-2 shadow-lg hover-lift border border-white/30">
               <Users className="w-6 h-6" />
             </div>
@@ -112,7 +125,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
               return (
                 <button
                   key={item.id}
-                  onClick={() => onTabChange(item.id)}
+                  onClick={() => handleTabNavigate(item.id)}
                   aria-label={item.label}
                   className={`cl-navbar-nav-button relative flex flex-col items-center justify-center gap-1 w-24 h-14 rounded-xl border transition-all duration-300 ${
                     isActive
@@ -132,7 +145,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
             })}
 
             <button 
-              onClick={() => onTabChange('notifications')}
+              onClick={() => handleTabNavigate('notifications')}
               aria-label="Notifications"
               className={`cl-navbar-nav-button flex flex-col items-center justify-center gap-1 w-24 h-14 rounded-xl border relative transition-all duration-300 ${
                 activeTab === 'notifications' ? 'text-white bg-white/20 shadow-lg border-white/30' : 'text-white/80 border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20'
@@ -170,11 +183,11 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-48" align="end">
-                <DropdownMenuItem onClick={() => onTabChange('profile')}>
+                <DropdownMenuItem onClick={() => handleTabNavigate('profile')}>
                   <User className="mr-2 h-4 w-4" />
                   <span>Profile</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onTabChange('settings')}>
+                <DropdownMenuItem onClick={() => handleTabNavigate('settings')}>
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Settings</span>
                 </DropdownMenuItem>
@@ -206,7 +219,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
 
               {/* Notifications - Mobile */}
               <button 
-                onClick={() => onTabChange('notifications')}
+                onClick={() => handleTabNavigate('notifications')}
                 aria-label="Notifications"
                 className="cl-mobile-top-action md:hidden p-2 rounded-xl relative transition-all duration-300 hover:scale-110"
               >
@@ -229,11 +242,11 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-52" align="end">
-                  <DropdownMenuItem onClick={() => onTabChange('profile')}>
+                  <DropdownMenuItem onClick={() => handleTabNavigate('profile')}>
                     <User className="mr-2 h-4 w-4" />
                     <span>Profile</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onTabChange('settings')}>
+                  <DropdownMenuItem onClick={() => handleTabNavigate('settings')}>
                     <Settings className="mr-2 h-4 w-4" />
                     <span>Settings</span>
                   </DropdownMenuItem>
@@ -287,7 +300,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
             return (
               <button
                 key={item.id}
-                onClick={() => onTabChange(item.id)}
+                onClick={() => handleTabNavigate(item.id)}
                 aria-label={item.label}
                 title={item.label}
                 className={`relative flex h-12 flex-1 max-w-[72px] items-center justify-center rounded-2xl transition-all duration-300 ${
