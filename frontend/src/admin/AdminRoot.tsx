@@ -161,6 +161,8 @@ function EmptyPanel({ title, body }: { title: string; body: string }) {
   );
 }
 
+// SessionLoadingScreen removed — dashboard renders immediately when a token exists.
+
 function AdminLogin({
   onLogin,
   isLoading,
@@ -475,39 +477,49 @@ export default function AdminRoot() {
 
   const notificationCount = dashboard?.moderationQueue?.length ?? reports.filter((item) => ['open', 'reviewing', 'escalated'].includes(item.status)).length ?? 0;
 
-  if (!token || !admin) {
+  if (!token) {
     return <AdminLogin onLogin={handleLogin} isLoading={authLoading} error={authError} />;
   }
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
       <aside
-        style={{ width: collapsed ? 84 : 246 }}
+        style={{ width: collapsed ? 64 : 246 }}
         className="fixed inset-y-0 left-0 z-30 border-r border-slate-200 bg-slate-50 transition-all duration-200"
       >
           <div className="flex h-full flex-col">
             <div className="border-b border-slate-200 px-4 py-4">
               <div className="flex items-center justify-between">
-                <div className="overflow-hidden">
-                  <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">CampusLink</p>
-                  {!collapsed ? <p className="mt-1 text-sm font-semibold text-slate-900">Admin Console</p> : null}
-                </div>
+                {!collapsed ? (
+                  <div className="overflow-hidden">
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">CampusLink</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-900">Admin Console</p>
+                  </div>
+                ) : (
+                  <div className="w-3" />
+                )}
                 <Button variant="ghost" size="icon" onClick={() => setCollapsed((value) => !value)}>
                   <ChevronRight className={`h-4 w-4 transition-transform ${collapsed ? '' : 'rotate-180'}`} />
                 </Button>
               </div>
             </div>
 
-            <nav className="flex-1 space-y-1 px-3 py-4">
+              <nav className="flex-1 space-y-1 px-3 py-4">
               {NAV_ITEMS.map((item) => {
                 const Icon = item.icon;
                 const active = page === item.key;
+                const base = `flex w-full items-center gap-3 rounded-md border text-sm transition `;
+                const collapsedClasses = 'justify-center px-0 py-2';
+                const expandedClasses = 'px-3 py-2 text-left';
                 return (
                   <button
                     key={item.key}
                     type="button"
                     onClick={() => goTo(item.key)}
-                    className={`flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left text-sm transition ${active ? 'border-slate-300 bg-white font-medium text-slate-900' : 'border-transparent text-slate-600 hover:border-slate-200 hover:bg-white hover:text-slate-900'}`}
+                    className={
+                      base + (collapsed ? collapsedClasses : expandedClasses) +
+                      (active ? ' border-slate-300 bg-white font-medium text-slate-900' : ' border-transparent text-slate-600 hover:border-slate-200 hover:bg-white hover:text-slate-900')
+                    }
                   >
                     <Icon className="h-4 w-4 shrink-0" />
                     {!collapsed ? <span className="truncate">{item.label}</span> : null}
@@ -517,22 +529,28 @@ export default function AdminRoot() {
             </nav>
 
             <div className="border-t border-slate-200 p-3">
-              <div className="rounded-lg border border-slate-200 bg-white p-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
-                    {admin.username.slice(0, 2).toUpperCase()}
-                  </div>
-                  {!collapsed ? (
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-slate-900">{admin.username}</p>
-                      <p className="truncate text-xs text-slate-500">{admin.role.replace('_', ' ')}</p>
+              <div className={collapsed ? 'flex items-center justify-center py-3' : 'rounded-lg border border-slate-200 bg-white p-3'}>
+                {!collapsed ? (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+                        {admin?.username ? admin.username.slice(0, 2).toUpperCase() : 'AD'}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-slate-900">{admin?.username ?? 'Loading...'}</p>
+                        <p className="truncate text-xs text-slate-500">{admin?.role ? admin.role.replace('_', ' ') : ''}</p>
+                      </div>
                     </div>
-                  ) : null}
-                </div>
-                <Button variant="outline" size="sm" className="mt-3 w-full justify-start border-slate-200 text-slate-700" onClick={handleLogout}>
-                  <LogOut className="h-4 w-4" />
-                  {!collapsed ? 'Logout' : null}
-                </Button>
+                    <Button variant="outline" size="sm" className="mt-3 w-full justify-start border-slate-200 text-slate-700" onClick={handleLogout}>
+                      <LogOut className="h-4 w-4" />
+                      Logout
+                    </Button>
+                  </>
+                ) : (
+                  <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full border border-slate-200 bg-white text-slate-700" onClick={handleLogout}>
+                    <LogOut className="h-4 w-4" />
+                  </Button>
+                )}
               </div>
             </div>
           </div>
@@ -552,12 +570,12 @@ export default function AdminRoot() {
               </div>
 
               <div className="relative hidden w-[320px] xl:block">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 pointer-events-none z-10" />
                 <Input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   placeholder="Search current page"
-                  className="h-10 rounded-md border-slate-300 bg-slate-50 pl-9"
+                  className="h-10 rounded-md border-slate-300 bg-slate-50 pl-10"
                 />
               </div>
 
@@ -647,23 +665,23 @@ export default function AdminRoot() {
                         <table className="min-w-full text-sm">
                           <thead>
                             <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-[0.12em] text-slate-500">
-                              <th className="pb-3 pr-4">Reported item</th>
-                              <th className="pb-3 pr-4">User</th>
-                              <th className="pb-3 pr-4">Reason</th>
-                              <th className="pb-3 pr-4">Severity</th>
-                              <th className="pb-3 pr-4">Count</th>
-                              <th className="pb-3">Time</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Reported item</th>
+                              <th className="px-3 py-3 whitespace-nowrap">User</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Reason</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Severity</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Count</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Time</th>
                             </tr>
                           </thead>
                           <tbody>
                             {(dashboard.moderationQueue ?? []).map((item: any) => (
                               <tr key={item.id} className="border-b border-slate-100 align-top">
-                                <td className="py-3 pr-4 font-medium text-slate-800">{item.reportedItem}</td>
-                                <td className="py-3 pr-4 text-slate-600">{item.user}</td>
-                                <td className="py-3 pr-4 text-slate-600">{item.reason}</td>
-                                <td className="py-3 pr-4"><StatusBadge value={item.severity} /></td>
-                                <td className="py-3 pr-4 text-slate-600">{item.reportsCount}</td>
-                                <td className="py-3 text-slate-500">{formatDate(item.time)}</td>
+                                <td className="px-3 py-3 font-medium text-slate-800">{item.reportedItem}</td>
+                                <td className="px-3 py-3 text-slate-600">{item.user}</td>
+                                <td className="px-3 py-3 text-slate-600">{item.reason}</td>
+                                <td className="px-3 py-3"><StatusBadge value={item.severity} /></td>
+                                <td className="px-3 py-3 text-slate-600">{item.reportsCount}</td>
+                                <td className="px-3 py-3 text-slate-500">{formatDate(item.time)}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -722,21 +740,21 @@ export default function AdminRoot() {
                     <table className="min-w-full text-sm">
                       <thead>
                         <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-[0.12em] text-slate-500">
-                          <th className="pb-3 pr-3"></th>
-                          <th className="pb-3 pr-3">User</th>
-                          <th className="pb-3 pr-3">College</th>
-                          <th className="pb-3 pr-3">Followers</th>
-                          <th className="pb-3 pr-3">Posts</th>
-                          <th className="pb-3 pr-3">Reports</th>
-                          <th className="pb-3 pr-3">Last active</th>
-                          <th className="pb-3 pr-3">Status</th>
-                          <th className="pb-3">Actions</th>
+                          <th className="px-3 py-3 whitespace-nowrap"></th>
+                          <th className="px-3 py-3 whitespace-nowrap">User</th>
+                          <th className="px-3 py-3 whitespace-nowrap">College</th>
+                          <th className="px-3 py-3 whitespace-nowrap">Followers</th>
+                          <th className="px-3 py-3 whitespace-nowrap">Posts</th>
+                          <th className="px-3 py-3 whitespace-nowrap">Reports</th>
+                          <th className="px-3 py-3 whitespace-nowrap">Last active</th>
+                          <th className="px-3 py-3 whitespace-nowrap">Status</th>
+                          <th className="px-3 py-3 whitespace-nowrap">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {users.map((user) => (
                           <tr key={user.id} className="border-b border-slate-100 hover:bg-slate-50">
-                            <td className="py-3 pr-3">
+                            <td className="px-3 py-3">
                               <input
                                 type="checkbox"
                                 checked={selectedUserIds.includes(user.id)}
@@ -745,19 +763,19 @@ export default function AdminRoot() {
                                 }}
                               />
                             </td>
-                            <td className="py-3 pr-3">
+                            <td className="px-3 py-3">
                               <button type="button" onClick={() => void openUserDrawer(user)} className="text-left">
                                 <p className="font-medium text-slate-800">{user.username}</p>
                                 <p className="text-xs text-slate-500">{user.email}</p>
                               </button>
                             </td>
-                            <td className="py-3 pr-3 text-slate-600">{user.college}</td>
-                            <td className="py-3 pr-3 text-slate-600">{formatNumber(user.followers)}</td>
-                            <td className="py-3 pr-3 text-slate-600">{formatNumber(user.postsCount)}</td>
-                            <td className="py-3 pr-3 text-slate-600">{formatNumber(user.reportsCount)}</td>
-                            <td className="py-3 pr-3 text-slate-500">{formatDate(user.lastActive)}</td>
-                            <td className="py-3 pr-3"><StatusBadge value={user.status} /></td>
-                            <td className="py-3">
+                            <td className="px-3 py-3 text-slate-600">{user.college}</td>
+                            <td className="px-3 py-3 text-slate-600">{formatNumber(user.followers)}</td>
+                            <td className="px-3 py-3 text-slate-600">{formatNumber(user.postsCount)}</td>
+                            <td className="px-3 py-3 text-slate-600">{formatNumber(user.reportsCount)}</td>
+                            <td className="px-3 py-3 text-slate-500">{formatDate(user.lastActive)}</td>
+                            <td className="px-3 py-3"><StatusBadge value={user.status} /></td>
+                            <td className="px-3 py-3">
                               <div className="flex flex-wrap gap-2">
                                 <Button variant="outline" size="sm" onClick={() => void runUserAction(user.id, 'warn', 'Admin warning issued')}>Warn</Button>
                                 <Button variant="outline" size="sm" onClick={() => void runUserAction(user.id, 'suspend')}>Suspend</Button>
@@ -780,32 +798,32 @@ export default function AdminRoot() {
                   <table className="min-w-full text-sm">
                     <thead>
                       <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-[0.12em] text-slate-500">
-                        <th className="pb-3 pr-3">Club</th>
-                        <th className="pb-3 pr-3">Members</th>
-                        <th className="pb-3 pr-3">Activity</th>
-                        <th className="pb-3 pr-3">Posts</th>
-                        <th className="pb-3 pr-3">Reports</th>
-                        <th className="pb-3 pr-3">Created by</th>
-                        <th className="pb-3 pr-3">Verification</th>
-                        <th className="pb-3">Actions</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Club</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Members</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Activity</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Posts</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Reports</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Created by</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Verification</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {clubs.map((club) => (
                         <tr key={club.id} className="border-b border-slate-100 hover:bg-slate-50">
-                          <td className="py-3 pr-3">
+                          <td className="px-3 py-3">
                             <button type="button" onClick={() => void openClubDrawer(club)} className="text-left">
                               <p className="font-medium text-slate-800">{club.name}</p>
                               <p className="text-xs text-slate-500">{club.status}</p>
                             </button>
                           </td>
-                          <td className="py-3 pr-3 text-slate-600">{formatNumber(club.members)}</td>
-                          <td className="py-3 pr-3 text-slate-600">{formatNumber(club.activityScore)}</td>
-                          <td className="py-3 pr-3 text-slate-600">{formatNumber(club.postsCount)}</td>
-                          <td className="py-3 pr-3 text-slate-600">{formatNumber(club.reports)}</td>
-                          <td className="py-3 pr-3 text-slate-600">{club.createdBy}</td>
-                          <td className="py-3 pr-3"><StatusBadge value={club.verificationStatus} /></td>
-                          <td className="py-3">
+                          <td className="px-3 py-3 text-slate-600">{formatNumber(club.members)}</td>
+                          <td className="px-3 py-3 text-slate-600">{formatNumber(club.activityScore)}</td>
+                          <td className="px-3 py-3 text-slate-600">{formatNumber(club.postsCount)}</td>
+                          <td className="px-3 py-3 text-slate-600">{formatNumber(club.reports)}</td>
+                          <td className="px-3 py-3 text-slate-600">{club.createdBy}</td>
+                          <td className="px-3 py-3"><StatusBadge value={club.verificationStatus} /></td>
+                          <td className="px-3 py-3">
                             <div className="flex flex-wrap gap-2">
                               <Button variant="outline" size="sm" onClick={() => void runClubAction(club.id, 'verify')}>Verify</Button>
                               <Button variant="outline" size="sm" onClick={() => void runClubAction(club.id, 'feature')}>Feature</Button>
@@ -858,27 +876,27 @@ export default function AdminRoot() {
                   <table className="min-w-full text-sm">
                     <thead>
                       <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-[0.12em] text-slate-500">
-                        <th className="pb-3 pr-3">Reporter</th>
-                        <th className="pb-3 pr-3">Target</th>
-                        <th className="pb-3 pr-3">Reason</th>
-                        <th className="pb-3 pr-3">Evidence</th>
-                        <th className="pb-3 pr-3">Frequency</th>
-                        <th className="pb-3 pr-3">Severity</th>
-                        <th className="pb-3 pr-3">Status</th>
-                        <th className="pb-3">Actions</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Reporter</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Target</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Reason</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Evidence</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Frequency</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Severity</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Status</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
                       {reports.map((report) => (
                         <tr key={report.id} className="border-b border-slate-100 align-top hover:bg-slate-50">
-                          <td className="py-3 pr-3 text-slate-700">{report.reporter}</td>
-                          <td className="py-3 pr-3 text-slate-600">{report.targetType}: {report.targetContent}</td>
-                          <td className="py-3 pr-3 text-slate-600">{report.reason}</td>
-                          <td className="py-3 pr-3 text-slate-500">{report.evidence || '—'}</td>
-                          <td className="py-3 pr-3 text-slate-600">{report.reportFrequency}</td>
-                          <td className="py-3 pr-3"><StatusBadge value={report.severity} /></td>
-                          <td className="py-3 pr-3"><StatusBadge value={report.status} /></td>
-                          <td className="py-3">
+                          <td className="px-3 py-3 text-slate-700">{report.reporter}</td>
+                          <td className="px-3 py-3 text-slate-600">{report.targetType}: {report.targetContent}</td>
+                          <td className="px-3 py-3 text-slate-600">{report.reason}</td>
+                          <td className="px-3 py-3 text-slate-500">{report.evidence || '—'}</td>
+                          <td className="px-3 py-3 text-slate-600">{report.reportFrequency}</td>
+                          <td className="px-3 py-3"><StatusBadge value={report.severity} /></td>
+                          <td className="px-3 py-3"><StatusBadge value={report.status} /></td>
+                          <td className="px-3 py-3">
                             <div className="flex flex-wrap gap-2">
                               <Button variant="outline" size="sm" onClick={() => void apiAdminPost(`/admin/reports/${report.id}`, token!, { status: 'reviewing', assignToMe: true }, 'PATCH').then(refreshCurrentPage)}>Review</Button>
                               <Button variant="outline" size="sm" onClick={() => void apiAdminPost(`/admin/reports/${report.id}`, token!, { status: 'resolved' }, 'PATCH').then(refreshCurrentPage)}>Resolve</Button>
@@ -1042,21 +1060,21 @@ export default function AdminRoot() {
                   <table className="min-w-full text-sm">
                     <thead>
                       <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-[0.12em] text-slate-500">
-                        <th className="pb-3 pr-3">Timestamp</th>
-                        <th className="pb-3 pr-3">Severity</th>
-                        <th className="pb-3 pr-3">Actor</th>
-                        <th className="pb-3 pr-3">Action</th>
-                        <th className="pb-3">Summary</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Timestamp</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Severity</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Actor</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Action</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Summary</th>
                       </tr>
                     </thead>
                     <tbody>
                       {logs.map((log) => (
                         <tr key={log.id} className="border-b border-slate-100">
-                          <td className="py-3 pr-3 text-slate-500">{formatDate(log.createdAt)}</td>
-                          <td className="py-3 pr-3"><StatusBadge value={log.severity} /></td>
-                          <td className="py-3 pr-3 text-slate-700">{log.actor}</td>
-                          <td className="py-3 pr-3 text-slate-600">{log.actionType}</td>
-                          <td className="py-3 text-slate-600">{log.summary}</td>
+                          <td className="px-3 py-3 text-slate-500">{formatDate(log.createdAt)}</td>
+                          <td className="px-3 py-3"><StatusBadge value={log.severity} /></td>
+                          <td className="px-3 py-3 text-slate-700">{log.actor}</td>
+                          <td className="px-3 py-3 text-slate-600">{log.actionType}</td>
+                          <td className="px-3 py-3 text-slate-600">{log.summary}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1069,7 +1087,7 @@ export default function AdminRoot() {
               <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
                 <ShellCard title="Password Change">
                   <div className="space-y-4">
-                    {admin.mustChangePassword ? (
+                    {admin?.mustChangePassword ? (
                       <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
                         The seeded admin password is still active. Change it now to complete setup.
                       </div>
