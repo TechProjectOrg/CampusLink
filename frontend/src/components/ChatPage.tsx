@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import type { MouseEvent } from 'react';
-import { Send, Search, MoreVertical, Info, Image, Smile, CircleDot, Plus, Flag, Ban, Eye, Reply, X, Trash2, Copy, ChevronDown, Phone, Video } from 'lucide-react';
+import { Send, Search, MoreVertical, Info, Image, Smile, CircleDot, Plus, Flag, Ban, Eye, Reply, X, Trash2, Copy, ChevronDown } from 'lucide-react';
 import { ChatConversation, Student } from '../types';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
@@ -704,7 +704,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
           <div className={`cl-chat-panel ${selectedChat ? 'flex' : 'hidden md:flex'} flex-1 flex-col min-w-0 min-h-0 bg-white`}>
             {/* Fixed Chat Header */}
             <div className="cl-chat-panel-header px-4 md:px-6 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 items-center gap-3">
                 <button 
                   onClick={() => appData.selectConversation(null)}
                   className="md:hidden text-gray-600 hover:text-gray-900 mr-2"
@@ -722,14 +722,14 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                       onViewProfile?.(selectedConversation.participantId);
                     }
                   }}
-                  className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                  className="flex min-w-0 items-center gap-3 hover:opacity-80 transition-opacity"
                 >
                     <Avatar className="w-10 h-10">
                     <AvatarImage src={selectedConversation.participantAvatar} />
                     <AvatarFallback className="bg-pink-500 text-white">{selectedConversation.participantName[0]}</AvatarFallback>
                   </Avatar>
-                  <div className="text-left">
-                    <p className="text-xl font-semibold leading-tight text-gray-950 md:text-2xl">{selectedConversation.participantName}</p>
+                  <div className="min-w-0 text-left">
+                    <p className="truncate text-base font-semibold leading-tight text-gray-950">{selectedConversation.participantName}</p>
                     <div className="flex items-center gap-1">
                       {typingStatusLabel ? (
                         <>
@@ -766,13 +766,6 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                 </button>
               </div>
               <div className="flex items-center gap-1 md:gap-2">
-
-                <Button variant="ghost" size="sm" className="hover:bg-gray-100 rounded-full w-8 h-8 md:w-9 md:h-9 p-0" aria-label="Voice call">
-                  <Phone className="w-4 h-4 md:w-5 md:h-5 text-gray-700" />
-                </Button>
-                <Button variant="ghost" size="sm" className="hover:bg-gray-100 rounded-full w-8 h-8 md:w-9 md:h-9 p-0" aria-label="Video call">
-                  <Video className="w-4 h-4 md:w-5 md:h-5 text-gray-700" />
-                </Button>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm" className="hover:bg-gray-100 rounded-full w-8 h-8 md:w-9 md:h-9 p-0">
