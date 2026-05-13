@@ -182,8 +182,8 @@ export function SearchPage({
   const filteredStudents = searchResults;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
-      <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+    <div className="cl-search-page min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
+      <div className="cl-search-content max-w-6xl mx-auto px-4 py-6 space-y-6">
         <div className="hidden lg:block animate-slide-in-down">
           <h1 className="text-gray-900 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
             Search
@@ -238,9 +238,9 @@ export function SearchPage({
           </Card>
         )}
 
-        <div>
+        <div className="cl-search-results-section">
           {!searchQuery.trim() && !isLoading && suggestedUsers.length > 0 && (
-            <Card className="border-primary/10 shadow-lg rounded-2xl animate-slide-in-up mb-6">
+            <Card className="cl-search-suggested-card border-primary/10 shadow-lg rounded-2xl animate-slide-in-up mb-6">
               <CardContent className="p-6 space-y-4">
                 <div className="flex items-center gap-2">
                   <Users className="w-5 h-5 text-primary" />
