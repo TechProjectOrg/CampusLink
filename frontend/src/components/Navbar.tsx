@@ -60,9 +60,24 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
     onTabChange(tab);
   };
 
-  const handleMobileSearchToggle = () => {
+  const handleTabletSearchToggle = () => {
     setIsMobileSearchOpen((current) => !current);
     if (!isMobileSearchOpen && activeTab !== 'search') {
+      onTabChange('search');
+    }
+  };
+
+  const handleMobileSearchToggle = () => {
+    if (isMobileSearchOpen) {
+      setIsMobileSearchOpen(false);
+      if (activeTab === 'search') {
+        onTabChange('feed');
+      }
+      return;
+    }
+
+    setIsMobileSearchOpen(true);
+    if (activeTab !== 'search') {
       onTabChange('search');
     }
   };
@@ -96,7 +111,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
           <div className="cl-navbar-search hidden md:flex flex-1 max-w-2xl mx-4">
             <button
               type="button"
-              onClick={handleMobileSearchToggle}
+              onClick={handleTabletSearchToggle}
               aria-label="Search"
               aria-expanded={isMobileSearchOpen}
               className="cl-navbar-tablet-search-button hidden items-center justify-center rounded-2xl bg-white/20 backdrop-blur-lg border border-white/30 text-white transition-all duration-300 hover:bg-white/25 focus:bg-white/30 focus:border-white/50"
