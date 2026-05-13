@@ -4964,6 +4964,10 @@ div[style*="width: 25%"]::webkit-scrollbar {
   display: none !important;
 }
 
+.cl-navbar-mobile-search-panel {
+  display: none;
+}
+
 .cl-feed-action-label-mobile {
   display: none;
 }
@@ -5754,6 +5758,7 @@ div[style*="width: 25%"]::webkit-scrollbar {
   }
 
   .cl-navbar-mobile-search-panel {
+    display: block;
     position: absolute;
     top: 4.75rem;
     left: 0;
@@ -5913,6 +5918,7 @@ div[style*="width: 25%"]::webkit-scrollbar {
   }
 
   .cl-navbar-mobile-search-panel {
+    display: block;
     max-height: 0;
     overflow: hidden;
     opacity: 0;
