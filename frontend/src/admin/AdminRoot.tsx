@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
-  AlertTriangle,
   Bell,
   BookCheck,
   Building2,
@@ -599,10 +598,6 @@ export default function AdminRoot() {
                 <Bell className="h-4 w-4" />
                 {notificationCount ? <span className="absolute -right-1 -top-1 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-semibold text-white">{notificationCount}</span> : null}
               </button>
-              <Button className="h-10 rounded-md bg-slate-900 text-white hover:bg-slate-800" onClick={() => goTo('reports')}>
-                <AlertTriangle className="h-4 w-4" />
-                Review Queue
-              </Button>
             </div>
           </header>
 
