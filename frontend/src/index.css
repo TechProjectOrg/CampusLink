@@ -5003,6 +5003,24 @@ div[style*="width: 25%"]::webkit-scrollbar {
   background: #2f7df6;
 }
 
+.cl-clubs-page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - 4rem);
+  min-height: 0;
+  padding-bottom: 0;
+  overflow: hidden;
+}
+
+.cl-clubs-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
 @media (max-width: 639px) {
   .cl-feed-page {
     max-width: none !important;
@@ -5716,6 +5734,14 @@ div[style*="width: 25%"]::webkit-scrollbar {
 
   body {
     padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
+  }
+
+  .cl-clubs-page {
+    height: calc(100dvh - 4.75rem - env(safe-area-inset-bottom));
+  }
+
+  .cl-clubs-content {
+    padding-bottom: 1rem;
   }
 
   .cl-navbar-root {
