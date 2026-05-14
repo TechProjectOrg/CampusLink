@@ -2440,9 +2440,17 @@ export default function AdminRoot() {
 
             <ShellCard title="Author">
               <div className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3">
-                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
-                  {selectedPostDetail.author.username.slice(0, 2).toUpperCase()}
-                </div>
+                {selectedPostDetail.author.avatarUrl ? (
+                  <img
+                    src={selectedPostDetail.author.avatarUrl}
+                    alt={selectedPostDetail.author.username}
+                    className="h-9 w-9 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+                    {selectedPostDetail.author.username.slice(0, 2).toUpperCase()}
+                  </div>
+                )}
                 <div className="min-w-0">
                   <p className="text-sm font-medium text-slate-800">{selectedPostDetail.author.username}</p>
                   <p className="text-xs text-slate-500">{selectedPostDetail.author.email}</p>
