@@ -15,7 +15,7 @@ import {
   writeStoredSession,
   type StoredAuthSession,
 } from '../lib/authStorage';
-import { clearAdminSession, writeAdminSession } from '../admin/session';
+import { clearAdminSession, readAdminSession, writeAdminSession } from '../admin/session';
 
 interface AuthContextValue {
   isLoading: boolean;
@@ -131,6 +131,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const init = async () => {
       const stored = readStoredSession();
       if (!stored) {
+        const storedAdminSession = readAdminSession();
+        if (storedAdminSession) {
+          window.location.replace('/admin');
+          return;
+        }
         setIsLoading(false);
         return;
       }

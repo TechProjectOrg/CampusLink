@@ -15,7 +15,6 @@ import {
   Megaphone,
   Search,
   Settings,
-  Shield,
   Users,
   UserCog,
 } from 'lucide-react';
@@ -35,8 +34,8 @@ import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { Textarea } from '../components/ui/textarea';
 import { apiChangePassword, apiVerifyPasswordChange } from '../lib/authApi';
-import { apiAdminGet, apiAdminLogin, apiAdminPost, type AdminProfile } from './api';
-import { clearAdminSession, readAdminSession, writeAdminSession } from './session';
+import { apiAdminGet, apiAdminPost, type AdminProfile } from './api';
+import { clearAdminSession, readAdminSession } from './session';
 
 type PageKey =
   | 'dashboard'
@@ -188,78 +187,6 @@ function EmptyPanel({ title, body }: { title: string; body: string }) {
 
 // SessionLoadingScreen removed — dashboard renders immediately when a token exists.
 
-function AdminLogin({
-  onLogin,
-  isLoading,
-  error,
-}: {
-  onLogin: (email: string, password: string) => Promise<void>;
-  isLoading: boolean;
-  error: string;
-}) {
-  const [email, setEmail] = useState('admin.campuslynk@gbpuat.ac.in');
-  const [password, setPassword] = useState('Admin@123');
-
-  return (
-    <div className="min-h-screen bg-slate-100 px-6 py-16">
-      <div className="mx-auto grid max-w-5xl grid-cols-1 gap-8 lg:grid-cols-[1.15fr_0.85fr]">
-        <div className="rounded-2xl border border-slate-200 bg-white p-10">
-          <div className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-medium uppercase tracking-[0.12em] text-slate-600">
-            <Shield className="h-3.5 w-3.5" />
-            CampusLink Admin
-          </div>
-          <h1 className="mt-6 max-w-xl text-3xl font-semibold tracking-tight text-slate-900">
-            Internal operations dashboard for moderation, analytics, and platform health.
-          </h1>
-          <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600">
-            This admin surface is intentionally utility-first: dense tables, fast navigation, moderation controls, audit visibility, and lightweight operational status.
-          </p>
-
-          <div className="mt-8 grid gap-3 sm:grid-cols-2">
-            {[
-              ['Moderation queue', 'Triage reported content and enforcement actions quickly.'],
-              ['Operational visibility', 'Watch user activity, system health, and admin actions.'],
-              ['Data-heavy workflows', 'Manage users, clubs, posts, reports, and verification from one shell.'],
-              ['Controlled access', 'Seeded super-admin login with password change support.'],
-            ].map(([title, body]) => (
-              <div key={title} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <p className="text-sm font-semibold text-slate-800">{title}</p>
-                <p className="mt-1 text-sm text-slate-500">{body}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-8">
-          <h2 className="text-xl font-semibold text-slate-900">Admin Sign In</h2>
-          <p className="mt-2 text-sm text-slate-500">Use the seeded operational account to access the admin console.</p>
-
-          <form
-            className="mt-8 space-y-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void onLogin(email, password);
-            }}
-          >
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Email</label>
-              <Input value={email} onChange={(event) => setEmail(event.target.value)} className="h-10 rounded-md border-slate-300 bg-white" />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-slate-700">Password</label>
-              <Input type="password" value={password} onChange={(event) => setPassword(event.target.value)} className="h-10 rounded-md border-slate-300 bg-white" />
-            </div>
-            {error ? <p className="text-sm text-red-600">{error}</p> : null}
-            <Button type="submit" className="h-10 w-full rounded-md bg-slate-900 text-white hover:bg-slate-800" disabled={isLoading}>
-              {isLoading ? 'Signing in...' : 'Sign in to admin'}
-            </Button>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function AdminRoot() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState<PageKey>(() => parsePageFromPath(window.location.pathname));
@@ -267,7 +194,6 @@ export default function AdminRoot() {
   const [token, setToken] = useState<string | null>(() => readAdminSession()?.token ?? null);
   const [admin, setAdmin] = useState<AdminProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(Boolean(readAdminSession()?.token));
-  const [authError, setAuthError] = useState('');
   const [search, setSearch] = useState('');
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
   const [selectedClub, setSelectedClub] = useState<any | null>(null);
@@ -298,6 +224,12 @@ export default function AdminRoot() {
   }, []);
 
   useEffect(() => {
+    if (!token && !authLoading) {
+      window.location.replace('/');
+    }
+  }, [token, authLoading]);
+
+  useEffect(() => {
     if (!token) {
       setAuthLoading(false);
       setAdmin(null);
@@ -310,14 +242,12 @@ export default function AdminRoot() {
       .then((result) => {
         if (cancelled) return;
         setAdmin(result.admin);
-        setAuthError('');
       })
-      .catch((error) => {
+      .catch(() => {
         if (cancelled) return;
         clearAdminSession();
         setToken(null);
         setAdmin(null);
-        setAuthError(error instanceof Error ? error.message : 'Unable to restore admin session');
       })
       .finally(() => {
         if (!cancelled) setAuthLoading(false);
@@ -378,34 +308,10 @@ export default function AdminRoot() {
     });
   };
 
-  const handleLogin = async (email: string, password: string) => {
-    setAuthError('');
-    setAuthLoading(true);
-    try {
-      const result = await apiAdminLogin(email, password);
-      writeAdminSession({ token: result.token });
-      setToken(result.token);
-      setAdmin(result.admin);
-      window.history.replaceState({ page: 'dashboard' }, '', '/admin');
-      setPage('dashboard');
-    } catch (error) {
-      setAuthError(error instanceof Error ? error.message : 'Login failed');
-    } finally {
-      setAuthLoading(false);
-    }
-  };
-
   const handleLogout = () => {
     clearAdminSession();
     queryClient.removeQueries({ queryKey: ['admin'] });
-    setToken(null);
-    setAdmin(null);
-    setSelectedUser(null);
-    setSelectedClub(null);
-    setSelectedUserDetail(null);
-    setSelectedClubDetail(null);
-    window.history.replaceState({}, '', '/admin');
-    setPage('dashboard');
+    window.location.replace('/');
   };
 
   const refreshCurrentPage = async () => {
@@ -477,9 +383,7 @@ export default function AdminRoot() {
 
   const notificationCount = dashboard?.moderationQueue?.length ?? reports.filter((item) => ['open', 'reviewing', 'escalated'].includes(item.status)).length ?? 0;
 
-  if (!token) {
-    return <AdminLogin onLogin={handleLogin} isLoading={authLoading} error={authError} />;
-  }
+  if (!token) return null;
 
   return (
     <div className="min-h-screen bg-slate-100 text-slate-900">
