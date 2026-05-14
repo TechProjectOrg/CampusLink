@@ -5774,10 +5774,11 @@ div[style*="width: 25%"]::webkit-scrollbar {
     border: 1px solid #e2e8f0;
     border-bottom: 0;
     border-radius: 1.125rem 1.125rem 0 0;
-    box-shadow: 0 12px 28px rgba(15, 23, 42, .08);
+    box-shadow: none;
   }
 
   .cl-navbar-mobile-search-panel-open {
+    height: 13rem;
     max-height: 13rem;
     opacity: 1;
     transform: translateY(0);
@@ -5804,9 +5805,10 @@ div[style*="width: 25%"]::webkit-scrollbar {
   }
 
   .cl-search-suggested-card {
+    margin-top: 0 !important;
     margin-bottom: .75rem;
-    border-top: 1px solid #e2e8f0;
-    border-radius: 0 0 1.125rem 1.125rem;
+    border-top: 0 !important;
+    border-radius: 0 0 1.125rem 1.125rem !important;
     background: rgba(255, 255, 255, .98);
     box-shadow: 0 14px 28px rgba(15, 23, 42, .08);
   }
