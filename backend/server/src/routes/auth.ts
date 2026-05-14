@@ -257,6 +257,7 @@ interface StudentSignupBody {
   password: string;
   branch: string;
   year: string | number;
+  googleIdToken: string;
 }
 
 interface AlumniSignupBody {
@@ -506,8 +507,127 @@ router.post('/google/student', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/signup/student', validatePassword, async (_req: Request, res: Response) => {
-  return res.status(410).json({ message: 'Students must sign in with Google using their @gbpuat.ac.in account' });
+router.post('/signup/student', validatePassword, async (req: Request, res: Response) => {
+  const { name, email, password, branch, year, googleIdToken } = req.body as Partial<StudentSignupBody>;
+
+  if (!name || !email || !password || !branch || !year || !googleIdToken) {
+    return res.status(400).json({ message: 'Missing required fields' });
+  }
+
+  if (!email.toLowerCase().endsWith('@gbpuat.ac.in')) {
+    return res.status(400).json({ message: 'Students must use a college email (@gbpuat.ac.in)' });
+  }
+
+  try {
+    const tokenInfo = await verifyGoogleIdToken(googleIdToken);
+    const googleEmail = tokenInfo.email?.trim().toLowerCase();
+
+    if (!googleEmail || googleEmail !== email.trim().toLowerCase()) {
+      return res.status(400).json({ message: 'Google verification must match the student email you entered' });
+    }
+
+    if (tokenInfo.hd !== 'gbpuat.ac.in') {
+      return res.status(403).json({ message: 'Students must verify with a GBPUAT Google account' });
+    }
+
+    const exists = await emailExists(email);
+    if (exists) {
+      return res.status(409).json({ message: 'User already exists. Please sign in instead.' });
+    }
+
+    const username = await generateUsername(email, name);
+    const passwordHash = hashPassword(password);
+    const numericYear = parseRequiredNumericValue(year, 'Year');
+
+    const createdUsers = await prisma.$queryRaw<
+      { user_id: string; username: string; email: string; created_at: Date }[]
+    >`
+      INSERT INTO users (
+        username,
+        email,
+        password_hash,
+        user_type,
+        profile_photo_url,
+        is_private,
+        verified_at,
+        verification_state,
+        updated_at
+      )
+      VALUES (
+        ${username},
+        ${email},
+        ${passwordHash},
+        'student'::"UserType",
+        NULL,
+        FALSE,
+        NOW(),
+        'student_google_verified'::"UserVerificationState",
+        NOW()
+      )
+      RETURNING user_id, username, email, created_at
+    `;
+
+    const user = createdUsers[0];
+
+    await prisma.$queryRaw`
+      INSERT INTO student_profiles (user_id, branch, year)
+      VALUES (${user.user_id}, ${branch}, ${numericYear})
+    `;
+
+    await createDefaultUserSettings(user.user_id);
+    await invalidateUserCache(user.user_id);
+
+    const session = await createAuthSession(user.user_id, req);
+    const profile = await getUserProfileById(user.user_id);
+    const responsePayload = profile ?? {
+      userId: user.user_id,
+      username: user.username,
+      email: user.email,
+      type: 'student' as const,
+      verificationState: 'student_google_verified' as const,
+      createdAt: user.created_at,
+      bio: null,
+      headline: null,
+      profilePictureUrl: null,
+      coverPhotoUrl: null,
+      isPublic: true,
+      isActive: true,
+      isOnline: false,
+      lastSeenAt: null,
+      details: {
+        branch,
+        year: numericYear,
+      },
+      stats: {
+        followerCount: 0,
+        followingCount: 0,
+        postCount: 0,
+      },
+    };
+
+    return res.status(201).json({
+      ...responsePayload,
+      token: signAuthToken({
+        userId: responsePayload.userId,
+        email: responsePayload.email,
+        username: responsePayload.username,
+        type: responsePayload.type,
+        sessionId: session.session_id,
+      }),
+    });
+  } catch (err: any) {
+    console.error('Error during student signup:', err);
+    return res.status(500).json({
+      message: err?.message || 'Internal server error',
+      error: {
+        name: err?.name,
+        message: err?.message,
+        code: err?.code,
+        meta: err?.meta,
+        stack: err?.stack,
+      },
+    });
+  }
 });
 
 router.post('/signup/alumni', alumniProofUpload.array('proofFiles', 5), validatePassword, async (req: Request, res: Response) => {
@@ -670,10 +790,6 @@ router.post('/login', async (req: Request, res: Response) => {
 
     if (!passwordMatches) {
       return res.status(401).json({ message: 'Invalid email or password' });
-    }
-
-    if (user.user_type === 'student') {
-      return res.status(403).json({ message: 'Students must sign in with Google using their @gbpuat.ac.in account' });
     }
 
     if (user.verification_state === 'alumni_pending_review') {

@@ -25,6 +25,7 @@ export interface StudentSignupPayload {
   password: string;
   branch: string;
   year: string | number;
+  googleIdToken: string;
 }
 
 export interface AlumniSignupPayload {

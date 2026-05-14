@@ -137,8 +137,14 @@ export function AuthPage() {
   const [activeForm, setActiveForm] = useState<'login' | 'signup'>('login');
   const [isLoading, setIsLoading] = useState(false);
   const [studentSignupData, setStudentSignupData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
     branch: '',
     year: '',
+    googleIdToken: '',
+    verifiedGoogleEmail: '',
   });
   const [alumniSignupData, setAlumniSignupData] = useState({
     name: '',
@@ -155,8 +161,22 @@ export function AuthPage() {
   const [alumniPendingMessage, setAlumniPendingMessage] = useState('');
   const [passwordValidationMessages, setPasswordValidationMessages] = useState<string[]>([]);
   const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showStudentPassword, setShowStudentPassword] = useState(false);
+  const [showStudentConfirmPassword, setShowStudentConfirmPassword] = useState(false);
   const [showAlumniPassword, setShowAlumniPassword] = useState(false);
   const [showAlumniConfirmPassword, setShowAlumniConfirmPassword] = useState(false);
+
+  const parseGoogleCredentialEmail = (credential: string): string | null => {
+    try {
+      const payload = credential.split('.')[1];
+      if (!payload) return null;
+      const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
+      const decoded = JSON.parse(window.atob(normalized));
+      return typeof decoded.email === 'string' ? decoded.email.toLowerCase() : null;
+    } catch {
+      return null;
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -234,24 +254,99 @@ export function AuthPage() {
     }
   };
 
+  const handleStudentSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSignupError('');
+    setLoginError('');
+    setAlumniPendingMessage('');
+    setIsLoading(true);
+
+    if (studentSignupData.password !== studentSignupData.confirmPassword) {
+      setSignupError('Passwords do not match');
+      setIsLoading(false);
+      return;
+    }
+
+    if (!validatePassword(studentSignupData.password)) {
+      setSignupError('Password does not meet the requirements.');
+      setIsLoading(false);
+      return;
+    }
+
+    if (!studentSignupData.email.toLowerCase().endsWith('@gbpuat.ac.in')) {
+      setSignupError('Students must use a college email (@gbpuat.ac.in)');
+      setIsLoading(false);
+      return;
+    }
+
+    if (!studentSignupData.googleIdToken) {
+      setSignupError('Please verify your student email with Google before signing up.');
+      setIsLoading(false);
+      return;
+    }
+
+    if (
+      studentSignupData.verifiedGoogleEmail &&
+      studentSignupData.verifiedGoogleEmail !== studentSignupData.email.trim().toLowerCase()
+    ) {
+      setSignupError('The verified Google account must match the student email you entered.');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      await auth.signupStudent({
+        name: studentSignupData.name,
+        email: studentSignupData.email,
+        password: studentSignupData.password,
+        branch: studentSignupData.branch,
+        year: studentSignupData.year,
+        googleIdToken: studentSignupData.googleIdToken,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Signup failed';
+      setSignupError(message);
+      if (message.toLowerCase().includes('already exists')) {
+        setActiveForm('login');
+        setLoginEmail(studentSignupData.email);
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleStudentGoogle = async (credential: string, mode: 'login' | 'signup') => {
     setSignupError('');
     setLoginError('');
     setAlumniPendingMessage('');
 
-    if (mode === 'signup' && (!studentSignupData.branch || !studentSignupData.year)) {
-      setSignupError('Branch and year are required before continuing with Google.');
+    if (mode === 'signup' && (!studentSignupData.branch || !studentSignupData.year || !studentSignupData.email)) {
+      setSignupError('Name, college email, branch, and year are required before Google verification.');
+      return;
+    }
+
+    if (mode === 'signup' && !studentSignupData.email.toLowerCase().endsWith('@gbpuat.ac.in')) {
+      setSignupError('Students must use a college email (@gbpuat.ac.in)');
       return;
     }
 
     setIsLoading(true);
     try {
-      await auth.loginStudentWithGoogle(
-        credential,
-        mode === 'signup'
-          ? { branch: studentSignupData.branch, year: studentSignupData.year }
-          : undefined
-      );
+      if (mode === 'signup') {
+        const verifiedEmail = parseGoogleCredentialEmail(credential);
+        if (verifiedEmail && verifiedEmail !== studentSignupData.email.trim().toLowerCase()) {
+          setSignupError('Use the same Google account as the student email entered in the form.');
+          return;
+        }
+
+        setStudentSignupData((current) => ({
+          ...current,
+          googleIdToken: credential,
+          verifiedGoogleEmail: verifiedEmail ?? current.verifiedGoogleEmail,
+        }));
+      } else {
+        await auth.loginStudentWithGoogle(credential);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Google sign-in failed';
       if (mode === 'signup') {
@@ -387,7 +482,7 @@ export function AuthPage() {
 
                   <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-slate-400">
                     <div className="h-px flex-1 bg-slate-200" />
-                    <span>Alumni Login</span>
+                    <span>Email / Password Login</span>
                     <div className="h-px flex-1 bg-slate-200" />
                   </div>
 
@@ -434,9 +529,9 @@ export function AuthPage() {
                     {loginError ? <p className="text-sm text-red-500">{loginError}</p> : null}
                     {alumniPendingMessage ? <p className="text-sm text-emerald-600">{alumniPendingMessage}</p> : null}
 
-                    <Button type="submit" className="w-full gradient-primary shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105" disabled={isLoading}>
-                      {isLoading ? <Lottie animationData={loadingAnimation} style={{ height: 50, width: 50 }} /> : 'Login as Alumni'}
-                    </Button>
+                      <Button type="submit" className="w-full gradient-primary shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105" disabled={isLoading}>
+                        {isLoading ? <Lottie animationData={loadingAnimation} style={{ height: 50, width: 50 }} /> : 'Login to CampusLynk'}
+                      </Button>
 
                     <div className="text-center">
                       <Dialog open={isForgotPasswordOpen} onOpenChange={setIsForgotPasswordOpen}>
@@ -482,7 +577,7 @@ export function AuthPage() {
                 </div>
               ) : (
                 <div className="animate-fade-slide-in">
-                  <form onSubmit={handleAlumniSignup} className="space-y-4">
+                  <form onSubmit={signupType === 'student' ? handleStudentSignup : handleAlumniSignup} className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="signup-type">Sign up as</Label>
                       <select
@@ -501,6 +596,41 @@ export function AuthPage() {
 
                     {signupType === 'student' ? (
                       <>
+                        <div className="space-y-2">
+                          <Label htmlFor="student-name">Full Name</Label>
+                          <Input
+                            id="student-name"
+                            type="text"
+                            placeholder="Enter your full name"
+                            value={studentSignupData.name}
+                            onChange={(e) => setStudentSignupData((current) => ({ ...current, name: e.target.value }))}
+                            className="border-primary/20 focus:border-primary rounded-xl"
+                            required
+                          />
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="student-email">College Email</Label>
+                          <div className="relative">
+                            <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                            <Input
+                              id="student-email"
+                              type="email"
+                              placeholder="your.name@gbpuat.ac.in"
+                              value={studentSignupData.email}
+                              onChange={(e) => setStudentSignupData((current) => ({
+                                ...current,
+                                email: e.target.value,
+                                googleIdToken: '',
+                                verifiedGoogleEmail: '',
+                              }))}
+                              className="pl-10 border-primary/20 focus:border-primary rounded-xl"
+                              required
+                            />
+                          </div>
+                          <p className="text-xs text-gray-500">Only college email is allowed for student accounts.</p>
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4">
                           <div className="space-y-2">
                             <Label htmlFor="signup-branch">Branch</Label>
@@ -541,10 +671,72 @@ export function AuthPage() {
                           </div>
                         </div>
 
+                        <div className="space-y-2">
+                          <Label htmlFor="student-password">Password</Label>
+                          <div className="relative">
+                            <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                            <Input
+                              id="student-password"
+                              type={showStudentPassword ? 'text' : 'password'}
+                              placeholder="Password"
+                              value={studentSignupData.password}
+                              onChange={(e) => {
+                                const nextPassword = e.target.value;
+                                setStudentSignupData((current) => ({ ...current, password: nextPassword }));
+                                setPasswordValidationMessages(getPasswordValidationMessage(nextPassword));
+                                setSignupError('');
+                              }}
+                              className="pl-10 pr-10 border-primary/20 focus:border-primary rounded-xl"
+                              required
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowStudentPassword(!showStudentPassword)}
+                              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                            >
+                              {showStudentPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                            </button>
+                          </div>
+                          {passwordValidationMessages.length > 0 ? (
+                            <ul className="text-xs text-red-500 list-disc list-inside">
+                              {passwordValidationMessages.map((message) => <li key={message}>{message}</li>)}
+                            </ul>
+                          ) : null}
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="student-confirm-password">Confirm Password</Label>
+                          <div className="relative">
+                            <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                            <Input
+                              id="student-confirm-password"
+                              type={showStudentConfirmPassword ? 'text' : 'password'}
+                              placeholder="Confirm password"
+                              value={studentSignupData.confirmPassword}
+                              onChange={(e) => {
+                                const nextConfirmPassword = e.target.value;
+                                setStudentSignupData((current) => ({ ...current, confirmPassword: nextConfirmPassword }));
+                                setSignupError(
+                                  studentSignupData.password === nextConfirmPassword ? '' : 'Passwords do not match'
+                                );
+                              }}
+                              className="pl-10 pr-10 border-primary/20 focus:border-primary rounded-xl"
+                              required
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowStudentConfirmPassword(!showStudentConfirmPassword)}
+                              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                            >
+                              {showStudentConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                            </button>
+                          </div>
+                        </div>
+
                         <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
                           <p className="text-sm font-semibold text-slate-900">Student verification uses Google</p>
                           <p className="mt-1 text-xs text-slate-600">
-                            Continue with your official `@gbpuat.ac.in` Google account. Branch and year are used only when creating your student profile.
+                            Verify that your college email exists by continuing with the same `@gbpuat.ac.in` Google account before creating the student account.
                           </p>
                           <div className="mt-4">
                             <GoogleStudentButton
@@ -553,6 +745,12 @@ export function AuthPage() {
                               onCredential={(credential) => handleStudentGoogle(credential, 'signup')}
                             />
                           </div>
+                          <p className="mt-3 text-xs text-slate-600">
+                            Verification status:{' '}
+                            {studentSignupData.googleIdToken
+                              ? `Verified with ${studentSignupData.verifiedGoogleEmail || 'your Google account'}`
+                              : 'Not verified yet'}
+                          </p>
                         </div>
                       </>
                     ) : (
@@ -720,11 +918,13 @@ export function AuthPage() {
 
                     {signupError ? <p className="text-sm text-red-500">{signupError}</p> : null}
 
-                    {signupType === 'alumni' ? (
-                      <Button type="submit" className="w-full gradient-success shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105" disabled={isLoading}>
-                        {isLoading ? <Lottie animationData={loadingAnimation} style={{ height: 50, width: 50 }} /> : 'Submit Alumni Verification'}
-                      </Button>
-                    ) : null}
+                    <Button type="submit" className="w-full gradient-success shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105" disabled={isLoading}>
+                      {isLoading
+                        ? <Lottie animationData={loadingAnimation} style={{ height: 50, width: 50 }} />
+                        : signupType === 'student'
+                          ? 'Create Student Account'
+                          : 'Submit Alumni Verification'}
+                    </Button>
 
                     <p className="text-xs text-gray-500 text-center">
                       By signing up, you agree to our Terms of Service and Privacy Policy
