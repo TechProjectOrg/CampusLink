@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Home, Search, Users, MessageCircle, BookOpen, User, Bell, Settings, LogOut, Menu } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
@@ -21,8 +21,10 @@ interface NavbarProps {
 
 export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifications = 0, onSearch }: NavbarProps) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const { logout, profile } = useAuth();
   const navbarProfilePhoto = profile?.profilePictureUrl ?? null;
+  const showMobileTopActions = activeTab === 'feed' || activeTab === 'search';
 
   const navItems = [
     { id: 'feed', label: 'Feed', icon: Home },
@@ -51,12 +53,54 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
     }
   };
 
+  const handleTabNavigate = (tab: string) => {
+    if (tab !== 'search') {
+      setIsMobileSearchOpen(false);
+    }
+    onTabChange(tab);
+  };
+
+  const handleTabletSearchToggle = () => {
+    setIsMobileSearchOpen((current) => !current);
+    if (!isMobileSearchOpen && activeTab !== 'search') {
+      onTabChange('search');
+    }
+  };
+
+  const handleMobileSearchToggle = () => {
+    if (isMobileSearchOpen) {
+      setIsMobileSearchOpen(false);
+      if (activeTab === 'search') {
+        onTabChange('feed');
+      }
+      return;
+    }
+
+    setIsMobileSearchOpen(true);
+    if (activeTab !== 'search') {
+      onTabChange('search');
+    }
+  };
+
+  const handleMobileSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    handleSearchChange(e);
+    if (activeTab !== 'search') {
+      onTabChange('search');
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'search') {
+      setIsMobileSearchOpen(false);
+    }
+  }, [activeTab]);
+
   return (
     <nav className="cl-navbar-root sticky top-0 z-50 w-full overflow-x-hidden backdrop-blur-xl bg-gradient-to-r from-primary via-secondary to-primary shadow-lg animate-slide-in-down">
       <div className="cl-navbar-shell max-w-7xl mx-auto px-4">
         <div className="cl-navbar-row flex items-center gap-4 h-16">
           {/* Logo */}
-          <div className="flex items-center gap-2 flex-shrink-0 cursor-pointer" onClick={() => onTabChange('feed')}>
+          <div className="flex items-center gap-2 flex-shrink-0 cursor-pointer" onClick={() => handleTabNavigate('feed')}>
             <div className="bg-white/20 backdrop-blur-lg text-white rounded-xl p-2 shadow-lg hover-lift border border-white/30">
               <Users className="w-6 h-6" />
             </div>
@@ -67,8 +111,9 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
           <div className="cl-navbar-search hidden md:flex flex-1 max-w-2xl mx-4">
             <button
               type="button"
-              onClick={handleSearchFocus}
+              onClick={handleTabletSearchToggle}
               aria-label="Search"
+              aria-expanded={isMobileSearchOpen}
               className="cl-navbar-tablet-search-button hidden items-center justify-center rounded-2xl bg-white/20 backdrop-blur-lg border border-white/30 text-white transition-all duration-300 hover:bg-white/25 focus:bg-white/30 focus:border-white/50"
             >
               <Search className="w-5 h-5" />
@@ -77,7 +122,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/70" />
               <Input
                 type="text"
-                placeholder="Search students, skills, or opportunities..."
+                placeholder="Search users or tags"
                 value={searchQuery}
                 onChange={handleSearchChange}
                 onFocus={handleSearchFocus}
@@ -95,7 +140,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
               return (
                 <button
                   key={item.id}
-                  onClick={() => onTabChange(item.id)}
+                  onClick={() => handleTabNavigate(item.id)}
                   aria-label={item.label}
                   className={`cl-navbar-nav-button relative flex flex-col items-center justify-center gap-1 w-24 h-14 rounded-xl border transition-all duration-300 ${
                     isActive
@@ -115,7 +160,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
             })}
 
             <button 
-              onClick={() => onTabChange('notifications')}
+              onClick={() => handleTabNavigate('notifications')}
               aria-label="Notifications"
               className={`cl-navbar-nav-button flex flex-col items-center justify-center gap-1 w-24 h-14 rounded-xl border relative transition-all duration-300 ${
                 activeTab === 'notifications' ? 'text-white bg-white/20 shadow-lg border-white/30' : 'text-white/80 border-white/10 hover:bg-white/10 hover:text-white hover:border-white/20'
@@ -153,11 +198,11 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="w-48" align="end">
-                <DropdownMenuItem onClick={() => onTabChange('profile')}>
+                <DropdownMenuItem onClick={() => handleTabNavigate('profile')}>
                   <User className="mr-2 h-4 w-4" />
                   <span>Profile</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onTabChange('settings')}>
+                <DropdownMenuItem onClick={() => handleTabNavigate('settings')}>
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Settings</span>
                 </DropdownMenuItem>
@@ -175,12 +220,13 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
 
 
 
-          {activeTab === 'feed' && (
+          {showMobileTopActions && (
             <>
               {/* Search Icon - Mobile */}
               <button 
-                onClick={handleSearchFocus}
+                onClick={handleMobileSearchToggle}
                 aria-label="Search"
+                aria-expanded={isMobileSearchOpen}
                 className="cl-mobile-top-action md:hidden p-2 rounded-xl relative transition-all duration-300 hover:scale-110"
               >
                 <Search className="w-5 h-5" />
@@ -188,7 +234,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
 
               {/* Notifications - Mobile */}
               <button 
-                onClick={() => onTabChange('notifications')}
+                onClick={() => handleTabNavigate('notifications')}
                 aria-label="Notifications"
                 className="cl-mobile-top-action md:hidden p-2 rounded-xl relative transition-all duration-300 hover:scale-110"
               >
@@ -211,11 +257,11 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-52" align="end">
-                  <DropdownMenuItem onClick={() => onTabChange('profile')}>
+                  <DropdownMenuItem onClick={() => handleTabNavigate('profile')}>
                     <User className="mr-2 h-4 w-4" />
                     <span>Profile</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => onTabChange('settings')}>
+                  <DropdownMenuItem onClick={() => handleTabNavigate('settings')}>
                     <Settings className="mr-2 h-4 w-4" />
                     <span>Settings</span>
                   </DropdownMenuItem>
@@ -233,21 +279,32 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
           )}
         </div>
 
-        {/* Mobile Search Bar */}
-        {activeTab === 'search' && (
-          <div className="md:hidden pb-3 animate-fade-in">
+        {/* Mobile and tablet search panel */}
+        <div
+          className={`cl-navbar-mobile-search-panel lg:hidden ${
+            isMobileSearchOpen ? 'cl-navbar-mobile-search-panel-open' : ''
+          }`}
+        >
+          <div className="cl-navbar-mobile-search-inner">
+            <div className="mb-4">
+              <h1 className="text-gray-900 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                Search
+              </h1>
+              <p className="text-gray-600">Find users and hashtags in one place</p>
+            </div>
             <div className="relative">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/70" />
               <Input
                 type="text"
-                placeholder="Search students, skills..."
+                placeholder="Search users or tags"
                 value={searchQuery}
-                onChange={handleSearchChange}
-                className="pl-12 pr-4 h-11 bg-white/20 backdrop-blur-lg border-white/30 text-white placeholder:text-white/70 rounded-2xl focus:bg-white/30 focus:border-white/50 transition-all duration-300"
+                onChange={handleMobileSearchChange}
+                onFocus={handleSearchFocus}
+                className="pl-12 pr-4 h-11 bg-white border-primary/20 text-gray-900 placeholder:text-gray-500 rounded-2xl focus:bg-white focus:border-primary/40 transition-all duration-300"
               />
             </div>
           </div>
-        )}
+        </div>
 
         {/* Mobile Navigation */}
         <div className="cl-mobile-bottom-nav md:hidden fixed bottom-0 left-0 right-0 backdrop-blur-xl bg-gradient-to-r from-primary via-secondary to-primary border-t border-white/20 flex items-center justify-center gap-2 py-3 px-4 shadow-2xl z-50 safe-area-inset-bottom">
@@ -258,7 +315,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
             return (
               <button
                 key={item.id}
-                onClick={() => onTabChange(item.id)}
+                onClick={() => handleTabNavigate(item.id)}
                 aria-label={item.label}
                 title={item.label}
                 className={`relative flex h-12 flex-1 max-w-[72px] items-center justify-center rounded-2xl transition-all duration-300 ${
