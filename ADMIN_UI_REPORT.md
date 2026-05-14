@@ -17,7 +17,7 @@ This report is based on code inspection of the current repository, not a live ma
 
 The admin area is implemented as a separate frontend shell mounted on `/admin`, backed by a dedicated admin API and its own database tables. Core moderation and management actions are real for users, clubs, posts, reports, verification requests, announcements, logs, and admin password change.
 
-What is not complete is workflow depth. Several pages stop at MVP-level list/action handling and do not yet provide richer filtering, pagination, notes/history UX, document review UX, operational controls, or advanced analytics.
+Stages 1 through 5 are now implemented in code. The biggest remaining gaps are no longer around basic moderation existence, but around deeper verification review UX, richer analytics fidelity, editable settings, and broader operational tooling.
 
 ## Architecture status
 
@@ -242,42 +242,58 @@ Need to be done:
 
 ### 5. Reports
 
-Status: Real backend and basic working UI, but workflow depth is still missing
+Status: Implemented as a real drawer-based moderation ticket workflow
 
 Done:
 
-- Real report list route at `GET /admin/reports`
-- Real report update route at `PATCH /admin/reports/:reportId`
-- Backend supports:
+- Report list route `GET /admin/reports` now returns paginated list data instead of a raw array
+- Report list supports:
+  - free-text search
+  - status filter
+  - severity filter
+  - target type filter
+  - assignee filter
+  - date range
+  - pagination
+- Real report detail route exists at `GET /admin/reports/:reportId`
+- Real report update route at `PATCH /admin/reports/:reportId` now supports:
   - status updates
   - assigning to current admin
+  - clearing assignee
   - internal notes update
   - resolved timestamps
-- Backend also supports note creation through `POST /admin/reports/:reportId/notes`
-- Frontend table supports actions:
-  - Review
-  - Resolve
-  - Reject
-  - Escalate
+- Report note creation is wired through `POST /admin/reports/:reportId/notes`
+- Frontend reports page now provides:
+  - filter bar
+  - paginated queue table
+  - row-level open/review actions
+  - right-drawer ticket workflow
+- Report drawer now includes:
+  - ticket overview
+  - reporter and assignee summary
+  - evidence and reason review
+  - target preview
+  - moderation actions
+  - internal notes editor
+  - note composer
+  - unified timeline from report notes and audit logs
+- Report drawer can drill into the linked moderation target:
+  - user reports open the existing user drawer
+  - club reports open the existing club drawer
+  - post reports open the existing post drawer
 
 Exact limitations found:
 
-- Frontend shows reports only as a flat table
-- No report detail page or side drawer
-- No UI for `internalNotes` editing even though backend supports it
-- No UI for `POST /admin/reports/:reportId/notes`
-- No visible timeline of notes/history
-- No assignee management beyond `assignToMe`
-- Evidence is shown only as raw text, not as a structured review surface
-- No direct link from a report to the target user/post/club inspection view
+- Assignee control is still limited to `assignToMe` and `clearAssignee`; there is no assign-to-other-admin flow yet
+- Evidence is still text-first; there is no richer attachment-specific viewer beyond current stored fields
+- The report drawer reuses existing user/club/post drawers for deep inspection rather than embedding a full target-case workspace inside the report itself
+- No realtime queue updates yet; the page still relies on polling/refetch
 
 Need to be done:
 
-- Build a proper moderation ticket workflow
-- Add internal notes editor and notes timeline
-- Add assignee controls and ownership states
-- Add evidence viewer and linked target drilldowns
-- Add filters for severity/status/target type/assignee/date
+- Add multi-admin reassignment if moderator/sub-admin workflows are needed
+- Expand evidence presentation if reports begin storing richer media or structured proof
+- Add direct deep-link opening from escalated post actions into the newly created report ticket if desired
 
 ### 6. Verification
 
@@ -436,40 +452,36 @@ Need to be done:
 - Admin access enforcement
 - Dedicated admin data model
 - User/club/post moderation mutations
-- Report status updates
+- Report queue, ticket detail, note timeline, and assignment workflow
 - Verification approval/rejection state changes
 - Announcement creation/listing
 - Audit log ingestion and viewing
 
 ### Still MVP-level across multiple pages
 
-- No pagination on list-heavy pages
-- Limited filtering and sorting
-- Few drilldowns between related admin objects
+- Limited filtering and sorting on some remaining pages, especially logs and analytics
 - No realtime/live update channel
-- No deep note/history UX
-- No success/error toast or mutation feedback system visible in this file
-- No empty/error-specific recovery UX beyond basic empty panels
+- Verification and analytics still need deeper review UX
 
 ### Exact backend-only capabilities not exposed in frontend yet
 
 - Admin login endpoint: `POST /admin/auth/login`
-- Report note endpoint: `POST /admin/reports/:reportId/notes`
-- Report internal note updates via `PATCH /admin/reports/:reportId`
 - Club `transfer_ownership` action branch, though currently placeholder-only
 - User list filter params for `banned` and `verified`
 
 ## Recommended implementation priorities
 
+Next active milestone after stage 5: Verification review depth
+
 ### Priority 1
 
 - Add standalone admin login UI
-- Build report detail workflow with notes, assignee controls, and evidence review
 - Improve verification review with document previews and target previews
+- Add richer report evidence presentation only if report payloads expand beyond text evidence
 
 ### Priority 2
 
-- Add pagination/filter/sort for users, clubs, posts, reports, and logs
+- Add remaining pagination/filter/sort improvements for logs and any unfinished admin surfaces
 - Replace hardcoded dashboard and analytics values with real telemetry/analytics
 - Add proper club and post drilldown views
 

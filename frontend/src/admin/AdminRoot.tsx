@@ -42,6 +42,11 @@ import {
   type AdminDashboardResponse,
   type AdminDashboardTrendDirection,
   type AdminProfile,
+  type AdminReportAuditEntry,
+  type AdminReportDetailResponse,
+  type AdminReportListItem,
+  type AdminReportListResponse,
+  type AdminReportTargetPreview,
 } from './api';
 import { clearAdminSession, readAdminSession } from './session';
 
@@ -70,7 +75,7 @@ const NAV_ITEMS: Array<{ key: PageKey; label: string; icon: typeof LayoutDashboa
   { key: 'settings', label: 'Settings', icon: Settings },
 ];
 
-const SEARCHABLE_PAGES = new Set<PageKey>(['users', 'clubs', 'posts', 'logs']);
+const SEARCHABLE_PAGES = new Set<PageKey>(['users', 'clubs', 'posts', 'reports', 'logs']);
 const ADMIN_CACHE_MS = 30_000;
 const DASHBOARD_RANGES: AdminDashboardRange[] = ['7d', '30d', '90d'];
 
@@ -308,6 +313,42 @@ type PostFilterState = {
 };
 
 type PostActionName = 'hide' | 'unhide' | 'delete' | 'restore' | 'warn' | 'suspend_author' | 'escalate';
+type AdminReportStatus = 'open' | 'reviewing' | 'resolved' | 'rejected' | 'escalated';
+type AdminReportTargetType = 'user' | 'post' | 'club';
+type AdminReportAssigneeFilter = 'all' | 'me' | 'unassigned';
+
+type ReportFilterState = {
+  status: '' | AdminReportStatus;
+  severity: '' | 'warning' | 'critical';
+  targetType: '' | AdminReportTargetType;
+  assignee: AdminReportAssigneeFilter;
+  from: string;
+  to: string;
+  page: number;
+  limit: number;
+};
+
+type ReportTimelineItem =
+  | {
+      id: string;
+      type: 'note';
+      timestamp: string;
+      severity: 'info';
+      summary: string;
+      actor: { username: string; email: string; avatarUrl: string | null };
+      body: string;
+      metadata?: Record<string, unknown>;
+    }
+  | {
+      id: string;
+      type: 'audit';
+      timestamp: string;
+      severity: string;
+      summary: string;
+      actor: { username: string; email: string; avatarUrl: string | null };
+      body?: string;
+      metadata?: Record<string, unknown>;
+    };
 
 const DEFAULT_POST_FILTERS: PostFilterState = {
   status: '',
@@ -318,6 +359,45 @@ const DEFAULT_POST_FILTERS: PostFilterState = {
   page: 1,
   limit: 20,
 };
+
+const DEFAULT_REPORT_FILTERS: ReportFilterState = {
+  status: '',
+  severity: '',
+  targetType: '',
+  assignee: 'all',
+  from: '',
+  to: '',
+  page: 1,
+  limit: 20,
+};
+
+const REPORT_STATUS_OPTIONS: Array<{ value: ReportFilterState['status']; label: string }> = [
+  { value: '', label: 'All statuses' },
+  { value: 'open', label: 'Open' },
+  { value: 'reviewing', label: 'Reviewing' },
+  { value: 'escalated', label: 'Escalated' },
+  { value: 'resolved', label: 'Resolved' },
+  { value: 'rejected', label: 'Rejected' },
+];
+
+const REPORT_SEVERITY_OPTIONS: Array<{ value: ReportFilterState['severity']; label: string }> = [
+  { value: '', label: 'All severities' },
+  { value: 'warning', label: 'Warning' },
+  { value: 'critical', label: 'Critical' },
+];
+
+const REPORT_TARGET_OPTIONS: Array<{ value: ReportFilterState['targetType']; label: string }> = [
+  { value: '', label: 'All targets' },
+  { value: 'user', label: 'Users' },
+  { value: 'club', label: 'Clubs' },
+  { value: 'post', label: 'Posts' },
+];
+
+const REPORT_ASSIGNEE_OPTIONS: Array<{ value: ReportFilterState['assignee']; label: string }> = [
+  { value: 'all', label: 'All assignees' },
+  { value: 'me', label: 'Assigned to me' },
+  { value: 'unassigned', label: 'Unassigned' },
+];
 
 const POST_STATUS_OPTIONS: Array<{ value: PostFilterState['status']; label: string }> = [
   { value: '', label: 'All visible posts' },
@@ -406,6 +486,20 @@ function buildPostsQueryString(search: string, filters: PostFilterState) {
     club: filters.club,
     sort: filters.sort,
     order: filters.order,
+    page: filters.page,
+    limit: filters.limit,
+  });
+}
+
+function buildReportsQueryString(search: string, filters: ReportFilterState) {
+  return buildQueryString({
+    q: search,
+    status: filters.status,
+    severity: filters.severity,
+    targetType: filters.targetType,
+    assignee: filters.assignee,
+    from: filters.from,
+    to: filters.to,
     page: filters.page,
     limit: filters.limit,
   });
@@ -525,12 +619,13 @@ async function fetchAdminPageData(
   userFilters: UserFilterState,
   clubFilters: ClubFilterState = DEFAULT_CLUB_FILTERS,
   postFilters: PostFilterState = DEFAULT_POST_FILTERS,
+  reportFilters: ReportFilterState = DEFAULT_REPORT_FILTERS,
 ) {
   if (page === 'dashboard') return apiAdminGet<AdminDashboardResponse>(`/admin/dashboard?range=${encodeURIComponent(range)}`, token);
   if (page === 'users') return apiAdminGet<AdminUserListResponse>(`/admin/users?${buildUsersQueryString(search, userFilters)}`, token);
   if (page === 'clubs') return apiAdminGet<AdminClubListResponse>(`/admin/clubs?${buildClubsQueryString(search, clubFilters)}`, token);
   if (page === 'posts') return apiAdminGet<AdminPostListResponse>(`/admin/posts?${buildPostsQueryString(search, postFilters)}`, token);
-  if (page === 'reports') return apiAdminGet('/admin/reports', token);
+  if (page === 'reports') return apiAdminGet<AdminReportListResponse>(`/admin/reports?${buildReportsQueryString(search, reportFilters)}`, token);
   if (page === 'verification') return apiAdminGet('/admin/verification-requests', token);
   if (page === 'analytics') return apiAdminGet('/admin/analytics', token);
   if (page === 'announcements') return apiAdminGet('/admin/announcements', token);
@@ -553,6 +648,42 @@ function formatNumber(value: number | string | null | undefined): string {
 function formatDate(value: string | null | undefined): string {
   if (!value) return '—';
   return new Date(value).toLocaleString();
+}
+
+function formatShortDate(value: string | null | undefined): string {
+  if (!value) return 'â€”';
+  return new Date(value).toLocaleDateString();
+}
+
+function getReportTargetKindLabel(targetType: AdminReportTargetType): string {
+  if (targetType === 'user') return 'User';
+  if (targetType === 'club') return 'Club';
+  return 'Post';
+}
+
+function buildReportTimeline(detail: AdminReportDetailResponse | null): ReportTimelineItem[] {
+  if (!detail) return [];
+  const noteItems: ReportTimelineItem[] = detail.noteEntries.map((entry) => ({
+    id: `note-${entry.id}`,
+    type: 'note',
+    timestamp: entry.createdAt,
+    severity: 'info',
+    summary: 'Internal note added',
+    actor: entry.author,
+    body: entry.note,
+  }));
+  const auditItems: ReportTimelineItem[] = detail.auditHistory.map((entry: AdminReportAuditEntry) => ({
+    id: `audit-${entry.id}`,
+    type: 'audit',
+    timestamp: entry.timestamp,
+    severity: entry.severity,
+    summary: entry.summary,
+    actor: entry.actor,
+    body: typeof entry.metadata?.note === 'string' ? String(entry.metadata.note) : undefined,
+    metadata: entry.metadata,
+  }));
+
+  return [...noteItems, ...auditItems].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 }
 
 function statusTone(status: string | boolean | null | undefined): string {
@@ -740,6 +871,11 @@ export default function AdminRoot() {
   const [commentRepliesNextCursorByParentId, setCommentRepliesNextCursorByParentId] = useState<Record<string, string | null>>({});
   const [commentRepliesLoadingByParentId, setCommentRepliesLoadingByParentId] = useState<Record<string, boolean>>({});
   const [postFilters, setPostFilters] = useState<PostFilterState>(DEFAULT_POST_FILTERS);
+  const [reportFilters, setReportFilters] = useState<ReportFilterState>(DEFAULT_REPORT_FILTERS);
+  const [selectedReport, setSelectedReport] = useState<AdminReportListItem | null>(null);
+  const [selectedReportDetail, setSelectedReportDetail] = useState<AdminReportDetailResponse | null>(null);
+  const [reportInternalNotes, setReportInternalNotes] = useState('');
+  const [reportNoteDraft, setReportNoteDraft] = useState('');
   const [postActionNote, setPostActionNote] = useState('');
   const [commentActionNote, setCommentActionNote] = useState('');
   const [transferTarget, setTransferTarget] = useState<string>('');
@@ -765,6 +901,7 @@ export default function AdminRoot() {
   const usersQueryContext = useMemo(() => (page === 'users' ? JSON.stringify(userFilters) : ''), [page, userFilters]);
   const clubsQueryContext = useMemo(() => (page === 'clubs' ? JSON.stringify(clubFilters) : ''), [page, clubFilters]);
   const postsQueryContext = useMemo(() => (page === 'posts' ? JSON.stringify(postFilters) : ''), [page, postFilters]);
+  const reportsQueryContext = useMemo(() => (page === 'reports' ? JSON.stringify(reportFilters) : ''), [page, reportFilters]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -795,6 +932,11 @@ export default function AdminRoot() {
   useEffect(() => {
     if (page !== 'posts') return;
     setPostFilters((current) => (current.page === 1 ? current : { ...current, page: 1 }));
+  }, [page, searchKey]);
+
+  useEffect(() => {
+    if (page !== 'reports') return;
+    setReportFilters((current) => (current.page === 1 ? current : { ...current, page: 1 }));
   }, [page, searchKey]);
 
   useEffect(() => {
@@ -843,8 +985,8 @@ export default function AdminRoot() {
   });
 
   const currentPageQuery = useQuery({
-    queryKey: token ? getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext) : ['admin', page, searchKey, 'anon', dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext],
-    queryFn: () => fetchAdminPageData(page, token!, searchKey, dashboardRange, userFilters, clubFilters, postFilters),
+    queryKey: token ? getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext + reportsQueryContext) : ['admin', page, searchKey, 'anon', dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext + reportsQueryContext],
+    queryFn: () => fetchAdminPageData(page, token!, searchKey, dashboardRange, userFilters, clubFilters, postFilters, reportFilters),
     enabled: canQueryAdmin && page !== 'dashboard',
     staleTime: ADMIN_CACHE_MS,
     gcTime: ADMIN_CACHE_MS * 10,
@@ -862,7 +1004,9 @@ export default function AdminRoot() {
   const postsResponse = page === 'posts' ? ((currentPageQuery.data as AdminPostListResponse | null) ?? null) : null;
   const posts = postsResponse?.items ?? [];
   const postsPageInfo = postsResponse?.pageInfo ?? null;
-  const reports = page === 'reports' ? ((currentPageQuery.data as any[]) ?? []) : [];
+  const reportsResponse = page === 'reports' ? ((currentPageQuery.data as AdminReportListResponse | null) ?? null) : null;
+  const reports = reportsResponse?.items ?? [];
+  const reportsPageInfo = reportsResponse?.pageInfo ?? null;
   const verification = page === 'verification' ? ((currentPageQuery.data as any[]) ?? []) : [];
   const analytics = page === 'analytics' ? (currentPageQuery.data ?? null) : null;
   const announcements = page === 'announcements' ? ((currentPageQuery.data as any[]) ?? []) : [];
@@ -871,6 +1015,7 @@ export default function AdminRoot() {
   const activeQuery = page === 'dashboard' ? dashboardQuery : currentPageQuery;
   const pageLoading = activeQuery.isLoading;
   const pageRefreshing = activeQuery.isFetching && !activeQuery.isLoading;
+  const reportTimeline = useMemo(() => buildReportTimeline(selectedReportDetail), [selectedReportDetail]);
   const selectedUserDetailQuery = useQuery({
     queryKey: selectedUser && token ? getAdminUserDetailQueryKey(token, selectedUser.id) : ['admin', 'user-detail', 'idle'],
     queryFn: () => apiAdminGet<AdminUserDetailResponse>(`/admin/users/${selectedUser!.id}`, token!),
@@ -882,6 +1027,7 @@ export default function AdminRoot() {
   const userDetailLoading = selectedUserDetailQuery.isLoading || (selectedUserDetailQuery.isFetching && !selectedUserDetail);
   const clubDetailLoading = Boolean(selectedClub && !selectedClubDetail);
   const postDetailLoading = Boolean(selectedPost && !selectedPostDetail);
+  const reportDetailLoading = Boolean(selectedReport && !selectedReportDetail);
 
   const goTo = (nextPage: PageKey, params?: Record<string, string | null | undefined>) => {
     const url = new URL(window.location.href);
@@ -909,10 +1055,12 @@ export default function AdminRoot() {
         ? JSON.stringify(clubFilters)
         : nextPage === 'posts'
           ? JSON.stringify(postFilters)
+          : nextPage === 'reports'
+            ? JSON.stringify(reportFilters)
           : '';
     void queryClient.prefetchQuery({
       queryKey: getAdminQueryKey(token, nextPage, nextSearchKey, dashboardRange, nextContext),
-      queryFn: () => fetchAdminPageData(nextPage, token, nextSearchKey, dashboardRange, userFilters, clubFilters, postFilters),
+      queryFn: () => fetchAdminPageData(nextPage, token, nextSearchKey, dashboardRange, userFilters, clubFilters, postFilters, reportFilters),
       staleTime: ADMIN_CACHE_MS,
     });
   };
@@ -934,7 +1082,7 @@ export default function AdminRoot() {
 
   const refreshCurrentPage = async () => {
     if (!token) return;
-    await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext), exact: true });
+    await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext + reportsQueryContext), exact: true });
     if (page !== 'dashboard') {
       await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, 'dashboard', '', dashboardRange), exact: true });
     }
@@ -1048,6 +1196,125 @@ export default function AdminRoot() {
     setSelectedPostDetail(detail);
     setSelectedPostComments(commentsResponse.comments ?? []);
     setSelectedPostCommentsNextCursor(commentsResponse.nextCursor ?? null);
+  };
+
+  const openReportDrawer = async (report: AdminReportListItem) => {
+    if (!token) return;
+    setSelectedReport(report);
+    setSelectedReportDetail(null);
+    setReportNoteDraft('');
+    const detail = await apiAdminGet<AdminReportDetailResponse>(`/admin/reports/${report.id}`, token);
+    setSelectedReportDetail(detail);
+    setReportInternalNotes(detail.internalNotes ?? '');
+  };
+
+  const refreshSelectedReportDetail = async (reportId: string) => {
+    if (!token) return;
+    const detail = await apiAdminGet<AdminReportDetailResponse>(`/admin/reports/${reportId}`, token);
+    setSelectedReportDetail(detail);
+    setReportInternalNotes(detail.internalNotes ?? '');
+  };
+
+  const runReportAction = async (
+    reportId: string,
+    body: { status?: AdminReportStatus; assignToMe?: boolean; clearAssignee?: boolean; internalNotes?: string },
+    successMessage: string,
+  ) => {
+    if (!token) return;
+    try {
+      await apiAdminPost(`/admin/reports/${reportId}`, token, body, 'PATCH');
+      toast.success(successMessage);
+      await refreshCurrentPage();
+      if (selectedReport?.id === reportId) {
+        await refreshSelectedReportDetail(reportId);
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to update report');
+    }
+  };
+
+  const saveReportInternalNotes = async () => {
+    if (!selectedReport) return;
+    await runReportAction(selectedReport.id, { internalNotes: reportInternalNotes }, 'Internal notes saved');
+  };
+
+  const addReportNote = async () => {
+    if (!token || !selectedReport) return;
+    const trimmed = reportNoteDraft.trim();
+    if (!trimmed) {
+      toast.error('Add a note before submitting.');
+      return;
+    }
+    try {
+      await apiAdminPost(`/admin/reports/${selectedReport.id}/notes`, token, { note: trimmed });
+      setReportNoteDraft('');
+      toast.success('Report note added');
+      await refreshCurrentPage();
+      await refreshSelectedReportDetail(selectedReport.id);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to add report note');
+    }
+  };
+
+  const openReportTarget = async (detail: AdminReportDetailResponse) => {
+    const target = detail.targetPreview as AdminReportTargetPreview;
+    if (target.kind === 'user') {
+      const fallbackUserId = detail.targetUserId ?? target.id;
+      setSelectedUser({
+        id: fallbackUserId,
+        username: target.label,
+        fullName: target.label,
+        email: target.email ?? '',
+        college: 'GBPUAT',
+        department: null,
+        followers: 0,
+        postsCount: 0,
+        reportsCount: 0,
+        lastActive: null,
+        createdAt: new Date().toISOString(),
+        suspendedUntil: null,
+        status: (target.status as AdminUserStatus | undefined) ?? 'active',
+        verified: Boolean(target.verified),
+        avatarUrl: target.avatarUrl ?? null,
+      });
+      setUserActionForm({ note: '', durationDays: 7 });
+      return;
+    }
+
+    if (target.kind === 'club') {
+      await openClubDrawer({
+        id: target.id,
+        name: target.label,
+        slug: target.slug ?? '',
+        logoUrl: target.avatarUrl ?? null,
+        members: 0,
+        activityScore: 0,
+        postsCount: 0,
+        reports: 0,
+        createdBy: '',
+        verified: Boolean(target.verified),
+        status: (target.status as AdminClubStatus | undefined) ?? 'active',
+        createdAt: target.createdAt ?? new Date().toISOString(),
+        lastActivity: target.createdAt ?? new Date().toISOString(),
+      });
+      return;
+    }
+
+    await openPostDrawer({
+      id: target.id,
+      author: target.authorUsername ?? 'Unknown author',
+      authorUserId: target.authorUserId ?? detail.targetUserId ?? '',
+      club: target.clubName ? { id: target.clubId ?? null, name: target.clubName, slug: null } : null,
+      title: target.label,
+      preview: target.preview ?? null,
+      mediaUrl: null,
+      engagement: { likes: 0, comments: 0, total: 0 },
+      reportsCount: detail.reportFrequency,
+      highestSeverity: detail.severity,
+      hiddenReason: null,
+      status: (target.status as AdminPostStatus | undefined) ?? 'live',
+      createdAt: target.createdAt ?? new Date().toISOString(),
+    });
   };
 
   const loadClubMembers = async (clubId: string, q = '') => {
@@ -1775,8 +2042,38 @@ export default function AdminRoot() {
             ) : null}
 
             {!pageLoading && page === 'reports' ? (
-              <ShellCard title="Reports">
-                <div className="overflow-x-auto">
+              <>
+                <ShellCard title="Report Filters">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+                    <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={reportFilters.status} onChange={(event) => setReportFilters((current) => ({ ...current, status: event.target.value as ReportFilterState['status'], page: 1 }))}>
+                      {REPORT_STATUS_OPTIONS.map((option) => <option key={option.label} value={option.value}>{option.label}</option>)}
+                    </select>
+                    <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={reportFilters.severity} onChange={(event) => setReportFilters((current) => ({ ...current, severity: event.target.value as ReportFilterState['severity'], page: 1 }))}>
+                      {REPORT_SEVERITY_OPTIONS.map((option) => <option key={option.label} value={option.value}>{option.label}</option>)}
+                    </select>
+                    <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={reportFilters.targetType} onChange={(event) => setReportFilters((current) => ({ ...current, targetType: event.target.value as ReportFilterState['targetType'], page: 1 }))}>
+                      {REPORT_TARGET_OPTIONS.map((option) => <option key={option.label} value={option.value}>{option.label}</option>)}
+                    </select>
+                    <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={reportFilters.assignee} onChange={(event) => setReportFilters((current) => ({ ...current, assignee: event.target.value as ReportFilterState['assignee'], page: 1 }))}>
+                      {REPORT_ASSIGNEE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                    <Input className="h-10" type="date" value={reportFilters.from} onChange={(event) => setReportFilters((current) => ({ ...current, from: event.target.value, page: 1 }))} />
+                    <Input className="h-10" type="date" value={reportFilters.to} onChange={(event) => setReportFilters((current) => ({ ...current, to: event.target.value, page: 1 }))} />
+                  </div>
+                </ShellCard>
+
+                <ShellCard title="Reports Queue">
+                  {currentPageQuery.isError ? (
+                    <EmptyPanel title="Unable to load reports" body={currentPageQuery.error instanceof Error ? currentPageQuery.error.message : 'Try refreshing this page.'} />
+                  ) : reports.length === 0 ? (
+                    <EmptyPanel title="No reports matched these filters" body="Adjust the search or filters to broaden the queue." />
+                  ) : (
+                    <>
+                      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500">
+                        <span>{formatNumber(reportsPageInfo?.total ?? 0)} reports found</span>
+                        <span>Page {reportsPageInfo?.page ?? 1} of {reportsPageInfo?.totalPages ?? 1}</span>
+                      </div>
+                      <div className="overflow-x-auto">
                   <table className="min-w-full text-sm">
                     <thead>
                       <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-[0.12em] text-slate-500">
@@ -1784,28 +2081,37 @@ export default function AdminRoot() {
                         <th className="px-3 py-3 whitespace-nowrap">Target</th>
                         <th className="px-3 py-3 whitespace-nowrap">Reason</th>
                         <th className="px-3 py-3 whitespace-nowrap">Evidence</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Assignee</th>
                         <th className="px-3 py-3 whitespace-nowrap">Frequency</th>
-                        <th className="px-3 py-3 whitespace-nowrap">Severity</th>
                         <th className="px-3 py-3 whitespace-nowrap">Status</th>
-                        <th className="px-3 py-3 whitespace-nowrap">Actions</th>
+                        <th className="px-3 py-3 whitespace-nowrap">Action</th>
                       </tr>
                     </thead>
                     <tbody>
                       {reports.map((report) => (
                         <tr key={report.id} className="border-b border-slate-100 align-top hover:bg-slate-50">
-                          <td className="px-3 py-3 text-slate-700">{report.reporter}</td>
-                          <td className="px-3 py-3 text-slate-600">{report.targetType}: {report.targetContent}</td>
+                          <td className="px-3 py-3 text-slate-700">
+                            <p>{report.reporter}</p>
+                            <p className="mt-1 text-xs text-slate-500">{formatDate(report.createdAt)}</p>
+                          </td>
+                          <td className="px-3 py-3 text-slate-600">
+                            <p className="font-medium text-slate-800">{report.targetLabel}</p>
+                            <p className="mt-1 text-xs text-slate-500">{getReportTargetKindLabel(report.targetType)}</p>
+                          </td>
                           <td className="px-3 py-3 text-slate-600">{report.reason}</td>
                           <td className="px-3 py-3 text-slate-500">{report.evidence || '—'}</td>
-                          <td className="px-3 py-3 text-slate-600">{report.reportFrequency}</td>
-                          <td className="px-3 py-3"><StatusBadge value={report.severity} /></td>
-                          <td className="px-3 py-3"><StatusBadge value={report.status} /></td>
+                          <td className="px-3 py-3 text-slate-600">{report.assignedModerator || 'Unassigned'}</td>
+                          <td className="px-3 py-3 text-slate-600">{formatNumber(report.reportFrequency)}</td>
                           <td className="px-3 py-3">
                             <div className="flex flex-wrap gap-2">
-                              <Button variant="outline" size="sm" onClick={() => void apiAdminPost(`/admin/reports/${report.id}`, token!, { status: 'reviewing', assignToMe: true }, 'PATCH').then(refreshCurrentPage)}>Review</Button>
-                              <Button variant="outline" size="sm" onClick={() => void apiAdminPost(`/admin/reports/${report.id}`, token!, { status: 'resolved' }, 'PATCH').then(refreshCurrentPage)}>Resolve</Button>
-                              <Button variant="outline" size="sm" onClick={() => void apiAdminPost(`/admin/reports/${report.id}`, token!, { status: 'rejected' }, 'PATCH').then(refreshCurrentPage)}>Reject</Button>
-                              <Button variant="outline" size="sm" onClick={() => void apiAdminPost(`/admin/reports/${report.id}`, token!, { status: 'escalated' }, 'PATCH').then(refreshCurrentPage)}>Escalate</Button>
+                              <StatusBadge value={report.severity} />
+                              <StatusBadge value={report.status} />
+                            </div>
+                          </td>
+                          <td className="px-3 py-3">
+                            <div className="flex flex-wrap gap-2">
+                              <Button variant="outline" size="sm" onClick={() => void openReportDrawer(report)}>Open</Button>
+                              <Button variant="outline" size="sm" onClick={() => void runReportAction(report.id, { status: 'reviewing', assignToMe: true }, 'Report assigned and moved to review')}>Review</Button>
                             </div>
                           </td>
                         </tr>
@@ -1813,7 +2119,22 @@ export default function AdminRoot() {
                     </tbody>
                   </table>
                 </div>
-              </ShellCard>
+                      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+                        <div className="flex items-center gap-2 text-sm text-slate-500">
+                          <span>Rows per page</span>
+                          <select className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700" value={reportFilters.limit} onChange={(event) => setReportFilters((current) => ({ ...current, limit: Number(event.target.value), page: 1 }))}>
+                            {[10, 20, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
+                          </select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="sm" disabled={!reportsPageInfo?.hasPreviousPage} onClick={() => setReportFilters((current) => ({ ...current, page: Math.max(1, current.page - 1) }))}>Previous</Button>
+                          <Button variant="outline" size="sm" disabled={!reportsPageInfo?.hasNextPage} onClick={() => setReportFilters((current) => ({ ...current, page: current.page + 1 }))}>Next</Button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </ShellCard>
+              </>
             ) : null}
 
             {!pageLoading && page === 'verification' ? (
@@ -2400,6 +2721,156 @@ export default function AdminRoot() {
                 >
                   Transfer ownership
                 </Button>
+              </div>
+            </ShellCard>
+          </div>
+        ) : null}
+      </RightDrawer>
+
+      <RightDrawer
+        open={Boolean(selectedReport)}
+        title={selectedReportDetail?.reason ?? selectedReport?.reason ?? 'Report detail'}
+        subtitle={selectedReportDetail ? `${getReportTargetKindLabel(selectedReportDetail.targetType)} · ${selectedReportDetail.targetPreview.label}` : 'Moderation ticket workflow'}
+        onClose={() => {
+          setSelectedReport(null);
+          setSelectedReportDetail(null);
+          setReportInternalNotes('');
+          setReportNoteDraft('');
+        }}
+      >
+        {reportDetailLoading ? (
+          <DrawerSkeleton showFooterBlocks={4} />
+        ) : selectedReportDetail ? (
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Status</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <StatusBadge value={selectedReportDetail.status} />
+                  <StatusBadge value={selectedReportDetail.severity} />
+                </div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Frequency</p>
+                <p className="mt-2 text-sm text-slate-800">{formatNumber(selectedReportDetail.reportFrequency)} reports</p>
+              </div>
+            </div>
+
+            <ShellCard title="Ticket Overview">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Created</p>
+                  <p className="mt-2 text-sm text-slate-800">{formatDate(selectedReportDetail.createdAt)}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Resolved</p>
+                  <p className="mt-2 text-sm text-slate-800">{formatDate(selectedReportDetail.resolvedAt)}</p>
+                </div>
+              </div>
+            </ShellCard>
+
+            <ShellCard title="Reporter and Assignee">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Reporter</p>
+                  {selectedReportDetail.reporter ? (
+                    <>
+                      <p className="mt-2 text-sm font-medium text-slate-800">{selectedReportDetail.reporter.username}</p>
+                      <p className="mt-1 text-xs text-slate-500">{selectedReportDetail.reporter.email}</p>
+                    </>
+                  ) : (
+                    <p className="mt-2 text-sm text-slate-500">System generated</p>
+                  )}
+                </div>
+                <div className="rounded-xl border border-slate-200 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Assignee</p>
+                  {selectedReportDetail.assignee ? (
+                    <>
+                      <p className="mt-2 text-sm font-medium text-slate-800">{selectedReportDetail.assignee.username}</p>
+                      <p className="mt-1 text-xs text-slate-500">{selectedReportDetail.assignee.email}</p>
+                    </>
+                  ) : (
+                    <p className="mt-2 text-sm text-slate-500">Unassigned</p>
+                  )}
+                </div>
+              </div>
+            </ShellCard>
+
+            <ShellCard title="Evidence and Reason">
+              <div className="space-y-3">
+                <div>
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Reason</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-700">{selectedReportDetail.reason}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Evidence</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-700">{selectedReportDetail.evidence || 'No extra evidence attached.'}</p>
+                </div>
+              </div>
+            </ShellCard>
+
+            <ShellCard title="Target Preview">
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">{getReportTargetKindLabel(selectedReportDetail.targetType)}</Badge>
+                  <StatusBadge value={selectedReportDetail.targetPreview.status ?? 'active'} />
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-slate-800">{selectedReportDetail.targetPreview.label}</p>
+                  {'preview' in selectedReportDetail.targetPreview && selectedReportDetail.targetPreview.preview ? (
+                    <p className="mt-2 text-sm leading-6 text-slate-600">{selectedReportDetail.targetPreview.preview}</p>
+                  ) : null}
+                  {'email' in selectedReportDetail.targetPreview && selectedReportDetail.targetPreview.email ? (
+                    <p className="mt-2 text-xs text-slate-500">{selectedReportDetail.targetPreview.email}</p>
+                  ) : null}
+                </div>
+                <Button variant="outline" size="sm" onClick={() => void openReportTarget(selectedReportDetail)}>Open linked target</Button>
+              </div>
+            </ShellCard>
+
+            <ShellCard title="Moderation Actions">
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => void runReportAction(selectedReportDetail.id, { status: 'reviewing', assignToMe: true }, 'Report assigned and moved to review')}>Review and assign to me</Button>
+                <Button variant="outline" size="sm" onClick={() => void runReportAction(selectedReportDetail.id, { status: 'resolved' }, 'Report resolved')}>Resolve</Button>
+                <Button variant="outline" size="sm" onClick={() => void runReportAction(selectedReportDetail.id, { status: 'rejected' }, 'Report rejected')}>Reject</Button>
+                <Button variant="outline" size="sm" onClick={() => void runReportAction(selectedReportDetail.id, { status: 'escalated' }, 'Report escalated')}>Escalate</Button>
+                <Button variant="outline" size="sm" onClick={() => void runReportAction(selectedReportDetail.id, { clearAssignee: true }, 'Report unassigned')}>Unassign</Button>
+              </div>
+            </ShellCard>
+
+            <ShellCard title="Internal Notes">
+              <div className="space-y-3">
+                <Textarea rows={5} value={reportInternalNotes} onChange={(event) => setReportInternalNotes(event.target.value)} placeholder="Persistent case notes for this report" />
+                <Button variant="outline" size="sm" onClick={() => void saveReportInternalNotes()}>Save internal notes</Button>
+              </div>
+            </ShellCard>
+
+            <ShellCard title="Add Note">
+              <div className="space-y-3">
+                <Textarea rows={4} value={reportNoteDraft} onChange={(event) => setReportNoteDraft(event.target.value)} placeholder="Add a timeline note for this report" />
+                <Button variant="outline" size="sm" onClick={() => void addReportNote()}>Add note</Button>
+              </div>
+            </ShellCard>
+
+            <ShellCard title="Timeline">
+              <div className="space-y-3">
+                {reportTimeline.length === 0 ? (
+                  <EmptyPanel title="No timeline activity" body="Notes and report actions will appear here." />
+                ) : (
+                  reportTimeline.map((item) => (
+                    <div key={item.id} className="rounded-xl border border-slate-200 px-4 py-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-slate-800">{item.summary}</p>
+                          <p className="mt-1 text-xs uppercase tracking-[0.1em] text-slate-500">{item.actor.username} Â· {item.type}</p>
+                        </div>
+                        <StatusBadge value={item.severity} />
+                      </div>
+                      {item.body ? <p className="mt-3 text-sm leading-6 text-slate-600">{item.body}</p> : null}
+                      <p className="mt-3 text-xs text-slate-500">{formatDate(item.timestamp)}</p>
+                    </div>
+                  ))
+                )}
               </div>
             </ShellCard>
           </div>

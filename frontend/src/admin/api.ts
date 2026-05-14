@@ -89,6 +89,125 @@ export interface AdminDashboardResponse {
   health: AdminDashboardHealthEntry[];
 }
 
+export interface AdminReportListItem {
+  id: string;
+  reporter: string;
+  reporterUserId: string | null;
+  targetType: 'user' | 'post' | 'club';
+  targetId: string;
+  targetUserId: string | null;
+  targetLabel: string;
+  reason: string;
+  evidence: string | null;
+  reportFrequency: number;
+  severity: 'warning' | 'critical';
+  status: 'open' | 'reviewing' | 'resolved' | 'rejected' | 'escalated';
+  assignedModerator: string | null;
+  assignedAdminUserId: string | null;
+  internalNotes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+}
+
+export interface AdminListPageInfo {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+}
+
+export interface AdminReportListResponse {
+  items: AdminReportListItem[];
+  pageInfo: AdminListPageInfo;
+}
+
+export interface AdminReportActorSummary {
+  id: string;
+  username: string;
+  email: string;
+  avatarUrl: string | null;
+}
+
+export interface AdminReportTargetPreviewUser {
+  kind: 'user';
+  id: string;
+  label: string;
+  email?: string;
+  avatarUrl?: string | null;
+  status?: string;
+  verified?: boolean;
+}
+
+export interface AdminReportTargetPreviewClub {
+  kind: 'club';
+  id: string;
+  label: string;
+  slug?: string;
+  avatarUrl?: string | null;
+  status?: string;
+  verified?: boolean;
+  createdAt?: string;
+}
+
+export interface AdminReportTargetPreviewPost {
+  kind: 'post';
+  id: string;
+  label: string;
+  preview?: string | null;
+  authorUserId?: string;
+  authorUsername?: string;
+  clubId?: string | null;
+  clubName?: string | null;
+  status?: string;
+  createdAt?: string;
+}
+
+export type AdminReportTargetPreview =
+  | AdminReportTargetPreviewUser
+  | AdminReportTargetPreviewClub
+  | AdminReportTargetPreviewPost;
+
+export interface AdminReportNoteEntry {
+  id: string;
+  author: AdminReportActorSummary;
+  note: string;
+  createdAt: string;
+}
+
+export interface AdminReportAuditEntry {
+  id: string;
+  actionType: string;
+  summary: string;
+  severity: string;
+  timestamp: string;
+  actor: AdminReportActorSummary;
+  metadata: Record<string, unknown>;
+}
+
+export interface AdminReportDetailResponse {
+  id: string;
+  reporter: AdminReportActorSummary | null;
+  targetType: 'user' | 'post' | 'club';
+  targetId: string;
+  targetUserId: string | null;
+  reason: string;
+  evidence: string | null;
+  severity: 'warning' | 'critical';
+  status: 'open' | 'reviewing' | 'resolved' | 'rejected' | 'escalated';
+  reportFrequency: number;
+  assignee: AdminReportActorSummary | null;
+  internalNotes: string | null;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+  targetPreview: AdminReportTargetPreview;
+  noteEntries: AdminReportNoteEntry[];
+  auditHistory: AdminReportAuditEntry[];
+}
+
 export async function apiAdminLogin(email: string, password: string): Promise<{ token: string; admin: AdminProfile }> {
   return safeFetch('/admin/auth/login', {
     method: 'POST',

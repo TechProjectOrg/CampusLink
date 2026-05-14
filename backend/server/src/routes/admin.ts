@@ -161,6 +161,9 @@ const ADMIN_USER_SORT_COLUMNS = {
 type AdminUserSortKey = keyof typeof ADMIN_USER_SORT_COLUMNS;
 type AdminUserSortOrder = 'asc' | 'desc';
 type AdminUserStatusFilter = 'active' | 'suspended' | 'banned';
+type AdminReportStatusFilter = 'open' | 'reviewing' | 'resolved' | 'rejected' | 'escalated';
+type AdminReportTargetTypeFilter = 'user' | 'post' | 'club';
+type AdminReportAssigneeFilter = 'all' | 'me' | 'unassigned';
 
 function parseAdminBooleanFilter(raw: unknown): '' | 'true' | 'false' {
   const value = String(raw ?? '').trim().toLowerCase();
@@ -185,6 +188,38 @@ function parsePositiveInt(raw: unknown, fallback: number, min: number, max: numb
   const parsed = Number.parseInt(String(raw ?? ''), 10);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.min(max, Math.max(min, parsed));
+}
+
+function parseAdminSeverityFilter(raw: unknown): '' | 'warning' | 'critical' {
+  const value = String(raw ?? '').trim().toLowerCase();
+  return value === 'warning' || value === 'critical' ? value : '';
+}
+
+function parseAdminReportStatusFilter(raw: unknown): AdminReportStatusFilter | '' {
+  const value = String(raw ?? '').trim().toLowerCase();
+  return value === 'open' || value === 'reviewing' || value === 'resolved' || value === 'rejected' || value === 'escalated'
+    ? value as AdminReportStatusFilter
+    : '';
+}
+
+function parseAdminReportTargetTypeFilter(raw: unknown): AdminReportTargetTypeFilter | '' {
+  const value = String(raw ?? '').trim().toLowerCase();
+  return value === 'user' || value === 'post' || value === 'club' ? value as AdminReportTargetTypeFilter : '';
+}
+
+function parseAdminReportAssigneeFilter(raw: unknown): AdminReportAssigneeFilter {
+  const value = String(raw ?? '').trim().toLowerCase();
+  return value === 'me' || value === 'unassigned' ? value : 'all';
+}
+
+function parseAdminDateFilter(raw: unknown, endOfDay = false): Date | null {
+  const value = String(raw ?? '').trim();
+  if (!value) return null;
+  const normalized = /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? `${value}T${endOfDay ? '23:59:59.999' : '00:00:00.000'}Z`
+    : value;
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 async function invalidateAdminClubCaches(clubId: string, memberUserIds: string[] = []): Promise<void> {
@@ -2011,40 +2046,102 @@ router.post('/comments/:commentId/actions', async (req: Request<{ commentId: str
   }
 });
 
-router.get('/reports', async (_req: Request, res: Response) => {
+router.get('/reports', async (req: Request, res: Response) => {
+  const adminReq = req as AdminAuthedRequest;
+  const query = String(req.query.q ?? '').trim();
+  const status = parseAdminReportStatusFilter(req.query.status);
+  const severity = parseAdminSeverityFilter(req.query.severity);
+  const targetType = parseAdminReportTargetTypeFilter(req.query.targetType);
+  const assignee = parseAdminReportAssigneeFilter(req.query.assignee);
+  const from = parseAdminDateFilter(req.query.from);
+  const to = parseAdminDateFilter(req.query.to, true);
+  const page = parsePositiveInt(req.query.page, 1, 1, 10_000);
+  const limit = parsePositiveInt(req.query.limit, 20, 1, 100);
+  const offset = (page - 1) * limit;
+  const searchPattern = `%${query}%`;
+
+  const reportBaseSql = `
+    FROM admin_reports r
+    LEFT JOIN users reporter ON reporter.user_id = r.reporter_user_id
+    LEFT JOIN users assignee_user ON assignee_user.user_id = r.assigned_admin_user_id
+    LEFT JOIN users target_user ON target_user.user_id = r.target_user_id
+    LEFT JOIN clubs target_club ON r.target_type = CAST('club' AS "AdminReportTargetType") AND target_club.club_id::text = r.target_id
+    LEFT JOIN posts target_post ON r.target_type = CAST('post' AS "AdminReportTargetType") AND target_post.post_id::text = r.target_id
+    LEFT JOIN users target_post_author ON target_post_author.user_id = target_post.author_user_id
+    WHERE
+      ($1 = '' OR (
+        COALESCE(reporter.username, 'System') ILIKE $2
+        OR r.reason ILIKE $2
+        OR COALESCE(r.evidence, '') ILIKE $2
+        OR (
+          CASE
+            WHEN r.target_type = CAST('user' AS "AdminReportTargetType") THEN COALESCE(target_user.username, r.target_id)
+            WHEN r.target_type = CAST('club' AS "AdminReportTargetType") THEN COALESCE(target_club.name, r.target_id)
+            WHEN r.target_type = CAST('post' AS "AdminReportTargetType") THEN COALESCE(NULLIF(target_post.title, ''), NULLIF(LEFT(COALESCE(target_post.content_text, ''), 120), ''), r.target_id)
+            ELSE r.target_id
+          END
+        ) ILIKE $2
+      ))
+      AND ($3 = '' OR r.status::text = $3)
+      AND ($4 = '' OR r.severity::text = $4)
+      AND ($5 = '' OR r.target_type::text = $5)
+      AND (
+        $6 = 'all'
+        OR ($6 = 'me' AND r.assigned_admin_user_id = $7)
+        OR ($6 = 'unassigned' AND r.assigned_admin_user_id IS NULL)
+      )
+      AND ($8::timestamp IS NULL OR r.created_at >= $8::timestamp)
+      AND ($9::timestamp IS NULL OR r.created_at <= $9::timestamp)
+  `;
+
   try {
-    const rows = await prisma.$queryRaw<
-      Array<{
-        report_id: string;
-        reporter: string | null;
-        target_type: string;
-        target_id: string;
-        reason: string;
-        evidence: string | null;
-        report_count: number;
-        severity: string;
-        status: string;
-        assigned_to: string | null;
-        internal_notes: string | null;
-        created_at: Date;
-      }>
-    >`
+    type AdminReportListRow = {
+      report_id: string;
+      reporter: string | null;
+      reporter_user_id: string | null;
+      target_type: string;
+      target_id: string;
+      target_user_id: string | null;
+      target_label: string;
+      reason: string;
+      evidence: string | null;
+      report_count: number;
+      severity: string;
+      status: string;
+      assigned_to: string | null;
+      assigned_admin_user_id: string | null;
+      internal_notes: string | null;
+      created_at: Date;
+      updated_at: Date;
+      resolved_at: Date | null;
+    };
+
+    const listSql = `
       SELECT
         r.report_id,
         reporter.username AS reporter,
+        r.reporter_user_id,
         r.target_type::text,
         r.target_id,
+        r.target_user_id,
+        CASE
+          WHEN r.target_type = CAST('user' AS "AdminReportTargetType") THEN COALESCE(target_user.username, r.target_id)
+          WHEN r.target_type = CAST('club' AS "AdminReportTargetType") THEN COALESCE(target_club.name, r.target_id)
+          WHEN r.target_type = CAST('post' AS "AdminReportTargetType") THEN COALESCE(NULLIF(target_post.title, ''), NULLIF(LEFT(COALESCE(target_post.content_text, ''), 120), ''), r.target_id)
+          ELSE r.target_id
+        END AS target_label,
         r.reason,
         r.evidence,
         r.report_count,
         r.severity::text,
         r.status::text,
-        assignee.username AS assigned_to,
+        assignee_user.username AS assigned_to,
+        r.assigned_admin_user_id,
         r.internal_notes,
-        r.created_at
-      FROM admin_reports r
-      LEFT JOIN users reporter ON reporter.user_id = r.reporter_user_id
-      LEFT JOIN users assignee ON assignee.user_id = r.assigned_admin_user_id
+        r.created_at,
+        r.updated_at,
+        r.resolved_at
+      ${reportBaseSql}
       ORDER BY
         CASE r.status
           WHEN CAST('open' AS "AdminReportStatus") THEN 0
@@ -2052,25 +2149,369 @@ router.get('/reports', async (_req: Request, res: Response) => {
           WHEN CAST('escalated' AS "AdminReportStatus") THEN 2
           ELSE 3
         END,
-        r.created_at DESC
+        r.created_at DESC,
+        r.report_id DESC
+      LIMIT $10
+      OFFSET $11
+    `;
+    const countSql = `
+      SELECT COUNT(*)::int AS total
+      ${reportBaseSql}
     `;
 
-    return res.status(200).json(rows.map((row) => ({
-      id: row.report_id,
-      reporter: row.reporter ?? 'System',
-      targetType: row.target_type,
-      targetContent: row.target_id,
-      reason: row.reason,
-      evidence: row.evidence,
-      reportFrequency: row.report_count,
-      severity: row.severity,
-      status: row.status,
-      assignedModerator: row.assigned_to,
-      internalNotes: row.internal_notes,
-      createdAt: row.created_at.toISOString(),
-    })));
+    const [rows, totalRows] = await Promise.all([
+      prisma.$queryRawUnsafe<AdminReportListRow[]>(
+        listSql,
+        query,
+        searchPattern,
+        status,
+        severity,
+        targetType,
+        assignee,
+        adminReq.auth!.userId,
+        from,
+        to,
+        limit,
+        offset,
+      ),
+      prisma.$queryRawUnsafe<Array<{ total: number }>>(
+        countSql,
+        query,
+        searchPattern,
+        status,
+        severity,
+        targetType,
+        assignee,
+        adminReq.auth!.userId,
+        from,
+        to,
+      ),
+    ]);
+
+    const total = totalRows[0]?.total ?? 0;
+    const totalPages = total === 0 ? 1 : Math.ceil(total / limit);
+
+    return res.status(200).json({
+      items: rows.map((row) => ({
+        id: row.report_id,
+        reporter: row.reporter ?? 'System',
+        reporterUserId: row.reporter_user_id,
+        targetType: row.target_type,
+        targetId: row.target_id,
+        targetUserId: row.target_user_id,
+        targetLabel: row.target_label,
+        reason: row.reason,
+        evidence: row.evidence,
+        reportFrequency: row.report_count,
+        severity: row.severity,
+        status: row.status,
+        assignedModerator: row.assigned_to,
+        assignedAdminUserId: row.assigned_admin_user_id,
+        internalNotes: row.internal_notes,
+        createdAt: row.created_at.toISOString(),
+        updatedAt: row.updated_at.toISOString(),
+        resolvedAt: row.resolved_at ? row.resolved_at.toISOString() : null,
+      })),
+      pageInfo: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+    });
   } catch (err) {
     console.error('Error loading reports:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.get('/reports/:reportId', async (req: Request<{ reportId: string }>, res: Response) => {
+  const { reportId } = req.params;
+
+  try {
+    const reportRows = await prisma.$queryRaw<Array<{
+      report_id: string;
+      reporter_user_id: string | null;
+      reporter_username: string | null;
+      reporter_email: string | null;
+      reporter_avatar_url: string | null;
+      target_type: string;
+      target_id: string;
+      target_user_id: string | null;
+      reason: string;
+      evidence: string | null;
+      severity: string;
+      status: string;
+      report_count: number;
+      assigned_admin_user_id: string | null;
+      assigned_admin_username: string | null;
+      assigned_admin_email: string | null;
+      assigned_admin_avatar_url: string | null;
+      internal_notes: string | null;
+      created_at: Date;
+      updated_at: Date;
+      resolved_at: Date | null;
+    }>>`
+      SELECT
+        r.report_id,
+        r.reporter_user_id,
+        reporter.username AS reporter_username,
+        reporter.email AS reporter_email,
+        reporter.profile_photo_url AS reporter_avatar_url,
+        r.target_type::text,
+        r.target_id,
+        r.target_user_id,
+        r.reason,
+        r.evidence,
+        r.severity::text,
+        r.status::text,
+        r.report_count,
+        r.assigned_admin_user_id,
+        assignee_user.username AS assigned_admin_username,
+        assignee_user.email AS assigned_admin_email,
+        assignee_user.profile_photo_url AS assigned_admin_avatar_url,
+        r.internal_notes,
+        r.created_at,
+        r.updated_at,
+        r.resolved_at
+      FROM admin_reports r
+      LEFT JOIN users reporter ON reporter.user_id = r.reporter_user_id
+      LEFT JOIN users assignee_user ON assignee_user.user_id = r.assigned_admin_user_id
+      WHERE r.report_id = ${reportId}
+      LIMIT 1
+    `;
+
+    const report = reportRows[0];
+    if (!report) {
+      return res.status(404).json({ message: 'Report not found' });
+    }
+
+    const [noteRows, auditRows, userTargetRows, clubTargetRows, postTargetRows] = await Promise.all([
+      prisma.$queryRaw<Array<{
+        report_note_id: string;
+        admin_user_id: string;
+        admin_username: string;
+        admin_email: string;
+        admin_avatar_url: string | null;
+        note: string;
+        created_at: Date;
+      }>>`
+        SELECT
+          n.report_note_id,
+          n.admin_user_id,
+          u.username AS admin_username,
+          u.email AS admin_email,
+          u.profile_photo_url AS admin_avatar_url,
+          n.note,
+          n.created_at
+        FROM admin_report_notes n
+        JOIN users u ON u.user_id = n.admin_user_id
+        WHERE n.report_id = ${reportId}
+        ORDER BY n.created_at DESC, n.report_note_id DESC
+      `,
+      prisma.$queryRaw<Array<{
+        audit_log_id: string;
+        action_type: string;
+        summary: string;
+        severity: string;
+        created_at: Date;
+        actor_user_id: string;
+        actor_username: string;
+        actor_email: string;
+        actor_avatar_url: string | null;
+        metadata: unknown;
+      }>>`
+        SELECT
+          l.audit_log_id,
+          l.action_type,
+          l.summary,
+          l.severity::text,
+          l.created_at,
+          actor.user_id AS actor_user_id,
+          actor.username AS actor_username,
+          actor.email AS actor_email,
+          actor.profile_photo_url AS actor_avatar_url,
+          l.metadata
+        FROM admin_audit_logs l
+        JOIN users actor ON actor.user_id = l.actor_user_id
+        WHERE l.target_type = 'report' AND l.target_id = ${reportId}
+        ORDER BY l.created_at DESC, l.audit_log_id DESC
+      `,
+      report.target_type === 'user' && report.target_user_id
+        ? prisma.$queryRaw<Array<{
+            user_id: string;
+            username: string;
+            email: string;
+            profile_photo_url: string | null;
+            is_banned: boolean;
+            suspended_until: Date | null;
+            verified_at: Date | null;
+          }>>`
+            SELECT user_id, username, email, profile_photo_url, is_banned, suspended_until, verified_at
+            FROM users
+            WHERE user_id = ${report.target_user_id}
+            LIMIT 1
+          `
+        : Promise.resolve([]),
+      report.target_type === 'club'
+        ? prisma.$queryRaw<Array<{
+            club_id: string;
+            name: string;
+            slug: string;
+            avatar_url: string | null;
+            is_verified: boolean;
+            featured_at: Date | null;
+            frozen_at: Date | null;
+            deleted_at: Date | null;
+            created_at: Date;
+          }>>`
+            SELECT club_id, name, slug, avatar_url, is_verified, featured_at, frozen_at, deleted_at, created_at
+            FROM clubs
+            WHERE club_id::text = ${report.target_id}
+            LIMIT 1
+          `
+        : Promise.resolve([]),
+      report.target_type === 'post'
+        ? prisma.$queryRaw<Array<{
+            post_id: string;
+            title: string | null;
+            content_text: string | null;
+            created_at: Date;
+            hidden_at: Date | null;
+            deleted_at: Date | null;
+            author_user_id: string;
+            author_username: string;
+            club_id: string | null;
+            club_name: string | null;
+          }>>`
+            SELECT
+              p.post_id,
+              p.title,
+              p.content_text,
+              p.created_at,
+              p.hidden_at,
+              p.deleted_at,
+              p.author_user_id,
+              author.username AS author_username,
+              p.club_id,
+              c.name AS club_name
+            FROM posts p
+            JOIN users author ON author.user_id = p.author_user_id
+            LEFT JOIN clubs c ON c.club_id = p.club_id
+            WHERE p.post_id::text = ${report.target_id}
+            LIMIT 1
+          `
+        : Promise.resolve([]),
+    ]);
+
+    let targetPreview: Record<string, unknown> = {
+      kind: report.target_type,
+      id: report.target_id,
+      label: report.target_id,
+    };
+
+    if (report.target_type === 'user') {
+      const user = userTargetRows[0];
+      targetPreview = user
+        ? {
+            kind: 'user',
+            id: user.user_id,
+            label: user.username,
+            email: user.email,
+            avatarUrl: user.profile_photo_url,
+            status: user.is_banned ? 'banned' : user.suspended_until && user.suspended_until > new Date() ? 'suspended' : 'active',
+            verified: Boolean(user.verified_at),
+          }
+        : { kind: 'user', id: report.target_user_id ?? report.target_id, label: report.target_id };
+    } else if (report.target_type === 'club') {
+      const club = clubTargetRows[0];
+      targetPreview = club
+        ? {
+            kind: 'club',
+            id: club.club_id,
+            label: club.name,
+            slug: club.slug,
+            avatarUrl: club.avatar_url,
+            verified: club.is_verified,
+            status: club.deleted_at ? 'deleted' : club.frozen_at ? 'frozen' : club.featured_at ? 'featured' : 'active',
+            createdAt: club.created_at.toISOString(),
+          }
+        : { kind: 'club', id: report.target_id, label: report.target_id };
+    } else if (report.target_type === 'post') {
+      const post = postTargetRows[0];
+      targetPreview = post
+        ? {
+            kind: 'post',
+            id: post.post_id,
+            label: post.title || post.content_text || post.post_id,
+            preview: post.content_text,
+            authorUserId: post.author_user_id,
+            authorUsername: post.author_username,
+            clubId: post.club_id,
+            clubName: post.club_name,
+            status: post.deleted_at ? 'deleted' : post.hidden_at ? 'hidden' : 'live',
+            createdAt: post.created_at.toISOString(),
+          }
+        : { kind: 'post', id: report.target_id, label: report.target_id };
+    }
+
+    return res.status(200).json({
+      id: report.report_id,
+      reporter: report.reporter_user_id ? {
+        id: report.reporter_user_id,
+        username: report.reporter_username ?? 'Unknown user',
+        email: report.reporter_email ?? '',
+        avatarUrl: report.reporter_avatar_url,
+      } : null,
+      targetType: report.target_type,
+      targetId: report.target_id,
+      targetUserId: report.target_user_id,
+      reason: report.reason,
+      evidence: report.evidence,
+      severity: report.severity,
+      status: report.status,
+      reportFrequency: report.report_count,
+      assignee: report.assigned_admin_user_id ? {
+        id: report.assigned_admin_user_id,
+        username: report.assigned_admin_username ?? 'Unknown admin',
+        email: report.assigned_admin_email ?? '',
+        avatarUrl: report.assigned_admin_avatar_url,
+      } : null,
+      internalNotes: report.internal_notes,
+      createdAt: report.created_at.toISOString(),
+      updatedAt: report.updated_at.toISOString(),
+      resolvedAt: report.resolved_at ? report.resolved_at.toISOString() : null,
+      targetPreview,
+      noteEntries: noteRows.map((note) => ({
+        id: note.report_note_id,
+        author: {
+          id: note.admin_user_id,
+          username: note.admin_username,
+          email: note.admin_email,
+          avatarUrl: note.admin_avatar_url,
+        },
+        note: note.note,
+        createdAt: note.created_at.toISOString(),
+      })),
+      auditHistory: auditRows.map((entry) => ({
+        id: entry.audit_log_id,
+        actionType: entry.action_type,
+        summary: entry.summary,
+        severity: entry.severity,
+        timestamp: entry.created_at.toISOString(),
+        actor: {
+          id: entry.actor_user_id,
+          username: entry.actor_username,
+          email: entry.actor_email,
+          avatarUrl: entry.actor_avatar_url,
+        },
+        metadata: entry.metadata ?? {},
+      })),
+    });
+  } catch (err) {
+    console.error('Error loading report detail:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });
@@ -2078,7 +2519,12 @@ router.get('/reports', async (_req: Request, res: Response) => {
 router.patch('/reports/:reportId', async (req: Request<{ reportId: string }>, res: Response) => {
   const adminReq = req as AdminAuthedRequest;
   const { reportId } = req.params;
-  const { status, internalNotes, assignToMe } = req.body as { status?: string; internalNotes?: string; assignToMe?: boolean };
+  const { status, internalNotes, assignToMe, clearAssignee } = req.body as {
+    status?: string;
+    internalNotes?: string;
+    assignToMe?: boolean;
+    clearAssignee?: boolean;
+  };
 
   try {
     await prisma.$queryRaw`
@@ -2093,11 +2539,13 @@ router.patch('/reports/:reportId', async (req: Request<{ reportId: string }>, re
           ELSE ${internalNotes?.trim() || null}
         END,
         assigned_admin_user_id = CASE
+          WHEN ${clearAssignee ? true : false} THEN NULL
           WHEN ${assignToMe ? true : false} THEN ${adminReq.auth!.userId}
           ELSE assigned_admin_user_id
         END,
         resolved_at = CASE
           WHEN ${status === 'resolved' || status === 'rejected'} THEN NOW()
+          WHEN ${status === 'open' || status === 'reviewing' || status === 'escalated'} THEN NULL
           ELSE resolved_at
         END,
         updated_at = NOW()
@@ -2111,7 +2559,12 @@ router.patch('/reports/:reportId', async (req: Request<{ reportId: string }>, re
       targetId: reportId,
       severity: status === 'escalated' ? 'critical' : 'info',
       summary: 'Admin updated report ticket',
-      metadata: { status, assignToMe: Boolean(assignToMe) },
+      metadata: {
+        status,
+        assignToMe: Boolean(assignToMe),
+        clearAssignee: Boolean(clearAssignee),
+        internalNotesUpdated: internalNotes !== undefined,
+      },
     });
 
     return res.status(200).json({ success: true });
