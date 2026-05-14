@@ -3,9 +3,11 @@ import type { ApiUserProfile, Student } from '../types';
 import {
   apiDeleteAccount,
   apiFetchUserProfile,
+  apiLoginStudentWithGoogle,
   apiLogin,
   apiSignupAlumni,
   apiSignupStudent,
+  type AlumniPendingVerificationResult,
   type AlumniSignupPayload,
   type StudentSignupPayload,
 } from '../lib/authApi';
@@ -25,8 +27,9 @@ interface AuthContextValue {
   currentUser: Student | null;
 
   login: (email: string, password: string) => Promise<void>;
+  loginStudentWithGoogle: (idToken: string, payload?: { branch?: string; year?: string | number }) => Promise<void>;
   signupStudent: (payload: StudentSignupPayload) => Promise<void>;
-  signupAlumni: (payload: AlumniSignupPayload) => Promise<void>;
+  signupAlumni: (payload: AlumniSignupPayload) => Promise<AlumniPendingVerificationResult>;
   refreshProfile: () => Promise<void>;
   deleteAccount: (password: string) => Promise<void>;
   logout: () => void;
@@ -122,9 +125,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     persistAndSet(p, token);
   };
 
-  const signupAlumni = async (payload: AlumniSignupPayload) => {
-    const { profile: p, token } = await apiSignupAlumni(payload);
+  const loginStudentWithGoogle = async (idToken: string, payload?: { branch?: string; year?: string | number }) => {
+    const { profile: p, token } = await apiLoginStudentWithGoogle(idToken, payload);
     persistAndSet(p, token);
+  };
+
+  const signupAlumni = async (payload: AlumniSignupPayload) => {
+    return await apiSignupAlumni(payload);
   };
 
   useEffect(() => {
@@ -168,6 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     profile,
     currentUser,
     login,
+    loginStudentWithGoogle,
     signupStudent,
     signupAlumni,
     refreshProfile,

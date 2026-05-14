@@ -18,6 +18,7 @@ import {
   markAdminLogin,
   recordAdminAuditLog,
 } from '../lib/admin';
+import { invalidateUserCache } from '../lib/userCache';
 import {
   invalidateClubFeedCaches,
   invalidateClubMembershipCache,
@@ -2897,13 +2898,54 @@ router.get('/verification-requests', async (_req: Request, res: Response) => {
         target_user_id: string | null;
         target_club_id: string | null;
         document_urls: unknown;
+        profile_preview: unknown;
         notes: string | null;
+        decision_note: string | null;
         status: string;
         requested_at: Date;
+        reviewed_at: Date | null;
+        reviewed_by_user_id: string | null;
+        reviewer_username: string | null;
+        reviewer_email: string | null;
+        target_username: string | null;
+        target_email: string | null;
+        target_profile_photo_url: string | null;
+        target_verification_state: string | null;
+        target_verified_at: Date | null;
+        target_club_name: string | null;
+        target_club_slug: string | null;
+        target_club_avatar_url: string | null;
+        target_club_verified: boolean | null;
       }>
     >`
-      SELECT verification_request_id, request_type::text, target_user_id, target_club_id, document_urls, notes, status::text, requested_at
-      FROM admin_verification_requests
+      SELECT
+        avr.verification_request_id,
+        avr.request_type::text,
+        avr.target_user_id,
+        avr.target_club_id,
+        avr.document_urls,
+        avr.profile_preview,
+        avr.notes,
+        avr.decision_note,
+        avr.status::text,
+        avr.requested_at,
+        avr.reviewed_at,
+        avr.reviewed_by_user_id,
+        reviewer.username AS reviewer_username,
+        reviewer.email AS reviewer_email,
+        target_user.username AS target_username,
+        target_user.email AS target_email,
+        target_user.profile_photo_url AS target_profile_photo_url,
+        target_user.verification_state::text AS target_verification_state,
+        target_user.verified_at AS target_verified_at,
+        target_club.name AS target_club_name,
+        target_club.slug AS target_club_slug,
+        target_club.avatar_url AS target_club_avatar_url,
+        target_club.is_verified AS target_club_verified
+      FROM admin_verification_requests avr
+      LEFT JOIN users reviewer ON reviewer.user_id = avr.reviewed_by_user_id
+      LEFT JOIN users target_user ON target_user.user_id = avr.target_user_id
+      LEFT JOIN clubs target_club ON target_club.club_id = avr.target_club_id
       ORDER BY requested_at DESC
     `;
 
@@ -2913,9 +2955,34 @@ router.get('/verification-requests', async (_req: Request, res: Response) => {
       targetUserId: row.target_user_id,
       targetClubId: row.target_club_id,
       documentUrls: Array.isArray(row.document_urls) ? row.document_urls : [],
+      profilePreview: row.profile_preview && typeof row.profile_preview === 'object' ? row.profile_preview : null,
       notes: row.notes,
+      decisionNote: row.decision_note,
       status: row.status,
       requestedAt: row.requested_at.toISOString(),
+      reviewedAt: row.reviewed_at ? row.reviewed_at.toISOString() : null,
+      reviewedBy: row.reviewed_by_user_id ? {
+        id: row.reviewed_by_user_id,
+        username: row.reviewer_username ?? 'Unknown admin',
+        email: row.reviewer_email ?? '',
+      } : null,
+      verificationState: row.target_verification_state,
+      targetSummary: row.target_user_id ? {
+        kind: 'user',
+        id: row.target_user_id,
+        label: row.target_username ?? row.target_email ?? row.target_user_id,
+        email: row.target_email,
+        avatarUrl: row.target_profile_photo_url,
+        verificationState: row.target_verification_state,
+        verified: Boolean(row.target_verified_at),
+      } : row.target_club_id ? {
+        kind: 'club',
+        id: row.target_club_id,
+        label: row.target_club_name ?? row.target_club_id,
+        slug: row.target_club_slug,
+        avatarUrl: row.target_club_avatar_url,
+        verified: Boolean(row.target_club_verified),
+      } : null,
     })));
   } catch (err) {
     console.error('Error loading verification requests:', err);
@@ -2926,7 +2993,7 @@ router.get('/verification-requests', async (_req: Request, res: Response) => {
 router.patch('/verification-requests/:requestId', async (req: Request<{ requestId: string }>, res: Response) => {
   const adminReq = req as AdminAuthedRequest;
   const { requestId } = req.params;
-  const { status, notes } = req.body as { status?: string; notes?: string };
+  const { status, decisionNote, notes } = req.body as { status?: string; decisionNote?: string; notes?: string };
 
   if (!status) {
     return res.status(400).json({ message: 'Status is required' });
@@ -2938,13 +3005,16 @@ router.patch('/verification-requests/:requestId', async (req: Request<{ requestI
         UPDATE admin_verification_requests
         SET
           status = CAST(${status} AS "VerificationRequestStatus"),
-          notes = CASE WHEN ${notes === undefined} THEN notes ELSE ${notes?.trim() || null} END,
+          decision_note = CASE
+            WHEN ${decisionNote === undefined && notes === undefined} THEN decision_note
+            ELSE ${(decisionNote ?? notes)?.trim() || null}
+          END,
           reviewed_at = NOW(),
           reviewed_by_user_id = ${adminReq.auth!.userId}
         WHERE verification_request_id = ${requestId}
       `;
 
-      const targets = await tx.$queryRaw<Array<{ target_user_id: string | null; target_club_id: string | null; request_type: 'student' | 'club' }>>`
+      const targets = await tx.$queryRaw<Array<{ target_user_id: string | null; target_club_id: string | null; request_type: 'student' | 'alumni' | 'club' }>>`
         SELECT target_user_id, target_club_id, request_type::text
         FROM admin_verification_requests
         WHERE verification_request_id = ${requestId}
@@ -2953,10 +3023,41 @@ router.patch('/verification-requests/:requestId', async (req: Request<{ requestI
       const target = targets[0];
       if (target && status === 'approved') {
         if (target.target_user_id) {
-          await tx.$queryRaw`UPDATE users SET verified_at = NOW(), updated_at = NOW() WHERE user_id = ${target.target_user_id}`;
+          const verificationState =
+            target.request_type === 'alumni'
+              ? 'alumni_verified'
+              : 'student_google_verified';
+          await tx.$queryRaw`
+            UPDATE users
+            SET verified_at = NOW(),
+                verification_state = CAST(${verificationState} AS "UserVerificationState"),
+                updated_at = NOW()
+            WHERE user_id = ${target.target_user_id}
+          `;
+          await invalidateUserCache(target.target_user_id);
         }
         if (target.target_club_id) {
           await tx.$queryRaw`UPDATE clubs SET is_verified = TRUE, updated_at = NOW() WHERE club_id = ${target.target_club_id}`;
+        }
+      } else if (target?.target_user_id && target.request_type === 'alumni') {
+        if (status === 'rejected') {
+          await tx.$queryRaw`
+            UPDATE users
+            SET verified_at = NULL,
+                verification_state = 'alumni_rejected'::"UserVerificationState",
+                updated_at = NOW()
+            WHERE user_id = ${target.target_user_id}
+          `;
+          await invalidateUserCache(target.target_user_id);
+        } else if (status === 'more_info') {
+          await tx.$queryRaw`
+            UPDATE users
+            SET verified_at = NULL,
+                verification_state = 'alumni_pending_review'::"UserVerificationState",
+                updated_at = NOW()
+            WHERE user_id = ${target.target_user_id}
+          `;
+          await invalidateUserCache(target.target_user_id);
         }
       }
     });

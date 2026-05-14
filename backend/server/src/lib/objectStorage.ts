@@ -10,6 +10,7 @@ interface StorageEnv {
   postMediaPrefix: string;
   chatMediaPrefix: string;
   clubMediaPrefix: string;
+  verificationProofsPrefix: string;
   accessKeyId: string;
   secretAccessKey: string;
 }
@@ -76,6 +77,9 @@ function buildStorageEnv(): StorageEnv {
     clubMediaPrefix:
       optionalEnv(['STORAGE_S3_CLUB_MEDIA_PREFIX', 'S3_CLUB_MEDIA_PREFIX']) ??
       'clubs/media',
+    verificationProofsPrefix:
+      optionalEnv(['STORAGE_S3_VERIFICATION_PROOFS_PREFIX', 'S3_VERIFICATION_PROOFS_PREFIX']) ??
+      'verification/proofs',
     accessKeyId,
     secretAccessKey,
   };
@@ -116,6 +120,7 @@ function extensionFromMime(mimeType: string): string {
     'image/webp': 'webp',
     'image/gif': 'gif',
     'image/avif': 'avif',
+    'application/pdf': 'pdf',
   };
 
   return lookup[mimeType.toLowerCase()] ?? 'bin';
@@ -240,6 +245,29 @@ export async function uploadClubMediaToStorage(params: {
   const extension = extensionFromMime(params.mimeType);
   const fileName = `${Date.now()}-${randomUUID()}.${extension}`;
   const key = `${storageEnv.clubMediaPrefix}/${params.userId}/${fileName}`;
+
+  await getS3Client().send(
+    new PutObjectCommand({
+      Bucket: storageEnv.bucketName,
+      Key: key,
+      Body: params.fileBuffer,
+      ContentType: params.mimeType,
+      CacheControl: 'public,max-age=31536000,immutable',
+    })
+  );
+
+  return `${storageEnv.publicBaseUrl}/${key}`;
+}
+
+export async function uploadVerificationProofToStorage(params: {
+  userId: string;
+  fileBuffer: Buffer;
+  mimeType: string;
+}): Promise<string> {
+  const storageEnv = getStorageEnv();
+  const extension = extensionFromMime(params.mimeType);
+  const fileName = `${Date.now()}-${randomUUID()}.${extension}`;
+  const key = `${storageEnv.verificationProofsPrefix}/${params.userId}/${fileName}`;
 
   await getS3Client().send(
     new PutObjectCommand({

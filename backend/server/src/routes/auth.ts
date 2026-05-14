@@ -1,12 +1,22 @@
 import crypto from 'crypto';
 import express, { Request, Response } from 'express';
+import multer from 'multer';
 import prisma from '../prisma';
 import validatePassword from '../middleware/validatePassword';
 import { getUserProfileById } from '../services/userProfile';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
 import { hashPassword, signAuthToken, verifyPassword } from '../lib/auth';
+import { uploadVerificationProofToStorage } from '../lib/objectStorage';
+import { invalidateUserCache } from '../lib/userCache';
 
 const router = express.Router();
+const alumniProofUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    files: 5,
+    fileSize: 10 * 1024 * 1024,
+  },
+});
 
 async function emailExists(email: string): Promise<boolean> {
   const result = await prisma.$queryRaw<{ exists: boolean }[]>`
@@ -263,71 +273,216 @@ interface LoginBody {
   password: string;
 }
 
-router.post('/signup/student', validatePassword, async (req: Request, res: Response) => {
-  const { name, email, password, branch, year } = req.body as Partial<StudentSignupBody>;
+interface StudentGoogleAuthBody {
+  idToken: string;
+  branch?: string;
+  year?: string | number;
+}
 
-  if (!name || !email || !password || !branch || !year) {
-    return res.status(400).json({ message: 'Missing required fields' });
+type UserVerificationState =
+  | 'student_google_verified'
+  | 'alumni_pending_review'
+  | 'alumni_verified'
+  | 'alumni_rejected';
+
+interface GoogleTokenInfo {
+  aud?: string;
+  email?: string;
+  email_verified?: string;
+  hd?: string;
+  given_name?: string;
+  family_name?: string;
+  name?: string;
+  sub?: string;
+}
+
+function getGoogleClientId(): string {
+  const clientId =
+    process.env.GOOGLE_CLIENT_ID?.trim() ||
+    process.env.GOOGLE_OAUTH_CLIENT_ID?.trim();
+
+  if (!clientId) {
+    throw new Error('Google sign-in is not configured on the server');
   }
 
-  if (!email.toLowerCase().endsWith('@gbpuat.ac.in')) {
-    return res.status(400).json({ message: 'Students must use a college email (@gbpuat.ac.in)' });
+  return clientId;
+}
+
+async function verifyGoogleIdToken(idToken: string): Promise<GoogleTokenInfo> {
+  const clientId = getGoogleClientId();
+  const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
+
+  if (!response.ok) {
+    throw new Error('Unable to verify Google sign-in token');
+  }
+
+  const payload = (await response.json()) as GoogleTokenInfo;
+
+  if (payload.aud !== clientId) {
+    throw new Error('Google token audience mismatch');
+  }
+
+  if (payload.email_verified !== 'true') {
+    throw new Error('Google account email is not verified');
+  }
+
+  return payload;
+}
+
+function assertAllowedAlumniProofFiles(files: Express.Multer.File[]): void {
+  const allowedMimeTypes = new Set([
+    'application/pdf',
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/webp',
+  ]);
+
+  for (const file of files) {
+    if (!allowedMimeTypes.has(file.mimetype.toLowerCase())) {
+      throw new Error('Only PDF, JPG, PNG, and WEBP files are allowed for alumni proof uploads');
+    }
+  }
+}
+
+function parseRequiredNumericValue(raw: string | number | undefined, label: string): number {
+  const numericValue = typeof raw === 'string' ? parseInt(raw, 10) : raw;
+  if (!numericValue || Number.isNaN(numericValue)) {
+    throw new Error(`${label} is required`);
+  }
+  return numericValue;
+}
+
+router.post('/google/student', async (req: Request, res: Response) => {
+  const { idToken, branch, year } = req.body as Partial<StudentGoogleAuthBody>;
+
+  if (!idToken) {
+    return res.status(400).json({ message: 'Google ID token is required' });
   }
 
   try {
-    const exists = await emailExists(email);
-    if (exists) {
-      return res.status(409).json({ message: 'User already exists. Please sign in instead.' });
+    const tokenInfo = await verifyGoogleIdToken(idToken);
+    const email = tokenInfo.email?.trim().toLowerCase();
+
+    if (!email || !email.endsWith('@gbpuat.ac.in') || tokenInfo.hd !== 'gbpuat.ac.in') {
+      return res.status(403).json({ message: 'Students must sign in with a GBPUAT Google account' });
     }
 
-    const username = await generateUsername(email, name);
-    const passwordHash = hashPassword(password);
-    const numericYear = typeof year === 'string' ? parseInt(year, 10) : year;
-
-    const createdUsers = await prisma.$queryRaw<
-      { user_id: string; username: string; email: string; created_at: Date }[]
+    const existingUsers = await prisma.$queryRaw<
+      Array<{
+        user_id: string;
+        username: string;
+        email: string;
+        created_at: Date;
+        user_type: 'student' | 'alumni';
+      }>
     >`
-      INSERT INTO users (
-        username,
-        email,
-        password_hash,
-        user_type,
-        profile_photo_url,
-        is_private,
-        updated_at
-      )
-      VALUES (${username}, ${email}, ${passwordHash}, 'student'::"UserType", NULL, FALSE, NOW())
-      RETURNING user_id, username, email, created_at
+      SELECT user_id, username, email, created_at, user_type
+      FROM users
+      WHERE email = ${email}
+      LIMIT 1
     `;
 
-    const user = createdUsers[0];
+    const existingUser = existingUsers[0];
 
-    await prisma.$queryRaw`
-      INSERT INTO student_profiles (user_id, branch, year)
-      VALUES (${user.user_id}, ${branch}, ${numericYear})
-    `;
+    let userId = existingUser?.user_id ?? null;
+    let username = existingUser?.username ?? null;
+    let createdAt = existingUser?.created_at ?? null;
 
-    await createDefaultUserSettings(user.user_id);
+    if (existingUser && existingUser.user_type !== 'student') {
+      return res.status(409).json({ message: 'This email is already linked to a non-student account' });
+    }
 
-    const session = await createAuthSession(user.user_id, req);
-    const profile = await getUserProfileById(user.user_id);
+    const numericYear = year == null || year === '' ? null : parseRequiredNumericValue(year, 'Year');
+    const normalizedBranch = branch?.trim() || null;
+
+    if (!existingUser) {
+      if (!normalizedBranch || !numericYear) {
+        return res.status(400).json({ message: 'Branch and year are required to create a student account' });
+      }
+
+      username = await generateUsername(email, tokenInfo.name || email.split('@')[0]);
+      const createdUsers = await prisma.$queryRaw<
+        { user_id: string; username: string; email: string; created_at: Date }[]
+      >`
+        INSERT INTO users (
+          username,
+          email,
+          password_hash,
+          user_type,
+          profile_photo_url,
+          is_private,
+          verified_at,
+          verification_state,
+          updated_at
+        )
+        VALUES (
+          ${username},
+          ${email},
+          ${hashPassword(crypto.randomUUID())},
+          'student'::"UserType",
+          NULL,
+          FALSE,
+          NOW(),
+          'student_google_verified'::"UserVerificationState",
+          NOW()
+        )
+        RETURNING user_id, username, email, created_at
+      `;
+
+      const user = createdUsers[0];
+      userId = user.user_id;
+      createdAt = user.created_at;
+
+      await prisma.$queryRaw`
+        INSERT INTO student_profiles (user_id, branch, year)
+        VALUES (${user.user_id}, ${normalizedBranch}, ${numericYear})
+      `;
+
+      await createDefaultUserSettings(user.user_id);
+      await invalidateUserCache(user.user_id);
+    } else {
+      userId = existingUser.user_id;
+      username = existingUser.username;
+      createdAt = existingUser.created_at;
+
+      await prisma.$queryRaw`
+        UPDATE users
+        SET verified_at = NOW(),
+            verification_state = 'student_google_verified'::"UserVerificationState",
+            updated_at = NOW()
+        WHERE user_id = ${userId}
+      `;
+
+      if (normalizedBranch && numericYear) {
+        await prisma.$queryRaw`
+          INSERT INTO student_profiles (user_id, branch, year)
+          VALUES (${userId}, ${normalizedBranch}, ${numericYear})
+          ON CONFLICT (user_id)
+          DO UPDATE SET branch = EXCLUDED.branch, year = EXCLUDED.year, updated_at = NOW()
+        `;
+      }
+      await invalidateUserCache(userId);
+    }
+
+    const session = await createAuthSession(userId!, req);
+    const profile = await getUserProfileById(userId!);
     const responsePayload = profile ?? {
-      userId: user.user_id,
-      username: user.username,
-      email: user.email,
+      userId,
+      username: username!,
+      email,
       type: 'student' as const,
-      createdAt: user.created_at,
+      verificationState: 'student_google_verified' as const,
+      createdAt: createdAt ?? new Date(),
       bio: null,
       headline: null,
       profilePictureUrl: null,
+      coverPhotoUrl: null,
       isPublic: true,
       isActive: true,
       isOnline: false,
       lastSeenAt: null,
-      details: {
-        branch,
-        year: numericYear,
-      },
+      details: normalizedBranch && numericYear ? { branch: normalizedBranch, year: numericYear } : {},
       stats: {
         followerCount: 0,
         followingCount: 0,
@@ -335,7 +490,7 @@ router.post('/signup/student', validatePassword, async (req: Request, res: Respo
       },
     };
 
-    return res.status(201).json({
+    return res.status(existingUser ? 200 : 201).json({
       ...responsePayload,
       token: signAuthToken({
         userId: responsePayload.userId,
@@ -346,29 +501,27 @@ router.post('/signup/student', validatePassword, async (req: Request, res: Respo
       }),
     });
   } catch (err: any) {
-    console.error('Error during student signup:', err);
-    return res.status(500).json({
-      message: 'Internal server error',
-      error: {
-        name: err?.name,
-        message: err?.message,
-        code: err?.code,
-        meta: err?.meta,
-        stack: err?.stack,
-      },
-    });
+    console.error('Error during Google student sign-in:', err);
+    return res.status(500).json({ message: err?.message || 'Unable to sign in with Google' });
   }
 });
 
-router.post('/signup/alumni', validatePassword, async (req: Request, res: Response) => {
+router.post('/signup/student', validatePassword, async (_req: Request, res: Response) => {
+  return res.status(410).json({ message: 'Students must sign in with Google using their @gbpuat.ac.in account' });
+});
+
+router.post('/signup/alumni', alumniProofUpload.array('proofFiles', 5), validatePassword, async (req: Request, res: Response) => {
   const { name, email, graduationYear, branch, currentStatus, password } =
     req.body as Partial<AlumniSignupBody>;
+  const uploadedFiles = Array.isArray(req.files) ? req.files : [];
 
   if (!name || !email || !graduationYear || !branch || !currentStatus || !password) {
     return res.status(400).json({ message: 'Missing required fields' });
   }
 
   try {
+    assertAllowedAlumniProofFiles(uploadedFiles);
+
     const exists = await emailExists(email);
     if (exists) {
       return res.status(409).json({ message: 'User already exists. Please sign in instead.' });
@@ -376,8 +529,7 @@ router.post('/signup/alumni', validatePassword, async (req: Request, res: Respon
 
     const username = await generateUsername(email, name);
     const passwordHash = hashPassword(password);
-    const numericGradYear =
-      typeof graduationYear === 'string' ? parseInt(graduationYear, 10) : graduationYear;
+    const numericGradYear = parseRequiredNumericValue(graduationYear, 'Graduation year');
 
     const createdUsers = await prisma.$queryRaw<
       { user_id: string; username: string; email: string; created_at: Date }[]
@@ -389,9 +541,19 @@ router.post('/signup/alumni', validatePassword, async (req: Request, res: Respon
         user_type,
         profile_photo_url,
         is_private,
+        verification_state,
         updated_at
       )
-      VALUES (${username}, ${email}, ${passwordHash}, 'alumni'::"UserType", NULL, FALSE, NOW())
+      VALUES (
+        ${username},
+        ${email},
+        ${passwordHash},
+        'alumni'::"UserType",
+        NULL,
+        FALSE,
+        'alumni_pending_review'::"UserVerificationState",
+        NOW()
+      )
       RETURNING user_id, username, email, created_at
     `;
 
@@ -403,47 +565,65 @@ router.post('/signup/alumni', validatePassword, async (req: Request, res: Respon
     `;
 
     await createDefaultUserSettings(user.user_id);
+    await invalidateUserCache(user.user_id);
 
-    const session = await createAuthSession(user.user_id, req);
-    const profile = await getUserProfileById(user.user_id);
-    const responsePayload = profile ?? {
-      userId: user.user_id,
-      username: user.username,
-      email: user.email,
-      type: 'alumni' as const,
-      createdAt: user.created_at,
-      bio: null,
-      headline: null,
-      profilePictureUrl: null,
-      isPublic: true,
-      isActive: true,
-      isOnline: false,
-      lastSeenAt: null,
-      details: {
-        branch,
-        passingYear: numericGradYear,
-      },
-      stats: {
-        followerCount: 0,
-        followingCount: 0,
-        postCount: 0,
-      },
+    const documentUrls = await Promise.all(
+      uploadedFiles.map((file) =>
+        uploadVerificationProofToStorage({
+          userId: user.user_id,
+          fileBuffer: file.buffer,
+          mimeType: file.mimetype,
+        })
+      )
+    );
+
+    const profilePreview = {
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      branch: branch.trim(),
+      passingYear: numericGradYear,
+      currentStatus: currentStatus.trim(),
+      submittedProofLabels: uploadedFiles.map((file) => file.originalname),
     };
 
+    const verificationRequests = await prisma.$queryRaw<
+      Array<{ verification_request_id: string; status: string; requested_at: Date }>
+    >`
+      INSERT INTO admin_verification_requests (
+        request_type,
+        target_user_id,
+        document_urls,
+        profile_preview,
+        notes,
+        status
+      )
+      VALUES (
+        'alumni'::"VerificationRequestType",
+        ${user.user_id},
+        ${JSON.stringify(documentUrls)}::jsonb,
+        ${JSON.stringify(profilePreview)}::jsonb,
+        ${`Alumni verification submitted by ${name.trim()}`},
+        'pending'::"VerificationRequestStatus"
+      )
+      RETURNING verification_request_id, status::text, requested_at
+    `;
+
+    const verificationRequest = verificationRequests[0];
+
     return res.status(201).json({
-      ...responsePayload,
-      token: signAuthToken({
-        userId: responsePayload.userId,
-        email: responsePayload.email,
-        username: responsePayload.username,
-        type: responsePayload.type,
-        sessionId: session.session_id,
-      }),
+      pendingVerification: true,
+      message: 'Your alumni verification request has been submitted and is pending admin approval.',
+      request: {
+        id: verificationRequest.verification_request_id,
+        status: verificationRequest.status,
+        requestedAt: verificationRequest.requested_at.toISOString(),
+        verificationState: 'alumni_pending_review' as const,
+      },
     });
   } catch (err: any) {
     console.error('Error during alumni signup:', err);
     return res.status(500).json({
-      message: 'Internal server error',
+      message: err?.message || 'Internal server error',
       error: {
         name: err?.name,
         message: err?.message,
@@ -470,10 +650,11 @@ router.post('/login', async (req: Request, res: Response) => {
         email: string;
         password_hash: string;
         user_type: 'student' | 'alumni';
+        verification_state: UserVerificationState | null;
         created_at: Date;
       }[]
     >`
-      SELECT user_id, username, email, password_hash, user_type, created_at
+      SELECT user_id, username, email, password_hash, user_type, verification_state::text, created_at
       FROM users
       WHERE email = ${email}
     `;
@@ -489,6 +670,31 @@ router.post('/login', async (req: Request, res: Response) => {
 
     if (!passwordMatches) {
       return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    if (user.user_type === 'student') {
+      return res.status(403).json({ message: 'Students must sign in with Google using their @gbpuat.ac.in account' });
+    }
+
+    if (user.verification_state === 'alumni_pending_review') {
+      const requestRows = await prisma.$queryRaw<Array<{ status: string }>>`
+        SELECT status::text
+        FROM admin_verification_requests
+        WHERE target_user_id = ${user.user_id}
+          AND request_type = 'alumni'::"VerificationRequestType"
+        ORDER BY requested_at DESC
+        LIMIT 1
+      `;
+
+      const latestStatus = requestRows[0]?.status ?? 'pending';
+      if (latestStatus === 'more_info') {
+        return res.status(403).json({ message: 'More verification information is required before your alumni account can be approved.' });
+      }
+      return res.status(403).json({ message: 'Your alumni verification is still under review. Access will unlock after approval.' });
+    }
+
+    if (user.verification_state === 'alumni_rejected') {
+      return res.status(403).json({ message: 'Your alumni verification was rejected. Please contact support or resubmit proof.' });
     }
 
     if (!user.password_hash.startsWith('$2a$') && !user.password_hash.startsWith('$2b$') && !user.password_hash.startsWith('$2y$')) {

@@ -25,6 +25,7 @@ export interface CachedUserSummary {
   lastSeenAt: string | null;
   createdAt: string;
   type: 'student' | 'alumni';
+  verificationState: string | null;
   details: {
     branch?: string;
     year?: number;
@@ -79,6 +80,7 @@ interface UserSummaryRow {
   last_seen_at: Date | null;
   created_at: Date;
   user_type: 'student' | 'alumni';
+  verification_state: string | null;
   student_branch: string | null;
   student_year: number | null;
   alumni_branch: string | null;
@@ -133,6 +135,7 @@ function mapSummaryRow(row: UserSummaryRow): CachedUserSummary {
     lastSeenAt: row.last_seen_at ? row.last_seen_at.toISOString() : null,
     createdAt: row.created_at.toISOString(),
     type: row.user_type,
+    verificationState: row.verification_state,
     details,
     allowMessages: row.allow_messages ?? true,
   };
@@ -165,6 +168,7 @@ async function fetchUserSummariesByIdsFromDb(userIds: string[]): Promise<Map<str
       u.last_seen_at,
       u.created_at,
       u.user_type,
+      u.verification_state::text AS verification_state,
       sp.branch AS student_branch,
       sp.year AS student_year,
       ap.branch AS alumni_branch,

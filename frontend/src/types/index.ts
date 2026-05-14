@@ -220,6 +220,11 @@ export interface Group {
 // Backend API types
 // ==============================
 export type ApiUserType = 'student' | 'alumni' | 'teacher' | 'unknown';
+export type ApiUserVerificationState =
+  | 'student_google_verified'
+  | 'alumni_pending_review'
+  | 'alumni_verified'
+  | 'alumni_rejected';
 
 export interface ApiUserProfile {
   userId: string;
@@ -232,6 +237,7 @@ export interface ApiUserProfile {
   isPublic: boolean;
   createdAt: string; // ISO string
   type: ApiUserType;
+  verificationState?: ApiUserVerificationState | null;
   details?: {
     branch?: string;
     year?: number;

@@ -2,6 +2,11 @@ import prisma from '../prisma';
 import { getUserStatsById, getUserSummaryById } from '../lib/userCache';
 
 export type UserType = 'student' | 'alumni';
+export type UserVerificationState =
+  | 'student_google_verified'
+  | 'alumni_pending_review'
+  | 'alumni_verified'
+  | 'alumni_rejected';
 
 export interface UserProfile {
   userId: string;
@@ -17,6 +22,7 @@ export interface UserProfile {
   lastSeenAt: Date | null;
   createdAt: Date;
   type: UserType;
+  verificationState: UserVerificationState | null;
   details: {
     branch?: string;
     year?: number;
@@ -69,6 +75,7 @@ export async function getUserProfileById(userId: string): Promise<UserProfile | 
     lastSeenAt: summary.lastSeenAt ? new Date(summary.lastSeenAt) : null,
     createdAt: new Date(summary.createdAt),
     type: summary.type as UserType,
+    verificationState: (summary.verificationState ?? null) as UserVerificationState | null,
     details: summary.details,
     stats: {
       followerCount: stats.followerCount,

@@ -55,6 +55,7 @@ import {
   type AdminDashboardResponse,
   type AdminDashboardTrendDirection,
   type AdminProfile,
+  type AdminVerificationRequestItem,
   type AdminReportAuditEntry,
   type AdminReportDetailResponse,
   type AdminReportListItem,
@@ -1007,6 +1008,8 @@ export default function AdminRoot() {
   const [selectedLogDetail, setSelectedLogDetail] = useState<AdminLogDetailResponse | null>(null);
   const [settingsDraft, setSettingsDraft] = useState<AdminSettingsResponse | null>(null);
   const [settingsSaving, setSettingsSaving] = useState(false);
+  const [selectedVerificationId, setSelectedVerificationId] = useState<string | null>(null);
+  const [verificationDecisionNote, setVerificationDecisionNote] = useState('');
 
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [passwordState, setPasswordState] = useState({ isSaving: false, message: '', error: '' });
@@ -1161,7 +1164,11 @@ export default function AdminRoot() {
   const reportsResponse = page === 'reports' ? ((currentPageQuery.data as AdminReportListResponse | null) ?? null) : null;
   const reports = reportsResponse?.items ?? [];
   const reportsPageInfo = reportsResponse?.pageInfo ?? null;
-  const verification = page === 'verification' ? ((currentPageQuery.data as any[]) ?? []) : [];
+  const verification = page === 'verification' ? ((currentPageQuery.data as AdminVerificationRequestItem[]) ?? []) : [];
+  const selectedVerification = useMemo(
+    () => verification.find((item) => item.id === selectedVerificationId) ?? verification[0] ?? null,
+    [verification, selectedVerificationId],
+  );
   const analytics = page === 'analytics' ? ((currentPageQuery.data as AdminAnalyticsResponse | null) ?? null) : null;
   const announcements = page === 'announcements' ? ((currentPageQuery.data as AdminAnnouncementItem[]) ?? []) : [];
   const logsResponse = page === 'logs' ? ((currentPageQuery.data as AdminLogListResponse | null) ?? null) : null;
@@ -1176,6 +1183,19 @@ export default function AdminRoot() {
     if (page !== 'settings') return;
     setSettingsDraft(settings ? JSON.parse(JSON.stringify(settings)) as AdminSettingsResponse : null);
   }, [page, settings]);
+
+  useEffect(() => {
+    if (page !== 'verification') return;
+    setSelectedVerificationId((current) => {
+      if (verification.length === 0) return null;
+      if (current && verification.some((item) => item.id === current)) return current;
+      return verification[0]?.id ?? null;
+    });
+  }, [page, verification]);
+
+  useEffect(() => {
+    setVerificationDecisionNote(selectedVerification?.decisionNote ?? '');
+  }, [selectedVerification?.id, selectedVerification?.decisionNote]);
 
   const selectedUserDetailQuery = useQuery({
     queryKey: selectedUser && token ? getAdminUserDetailQueryKey(token, selectedUser.id) : ['admin', 'user-detail', 'idle'],
@@ -1251,6 +1271,25 @@ export default function AdminRoot() {
     await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext + reportsQueryContext + analyticsQueryContext + announcementsQueryContext + logsQueryContext), exact: true });
     if (page !== 'dashboard') {
       await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, 'dashboard', '', dashboardRange), exact: true });
+    }
+  };
+
+  const runVerificationAction = async (status: 'approved' | 'rejected' | 'more_info') => {
+    if (!token || !selectedVerification) return;
+    try {
+      await apiAdminPost(
+        `/admin/verification-requests/${selectedVerification.id}`,
+        token,
+        {
+          status,
+          decisionNote: verificationDecisionNote.trim() || null,
+        },
+        'PATCH',
+      );
+      toast.success(`Verification request marked ${status.replace('_', ' ')}`);
+      await refreshCurrentPage();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to update verification request');
     }
   };
 
@@ -2465,31 +2504,141 @@ export default function AdminRoot() {
             ) : null}
 
             {!pageLoading && page === 'verification' ? (
-              <ShellCard title="Verification Queue">
-                {verification.length === 0 ? (
-                  <EmptyPanel title="No verification requests" body="New student or club verification requests will appear here." />
-                ) : (
-                  <div className="space-y-3">
-                    {verification.map((item) => (
-                      <div key={item.id} className="rounded-lg border border-slate-200 bg-white p-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-900">{item.type} verification</p>
-                            <p className="mt-1 text-xs text-slate-500">Requested {formatDate(item.requestedAt)}</p>
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.25fr)]">
+                <ShellCard title="Verification Queue">
+                  {verification.length === 0 ? (
+                    <EmptyPanel title="No verification requests" body="New alumni or club verification requests will appear here." />
+                  ) : (
+                    <div className="space-y-3">
+                      {verification.map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => setSelectedVerificationId(item.id)}
+                          className={`w-full rounded-lg border p-4 text-left transition ${
+                            selectedVerification?.id === item.id
+                              ? 'border-slate-900 bg-slate-50 shadow-sm'
+                              : 'border-slate-200 bg-white hover:border-slate-300'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-slate-900">{item.type} verification</p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {item.targetSummary?.label ?? item.profilePreview?.name ?? 'Unknown target'}
+                              </p>
+                              <p className="mt-1 text-xs text-slate-500">Requested {formatDate(item.requestedAt)}</p>
+                            </div>
+                            <StatusBadge value={item.status} />
                           </div>
-                          <StatusBadge value={item.status} />
+                          <p className="mt-3 text-sm text-slate-600 line-clamp-2">
+                            {item.notes || item.decisionNote || 'No verification notes provided.'}
+                          </p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </ShellCard>
+
+                <ShellCard title="Verification Review">
+                  {!selectedVerification ? (
+                    <EmptyPanel title="Select a request" body="Choose a verification request from the queue to review its proof and applicant details." />
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-lg font-semibold text-slate-900">
+                            {selectedVerification.targetSummary?.label ?? selectedVerification.profilePreview?.name ?? 'Verification request'}
+                          </p>
+                          <p className="mt-1 text-sm text-slate-500">
+                            {selectedVerification.type} verification
+                            {selectedVerification.verificationState ? ` • ${selectedVerification.verificationState}` : ''}
+                          </p>
                         </div>
-                        <p className="mt-3 text-sm text-slate-600">{item.notes || 'No verification notes provided.'}</p>
-                        <div className="mt-4 flex flex-wrap gap-2">
-                          <Button variant="outline" size="sm" onClick={() => void apiAdminPost(`/admin/verification-requests/${item.id}`, token!, { status: 'approved' }, 'PATCH').then(refreshCurrentPage)}>Approve</Button>
-                          <Button variant="outline" size="sm" onClick={() => void apiAdminPost(`/admin/verification-requests/${item.id}`, token!, { status: 'rejected' }, 'PATCH').then(refreshCurrentPage)}>Reject</Button>
-                          <Button variant="outline" size="sm" onClick={() => void apiAdminPost(`/admin/verification-requests/${item.id}`, token!, { status: 'more_info' }, 'PATCH').then(refreshCurrentPage)}>Request more info</Button>
+                        <StatusBadge value={selectedVerification.status} />
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="rounded-xl border border-slate-200 p-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Applicant Summary</p>
+                          <div className="mt-3 space-y-2 text-sm text-slate-700">
+                            <p><span className="font-medium text-slate-900">Name:</span> {selectedVerification.profilePreview?.name ?? selectedVerification.targetSummary?.label ?? 'Unknown'}</p>
+                            <p><span className="font-medium text-slate-900">Email:</span> {selectedVerification.profilePreview?.email ?? selectedVerification.targetSummary?.email ?? 'Unknown'}</p>
+                            <p><span className="font-medium text-slate-900">Branch:</span> {selectedVerification.profilePreview?.branch ?? 'Not provided'}</p>
+                            <p><span className="font-medium text-slate-900">Passing year:</span> {selectedVerification.profilePreview?.passingYear ?? 'Not provided'}</p>
+                            <p><span className="font-medium text-slate-900">Current status:</span> {selectedVerification.profilePreview?.currentStatus ?? 'Not provided'}</p>
+                          </div>
+                        </div>
+
+                        <div className="rounded-xl border border-slate-200 p-4">
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Target Summary</p>
+                          <div className="mt-3 space-y-2 text-sm text-slate-700">
+                            <p><span className="font-medium text-slate-900">Type:</span> {selectedVerification.targetSummary?.kind ?? 'Unknown'}</p>
+                            <p><span className="font-medium text-slate-900">Label:</span> {selectedVerification.targetSummary?.label ?? 'Unknown'}</p>
+                            {'email' in (selectedVerification.targetSummary ?? {}) ? (
+                              <p><span className="font-medium text-slate-900">Email:</span> {selectedVerification.targetSummary?.email ?? 'Unknown'}</p>
+                            ) : null}
+                            <p><span className="font-medium text-slate-900">Reviewed by:</span> {selectedVerification.reviewedBy?.username ?? 'Not reviewed yet'}</p>
+                            <p><span className="font-medium text-slate-900">Reviewed at:</span> {selectedVerification.reviewedAt ? formatDate(selectedVerification.reviewedAt) : 'Not reviewed yet'}</p>
+                          </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </ShellCard>
+
+                      <div className="rounded-xl border border-slate-200 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Submitted Proof</p>
+                        {selectedVerification.documentUrls.length === 0 ? (
+                          <p className="mt-3 text-sm text-slate-500">No proof documents uploaded.</p>
+                        ) : (
+                          <div className="mt-3 grid gap-3 md:grid-cols-2">
+                            {selectedVerification.documentUrls.map((url, index) => {
+                              const isImage = /\.(png|jpe?g|webp|gif)$/i.test(url);
+                              return (
+                                <a
+                                  key={`${selectedVerification.id}-proof-${index}`}
+                                  href={url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="rounded-lg border border-slate-200 p-3 transition hover:border-slate-300"
+                                >
+                                  {isImage ? <img src={url} alt={`Proof ${index + 1}`} className="h-36 w-full rounded-md object-cover" /> : null}
+                                  <p className="mt-2 text-sm font-medium text-slate-800">Proof {index + 1}</p>
+                                  <p className="mt-1 break-all text-xs text-slate-500">{url}</p>
+                                </a>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="rounded-xl border border-slate-200 p-4">
+                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Request Notes</p>
+                        <p className="mt-3 text-sm text-slate-700">
+                          {selectedVerification.notes || 'No applicant notes provided.'}
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl border border-slate-200 p-4">
+                        <Label htmlFor="verification-decision-note" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                          Reviewer Decision Note
+                        </Label>
+                        <Textarea
+                          id="verification-decision-note"
+                          value={verificationDecisionNote}
+                          onChange={(event) => setVerificationDecisionNote(event.target.value)}
+                          className="mt-3 min-h-[120px]"
+                          placeholder="Add the reason for approval, rejection, or more-information request."
+                        />
+                      </div>
+
+                      <div className="flex flex-wrap gap-2">
+                        <Button variant="outline" size="sm" onClick={() => void runVerificationAction('approved')}>Approve</Button>
+                        <Button variant="outline" size="sm" onClick={() => void runVerificationAction('rejected')}>Reject</Button>
+                        <Button variant="outline" size="sm" onClick={() => void runVerificationAction('more_info')}>Request more info</Button>
+                      </div>
+                    </div>
+                  )}
+                </ShellCard>
+              </div>
             ) : null}
 
             {!pageLoading && page === 'analytics' && analytics ? (

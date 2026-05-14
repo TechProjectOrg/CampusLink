@@ -8,6 +8,17 @@ export interface LoginResult {
   token?: string;
 }
 
+export interface AlumniPendingVerificationResult {
+  pendingVerification: true;
+  message: string;
+  request: {
+    id: string;
+    status: string;
+    requestedAt: string;
+    verificationState: 'alumni_pending_review';
+  };
+}
+
 export interface StudentSignupPayload {
   name: string;
   email: string;
@@ -23,6 +34,7 @@ export interface AlumniSignupPayload {
   branch: string;
   currentStatus: string;
   password: string;
+  proofFiles: File[];
 }
 
 function authHeaders(token?: string): HeadersInit {
@@ -74,18 +86,50 @@ export async function apiSignupStudent(payload: StudentSignupPayload): Promise<L
   return { profile: data, token: data.token };
 }
 
-export async function apiSignupAlumni(payload: AlumniSignupPayload): Promise<LoginResult> {
+export async function apiSignupAlumni(payload: AlumniSignupPayload): Promise<AlumniPendingVerificationResult> {
+  const formData = new FormData();
+  formData.append('name', payload.name);
+  formData.append('email', payload.email);
+  formData.append('graduationYear', String(payload.graduationYear));
+  formData.append('branch', payload.branch);
+  formData.append('currentStatus', payload.currentStatus);
+  formData.append('password', payload.password);
+  payload.proofFiles.forEach((file) => {
+    formData.append('proofFiles', file);
+  });
+
   const response = await safeFetch(`${API_BASE}/auth/signup/alumni`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
+    body: formData,
   });
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
     throw new Error(err?.message || 'Signup failed');
+  }
+
+  return (await response.json()) as AlumniPendingVerificationResult;
+}
+
+export async function apiLoginStudentWithGoogle(
+  idToken: string,
+  payload?: { branch?: string; year?: string | number }
+): Promise<LoginResult> {
+  const response = await safeFetch(`${API_BASE}/auth/google/student`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      idToken,
+      branch: payload?.branch,
+      year: payload?.year,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Google sign-in failed');
   }
 
   const data = (await response.json()) as ApiUserProfile & { token?: string };

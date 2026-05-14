@@ -102,6 +102,7 @@ enum AdminReportStatus {
 
 enum VerificationRequestType {
   STUDENT @map("student")
+  ALUMNI  @map("alumni")
   CLUB    @map("club")
 }
 
@@ -110,6 +111,13 @@ enum VerificationRequestStatus {
   APPROVED  @map("approved")
   REJECTED  @map("rejected")
   MORE_INFO @map("more_info")
+}
+
+enum UserVerificationState {
+  STUDENT_GOOGLE_VERIFIED @map("student_google_verified")
+  ALUMNI_PENDING_REVIEW   @map("alumni_pending_review")
+  ALUMNI_VERIFIED         @map("alumni_verified")
+  ALUMNI_REJECTED         @map("alumni_rejected")
 }
 
 enum AnnouncementStatus {
@@ -140,6 +148,7 @@ model User {
   isBanned               Boolean             @default(false) @map("is_banned")
   suspendedUntil         DateTime?           @map("suspended_until") @db.Timestamp(6)
   verifiedAt             DateTime?           @map("verified_at") @db.Timestamp(6)
+  verificationState      UserVerificationState? @map("verification_state")
   isOnline               Boolean             @default(false) @map("is_online")
   lastSeenAt             DateTime?           @map("last_seen_at") @db.Timestamp(6)
   createdAt              DateTime            @default(now()) @map("created_at") @db.Timestamp(6)
@@ -806,6 +815,7 @@ model AdminVerificationRequest {
   documentUrls          Json                      @default("[]") @map("document_urls") @db.JsonB
   profilePreview        Json?                     @map("profile_preview") @db.JsonB
   notes                 String?                   @db.Text
+  decisionNote          String?                   @map("decision_note") @db.Text
   status                VerificationRequestStatus @default(PENDING)
   requestedAt           DateTime                  @default(now()) @map("requested_at") @db.Timestamp(6)
   reviewedAt            DateTime?                 @map("reviewed_at") @db.Timestamp(6)
