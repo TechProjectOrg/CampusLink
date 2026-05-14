@@ -2,7 +2,7 @@
 
 ## Overview
 
-This guide covers the integration of Group Chat and Club Chat functionality into the CampusLink application. The implementation follows a strict membership-based visibility model where users can only see messages sent during their membership window.
+This guide covers the integration of Group Chat and Club Chat functionality into the CampusLynk application. The implementation follows a strict membership-based visibility model where users can only see messages sent during their membership window.
 
 ## Architecture
 

@@ -182,7 +182,7 @@ inserted_user AS (
     'admin.campuslynk@gbpuat.ac.in',
     '$2b$12$nBiN.Q7jAvrQuJctlwFXqezOedFmXsNxjzkZg3bMzb5Q0Vu1/AYOS',
     'alumni'::"UserType",
-    'CampusLink platform administrator',
+    'CampusLynk platform administrator',
     'Platform Administration',
     FALSE,
     TRUE,

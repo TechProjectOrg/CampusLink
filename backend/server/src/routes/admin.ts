@@ -544,7 +544,7 @@ router.get('/dashboard', async (req: Request, res: Response) => {
         )
         UNION ALL
         (
-          SELECT 'signup'::text AS type, CONCAT(username, ' joined CampusLink') AS summary, created_at
+          SELECT 'signup'::text AS type, CONCAT(username, ' joined CampusLynk') AS summary, created_at
           FROM users
         )
         UNION ALL

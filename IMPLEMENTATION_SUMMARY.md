@@ -2,7 +2,7 @@
 
 ## Overview
 
-This implementation adds complete support for **Group Chats** (independent user-created groups) and **Club Chats** (system-owned chats tied to clubs) to the CampusLink application. The system is built on a strict membership-based visibility model where users can only see messages sent during their membership window.
+This implementation adds complete support for **Group Chats** (independent user-created groups) and **Club Chats** (system-owned chats tied to clubs) to the CampusLynk application. The system is built on a strict membership-based visibility model where users can only see messages sent during their membership window.
 
 ## Files Created
 

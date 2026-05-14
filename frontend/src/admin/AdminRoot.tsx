@@ -1153,7 +1153,7 @@ export default function AdminRoot() {
               <div className="flex items-center justify-between">
                 {!collapsed ? (
                   <div className="overflow-hidden">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">CampusLink</p>
+                    <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">CampusLynk</p>
                     <p className="mt-1 text-sm font-semibold text-slate-900">Admin Console</p>
                   </div>
                 ) : (
@@ -1235,7 +1235,7 @@ export default function AdminRoot() {
                     ? `${formatRangeLabel(dashboard.range)} · ${databaseLatencyEntry?.value ?? 'DB probe unavailable'} · Updated ${formatDate(dashboard.generatedAt)}`
                     : dashboardContext.source === 'dashboard'
                       ? `Opened from dashboard · ${formatRangeLabel(dashboardRange)}`
-                      : 'Operational visibility for CampusLink.'}
+                      : 'Operational visibility for CampusLynk.'}
                 </p>
               </div>
 

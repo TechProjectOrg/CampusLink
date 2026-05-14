@@ -1,4 +1,4 @@
-# CampusLink — Full Implementation Status Audit
+# CampusLynk — Full Implementation Status Audit
 
 > **Audit Date:** 2026-05-08  
 > **Stack:** Node.js/Express · React/Vite · PostgreSQL/Prisma · Upstash Redis · Supabase S3 · Railway (Postgres host)
