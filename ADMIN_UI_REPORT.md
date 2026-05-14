@@ -139,40 +139,57 @@ Need to be done:
 
 ### 3. Clubs
 
-Status: Implemented for core moderation, partial for advanced workflows
+Status: Implemented for core moderation workflows, still light on deep analytics/admin tooling
 
 Done:
 
 - Real club list route at `GET /admin/clubs`
 - Real club detail route at `GET /admin/clubs/:clubId`
-- Table shows members, activity score, posts, reports, creator, verification state
-- Actions are wired:
+- Club list now supports:
+  - free-text search
+  - status filter
+  - verified filter
+  - sorting
+  - pagination
+- Table shows members, posts, reports, creator, status, and verification state
+- Actions are wired with reversible moderation states:
   - verify
   - feature
+  - unfeature
   - freeze
+  - unfreeze
   - delete
+  - restore
 - Club drawer shows:
-  - verification/status
+  - owner summary
+  - member/admin snapshot
+  - 30-day club analytics
+  - linked reports
   - top posts
   - moderation history from admin audit logs
+- Ownership transfer UI is present and calls a real backend workflow
+- Backend ownership transfer now:
+  - validates the target as an active member
+  - promotes the target to `owner`
+  - demotes the previous owner to `admin`
+  - updates `clubs.created_by_user_id`
+  - records an admin audit log entry
 
 Exact limitations found:
 
-- `activityScore` is simplified as `posts_count + members`
-- Club detail analytics are hardcoded:
-  - `memberGrowth: 12`
-  - `engagement: 68`
-- No pagination, filters, or sorting controls
-- No ownership transfer UI
-- Backend has a `transfer_ownership` action branch, but it only writes an audit log and does not transfer ownership
-- Deleted clubs are excluded from list, but there is no restore flow
+- Club list still uses simplified summary metrics rather than deeper moderation scoring
+- Club analytics are intentionally lightweight:
+  - `memberGrowth30d` is active members joined in the last 30 days
+  - `engagement30d` is like + comment volume on club posts created in the last 30 days
+- The drawer shows top posts and linked reports, but not a full member roster/history review workflow
+- There is no dedicated club notes editor or advanced moderation case timeline beyond audit logs and linked reports
+- Ownership transfer is limited to active existing members; there is no search-and-add flow from outside the club
 
 Need to be done:
 
-- Add real analytics for club growth and engagement
-- Implement actual ownership transfer workflow
-- Add filters, sorting, pagination, and restore/unfreeze options
-- Add richer club moderation detail such as member/admin snapshots and linked reports
+- Add deeper club analytics if operations need more than lightweight 30-day metrics
+- Add richer member/admin inspection if moderators need full roster-level review in the admin console
+- Add direct drilldowns from linked reports/posts into broader moderation workflows
 
 ### 4. Posts
 

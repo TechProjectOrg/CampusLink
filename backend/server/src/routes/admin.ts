@@ -11,6 +11,11 @@ import {
   markAdminLogin,
   recordAdminAuditLog,
 } from '../lib/admin';
+import {
+  invalidateClubMembershipCache,
+  invalidateClubMetaCache,
+  invalidateClubStatsCache,
+} from '../lib/clubCache';
 
 const router = express.Router();
 
@@ -173,6 +178,14 @@ function parsePositiveInt(raw: unknown, fallback: number, min: number, max: numb
   const parsed = Number.parseInt(String(raw ?? ''), 10);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.min(max, Math.max(min, parsed));
+}
+
+async function invalidateAdminClubCaches(clubId: string, memberUserIds: string[] = []): Promise<void> {
+  await Promise.allSettled([
+    invalidateClubMetaCache(clubId),
+    invalidateClubStatsCache(clubId),
+    ...memberUserIds.map((userId) => invalidateClubMembershipCache(clubId, userId)),
+  ]);
 }
 
 router.post('/auth/login', async (req: Request, res: Response) => {
@@ -919,52 +932,121 @@ router.post('/users/:userId/actions', async (req: Request<{ userId: string }>, r
   }
 });
 
-router.get('/clubs', async (_req: Request, res: Response) => {
+router.get('/clubs', async (req: Request, res: Response) => {
+  const query = String(req.query.q ?? '').trim();
+  const statusFilter = (() => {
+    const v = String(req.query.status ?? '').trim().toLowerCase();
+    return ['active', 'featured', 'frozen', 'deleted', 'all'].includes(v) ? v : '';
+  })();
+  const verifiedFilter = parseAdminBooleanFilter(req.query.verified);
+  const sortRaw = String(req.query.sort ?? '').trim();
+  const validSorts: Record<string, string> = {
+    members: 'members',
+    posts: 'posts_count',
+    reports: 'reports',
+    createdAt: 'c.created_at',
+    lastActivity: 'last_activity',
+  };
+  const sortColumn = validSorts[sortRaw] ?? 'members';
+  const order = parseAdminSortOrder(req.query.order);
+  const safeOrder = order.toUpperCase();
+  const page = parsePositiveInt(req.query.page, 1, 1, 10_000);
+  const limit = parsePositiveInt(req.query.limit, 20, 1, 100);
+  const offset = (page - 1) * limit;
+  const searchPattern = `%${query}%`;
+
   try {
-    const rows = await prisma.$queryRaw<
-      Array<{
-        club_id: string;
-        name: string;
-        avatar_url: string | null;
-        members: number;
-        posts_count: number;
-        reports: number;
-        created_by: string;
-        is_verified: boolean;
-        frozen_at: Date | null;
-        featured_at: Date | null;
-      }>
-    >`
+    const listSql = `
       SELECT
-        c.club_id,
-        c.name,
-        c.avatar_url,
+        c.club_id, c.name, c.slug, c.avatar_url,
         (SELECT COUNT(*)::int FROM club_memberships cm WHERE cm.club_id = c.club_id AND cm.status = CAST('active' AS "ClubMembershipStatus")) AS members,
         (SELECT COUNT(*)::int FROM posts p WHERE p.club_id = c.club_id AND p.deleted_at IS NULL) AS posts_count,
         (SELECT COUNT(*)::int FROM admin_reports r WHERE r.target_type = CAST('club' AS "AdminReportTargetType") AND r.target_id = c.club_id::text) AS reports,
         u.username AS created_by,
-        c.is_verified,
-        c.frozen_at,
-        c.featured_at
+        c.is_verified, c.frozen_at, c.featured_at, c.deleted_at, c.created_at,
+        COALESCE(
+          (SELECT MAX(p2.created_at) FROM posts p2 WHERE p2.club_id = c.club_id AND p2.deleted_at IS NULL),
+          c.created_at
+        ) AS last_activity
       FROM clubs c
       JOIN users u ON u.user_id = c.created_by_user_id
-      WHERE c.deleted_at IS NULL
-      ORDER BY members DESC, c.name ASC
-      LIMIT 100
+      WHERE
+        ($1 = '' OR c.name ILIKE $2 OR c.slug ILIKE $2 OR u.username ILIKE $2)
+        AND ($3 = '' OR ($3 = 'true' AND c.is_verified = TRUE) OR ($3 = 'false' AND c.is_verified = FALSE))
+        AND (
+          $4 = ''
+          OR ($4 = 'active' AND c.deleted_at IS NULL AND c.frozen_at IS NULL AND c.featured_at IS NULL)
+          OR ($4 = 'featured' AND c.deleted_at IS NULL AND c.frozen_at IS NULL AND c.featured_at IS NOT NULL)
+          OR ($4 = 'frozen' AND c.deleted_at IS NULL AND c.frozen_at IS NOT NULL)
+          OR ($4 = 'deleted' AND c.deleted_at IS NOT NULL)
+          OR ($4 = 'all')
+        )
+        AND ($4 != '' OR c.deleted_at IS NULL)
+      ORDER BY ${sortColumn} ${safeOrder}, c.club_id ${safeOrder}
+      LIMIT $5 OFFSET $6
+    `;
+    const countSql = `
+      SELECT COUNT(*)::int AS total
+      FROM clubs c
+      JOIN users u ON u.user_id = c.created_by_user_id
+      WHERE
+        ($1 = '' OR c.name ILIKE $2 OR c.slug ILIKE $2 OR u.username ILIKE $2)
+        AND ($3 = '' OR ($3 = 'true' AND c.is_verified = TRUE) OR ($3 = 'false' AND c.is_verified = FALSE))
+        AND (
+          $4 = ''
+          OR ($4 = 'active' AND c.deleted_at IS NULL AND c.frozen_at IS NULL AND c.featured_at IS NULL)
+          OR ($4 = 'featured' AND c.deleted_at IS NULL AND c.frozen_at IS NULL AND c.featured_at IS NOT NULL)
+          OR ($4 = 'frozen' AND c.deleted_at IS NULL AND c.frozen_at IS NOT NULL)
+          OR ($4 = 'deleted' AND c.deleted_at IS NOT NULL)
+          OR ($4 = 'all')
+        )
+        AND ($4 != '' OR c.deleted_at IS NULL)
     `;
 
-    return res.status(200).json(rows.map((row) => ({
-      id: row.club_id,
-      name: row.name,
-      logoUrl: row.avatar_url,
-      members: row.members,
-      activityScore: row.posts_count + row.members,
-      postsCount: row.posts_count,
-      reports: row.reports,
-      createdBy: row.created_by,
-      verificationStatus: row.is_verified ? 'verified' : 'unverified',
-      status: row.frozen_at ? 'frozen' : row.featured_at ? 'featured' : 'active',
-    })));
+    type AdminClubRow = {
+      club_id: string; name: string; slug: string; avatar_url: string | null;
+      members: number; posts_count: number; reports: number; created_by: string;
+      is_verified: boolean; frozen_at: Date | null; featured_at: Date | null;
+      deleted_at: Date | null; created_at: Date; last_activity: Date;
+    };
+
+    const [rows, totalRows] = await Promise.all([
+      prisma.$queryRawUnsafe<AdminClubRow[]>(listSql, query, searchPattern, verifiedFilter, statusFilter, limit, offset),
+      prisma.$queryRawUnsafe<Array<{ total: number }>>(countSql, query, searchPattern, verifiedFilter, statusFilter),
+    ]);
+
+    const total = totalRows[0]?.total ?? 0;
+    const pageCount = total === 0 ? 1 : Math.ceil(total / limit);
+
+    function deriveClubStatus(row: Pick<AdminClubRow, 'deleted_at' | 'frozen_at' | 'featured_at'>): string {
+      if (row.deleted_at) return 'deleted';
+      if (row.frozen_at) return 'frozen';
+      if (row.featured_at) return 'featured';
+      return 'active';
+    }
+
+    return res.status(200).json({
+      items: rows.map((row) => ({
+        id: row.club_id,
+        name: row.name,
+        slug: row.slug,
+        logoUrl: row.avatar_url,
+        members: row.members,
+        activityScore: row.posts_count + row.members,
+        postsCount: row.posts_count,
+        reports: row.reports,
+        createdBy: row.created_by,
+        verified: row.is_verified,
+        status: deriveClubStatus(row),
+        createdAt: row.created_at.toISOString(),
+        lastActivity: row.last_activity.toISOString(),
+      })),
+      pageInfo: {
+        page, limit, total, totalPages: pageCount,
+        hasNextPage: page < pageCount,
+        hasPreviousPage: page > 1,
+      },
+    });
   } catch (err) {
     console.error('Error loading admin clubs:', err);
     return res.status(500).json({ message: 'Internal server error' });
@@ -975,58 +1057,99 @@ router.get('/clubs/:clubId', async (req: Request<{ clubId: string }>, res: Respo
   const { clubId } = req.params;
 
   try {
-    const [clubs, topPosts, history] = await Promise.all([
-      prisma.$queryRaw<Array<{ club_id: string; name: string; description: string | null; is_verified: boolean; featured_at: Date | null; frozen_at: Date | null; created_at: Date }>>`
-        SELECT club_id, name, description, is_verified, featured_at, frozen_at, created_at
-        FROM clubs
-        WHERE club_id = ${clubId}
-        LIMIT 1
+    const [clubs, ownerRows, memberCounts, topPosts, linkedReports, history, memberGrowthRows, engagementRows] = await Promise.all([
+      prisma.$queryRaw<Array<{
+        club_id: string; name: string; slug: string; description: string | null;
+        is_verified: boolean; featured_at: Date | null; frozen_at: Date | null;
+        deleted_at: Date | null; created_at: Date; created_by_user_id: string;
+      }>>`
+        SELECT club_id, name, slug, description, is_verified, featured_at, frozen_at, deleted_at, created_at, created_by_user_id
+        FROM clubs WHERE club_id = ${clubId} LIMIT 1
+      `,
+      prisma.$queryRaw<Array<{ user_id: string; username: string; email: string; profile_photo_url: string | null }>>`
+        SELECT u.user_id, u.username, u.email, u.profile_photo_url
+        FROM clubs c JOIN users u ON u.user_id = c.created_by_user_id
+        WHERE c.club_id = ${clubId} LIMIT 1
+      `,
+      prisma.$queryRaw<Array<{ total_members: number; admin_count: number }>>`
+        SELECT
+          (SELECT COUNT(*)::int FROM club_memberships cm WHERE cm.club_id = ${clubId} AND cm.status = CAST('active' AS "ClubMembershipStatus")) AS total_members,
+          (SELECT COUNT(*)::int FROM club_memberships cm WHERE cm.club_id = ${clubId} AND cm.status = CAST('active' AS "ClubMembershipStatus") AND cm.role IN (CAST('admin' AS "ClubMembershipRole"), CAST('owner' AS "ClubMembershipRole"))) AS admin_count
       `,
       prisma.$queryRaw<Array<{ post_id: string; title: string | null; content_text: string | null; like_count: number; created_at: Date }>>`
-        SELECT
-          p.post_id,
-          p.title,
-          p.content_text,
+        SELECT p.post_id, p.title, p.content_text,
           (SELECT COUNT(*)::int FROM post_likes pl WHERE pl.post_id = p.post_id) AS like_count,
           p.created_at
-        FROM posts p
-        WHERE p.club_id = ${clubId} AND p.deleted_at IS NULL
-        ORDER BY like_count DESC, p.created_at DESC
-        LIMIT 5
+        FROM posts p WHERE p.club_id = ${clubId} AND p.deleted_at IS NULL
+        ORDER BY like_count DESC, p.created_at DESC LIMIT 5
       `,
-      prisma.$queryRaw<Array<{ summary: string; created_at: Date }>>`
-        SELECT summary, created_at
-        FROM admin_audit_logs
-        WHERE target_type = 'club' AND target_id = ${clubId}
-        ORDER BY created_at DESC
-        LIMIT 10
+      prisma.$queryRaw<Array<{ report_id: string; reason: string; severity: string; status: string; created_at: Date }>>`
+        SELECT r.report_id, r.reason, r.severity::text, r.status::text, r.created_at
+        FROM admin_reports r
+        WHERE r.target_type = CAST('club' AS "AdminReportTargetType") AND r.target_id = ${clubId}
+        ORDER BY r.created_at DESC LIMIT 10
+      `,
+      prisma.$queryRaw<Array<{ audit_log_id: string; action_type: string; summary: string; severity: string; created_at: Date; actor: string; metadata: unknown }>>`
+        SELECT l.audit_log_id, l.action_type, l.summary, l.severity::text, l.created_at, actor.username AS actor, l.metadata
+        FROM admin_audit_logs l
+        JOIN users actor ON actor.user_id = l.actor_user_id
+        WHERE l.target_type = 'club' AND l.target_id = ${clubId}
+        ORDER BY l.created_at DESC LIMIT 20
+      `,
+      prisma.$queryRaw<Array<{ count: number }>>`
+        SELECT COUNT(*)::int AS count FROM club_memberships cm
+        WHERE cm.club_id = ${clubId}
+          AND cm.status = CAST('active' AS "ClubMembershipStatus")
+          AND cm.joined_at >= NOW() - INTERVAL '30 day'
+      `,
+      prisma.$queryRaw<Array<{ count: number }>>`
+        SELECT COALESCE(
+          (SELECT COUNT(*)::int FROM post_likes pl JOIN posts p ON p.post_id = pl.post_id WHERE p.club_id = ${clubId} AND p.created_at >= NOW() - INTERVAL '30 day' AND p.deleted_at IS NULL), 0
+        ) + COALESCE(
+          (SELECT COUNT(*)::int FROM post_comments pc JOIN posts p ON p.post_id = pc.post_id WHERE p.club_id = ${clubId} AND p.created_at >= NOW() - INTERVAL '30 day' AND p.deleted_at IS NULL), 0
+        ) AS count
       `,
     ]);
 
     const club = clubs[0];
     if (!club) return res.status(404).json({ message: 'Club not found' });
 
+    const owner = ownerRows[0] ?? null;
+    const counts = memberCounts[0] ?? { total_members: 0, admin_count: 0 };
+
+    function deriveStatus(c: typeof club): string {
+      if (c.deleted_at) return 'deleted';
+      if (c.frozen_at) return 'frozen';
+      if (c.featured_at) return 'featured';
+      return 'active';
+    }
+
     return res.status(200).json({
       id: club.club_id,
       name: club.name,
+      slug: club.slug,
       description: club.description,
-      verificationStatus: club.is_verified ? 'verified' : 'unverified',
-      status: club.frozen_at ? 'frozen' : 'active',
+      verified: club.is_verified,
+      status: deriveStatus(club),
+      createdAt: club.created_at.toISOString(),
+      owner: owner ? { id: owner.user_id, username: owner.username, email: owner.email, avatarUrl: owner.profile_photo_url } : null,
+      memberSnapshot: { totalMembers: counts.total_members, adminCount: counts.admin_count },
       analytics: {
-        memberGrowth: 12,
-        engagement: 68,
+        memberGrowth30d: memberGrowthRows[0]?.count ?? 0,
+        engagement30d: engagementRows[0]?.count ?? 0,
       },
       topPosts: topPosts.map((post) => ({
-        id: post.post_id,
-        title: post.title,
-        preview: post.content_text,
-        likes: post.like_count,
-        createdAt: post.created_at.toISOString(),
+        id: post.post_id, title: post.title, preview: post.content_text,
+        likes: post.like_count, createdAt: post.created_at.toISOString(),
       })),
-      moderationHistory: history.map((item, index) => ({
-        id: `${clubId}-${index}`,
-        summary: item.summary,
-        timestamp: item.created_at.toISOString(),
+      linkedReports: linkedReports.map((r) => ({
+        id: r.report_id, reason: r.reason, severity: r.severity,
+        status: r.status, createdAt: r.created_at.toISOString(),
+      })),
+      moderationHistory: history.map((entry) => ({
+        id: entry.audit_log_id, actionType: entry.action_type, actor: entry.actor,
+        severity: entry.severity, summary: entry.summary,
+        timestamp: entry.created_at.toISOString(), metadata: entry.metadata ?? {},
       })),
     });
   } catch (err) {
@@ -1038,26 +1161,94 @@ router.get('/clubs/:clubId', async (req: Request<{ clubId: string }>, res: Respo
 router.post('/clubs/:clubId/actions', async (req: Request<{ clubId: string }>, res: Response) => {
   const adminReq = req as AdminAuthedRequest;
   const { clubId } = req.params;
-  const { action } = req.body as { action?: string };
+  const { action, targetUserId } = req.body as { action?: string; targetUserId?: string };
+
+  if (!action) {
+    return res.status(400).json({ message: 'Missing action' });
+  }
 
   try {
+    const clubRows = await prisma.$queryRaw<Array<{ created_by_user_id: string }>>`
+      SELECT created_by_user_id
+      FROM clubs
+      WHERE club_id = ${clubId}
+      LIMIT 1
+    `;
+    const clubRow = clubRows[0];
+    if (!clubRow) {
+      return res.status(404).json({ message: 'Club not found' });
+    }
+
     if (action === 'verify') {
       await prisma.$queryRaw`UPDATE clubs SET is_verified = TRUE, updated_at = NOW() WHERE club_id = ${clubId}`;
     } else if (action === 'feature') {
       await prisma.$queryRaw`UPDATE clubs SET featured_at = NOW(), updated_at = NOW() WHERE club_id = ${clubId}`;
+    } else if (action === 'unfeature') {
+      await prisma.$queryRaw`UPDATE clubs SET featured_at = NULL, updated_at = NOW() WHERE club_id = ${clubId}`;
     } else if (action === 'freeze') {
       await prisma.$queryRaw`UPDATE clubs SET frozen_at = NOW(), updated_at = NOW() WHERE club_id = ${clubId}`;
+    } else if (action === 'unfreeze') {
+      await prisma.$queryRaw`UPDATE clubs SET frozen_at = NULL, updated_at = NOW() WHERE club_id = ${clubId}`;
     } else if (action === 'delete') {
       await prisma.$queryRaw`UPDATE clubs SET deleted_at = NOW(), updated_at = NOW() WHERE club_id = ${clubId}`;
+    } else if (action === 'restore') {
+      await prisma.$queryRaw`UPDATE clubs SET deleted_at = NULL, updated_at = NOW() WHERE club_id = ${clubId}`;
     } else if (action === 'transfer_ownership') {
+      if (!targetUserId) {
+        return res.status(400).json({ message: 'Missing targetUserId for ownership transfer' });
+      }
+
+      // Validate target is an active member
+      const targetMembership = await prisma.$queryRaw<Array<{ user_id: string; role: string; status: string }>>`
+        SELECT cm.user_id, cm.role::text, cm.status::text
+        FROM club_memberships cm
+        WHERE cm.club_id = ${clubId} AND cm.user_id = ${targetUserId} LIMIT 1
+      `;
+      const target = targetMembership[0];
+      if (!target || target.status !== 'active') {
+        return res.status(400).json({ message: 'Target user is not an active member of this club' });
+      }
+
+      // Find current owner
+      const currentOwnerRows = await prisma.$queryRaw<Array<{ user_id: string }>>`
+        SELECT cm.user_id FROM club_memberships cm
+        WHERE cm.club_id = ${clubId} AND cm.role = CAST('owner' AS "ClubMembershipRole")
+        LIMIT 1
+      `;
+      const oldOwnerId = currentOwnerRows[0]?.user_id;
+
+      // Transaction: promote target to owner, demote current owner to admin, update clubs.created_by_user_id
+      await prisma.$transaction(async (tx) => {
+        await tx.$queryRaw`
+          UPDATE club_memberships
+          SET role = CAST('owner' AS "ClubMembershipRole"), updated_at = NOW()
+          WHERE club_id = ${clubId} AND user_id = ${targetUserId}
+        `;
+        if (oldOwnerId && oldOwnerId !== targetUserId) {
+          await tx.$queryRaw`
+            UPDATE club_memberships
+            SET role = CAST('admin' AS "ClubMembershipRole"), updated_at = NOW()
+            WHERE club_id = ${clubId} AND user_id = ${oldOwnerId}
+          `;
+        }
+        await tx.$queryRaw`
+          UPDATE clubs SET created_by_user_id = ${targetUserId}, updated_at = NOW()
+          WHERE club_id = ${clubId}
+        `;
+      });
+
       await recordAdminAuditLog({
         actorUserId: adminReq.auth!.userId,
-        actionType: 'club.transfer_ownership.requested',
+        actionType: 'club.transfer_ownership',
         targetType: 'club',
         targetId: clubId,
         severity: 'warning',
-        summary: 'Transfer ownership requested for manual follow-up',
+        summary: `Ownership transferred to user ${targetUserId}`,
+        metadata: { oldOwnerId: oldOwnerId ?? null, newOwnerId: targetUserId },
       });
+
+      await invalidateAdminClubCaches(clubId, [targetUserId, ...(oldOwnerId ? [oldOwnerId] : [])]);
+
       return res.status(200).json({ success: true });
     } else {
       return res.status(400).json({ message: 'Unsupported action' });
@@ -1072,9 +1263,49 @@ router.post('/clubs/:clubId/actions', async (req: Request<{ clubId: string }>, r
       summary: `Admin performed ${action} on club`,
     });
 
+    await invalidateAdminClubCaches(clubId, [clubRow.created_by_user_id]);
+
     return res.status(200).json({ success: true });
   } catch (err) {
     console.error('Error performing club action:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.get('/clubs/:clubId/members', async (req: Request<{ clubId: string }>, res: Response) => {
+  const { clubId } = req.params;
+  const query = String(req.query.q ?? '').trim();
+  const searchPattern = `%${query}%`;
+
+  try {
+    const rows = await prisma.$queryRawUnsafe<
+      Array<{ user_id: string; username: string; email: string; role: string; profile_photo_url: string | null }>
+    >(`
+      SELECT u.user_id, u.username, u.email, cm.role::text, u.profile_photo_url
+      FROM club_memberships cm
+      JOIN users u ON u.user_id = cm.user_id
+      WHERE cm.club_id = $1
+        AND cm.status = CAST('active' AS "ClubMembershipStatus")
+        AND ($2 = '' OR u.username ILIKE $3)
+      ORDER BY
+        CASE cm.role
+          WHEN CAST('owner' AS "ClubMembershipRole") THEN 0
+          WHEN CAST('admin' AS "ClubMembershipRole") THEN 1
+          ELSE 2
+        END,
+        u.username ASC
+      LIMIT 50
+    `, clubId, query, searchPattern);
+
+    return res.status(200).json(rows.map((row) => ({
+      id: row.user_id,
+      username: row.username,
+      email: row.email,
+      role: row.role,
+      avatarUrl: row.profile_photo_url,
+    })));
+  } catch (err) {
+    console.error('Error loading club members for admin:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });

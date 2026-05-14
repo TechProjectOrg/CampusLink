@@ -69,7 +69,7 @@ const NAV_ITEMS: Array<{ key: PageKey; label: string; icon: typeof LayoutDashboa
   { key: 'settings', label: 'Settings', icon: Settings },
 ];
 
-const SEARCHABLE_PAGES = new Set<PageKey>(['users', 'posts', 'logs']);
+const SEARCHABLE_PAGES = new Set<PageKey>(['users', 'clubs', 'posts', 'logs']);
 const ADMIN_CACHE_MS = 30_000;
 const DASHBOARD_RANGES: AdminDashboardRange[] = ['7d', '30d', '90d'];
 
@@ -158,6 +158,129 @@ type UserFilterState = {
 
 type UserActionName = 'warn' | 'suspend' | 'unsuspend' | 'ban' | 'unban' | 'verify';
 
+type AdminClubStatus = 'active' | 'featured' | 'frozen' | 'deleted';
+type AdminClubSortKey = 'members' | 'posts' | 'reports' | 'createdAt' | 'lastActivity';
+
+type AdminClubListItem = {
+  id: string;
+  name: string;
+  slug: string;
+  logoUrl: string | null;
+  members: number;
+  activityScore: number;
+  postsCount: number;
+  reports: number;
+  createdBy: string;
+  verified: boolean;
+  status: AdminClubStatus;
+  createdAt: string;
+  lastActivity: string;
+};
+
+type AdminClubListResponse = {
+  items: AdminClubListItem[];
+  pageInfo: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+};
+
+type AdminClubDetailResponse = {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  verified: boolean;
+  status: string;
+  createdAt: string;
+  owner: { id: string; username: string; email: string; avatarUrl: string | null } | null;
+  memberSnapshot: { totalMembers: number; adminCount: number };
+  analytics: { memberGrowth30d: number; engagement30d: number };
+  topPosts: Array<{ id: string; title: string | null; preview: string | null; likes: number; createdAt: string }>;
+  linkedReports: Array<{ id: string; reason: string; severity: string; status: string; createdAt: string }>;
+  moderationHistory: Array<{
+    id: string; actionType: string; actor: string; severity: string;
+    summary: string; timestamp: string; metadata?: Record<string, unknown>;
+  }>;
+};
+
+type AdminClubMember = { id: string; username: string; email: string; role: string; avatarUrl: string | null };
+
+type ClubFilterState = {
+  status: '' | AdminClubStatus | 'all';
+  verified: '' | 'true' | 'false';
+  sort: AdminClubSortKey;
+  order: AdminSortOrder;
+  page: number;
+  limit: number;
+};
+
+type ClubActionName = 'verify' | 'feature' | 'unfeature' | 'freeze' | 'unfreeze' | 'delete' | 'restore';
+
+const DEFAULT_CLUB_FILTERS: ClubFilterState = {
+  status: '',
+  verified: '',
+  sort: 'members',
+  order: 'desc',
+  page: 1,
+  limit: 20,
+};
+
+const CLUB_STATUS_OPTIONS: Array<{ value: ClubFilterState['status']; label: string }> = [
+  { value: '', label: 'All statuses' },
+  { value: 'active', label: 'Active' },
+  { value: 'featured', label: 'Featured' },
+  { value: 'frozen', label: 'Frozen' },
+  { value: 'deleted', label: 'Deleted' },
+  { value: 'all', label: 'All (incl. deleted)' },
+];
+
+const CLUB_SORT_OPTIONS: Array<{ value: AdminClubSortKey; label: string }> = [
+  { value: 'members', label: 'Members' },
+  { value: 'posts', label: 'Posts' },
+  { value: 'reports', label: 'Reports' },
+  { value: 'createdAt', label: 'Created date' },
+  { value: 'lastActivity', label: 'Last activity' },
+];
+
+function getClubActionOptions(club: Pick<AdminClubListItem, 'status' | 'verified'>): Array<{ action: ClubActionName; label: string }> {
+  const actions: Array<{ action: ClubActionName; label: string }> = [];
+  if (!club.verified) actions.push({ action: 'verify', label: 'Verify' });
+  if (club.status === 'deleted') {
+    actions.push({ action: 'restore', label: 'Restore' });
+  } else {
+    if (club.status === 'featured') {
+      actions.push({ action: 'unfeature', label: 'Unfeature' });
+    } else if (club.status !== 'frozen') {
+      actions.push({ action: 'feature', label: 'Feature' });
+    }
+    if (club.status === 'frozen') {
+      actions.push({ action: 'unfreeze', label: 'Unfreeze' });
+    } else {
+      actions.push({ action: 'freeze', label: 'Freeze' });
+    }
+    actions.push({ action: 'delete', label: 'Delete' });
+  }
+  return actions;
+}
+
+function buildClubsQueryString(search: string, filters: ClubFilterState) {
+  return buildQueryString({
+    q: search,
+    status: filters.status,
+    verified: filters.verified,
+    sort: filters.sort,
+    order: filters.order,
+    page: filters.page,
+    limit: filters.limit,
+  });
+}
+
+
 const DEFAULT_USER_FILTERS: UserFilterState = {
   banned: '',
   verified: '',
@@ -237,10 +360,10 @@ function getAdminUserDetailQueryKey(token: string, userId: string) {
   return ['admin', token, 'user-detail', userId] as const;
 }
 
-async function fetchAdminPageData(page: PageKey, token: string, search: string, range: AdminDashboardRange, userFilters: UserFilterState) {
+async function fetchAdminPageData(page: PageKey, token: string, search: string, range: AdminDashboardRange, userFilters: UserFilterState, clubFilters: ClubFilterState = DEFAULT_CLUB_FILTERS) {
   if (page === 'dashboard') return apiAdminGet<AdminDashboardResponse>(`/admin/dashboard?range=${encodeURIComponent(range)}`, token);
   if (page === 'users') return apiAdminGet<AdminUserListResponse>(`/admin/users?${buildUsersQueryString(search, userFilters)}`, token);
-  if (page === 'clubs') return apiAdminGet('/admin/clubs', token);
+  if (page === 'clubs') return apiAdminGet<AdminClubListResponse>(`/admin/clubs?${buildClubsQueryString(search, clubFilters)}`, token);
   if (page === 'posts') return apiAdminGet(`/admin/posts?q=${encodeURIComponent(search)}`, token);
   if (page === 'reports') return apiAdminGet('/admin/reports', token);
   if (page === 'verification') return apiAdminGet('/admin/verification-requests', token);
@@ -439,8 +562,12 @@ export default function AdminRoot() {
   const [search, setSearch] = useState('');
   const [userFilters, setUserFilters] = useState<UserFilterState>(DEFAULT_USER_FILTERS);
   const [selectedUser, setSelectedUser] = useState<AdminUserListItem | null>(null);
-  const [selectedClub, setSelectedClub] = useState<any | null>(null);
-  const [selectedClubDetail, setSelectedClubDetail] = useState<any | null>(null);
+  const [selectedClub, setSelectedClub] = useState<AdminClubListItem | null>(null);
+  const [selectedClubDetail, setSelectedClubDetail] = useState<AdminClubDetailResponse | null>(null);
+  const [clubFilters, setClubFilters] = useState<ClubFilterState>(DEFAULT_CLUB_FILTERS);
+  const [clubMembers, setClubMembers] = useState<AdminClubMember[]>([]);
+  const [transferTarget, setTransferTarget] = useState<string>('');
+  const [transferConfirm, setTransferConfirm] = useState(false);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [userActionForm, setUserActionForm] = useState({ note: '', durationDays: 7 });
 
@@ -460,6 +587,7 @@ export default function AdminRoot() {
   const pageTitle = useMemo(() => NAV_ITEMS.find((item) => item.key === page)?.label ?? 'Dashboard', [page]);
   const searchKey = useMemo(() => getSearchKey(page, search), [page, search]);
   const usersQueryContext = useMemo(() => (page === 'users' ? JSON.stringify(userFilters) : ''), [page, userFilters]);
+  const clubsQueryContext = useMemo(() => (page === 'clubs' ? JSON.stringify(clubFilters) : ''), [page, clubFilters]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -480,6 +608,11 @@ export default function AdminRoot() {
   useEffect(() => {
     if (page !== 'users') return;
     setUserFilters((current) => (current.page === 1 ? current : { ...current, page: 1 }));
+  }, [page, searchKey]);
+
+  useEffect(() => {
+    if (page !== 'clubs') return;
+    setClubFilters((current) => (current.page === 1 ? current : { ...current, page: 1 }));
   }, [page, searchKey]);
 
   useEffect(() => {
@@ -528,8 +661,8 @@ export default function AdminRoot() {
   });
 
   const currentPageQuery = useQuery({
-    queryKey: token ? getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext) : ['admin', page, searchKey, 'anon', dashboardRange, usersQueryContext],
-    queryFn: () => fetchAdminPageData(page, token!, searchKey, dashboardRange, userFilters),
+    queryKey: token ? getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext + clubsQueryContext) : ['admin', page, searchKey, 'anon', dashboardRange, usersQueryContext + clubsQueryContext],
+    queryFn: () => fetchAdminPageData(page, token!, searchKey, dashboardRange, userFilters, clubFilters),
     enabled: canQueryAdmin && page !== 'dashboard',
     staleTime: ADMIN_CACHE_MS,
     gcTime: ADMIN_CACHE_MS * 10,
@@ -541,7 +674,9 @@ export default function AdminRoot() {
   const users = usersResponse?.items ?? [];
   const usersPageInfo = usersResponse?.pageInfo ?? null;
   const userFilterOptions = usersResponse?.filterOptions ?? { departments: [] };
-  const clubs = page === 'clubs' ? ((currentPageQuery.data as any[]) ?? []) : [];
+  const clubsResponse = page === 'clubs' ? ((currentPageQuery.data as AdminClubListResponse | null) ?? null) : null;
+  const clubs = clubsResponse?.items ?? [];
+  const clubsPageInfo = clubsResponse?.pageInfo ?? null;
   const posts = page === 'posts' ? ((currentPageQuery.data as any[]) ?? []) : [];
   const reports = page === 'reports' ? ((currentPageQuery.data as any[]) ?? []) : [];
   const verification = page === 'verification' ? ((currentPageQuery.data as any[]) ?? []) : [];
@@ -606,7 +741,7 @@ export default function AdminRoot() {
 
   const refreshCurrentPage = async () => {
     if (!token) return;
-    await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext), exact: true });
+    await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext + clubsQueryContext), exact: true });
     if (page !== 'dashboard') {
       await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, 'dashboard', '', dashboardRange), exact: true });
     }
@@ -627,12 +762,17 @@ export default function AdminRoot() {
     }
   };
 
-  const runClubAction = async (clubId: string, action: string) => {
+  const runClubAction = async (clubId: string, action: string, body?: Record<string, unknown>) => {
     if (!token) return;
-    await apiAdminPost(`/admin/clubs/${clubId}/actions`, token, { action });
-    await refreshCurrentPage();
-    if (selectedClub?.id === clubId) {
-      setSelectedClubDetail(await apiAdminGet(`/admin/clubs/${clubId}`, token));
+    try {
+      await apiAdminPost(`/admin/clubs/${clubId}/actions`, token, { action, ...body });
+      toast.success(`Club ${action} completed`);
+      await refreshCurrentPage();
+      if (selectedClub?.id === clubId) {
+        setSelectedClubDetail(await apiAdminGet<AdminClubDetailResponse>(`/admin/clubs/${clubId}`, token));
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : `Unable to ${action} club`);
     }
   };
 
@@ -647,10 +787,19 @@ export default function AdminRoot() {
     setUserActionForm({ note: '', durationDays: 7 });
   };
 
-  const openClubDrawer = async (club: any) => {
+  const openClubDrawer = async (club: AdminClubListItem) => {
     if (!token) return;
     setSelectedClub(club);
-    setSelectedClubDetail(await apiAdminGet(`/admin/clubs/${club.id}`, token));
+    setTransferTarget('');
+    setTransferConfirm(false);
+    setClubMembers([]);
+    setSelectedClubDetail(await apiAdminGet<AdminClubDetailResponse>(`/admin/clubs/${club.id}`, token));
+  };
+
+  const loadClubMembers = async (clubId: string, q = '') => {
+    if (!token) return;
+    const members = await apiAdminGet<AdminClubMember[]>(`/admin/clubs/${clubId}/members?q=${encodeURIComponent(q)}`, token);
+    setClubMembers(members);
   };
 
   const handlePasswordChange = async () => {
@@ -1148,50 +1297,98 @@ export default function AdminRoot() {
             ) : null}
 
             {!pageLoading && page === 'clubs' ? (
-              <ShellCard title="Club Management">
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-[0.12em] text-slate-500">
-                        <th className="px-3 py-3 whitespace-nowrap">Club</th>
-                        <th className="px-3 py-3 whitespace-nowrap">Members</th>
-                        <th className="px-3 py-3 whitespace-nowrap">Activity</th>
-                        <th className="px-3 py-3 whitespace-nowrap">Posts</th>
-                        <th className="px-3 py-3 whitespace-nowrap">Reports</th>
-                        <th className="px-3 py-3 whitespace-nowrap">Created by</th>
-                        <th className="px-3 py-3 whitespace-nowrap">Verification</th>
-                        <th className="px-3 py-3 whitespace-nowrap">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {clubs.map((club) => (
-                        <tr key={club.id} className="border-b border-slate-100 hover:bg-slate-50">
-                          <td className="px-3 py-3">
-                            <button type="button" onClick={() => void openClubDrawer(club)} className="text-left">
-                              <p className="font-medium text-slate-800">{club.name}</p>
-                              <p className="text-xs text-slate-500">{club.status}</p>
-                            </button>
-                          </td>
-                          <td className="px-3 py-3 text-slate-600">{formatNumber(club.members)}</td>
-                          <td className="px-3 py-3 text-slate-600">{formatNumber(club.activityScore)}</td>
-                          <td className="px-3 py-3 text-slate-600">{formatNumber(club.postsCount)}</td>
-                          <td className="px-3 py-3 text-slate-600">{formatNumber(club.reports)}</td>
-                          <td className="px-3 py-3 text-slate-600">{club.createdBy}</td>
-                          <td className="px-3 py-3"><StatusBadge value={club.verificationStatus} /></td>
-                          <td className="px-3 py-3">
-                            <div className="flex flex-wrap gap-2">
-                              <Button variant="outline" size="sm" onClick={() => void runClubAction(club.id, 'verify')}>Verify</Button>
-                              <Button variant="outline" size="sm" onClick={() => void runClubAction(club.id, 'feature')}>Feature</Button>
-                              <Button variant="outline" size="sm" onClick={() => void runClubAction(club.id, 'freeze')}>Freeze</Button>
-                              <Button variant="outline" size="sm" onClick={() => void runClubAction(club.id, 'delete')}>Delete</Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </ShellCard>
+              <>
+                <ShellCard title="Club Filters">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                    <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={clubFilters.status} onChange={(event) => setClubFilters((current) => ({ ...current, status: event.target.value as ClubFilterState['status'], page: 1 }))}>
+                      {CLUB_STATUS_OPTIONS.map((option) => <option key={option.label} value={option.value}>{option.label}</option>)}
+                    </select>
+                    <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={clubFilters.verified} onChange={(event) => setClubFilters((current) => ({ ...current, verified: event.target.value as ClubFilterState['verified'], page: 1 }))}>
+                      {USER_BOOLEAN_OPTIONS.map((option) => <option key={`club-verified-${option.label}`} value={option.value}>{`Verified: ${option.label}`}</option>)}
+                    </select>
+                    <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={clubFilters.sort} onChange={(event) => setClubFilters((current) => ({ ...current, sort: event.target.value as AdminClubSortKey, page: 1 }))}>
+                      {CLUB_SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                    <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={clubFilters.order} onChange={(event) => setClubFilters((current) => ({ ...current, order: event.target.value as AdminSortOrder, page: 1 }))}>
+                      <option value="desc">Descending</option>
+                      <option value="asc">Ascending</option>
+                    </select>
+                  </div>
+                </ShellCard>
+
+                <ShellCard title="Club Management">
+                  {currentPageQuery.isError ? (
+                    <EmptyPanel title="Unable to load clubs" body={currentPageQuery.error instanceof Error ? currentPageQuery.error.message : 'Try refreshing this page.'} />
+                  ) : clubs.length === 0 ? (
+                    <EmptyPanel title="No clubs matched these filters" body="Adjust the search or filters to broaden the results." />
+                  ) : (
+                    <>
+                      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500">
+                        <span>{formatNumber(clubsPageInfo?.total ?? 0)} clubs found</span>
+                        <span>Page {clubsPageInfo?.page ?? 1} of {clubsPageInfo?.totalPages ?? 1}</span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-[0.12em] text-slate-500">
+                              <th className="px-3 py-3 whitespace-nowrap">Club</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Members</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Posts</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Reports</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Created by</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Status</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {clubs.map((club: AdminClubListItem) => (
+                              <tr key={club.id} className="border-b border-slate-100 hover:bg-slate-50">
+                                <td className="px-3 py-3">
+                                  <button type="button" onClick={() => void openClubDrawer(club)} className="text-left">
+                                    <p className="font-medium text-slate-800">{club.name}</p>
+                                    <p className="text-xs text-slate-500">{club.slug}</p>
+                                  </button>
+                                </td>
+                                <td className="px-3 py-3 text-slate-600">{formatNumber(club.members)}</td>
+                                <td className="px-3 py-3 text-slate-600">{formatNumber(club.postsCount)}</td>
+                                <td className="px-3 py-3 text-slate-600">{formatNumber(club.reports)}</td>
+                                <td className="px-3 py-3 text-slate-600">{club.createdBy}</td>
+                                <td className="px-3 py-3">
+                                  <div className="flex flex-wrap gap-2">
+                                    <StatusBadge value={club.status} />
+                                    <StatusBadge value={club.verified ? 'verified' : 'unverified'} />
+                                  </div>
+                                </td>
+                                <td className="px-3 py-3">
+                                  <div className="flex flex-wrap gap-2">
+                                    {getClubActionOptions(club).map((option) => (
+                                      <Button key={option.action} variant="outline" size="sm" onClick={() => void runClubAction(club.id, option.action)}>
+                                        {option.label}
+                                      </Button>
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+                        <div className="flex items-center gap-2 text-sm text-slate-500">
+                          <span>Rows per page</span>
+                          <select className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700" value={clubFilters.limit} onChange={(event) => setClubFilters((current) => ({ ...current, limit: Number(event.target.value), page: 1 }))}>
+                            {[10, 20, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
+                          </select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="sm" disabled={!clubsPageInfo?.hasPreviousPage} onClick={() => setClubFilters((current) => ({ ...current, page: Math.max(1, current.page - 1) }))}>Previous</Button>
+                          <Button variant="outline" size="sm" disabled={!clubsPageInfo?.hasNextPage} onClick={() => setClubFilters((current) => ({ ...current, page: current.page + 1 }))}>Next</Button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </ShellCard>
+              </>
             ) : null}
 
             {!pageLoading && page === 'posts' ? (
@@ -1695,23 +1892,84 @@ export default function AdminRoot() {
         onClose={() => {
           setSelectedClub(null);
           setSelectedClubDetail(null);
+          setClubMembers([]);
+          setTransferTarget('');
+          setTransferConfirm(false);
         }}
       >
         {selectedClubDetail ? (
           <div className="space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-2xl border border-slate-200 px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Verification</p>
-                <div className="mt-2"><StatusBadge value={selectedClubDetail.verificationStatus} /></div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 px-4 py-3">
                 <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Status</p>
                 <div className="mt-2"><StatusBadge value={selectedClubDetail.status} /></div>
               </div>
+              <div className="rounded-2xl border border-slate-200 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Verified</p>
+                <div className="mt-2"><StatusBadge value={selectedClubDetail.verified ? 'verified' : 'unverified'} /></div>
+              </div>
             </div>
+
+            <ShellCard title="Owner">
+              {selectedClubDetail.owner ? (
+                <div className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+                    {selectedClubDetail.owner.username.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-800">{selectedClubDetail.owner.username}</p>
+                    <p className="text-xs text-slate-500">{selectedClubDetail.owner.email}</p>
+                  </div>
+                </div>
+              ) : <EmptyPanel title="No owner found" body="Owner data is unavailable." />}
+            </ShellCard>
+
+            <ShellCard title="Member Snapshot">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Total members</p>
+                  <p className="mt-2 text-lg font-semibold text-slate-900">{formatNumber(selectedClubDetail.memberSnapshot.totalMembers)}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Admins</p>
+                  <p className="mt-2 text-lg font-semibold text-slate-900">{formatNumber(selectedClubDetail.memberSnapshot.adminCount)}</p>
+                </div>
+              </div>
+            </ShellCard>
+
+            <ShellCard title="30-Day Analytics">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Member growth</p>
+                  <p className="mt-2 text-lg font-semibold text-slate-900">{formatNumber(selectedClubDetail.analytics.memberGrowth30d)}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Engagement</p>
+                  <p className="mt-2 text-lg font-semibold text-slate-900">{formatNumber(selectedClubDetail.analytics.engagement30d)}</p>
+                </div>
+              </div>
+            </ShellCard>
+
+            <ShellCard title="Linked Reports">
+              <div className="space-y-3">
+                {(selectedClubDetail.linkedReports ?? []).length === 0 ? <EmptyPanel title="No reports" body="No reports targeting this club." /> : (selectedClubDetail.linkedReports ?? []).map((report) => (
+                  <div key={report.id} className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
+                    <div>
+                      <span className="text-sm text-slate-700">{report.reason}</span>
+                      <p className="mt-1 text-xs text-slate-500">{formatDate(report.createdAt)}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <StatusBadge value={report.severity} />
+                      <StatusBadge value={report.status} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </ShellCard>
+
             <ShellCard title="Top Posts">
               <div className="space-y-3">
-                {(selectedClubDetail.topPosts ?? []).map((post: any) => (
+                {(selectedClubDetail.topPosts ?? []).length === 0 ? <EmptyPanel title="No posts" body="No posts found for this club." /> : (selectedClubDetail.topPosts ?? []).map((post) => (
                   <div key={post.id} className="rounded-md border border-slate-200 px-3 py-3">
                     <p className="text-sm font-medium text-slate-800">{post.title || 'Untitled post'}</p>
                     <p className="mt-1 text-sm text-slate-500">{post.preview || 'No preview available.'}</p>
@@ -1720,14 +1978,74 @@ export default function AdminRoot() {
                 ))}
               </div>
             </ShellCard>
+
             <ShellCard title="Moderation History">
               <div className="space-y-3">
-                {(selectedClubDetail.moderationHistory ?? []).map((item: any) => (
-                  <div key={item.id} className="rounded-md border border-slate-200 px-3 py-3">
-                    <p className="text-sm text-slate-700">{item.summary}</p>
-                    <p className="mt-1 text-xs text-slate-500">{formatDate(item.timestamp)}</p>
+                {(selectedClubDetail.moderationHistory ?? []).length === 0 ? <EmptyPanel title="No moderation history" body="Admin actions on this club will appear here." /> : (selectedClubDetail.moderationHistory ?? []).map((entry) => (
+                  <div key={entry.id} className="rounded-xl border border-slate-200 px-4 py-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-slate-800">{entry.summary}</p>
+                        <p className="mt-1 text-xs uppercase tracking-[0.1em] text-slate-500">{entry.actor} · {entry.actionType}</p>
+                      </div>
+                      <StatusBadge value={entry.severity} />
+                    </div>
+                    <p className="mt-3 text-xs text-slate-500">{formatDate(entry.timestamp)}</p>
                   </div>
                 ))}
+              </div>
+            </ShellCard>
+
+            <ShellCard title="Transfer Ownership">
+              <div className="space-y-3">
+                <p className="text-sm text-slate-600">Transfer club ownership to another active member. The current owner will be demoted to admin.</p>
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder="Search members..."
+                    className="h-10"
+                    onChange={(event) => {
+                      if (selectedClub) void loadClubMembers(selectedClub.id, event.target.value);
+                    }}
+                    onFocus={() => {
+                      if (selectedClub && clubMembers.length === 0) void loadClubMembers(selectedClub.id);
+                    }}
+                  />
+                </div>
+                {clubMembers.length > 0 ? (
+                  <select
+                    className="h-10 w-full rounded-md border border-slate-300 bg-white px-3 text-sm"
+                    value={transferTarget}
+                    onChange={(event) => { setTransferTarget(event.target.value); setTransferConfirm(false); }}
+                  >
+                    <option value="">Select a member...</option>
+                    {clubMembers.filter((m) => m.role !== 'owner').map((member) => (
+                      <option key={member.id} value={member.id}>{member.username} ({member.role}) — {member.email}</option>
+                    ))}
+                  </select>
+                ) : null}
+                {transferTarget ? (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+                    <label className="flex items-center gap-2">
+                      <input type="checkbox" checked={transferConfirm} onChange={(event) => setTransferConfirm(event.target.checked)} />
+                      I confirm I want to transfer ownership to {clubMembers.find((m) => m.id === transferTarget)?.username ?? 'this user'}
+                    </label>
+                  </div>
+                ) : null}
+                <Button
+                  className="bg-slate-900 text-white hover:bg-slate-800"
+                  disabled={!transferTarget || !transferConfirm}
+                  onClick={async () => {
+                    if (!selectedClub || !transferTarget) return;
+                    await runClubAction(selectedClub.id, 'transfer_ownership', { targetUserId: transferTarget });
+                    setTransferTarget('');
+                    setTransferConfirm(false);
+                    if (token) {
+                      setSelectedClubDetail(await apiAdminGet<AdminClubDetailResponse>(`/admin/clubs/${selectedClub.id}`, token));
+                    }
+                  }}
+                >
+                  Transfer ownership
+                </Button>
               </div>
             </ShellCard>
           </div>
