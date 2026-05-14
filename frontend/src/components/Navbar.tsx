@@ -122,7 +122,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/70" />
               <Input
                 type="text"
-                placeholder="Search students, skills, or opportunities..."
+                placeholder="Search users or tags"
                 value={searchQuery}
                 onChange={handleSearchChange}
                 onFocus={handleSearchFocus}
@@ -296,7 +296,7 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-white/70" />
               <Input
                 type="text"
-                placeholder="Search users or hashtags..."
+                placeholder="Search users or tags"
                 value={searchQuery}
                 onChange={handleMobileSearchChange}
                 onFocus={handleSearchFocus}
