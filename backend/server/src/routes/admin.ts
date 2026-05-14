@@ -5,7 +5,12 @@ import authenticateToken from '../middleware/authenticateToken';
 import requireAdmin, { type AdminAuthedRequest } from '../middleware/requireAdmin';
 import { hashPassword, signAuthToken, verifyPassword } from '../lib/auth';
 import { probeRedisHealth } from '../lib/cache';
-import { invalidateUserFeedCache, getPostFeedRecipientIds } from '../lib/feedCache';
+import {
+  invalidateRecentComments,
+  invalidateUserFeedCache,
+  getPostFeedRecipientIds,
+  reconcilePostEngagement,
+} from '../lib/feedCache';
 import { socketsByUserId } from '../lib/realtime';
 import {
   getAdminAccountByUserId,
@@ -196,6 +201,102 @@ async function invalidateAdminPostCaches(postId: string, clubId: string | null):
     ...recipientUserIds.map((userId) => invalidateUserFeedCache(userId)),
     ...(clubId ? [invalidateClubFeedCaches(clubId)] : []),
   ]);
+}
+
+type AdminCommentTreeNode = {
+  id: string;
+  postId: string;
+  authorUserId: string;
+  authorUsername: string;
+  authorAvatarUrl: string | null;
+  parentCommentId: string | null;
+  content: string;
+  likeCount: number;
+  replyCount: number;
+  createdAt: string;
+  updatedAt: string;
+  replies: AdminCommentTreeNode[];
+};
+
+function mapAdminCommentRows(rows: Array<{
+  comment_id: string;
+  post_id: string;
+  author_user_id: string;
+  author_username: string;
+  author_profile_photo_url: string | null;
+  parent_comment_id: string | null;
+  content: string;
+  like_count: number;
+  reply_count: number;
+  created_at: Date;
+  updated_at: Date;
+}>): AdminCommentTreeNode[] {
+  const byId = new Map<string, AdminCommentTreeNode>();
+  const roots: AdminCommentTreeNode[] = [];
+
+  for (const row of rows) {
+    byId.set(row.comment_id, {
+      id: row.comment_id,
+      postId: row.post_id,
+      authorUserId: row.author_user_id,
+      authorUsername: row.author_username,
+      authorAvatarUrl: row.author_profile_photo_url,
+      parentCommentId: row.parent_comment_id,
+      content: row.content,
+      likeCount: row.like_count,
+      replyCount: row.reply_count,
+      createdAt: row.created_at.toISOString(),
+      updatedAt: row.updated_at.toISOString(),
+      replies: [],
+    });
+  }
+
+  for (const comment of byId.values()) {
+    if (comment.parentCommentId && byId.has(comment.parentCommentId)) {
+      byId.get(comment.parentCommentId)!.replies.push(comment);
+    } else {
+      roots.push(comment);
+    }
+  }
+
+  return roots;
+}
+
+function mapAdminFlatCommentRows(rows: Array<{
+  comment_id: string;
+  post_id: string;
+  author_user_id: string;
+  author_username: string;
+  author_profile_photo_url: string | null;
+  parent_comment_id: string | null;
+  content: string;
+  like_count: number;
+  reply_count: number;
+  created_at: Date;
+  updated_at: Date;
+}>): AdminCommentTreeNode[] {
+  return rows.map((row) => ({
+    id: row.comment_id,
+    postId: row.post_id,
+    authorUserId: row.author_user_id,
+    authorUsername: row.author_username,
+    authorAvatarUrl: row.author_profile_photo_url,
+    parentCommentId: row.parent_comment_id,
+    content: row.content,
+    likeCount: row.like_count,
+    replyCount: row.reply_count,
+    createdAt: row.created_at.toISOString(),
+    updatedAt: row.updated_at.toISOString(),
+    replies: [],
+  }));
+}
+
+function parseAdminCommentCursor(raw: unknown): Date | null {
+  if (!raw) return null;
+  const value = String(raw).trim();
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 router.post('/auth/login', async (req: Request, res: Response) => {
@@ -1624,6 +1725,72 @@ router.get('/posts/:postId', async (req: Request<{ postId: string }>, res: Respo
   }
 });
 
+router.get('/posts/:postId/comments', async (req: Request<{ postId: string }>, res: Response) => {
+  const { postId } = req.params;
+  const parentCommentId = String(req.query.parentCommentId ?? '').trim() || null;
+  const cursor = parseAdminCommentCursor(req.query.cursor);
+  const limit = parsePositiveInt(req.query.limit, 20, 1, 100);
+
+  try {
+    const postRows = await prisma.$queryRaw<Array<{ post_id: string }>>`
+      SELECT post_id
+      FROM posts
+      WHERE post_id = ${postId}
+      LIMIT 1
+    `;
+    if (!postRows[0]) {
+      return res.status(404).json({ message: 'Post not found' });
+    }
+
+    const rows = await prisma.$queryRaw<Array<{
+      comment_id: string;
+      post_id: string;
+      author_user_id: string;
+      author_username: string;
+      author_profile_photo_url: string | null;
+      parent_comment_id: string | null;
+      content: string;
+      like_count: number;
+      reply_count: number;
+      created_at: Date;
+      updated_at: Date;
+    }>>`
+      SELECT
+        c.comment_id,
+        c.post_id,
+        c.author_user_id,
+        u.username AS author_username,
+        u.profile_photo_url AS author_profile_photo_url,
+        c.parent_comment_id,
+        c.content,
+        (SELECT COUNT(*)::int FROM post_comment_likes pcl WHERE pcl.comment_id = c.comment_id) AS like_count,
+        (SELECT COUNT(*)::int FROM post_comments replies WHERE replies.parent_comment_id = c.comment_id) AS reply_count,
+        c.created_at,
+        c.updated_at
+      FROM post_comments c
+      JOIN users u ON u.user_id = c.author_user_id
+      WHERE c.post_id = ${postId}
+        AND (
+          (${parentCommentId}::uuid IS NULL AND c.parent_comment_id IS NULL)
+          OR c.parent_comment_id = ${parentCommentId}
+        )
+        AND (${cursor}::timestamp IS NULL OR c.created_at > ${cursor})
+      ORDER BY c.created_at ASC
+      LIMIT ${limit + 1}
+    `;
+
+    const pageRows = rows.slice(0, limit);
+
+    return res.status(200).json({
+      comments: mapAdminFlatCommentRows(pageRows),
+      nextCursor: rows.length > limit ? pageRows[pageRows.length - 1]?.created_at.toISOString() ?? null : null,
+    });
+  } catch (err) {
+    console.error('Error loading admin post comments:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 router.post('/posts/:postId/actions', async (req: Request<{ postId: string }>, res: Response) => {
   const adminReq = req as AdminAuthedRequest;
   const { postId } = req.params;
@@ -1744,6 +1911,102 @@ router.post('/posts/:postId/actions', async (req: Request<{ postId: string }>, r
     return res.status(200).json({ success: true });
   } catch (err) {
     console.error('Error performing post action:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.post('/comments/:commentId/actions', async (req: Request<{ commentId: string }>, res: Response) => {
+  const adminReq = req as AdminAuthedRequest;
+  const { commentId } = req.params;
+  const { action, note } = req.body as { action?: string; note?: string };
+  const normalizedNote = note?.trim() || '';
+
+  try {
+    const commentRows = await prisma.$queryRaw<Array<{
+      comment_id: string;
+      post_id: string;
+      parent_comment_id: string | null;
+      author_user_id: string;
+      club_id: string | null;
+    }>>`
+      SELECT
+        c.comment_id,
+        c.post_id,
+        c.parent_comment_id,
+        c.author_user_id,
+        p.club_id
+      FROM post_comments c
+      JOIN posts p ON p.post_id = c.post_id
+      WHERE c.comment_id = ${commentId}
+      LIMIT 1
+    `;
+    const comment = commentRows[0];
+    if (!comment) {
+      return res.status(404).json({ message: 'Comment not found' });
+    }
+
+    if (action === 'delete') {
+      await prisma.$queryRaw`
+        DELETE FROM post_comments
+        WHERE comment_id = ${commentId}
+      `;
+      await recordAdminAuditLog({
+        actorUserId: adminReq.auth!.userId,
+        actionType: 'comment.delete',
+        targetType: 'comment',
+        targetId: commentId,
+        severity: 'warning',
+        summary: 'Admin deleted comment',
+      });
+      await reconcilePostEngagement(comment.post_id);
+      if (!comment.parent_comment_id) {
+        await invalidateRecentComments(comment.post_id);
+      }
+      await invalidateAdminPostCaches(comment.post_id, comment.club_id);
+      return res.status(200).json({ success: true });
+    }
+
+    if (action === 'warn_author') {
+      if (!normalizedNote) {
+        return res.status(400).json({ message: 'A moderation note is required to warn a comment author' });
+      }
+      await recordAdminAuditLog({
+        actorUserId: adminReq.auth!.userId,
+        actionType: 'comment.warn_author',
+        targetType: 'comment',
+        targetId: commentId,
+        severity: 'warning',
+        summary: normalizedNote,
+        metadata: {
+          note: normalizedNote,
+          postId: comment.post_id,
+          commentAuthorUserId: comment.author_user_id,
+        },
+      });
+      return res.status(200).json({ success: true });
+    }
+
+    if (action === 'suspend_author') {
+      await prisma.$queryRaw`
+        UPDATE users
+        SET suspended_until = NOW() + INTERVAL '7 day', updated_at = NOW()
+        WHERE user_id = ${comment.author_user_id}
+      `;
+      await recordAdminAuditLog({
+        actorUserId: adminReq.auth!.userId,
+        actionType: 'comment.suspend_author',
+        targetType: 'comment',
+        targetId: commentId,
+        severity: 'warning',
+        summary: 'Admin suspended comment author',
+        metadata: normalizedNote ? { note: normalizedNote, postId: comment.post_id } : { postId: comment.post_id },
+      });
+      return res.status(200).json({ success: true });
+    }
+
+    return res.status(400).json({ message: 'Unsupported action' });
+  } catch (err) {
+    console.error('Error performing comment moderation action:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });

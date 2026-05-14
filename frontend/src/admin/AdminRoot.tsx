@@ -32,6 +32,7 @@ import { Toaster, toast } from 'sonner@2.0.3';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
+import { Skeleton } from '../components/ui/skeleton';
 import { Textarea } from '../components/ui/textarea';
 import { apiChangePassword, apiVerifyPasswordChange } from '../lib/authApi';
 import {
@@ -274,6 +275,26 @@ type AdminPostDetailResponse = {
     timestamp: string;
     metadata?: Record<string, unknown>;
   }>;
+};
+
+type AdminPostComment = {
+  id: string;
+  postId: string;
+  authorUserId: string;
+  authorUsername: string;
+  authorAvatarUrl: string | null;
+  parentCommentId: string | null;
+  content: string;
+  likeCount: number;
+  replyCount: number;
+  createdAt: string;
+  updatedAt: string;
+  replies: AdminPostComment[];
+};
+
+type AdminPostCommentsResponse = {
+  comments: AdminPostComment[];
+  nextCursor: string | null;
 };
 
 type PostFilterState = {
@@ -712,8 +733,15 @@ export default function AdminRoot() {
   const [clubMembers, setClubMembers] = useState<AdminClubMember[]>([]);
   const [selectedPost, setSelectedPost] = useState<AdminPostListItem | null>(null);
   const [selectedPostDetail, setSelectedPostDetail] = useState<AdminPostDetailResponse | null>(null);
+  const [selectedPostComments, setSelectedPostComments] = useState<AdminPostComment[]>([]);
+  const [selectedPostCommentsNextCursor, setSelectedPostCommentsNextCursor] = useState<string | null>(null);
+  const [expandedCommentIds, setExpandedCommentIds] = useState<Record<string, boolean>>({});
+  const [commentRepliesByParentId, setCommentRepliesByParentId] = useState<Record<string, AdminPostComment[]>>({});
+  const [commentRepliesNextCursorByParentId, setCommentRepliesNextCursorByParentId] = useState<Record<string, string | null>>({});
+  const [commentRepliesLoadingByParentId, setCommentRepliesLoadingByParentId] = useState<Record<string, boolean>>({});
   const [postFilters, setPostFilters] = useState<PostFilterState>(DEFAULT_POST_FILTERS);
   const [postActionNote, setPostActionNote] = useState('');
+  const [commentActionNote, setCommentActionNote] = useState('');
   const [transferTarget, setTransferTarget] = useState<string>('');
   const [transferConfirm, setTransferConfirm] = useState(false);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
@@ -852,6 +880,8 @@ export default function AdminRoot() {
   });
   const selectedUserDetail = selectedUserDetailQuery.data ?? null;
   const userDetailLoading = selectedUserDetailQuery.isLoading || (selectedUserDetailQuery.isFetching && !selectedUserDetail);
+  const clubDetailLoading = Boolean(selectedClub && !selectedClubDetail);
+  const postDetailLoading = Boolean(selectedPost && !selectedPostDetail);
 
   const goTo = (nextPage: PageKey, params?: Record<string, string | null | undefined>) => {
     const url = new URL(window.location.href);
@@ -960,6 +990,34 @@ export default function AdminRoot() {
     }
   };
 
+  const runCommentAction = async (commentId: string, action: 'delete' | 'warn_author' | 'suspend_author', postId: string, options?: { note?: string }) => {
+    if (!token) return;
+    try {
+      await apiAdminPost(`/admin/comments/${commentId}/actions`, token, {
+        action,
+        note: options?.note,
+      });
+      toast.success(`Comment ${action} completed`);
+      if (selectedPost?.id === postId) {
+        const [detail, commentsResponse] = await Promise.all([
+          apiAdminGet<AdminPostDetailResponse>(`/admin/posts/${postId}`, token),
+          apiAdminGet<AdminPostCommentsResponse>(`/admin/posts/${postId}/comments?limit=20`, token),
+        ]);
+        setSelectedPostDetail(detail);
+        setSelectedPostComments(commentsResponse.comments ?? []);
+        setSelectedPostCommentsNextCursor(commentsResponse.nextCursor ?? null);
+        setExpandedCommentIds({});
+        setCommentRepliesByParentId({});
+        setCommentRepliesNextCursorByParentId({});
+        setCommentRepliesLoadingByParentId({});
+      }
+      setCommentActionNote('');
+      await refreshCurrentPage();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : `Unable to ${action} comment`);
+    }
+  };
+
   const openUserDrawer = (user: AdminUserListItem) => {
     setSelectedUser(user);
     setUserActionForm({ note: '', durationDays: 7 });
@@ -978,13 +1036,49 @@ export default function AdminRoot() {
     if (!token) return;
     setSelectedPost(post);
     setPostActionNote(post.hiddenReason ?? '');
-    setSelectedPostDetail(await apiAdminGet<AdminPostDetailResponse>(`/admin/posts/${post.id}`, token));
+    setCommentActionNote('');
+    setExpandedCommentIds({});
+    setCommentRepliesByParentId({});
+    setCommentRepliesNextCursorByParentId({});
+    setCommentRepliesLoadingByParentId({});
+    const [detail, commentsResponse] = await Promise.all([
+      apiAdminGet<AdminPostDetailResponse>(`/admin/posts/${post.id}`, token),
+      apiAdminGet<AdminPostCommentsResponse>(`/admin/posts/${post.id}/comments?limit=20`, token),
+    ]);
+    setSelectedPostDetail(detail);
+    setSelectedPostComments(commentsResponse.comments ?? []);
+    setSelectedPostCommentsNextCursor(commentsResponse.nextCursor ?? null);
   };
 
   const loadClubMembers = async (clubId: string, q = '') => {
     if (!token) return;
     const members = await apiAdminGet<AdminClubMember[]>(`/admin/clubs/${clubId}/members?q=${encodeURIComponent(q)}`, token);
     setClubMembers(members);
+  };
+
+  const loadAdminPostComments = async (postId: string, options?: { parentCommentId?: string; cursor?: string | null; append?: boolean }) => {
+    if (!token) return;
+    const params = new URLSearchParams();
+    params.set('limit', '20');
+    if (options?.parentCommentId) params.set('parentCommentId', options.parentCommentId);
+    if (options?.cursor) params.set('cursor', options.cursor);
+    const response = await apiAdminGet<AdminPostCommentsResponse>(`/admin/posts/${postId}/comments?${params.toString()}`, token);
+
+    if (options?.parentCommentId) {
+      const parentId = options.parentCommentId;
+      setCommentRepliesByParentId((current) => ({
+        ...current,
+        [parentId]: options.append ? [...(current[parentId] ?? []), ...(response.comments ?? [])] : (response.comments ?? []),
+      }));
+      setCommentRepliesNextCursorByParentId((current) => ({
+        ...current,
+        [parentId]: response.nextCursor ?? null,
+      }));
+      return;
+    }
+
+    setSelectedPostComments((current) => (options?.append ? [...current, ...(response.comments ?? [])] : (response.comments ?? [])));
+    setSelectedPostCommentsNextCursor(response.nextCursor ?? null);
   };
 
   const handlePasswordChange = async () => {
@@ -2144,7 +2238,7 @@ export default function AdminRoot() {
       </RightDrawer>
 
       <RightDrawer
-        open={Boolean(selectedClub && selectedClubDetail)}
+        open={Boolean(selectedClub)}
         title={selectedClubDetail?.name ?? selectedClub?.name ?? 'Club detail'}
         subtitle={selectedClubDetail?.description ?? 'Club moderation and analytics'}
         onClose={() => {
@@ -2155,7 +2249,9 @@ export default function AdminRoot() {
           setTransferConfirm(false);
         }}
       >
-        {selectedClubDetail ? (
+        {clubDetailLoading ? (
+          <DrawerSkeleton showFooterBlocks={4} />
+        ) : selectedClubDetail ? (
           <div className="space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-2xl border border-slate-200 px-4 py-3">
@@ -2311,16 +2407,25 @@ export default function AdminRoot() {
       </RightDrawer>
 
       <RightDrawer
-        open={Boolean(selectedPost && selectedPostDetail)}
+        open={Boolean(selectedPost)}
         title={selectedPostDetail?.title ?? selectedPost?.title ?? 'Post detail'}
         subtitle={`Review post moderation details${selectedPostDetail?.club?.name ? ` · ${selectedPostDetail.club.name}` : ''}`}
         onClose={() => {
           setSelectedPost(null);
           setSelectedPostDetail(null);
+          setSelectedPostComments([]);
+          setSelectedPostCommentsNextCursor(null);
+          setExpandedCommentIds({});
+          setCommentRepliesByParentId({});
+          setCommentRepliesNextCursorByParentId({});
+          setCommentRepliesLoadingByParentId({});
           setPostActionNote('');
+          setCommentActionNote('');
         }}
       >
-        {selectedPostDetail ? (
+        {postDetailLoading ? (
+          <DrawerSkeleton showComments showFooterBlocks={2} />
+        ) : selectedPostDetail ? (
           <div className="space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="rounded-2xl border border-slate-200 px-4 py-3">
@@ -2456,6 +2561,138 @@ export default function AdminRoot() {
               </div>
             </ShellCard>
 
+            <ShellCard title="Comments">
+              <div className="space-y-3">
+                <Textarea
+                  rows={3}
+                  placeholder="Add a moderation note for warning or suspending a comment author"
+                  value={commentActionNote}
+                  onChange={(event) => setCommentActionNote(event.target.value)}
+                />
+                {selectedPostComments.length === 0 ? (
+                  <EmptyPanel title="No comments" body="This post does not have any comments yet." />
+                ) : (
+                  selectedPostComments.map((comment) => {
+                    const renderComment = (item: AdminPostComment, depth = 0): React.ReactNode => {
+                      const isExpanded = Boolean(expandedCommentIds[item.id]);
+                      const replies = commentRepliesByParentId[item.id] ?? [];
+                      const repliesNextCursor = commentRepliesNextCursorByParentId[item.id] ?? null;
+                      const repliesLoading = Boolean(commentRepliesLoadingByParentId[item.id]);
+
+                      return (
+                        <div key={item.id} className={`rounded-xl border border-slate-200 px-4 py-4 ${depth > 0 ? 'ml-4 mt-3' : ''}`}>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-slate-800">{item.authorUsername}</p>
+                              <p className="mt-1 text-xs text-slate-500">{formatDate(item.createdAt)}</p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <Badge variant="outline">{formatNumber(item.likeCount)} likes</Badge>
+                              <Badge variant="outline">{formatNumber(item.replyCount)} replies</Badge>
+                            </div>
+                          </div>
+                          <p className="mt-3 text-sm leading-6 text-slate-700">{item.content}</p>
+                          <div className="mt-4 flex flex-wrap gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => void runCommentAction(item.id, 'delete', selectedPostDetail.id)}
+                            >
+                              Delete
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                const trimmedNote = commentActionNote.trim();
+                                if (!trimmedNote) {
+                                  toast.error('Add a moderation note before warning a comment author.');
+                                  return;
+                                }
+                                void runCommentAction(item.id, 'warn_author', selectedPostDetail.id, { note: trimmedNote });
+                              }}
+                            >
+                              Warn author
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => void runCommentAction(item.id, 'suspend_author', selectedPostDetail.id, { note: commentActionNote.trim() || undefined })}
+                            >
+                              Suspend author
+                            </Button>
+                            {item.replyCount > 0 ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={async () => {
+                                  const nextExpanded = !isExpanded;
+                                  setExpandedCommentIds((current) => ({ ...current, [item.id]: nextExpanded }));
+                                  if (nextExpanded && replies.length === 0 && !repliesLoading) {
+                                    setCommentRepliesLoadingByParentId((current) => ({ ...current, [item.id]: true }));
+                                    try {
+                                      await loadAdminPostComments(selectedPostDetail.id, { parentCommentId: item.id });
+                                    } finally {
+                                      setCommentRepliesLoadingByParentId((current) => ({ ...current, [item.id]: false }));
+                                    }
+                                  }
+                                }}
+                              >
+                                {isExpanded ? 'Hide replies' : `View replies (${formatNumber(item.replyCount)})`}
+                              </Button>
+                            ) : null}
+                          </div>
+                          {isExpanded ? (
+                            <div className="mt-3 space-y-3">
+                              {repliesLoading && replies.length === 0 ? (
+                                <p className="text-sm text-slate-500">Loading replies...</p>
+                              ) : replies.length === 0 ? (
+                                <p className="text-sm text-slate-500">No replies loaded.</p>
+                              ) : (
+                                replies.map((reply) => renderComment(reply, depth + 1))
+                              )}
+                              {repliesNextCursor ? (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  disabled={repliesLoading}
+                                  onClick={async () => {
+                                    setCommentRepliesLoadingByParentId((current) => ({ ...current, [item.id]: true }));
+                                    try {
+                                      await loadAdminPostComments(selectedPostDetail.id, {
+                                        parentCommentId: item.id,
+                                        cursor: repliesNextCursor,
+                                        append: true,
+                                      });
+                                    } finally {
+                                      setCommentRepliesLoadingByParentId((current) => ({ ...current, [item.id]: false }));
+                                    }
+                                  }}
+                                >
+                                  Load more replies
+                                </Button>
+                              ) : null}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    };
+
+                    return renderComment(comment);
+                  })
+                )}
+                {selectedPostCommentsNextCursor ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void loadAdminPostComments(selectedPostDetail.id, { cursor: selectedPostCommentsNextCursor, append: true })}
+                  >
+                    Load more comments
+                  </Button>
+                ) : null}
+              </div>
+            </ShellCard>
+
             <ShellCard title="Moderation History">
               <div className="space-y-3">
                 {selectedPostDetail.moderationHistory.length === 0 ? (
@@ -2480,6 +2717,111 @@ export default function AdminRoot() {
           </div>
         ) : null}
       </RightDrawer>
+    </div>
+  );
+}
+
+function DrawerSkeleton({
+  showComments = false,
+  showFooterBlocks = 3,
+}: {
+  showComments?: boolean;
+  showFooterBlocks?: number;
+}) {
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-2xl border border-slate-200 px-4 py-3">
+          <Skeleton className="h-3 w-16" />
+          <Skeleton className="mt-3 h-8 w-24 rounded-full" />
+        </div>
+        <div className="rounded-2xl border border-slate-200 px-4 py-3">
+          <Skeleton className="h-3 w-20" />
+          <Skeleton className="mt-3 h-4 w-32" />
+        </div>
+      </div>
+
+      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <div className="border-b border-slate-200 px-4 py-3">
+          <Skeleton className="h-4 w-24" />
+        </div>
+        <div className="space-y-3 p-4">
+          <div className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3">
+            <Skeleton className="h-9 w-9 rounded-full" />
+            <div className="min-w-0 flex-1">
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="mt-2 h-3 w-40" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <div className="border-b border-slate-200 px-4 py-3">
+          <Skeleton className="h-4 w-28" />
+        </div>
+        <div className="space-y-3 p-4">
+          <Skeleton className="h-4 w-20" />
+          <Skeleton className="h-16 w-full rounded-xl" />
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+        <div className="border-b border-slate-200 px-4 py-3">
+          <Skeleton className="h-4 w-24" />
+        </div>
+        <div className="grid gap-3 p-4 sm:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="rounded-2xl border border-slate-200 px-4 py-3">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="mt-3 h-6 w-14" />
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {showComments ? (
+        <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+          <div className="border-b border-slate-200 px-4 py-3">
+            <Skeleton className="h-4 w-20" />
+          </div>
+          <div className="space-y-3 p-4">
+            <Skeleton className="h-20 w-full rounded-xl" />
+            {Array.from({ length: 2 }).map((_, index) => (
+              <div key={index} className="rounded-xl border border-slate-200 px-4 py-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="mt-2 h-3 w-36" />
+                  </div>
+                  <div className="flex gap-2">
+                    <Skeleton className="h-7 w-16 rounded-full" />
+                    <Skeleton className="h-7 w-20 rounded-full" />
+                  </div>
+                </div>
+                <Skeleton className="mt-3 h-14 w-full rounded-xl" />
+                <div className="mt-4 flex gap-2">
+                  <Skeleton className="h-9 w-20 rounded-full" />
+                  <Skeleton className="h-9 w-28 rounded-full" />
+                  <Skeleton className="h-9 w-32 rounded-full" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {Array.from({ length: showFooterBlocks }).map((_, index) => (
+        <section key={index} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+          <div className="border-b border-slate-200 px-4 py-3">
+            <Skeleton className="h-4 w-28" />
+          </div>
+          <div className="space-y-3 p-4">
+            <Skeleton className="h-20 w-full rounded-xl" />
+            <Skeleton className="h-20 w-full rounded-xl" />
+          </div>
+        </section>
+      ))}
     </div>
   );
 }
