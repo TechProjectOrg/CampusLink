@@ -138,6 +138,43 @@ function getOpenWebSocketCount(): number {
   return count;
 }
 
+const ADMIN_USER_SORT_COLUMNS = {
+  lastActive: 'COALESCE(u.last_seen_at, u.created_at)',
+  followers: 'follower_count',
+  posts: 'post_count',
+  reports: 'reports_count',
+  createdAt: 'u.created_at',
+} as const;
+
+type AdminUserSortKey = keyof typeof ADMIN_USER_SORT_COLUMNS;
+type AdminUserSortOrder = 'asc' | 'desc';
+type AdminUserStatusFilter = 'active' | 'suspended' | 'banned';
+
+function parseAdminBooleanFilter(raw: unknown): '' | 'true' | 'false' {
+  const value = String(raw ?? '').trim().toLowerCase();
+  return value === 'true' || value === 'false' ? value : '';
+}
+
+function parseAdminUserStatusFilter(raw: unknown): AdminUserStatusFilter | '' {
+  const value = String(raw ?? '').trim().toLowerCase();
+  return value === 'active' || value === 'suspended' || value === 'banned' ? value : '';
+}
+
+function parseAdminUserSortKey(raw: unknown): AdminUserSortKey {
+  const value = String(raw ?? '').trim();
+  return value in ADMIN_USER_SORT_COLUMNS ? (value as AdminUserSortKey) : 'lastActive';
+}
+
+function parseAdminSortOrder(raw: unknown): AdminUserSortOrder {
+  return String(raw ?? '').trim().toLowerCase() === 'asc' ? 'asc' : 'desc';
+}
+
+function parsePositiveInt(raw: unknown, fallback: number, min: number, max: number): number {
+  const parsed = Number.parseInt(String(raw ?? ''), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
 router.post('/auth/login', async (req: Request, res: Response) => {
   const { email, password } = req.body as { email?: string; password?: string };
 
@@ -538,11 +575,72 @@ router.get('/dashboard', async (req: Request, res: Response) => {
 
 router.get('/users', async (req: Request, res: Response) => {
   const query = String(req.query.q ?? '').trim();
-  const banned = String(req.query.banned ?? '').trim().toLowerCase();
-  const verified = String(req.query.verified ?? '').trim().toLowerCase();
+  const banned = parseAdminBooleanFilter(req.query.banned);
+  const verified = parseAdminBooleanFilter(req.query.verified);
+  const status = parseAdminUserStatusFilter(req.query.status);
+  const department = String(req.query.department ?? '').trim();
+  const sort = parseAdminUserSortKey(req.query.sort);
+  const order = parseAdminSortOrder(req.query.order);
+  const page = parsePositiveInt(req.query.page, 1, 1, 10_000);
+  const limit = parsePositiveInt(req.query.limit, 20, 1, 100);
+  const offset = (page - 1) * limit;
+  const safeOrder = order.toUpperCase();
+  const safeSortColumn = ADMIN_USER_SORT_COLUMNS[sort];
+  const searchPattern = `%${query}%`;
 
   try {
-    const rows = await prisma.$queryRaw<
+    const listSql = `
+      SELECT
+        u.user_id,
+        u.username,
+        u.email,
+        COALESCE(sp.branch, ap.branch, 'Unknown') AS branch,
+        (SELECT COUNT(*)::int FROM follows f WHERE f.followed_user_id = u.user_id) AS follower_count,
+        (SELECT COUNT(*)::int FROM posts p WHERE p.author_user_id = u.user_id AND p.deleted_at IS NULL) AS post_count,
+        (SELECT COUNT(*)::int FROM admin_reports r WHERE r.target_type = CAST('user' AS "AdminReportTargetType") AND r.target_user_id = u.user_id) AS reports_count,
+        COALESCE(u.last_seen_at, u.created_at) AS last_active,
+        u.is_banned,
+        u.suspended_until,
+        u.verified_at,
+        u.profile_photo_url,
+        u.created_at
+      FROM users u
+      LEFT JOIN student_profiles sp ON sp.user_id = u.user_id
+      LEFT JOIN alumni_profiles ap ON ap.user_id = u.user_id
+      WHERE
+        ($1 = '' OR u.username ILIKE $2 OR u.email ILIKE $2)
+        AND ($3 = '' OR ($3 = 'true' AND u.is_banned = TRUE) OR ($3 = 'false' AND u.is_banned = FALSE))
+        AND ($4 = '' OR ($4 = 'true' AND u.verified_at IS NOT NULL) OR ($4 = 'false' AND u.verified_at IS NULL))
+        AND (
+          $5 = ''
+          OR ($5 = 'active' AND u.is_banned = FALSE AND (u.suspended_until IS NULL OR u.suspended_until <= NOW()))
+          OR ($5 = 'suspended' AND u.is_banned = FALSE AND u.suspended_until IS NOT NULL AND u.suspended_until > NOW())
+          OR ($5 = 'banned' AND u.is_banned = TRUE)
+        )
+        AND ($6 = '' OR COALESCE(sp.branch, ap.branch, 'Unknown') = $6)
+      ORDER BY ${safeSortColumn} ${safeOrder}, u.user_id ${safeOrder}
+      LIMIT $7
+      OFFSET $8
+    `;
+    const countSql = `
+      SELECT COUNT(*)::int AS total
+      FROM users u
+      LEFT JOIN student_profiles sp ON sp.user_id = u.user_id
+      LEFT JOIN alumni_profiles ap ON ap.user_id = u.user_id
+      WHERE
+        ($1 = '' OR u.username ILIKE $2 OR u.email ILIKE $2)
+        AND ($3 = '' OR ($3 = 'true' AND u.is_banned = TRUE) OR ($3 = 'false' AND u.is_banned = FALSE))
+        AND ($4 = '' OR ($4 = 'true' AND u.verified_at IS NOT NULL) OR ($4 = 'false' AND u.verified_at IS NULL))
+        AND (
+          $5 = ''
+          OR ($5 = 'active' AND u.is_banned = FALSE AND (u.suspended_until IS NULL OR u.suspended_until <= NOW()))
+          OR ($5 = 'suspended' AND u.is_banned = FALSE AND u.suspended_until IS NOT NULL AND u.suspended_until > NOW())
+          OR ($5 = 'banned' AND u.is_banned = TRUE)
+        )
+        AND ($6 = '' OR COALESCE(sp.branch, ap.branch, 'Unknown') = $6)
+    `;
+    const [rows, totalRows, departmentRows] = await Promise.all([
+      prisma.$queryRawUnsafe<
       Array<{
         user_id: string;
         username: string;
@@ -556,47 +654,59 @@ router.get('/users', async (req: Request, res: Response) => {
         suspended_until: Date | null;
         verified_at: Date | null;
         profile_photo_url: string | null;
+        created_at: Date;
       }>
-    >`
-      SELECT
-        u.user_id,
-        u.username,
-        u.email,
-        COALESCE(sp.branch, ap.branch, 'Unknown') AS branch,
-        (SELECT COUNT(*)::int FROM follows f WHERE f.followed_user_id = u.user_id) AS follower_count,
-        (SELECT COUNT(*)::int FROM posts p WHERE p.author_user_id = u.user_id AND p.deleted_at IS NULL) AS post_count,
-        (SELECT COUNT(*)::int FROM admin_reports r WHERE r.target_type = CAST('user' AS "AdminReportTargetType") AND r.target_user_id = u.user_id) AS reports_count,
-        COALESCE(u.last_seen_at, u.created_at) AS last_active,
-        u.is_banned,
-        u.suspended_until,
-        u.verified_at,
-        u.profile_photo_url
-      FROM users u
-      LEFT JOIN student_profiles sp ON sp.user_id = u.user_id
-      LEFT JOIN alumni_profiles ap ON ap.user_id = u.user_id
-      WHERE
-        (${query} = '' OR u.username ILIKE ${`%${query}%`} OR u.email ILIKE ${`%${query}%`})
-        AND (${banned} = '' OR (${banned} = 'true' AND u.is_banned = TRUE) OR (${banned} = 'false' AND u.is_banned = FALSE))
-        AND (${verified} = '' OR (${verified} = 'true' AND u.verified_at IS NOT NULL) OR (${verified} = 'false' AND u.verified_at IS NULL))
-      ORDER BY COALESCE(u.last_seen_at, u.created_at) DESC
-      LIMIT 100
-    `;
+      >(listSql, query, searchPattern, banned, verified, status, department, limit, offset),
+      prisma.$queryRawUnsafe<
+        Array<{ total: number }>
+      >(countSql, query, searchPattern, banned, verified, status, department),
+      prisma.$queryRaw<
+        Array<{ department: string }>
+      >`
+        SELECT department
+        FROM (
+          SELECT DISTINCT COALESCE(sp.branch, ap.branch, 'Unknown') AS department
+          FROM users u
+          LEFT JOIN student_profiles sp ON sp.user_id = u.user_id
+          LEFT JOIN alumni_profiles ap ON ap.user_id = u.user_id
+        ) departments
+        ORDER BY department ASC
+      `,
+    ]);
 
-    return res.status(200).json(rows.map((row) => ({
-      id: row.user_id,
-      username: row.username,
-      fullName: row.username,
-      email: row.email,
-      college: 'GBPUAT',
-      department: row.branch,
-      followers: row.follower_count,
-      postsCount: row.post_count,
-      reportsCount: row.reports_count,
-      lastActive: row.last_active ? row.last_active.toISOString() : null,
-      status: row.is_banned ? 'banned' : row.suspended_until ? 'suspended' : 'active',
-      verified: Boolean(row.verified_at),
-      avatarUrl: row.profile_photo_url,
-    })));
+    const total = totalRows[0]?.total ?? 0;
+    const pageCount = total === 0 ? 1 : Math.ceil(total / limit);
+
+    return res.status(200).json({
+      items: rows.map((row) => ({
+        id: row.user_id,
+        username: row.username,
+        fullName: row.username,
+        email: row.email,
+        college: 'GBPUAT',
+        department: row.branch,
+        followers: row.follower_count,
+        postsCount: row.post_count,
+        reportsCount: row.reports_count,
+        lastActive: row.last_active ? row.last_active.toISOString() : null,
+        createdAt: row.created_at.toISOString(),
+        suspendedUntil: row.suspended_until ? row.suspended_until.toISOString() : null,
+        status: row.is_banned ? 'banned' : row.suspended_until && row.suspended_until > new Date() ? 'suspended' : 'active',
+        verified: Boolean(row.verified_at),
+        avatarUrl: row.profile_photo_url,
+      })),
+      pageInfo: {
+        page,
+        limit,
+        total,
+        totalPages: pageCount,
+        hasNextPage: page < pageCount,
+        hasPreviousPage: page > 1,
+      },
+      filterOptions: {
+        departments: departmentRows.map((row) => row.department),
+      },
+    });
   } catch (err) {
     console.error('Error loading admin users:', err);
     return res.status(500).json({ message: 'Internal server error' });
@@ -607,11 +717,25 @@ router.get('/users/:userId', async (req: Request<{ userId: string }>, res: Respo
   const { userId } = req.params;
 
   try {
-    const [users, posts, clubs, reports, sessions] = await Promise.all([
-      prisma.$queryRaw<Array<{ user_id: string; username: string; email: string; bio: string | null; is_banned: boolean; suspended_until: Date | null; verified_at: Date | null; created_at: Date; last_seen_at: Date | null; profile_photo_url: string | null }>>`
-        SELECT user_id, username, email, bio, is_banned, suspended_until, verified_at, created_at, last_seen_at, profile_photo_url
-        FROM users
-        WHERE user_id = ${userId}
+    const [users, posts, clubs, reports, sessions, auditLogs] = await Promise.all([
+      prisma.$queryRaw<Array<{ user_id: string; username: string; email: string; bio: string | null; headline: string | null; branch: string | null; is_banned: boolean; suspended_until: Date | null; verified_at: Date | null; created_at: Date; last_seen_at: Date | null; profile_photo_url: string | null }>>`
+        SELECT
+          u.user_id,
+          u.username,
+          u.email,
+          u.bio,
+          u.headline,
+          COALESCE(sp.branch, ap.branch, 'Unknown') AS branch,
+          u.is_banned,
+          u.suspended_until,
+          u.verified_at,
+          u.created_at,
+          u.last_seen_at,
+          u.profile_photo_url
+        FROM users u
+        LEFT JOIN student_profiles sp ON sp.user_id = u.user_id
+        LEFT JOIN alumni_profiles ap ON ap.user_id = u.user_id
+        WHERE u.user_id = ${userId}
         LIMIT 1
       `,
       prisma.$queryRaw<Array<{ post_id: string; title: string | null; content_text: string | null; created_at: Date; hidden_at: Date | null; deleted_at: Date | null }>>`
@@ -643,6 +767,14 @@ router.get('/users/:userId', async (req: Request<{ userId: string }>, res: Respo
         ORDER BY COALESCE(last_seen_at, created_at) DESC
         LIMIT 10
       `,
+      prisma.$queryRaw<Array<{ audit_log_id: string; action_type: string; summary: string; severity: string; created_at: Date; actor: string; metadata: unknown }>>`
+        SELECT l.audit_log_id, l.action_type, l.summary, l.severity::text, l.created_at, actor.username AS actor, l.metadata
+        FROM admin_audit_logs l
+        JOIN users actor ON actor.user_id = l.actor_user_id
+        WHERE l.target_type = 'user' AND l.target_id = ${userId}
+        ORDER BY l.created_at DESC
+        LIMIT 20
+      `,
     ]);
 
     const user = users[0];
@@ -656,11 +788,15 @@ router.get('/users/:userId', async (req: Request<{ userId: string }>, res: Respo
       fullName: user.username,
       email: user.email,
       bio: user.bio,
+      headline: user.headline,
+      college: 'GBPUAT',
+      department: user.branch,
       verified: Boolean(user.verified_at),
-      status: user.is_banned ? 'banned' : user.suspended_until ? 'suspended' : 'active',
+      status: user.is_banned ? 'banned' : user.suspended_until && user.suspended_until > new Date() ? 'suspended' : 'active',
       avatarUrl: user.profile_photo_url,
       createdAt: user.created_at.toISOString(),
       lastSeenAt: user.last_seen_at ? user.last_seen_at.toISOString() : null,
+      suspendedUntil: user.suspended_until ? user.suspended_until.toISOString() : null,
       recentPosts: posts.map((post) => ({
         id: post.post_id,
         title: post.title,
@@ -680,10 +816,14 @@ router.get('/users/:userId', async (req: Request<{ userId: string }>, res: Respo
         status: report.status,
         createdAt: report.created_at.toISOString(),
       })),
-      moderationHistory: reports.map((report) => ({
-        id: report.report_id,
-        summary: `${report.status}: ${report.reason}`,
-        timestamp: report.created_at.toISOString(),
+      moderationHistory: auditLogs.map((entry) => ({
+        id: entry.audit_log_id,
+        actionType: entry.action_type,
+        actor: entry.actor,
+        severity: entry.severity,
+        summary: entry.summary,
+        timestamp: entry.created_at.toISOString(),
+        metadata: entry.metadata ?? {},
       })),
       loginHistory: sessions.map((session) => ({
         id: session.session_id,
@@ -703,7 +843,9 @@ router.get('/users/:userId', async (req: Request<{ userId: string }>, res: Respo
 router.post('/users/:userId/actions', async (req: Request<{ userId: string }>, res: Response) => {
   const adminReq = req as AdminAuthedRequest;
   const { userId } = req.params;
-  const { action, note } = req.body as { action?: string; note?: string };
+  const { action, note, durationDays } = req.body as { action?: string; note?: string; durationDays?: number };
+  const normalizedNote = note?.trim();
+  const suspendDays = Math.min(365, Math.max(1, Number.isFinite(Number(durationDays)) ? Number(durationDays) : 7));
 
   if (!action) {
     return res.status(400).json({ message: 'Missing action' });
@@ -717,21 +859,34 @@ router.post('/users/:userId/actions', async (req: Request<{ userId: string }>, r
         targetType: 'user',
         targetId: userId,
         severity: 'warning',
-        summary: note?.trim() || 'User warned by admin',
+        summary: normalizedNote || 'User warned by admin',
+        metadata: normalizedNote ? { note: normalizedNote } : undefined,
       });
       return res.status(200).json({ success: true });
     }
 
     if (action === 'suspend') {
-      await prisma.$queryRaw`
+      await prisma.$queryRawUnsafe(`
         UPDATE users
-        SET suspended_until = NOW() + INTERVAL '7 day', updated_at = NOW()
+        SET suspended_until = NOW() + INTERVAL '${suspendDays} day', is_banned = FALSE, updated_at = NOW()
         WHERE user_id = ${userId}
-      `;
+      `);
     } else if (action === 'ban') {
       await prisma.$queryRaw`
         UPDATE users
         SET is_banned = TRUE, suspended_until = NULL, updated_at = NOW()
+        WHERE user_id = ${userId}
+      `;
+    } else if (action === 'unsuspend') {
+      await prisma.$queryRaw`
+        UPDATE users
+        SET suspended_until = NULL, updated_at = NOW()
+        WHERE user_id = ${userId}
+      `;
+    } else if (action === 'unban') {
+      await prisma.$queryRaw`
+        UPDATE users
+        SET is_banned = FALSE, updated_at = NOW()
         WHERE user_id = ${userId}
       `;
     } else if (action === 'verify') {
@@ -751,7 +906,10 @@ router.post('/users/:userId/actions', async (req: Request<{ userId: string }>, r
       targetId: userId,
       severity: action === 'verify' ? 'info' : 'warning',
       summary: `Admin performed ${action} on user`,
-      metadata: note ? { note } : undefined,
+      metadata: {
+        ...(normalizedNote ? { note: normalizedNote } : {}),
+        ...(action === 'suspend' ? { durationDays: suspendDays } : {}),
+      },
     });
 
     return res.status(200).json({ success: true });

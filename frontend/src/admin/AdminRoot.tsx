@@ -28,6 +28,7 @@ import {
   BarChart,
   Bar,
 } from 'recharts';
+import { Toaster, toast } from 'sonner@2.0.3';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
@@ -77,6 +78,118 @@ type DashboardRouteContext = {
   metric: string | null;
 };
 
+type AdminUserStatus = 'active' | 'suspended' | 'banned';
+type AdminUserSortKey = 'lastActive' | 'followers' | 'posts' | 'reports' | 'createdAt';
+type AdminSortOrder = 'asc' | 'desc';
+
+type AdminUserListItem = {
+  id: string;
+  username: string;
+  fullName: string;
+  email: string;
+  college: string;
+  department: string | null;
+  followers: number;
+  postsCount: number;
+  reportsCount: number;
+  lastActive: string | null;
+  createdAt: string;
+  suspendedUntil: string | null;
+  status: AdminUserStatus;
+  verified: boolean;
+  avatarUrl: string | null;
+};
+
+type AdminUserListResponse = {
+  items: AdminUserListItem[];
+  pageInfo: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+  filterOptions: {
+    departments: string[];
+  };
+};
+
+type AdminUserDetailResponse = {
+  id: string;
+  username: string;
+  fullName: string;
+  email: string;
+  bio: string | null;
+  headline?: string | null;
+  college: string;
+  department: string | null;
+  verified: boolean;
+  status: AdminUserStatus;
+  avatarUrl: string | null;
+  createdAt: string;
+  lastSeenAt: string | null;
+  suspendedUntil: string | null;
+  recentPosts: Array<{ id: string; title: string | null; preview: string | null; createdAt: string; status: string }>;
+  clubs: Array<{ id: string; name: string; role: string; status: string }>;
+  reports: Array<{ id: string; reason: string; status: string; createdAt: string }>;
+  moderationHistory: Array<{
+    id: string;
+    actionType: string;
+    actor: string;
+    severity: string;
+    summary: string;
+    timestamp: string;
+    metadata?: Record<string, unknown>;
+  }>;
+  loginHistory: Array<{ id: string; browser: string; platform: string; location: string; lastSeenAt: string | null; createdAt: string }>;
+};
+
+type UserFilterState = {
+  banned: '' | 'true' | 'false';
+  verified: '' | 'true' | 'false';
+  status: '' | AdminUserStatus;
+  department: string;
+  sort: AdminUserSortKey;
+  order: AdminSortOrder;
+  page: number;
+  limit: number;
+};
+
+type UserActionName = 'warn' | 'suspend' | 'unsuspend' | 'ban' | 'unban' | 'verify';
+
+const DEFAULT_USER_FILTERS: UserFilterState = {
+  banned: '',
+  verified: '',
+  status: '',
+  department: '',
+  sort: 'lastActive',
+  order: 'desc',
+  page: 1,
+  limit: 20,
+};
+
+const USER_STATUS_OPTIONS: Array<{ value: UserFilterState['status']; label: string }> = [
+  { value: '', label: 'All statuses' },
+  { value: 'active', label: 'Active' },
+  { value: 'suspended', label: 'Suspended' },
+  { value: 'banned', label: 'Banned' },
+];
+
+const USER_BOOLEAN_OPTIONS: Array<{ value: '' | 'true' | 'false'; label: string }> = [
+  { value: '', label: 'All' },
+  { value: 'true', label: 'Yes' },
+  { value: 'false', label: 'No' },
+];
+
+const USER_SORT_OPTIONS: Array<{ value: AdminUserSortKey; label: string }> = [
+  { value: 'lastActive', label: 'Last active' },
+  { value: 'followers', label: 'Followers' },
+  { value: 'posts', label: 'Posts' },
+  { value: 'reports', label: 'Reports' },
+  { value: 'createdAt', label: 'Created date' },
+];
+
 function getSearchKey(page: PageKey, search: string): string {
   return SEARCHABLE_PAGES.has(page) ? search.trim() : '';
 }
@@ -93,13 +206,36 @@ function parseDashboardContext(search: string): DashboardRouteContext {
   };
 }
 
-function getAdminQueryKey(token: string, page: PageKey, search = '', range: AdminDashboardRange = '7d') {
-  return ['admin', token, page, search, range] as const;
+function buildQueryString(params: Record<string, string | number | null | undefined>) {
+  const searchParams = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value === null || value === undefined || value === '') continue;
+    searchParams.set(key, String(value));
+  }
+  return searchParams.toString();
 }
 
-async function fetchAdminPageData(page: PageKey, token: string, search: string, range: AdminDashboardRange) {
+function buildUsersQueryString(search: string, filters: UserFilterState) {
+  return buildQueryString({
+    q: search,
+    banned: filters.banned,
+    verified: filters.verified,
+    status: filters.status,
+    department: filters.department,
+    sort: filters.sort,
+    order: filters.order,
+    page: filters.page,
+    limit: filters.limit,
+  });
+}
+
+function getAdminQueryKey(token: string, page: PageKey, search = '', range: AdminDashboardRange = '7d', context = '') {
+  return ['admin', token, page, search, range, context] as const;
+}
+
+async function fetchAdminPageData(page: PageKey, token: string, search: string, range: AdminDashboardRange, userFilters: UserFilterState) {
   if (page === 'dashboard') return apiAdminGet<AdminDashboardResponse>(`/admin/dashboard?range=${encodeURIComponent(range)}`, token);
-  if (page === 'users') return apiAdminGet(`/admin/users?q=${encodeURIComponent(search)}`, token);
+  if (page === 'users') return apiAdminGet<AdminUserListResponse>(`/admin/users?${buildUsersQueryString(search, userFilters)}`, token);
   if (page === 'clubs') return apiAdminGet('/admin/clubs', token);
   if (page === 'posts') return apiAdminGet(`/admin/posts?q=${encodeURIComponent(search)}`, token);
   if (page === 'reports') return apiAdminGet('/admin/reports', token);
@@ -159,6 +295,21 @@ function trendTone(direction: AdminDashboardTrendDirection): string {
 
 function TrendBadge({ label, direction }: { label: string; direction: AdminDashboardTrendDirection }) {
   return <span className={`inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium ${trendTone(direction)}`}>{label}</span>;
+}
+
+function getUserActionOptions(user: Pick<AdminUserListItem, 'status' | 'verified'>): Array<{ action: UserActionName; label: string }> {
+  const actions: Array<{ action: UserActionName; label: string }> = [{ action: 'warn', label: 'Warn' }];
+  if (user.status === 'banned') {
+    actions.push({ action: 'unban', label: 'Unban' });
+  } else if (user.status === 'suspended') {
+    actions.push({ action: 'unsuspend', label: 'Unsuspend' }, { action: 'ban', label: 'Ban' });
+  } else {
+    actions.push({ action: 'suspend', label: 'Suspend' }, { action: 'ban', label: 'Ban' });
+  }
+  if (!user.verified) {
+    actions.push({ action: 'verify', label: 'Verify' });
+  }
+  return actions;
 }
 
 function ShellCard({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
@@ -237,11 +388,13 @@ export default function AdminRoot() {
   const [admin, setAdmin] = useState<AdminProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(Boolean(readAdminSession()?.token));
   const [search, setSearch] = useState('');
-  const [selectedUser, setSelectedUser] = useState<any | null>(null);
+  const [userFilters, setUserFilters] = useState<UserFilterState>(DEFAULT_USER_FILTERS);
+  const [selectedUser, setSelectedUser] = useState<AdminUserListItem | null>(null);
   const [selectedClub, setSelectedClub] = useState<any | null>(null);
-  const [selectedUserDetail, setSelectedUserDetail] = useState<any | null>(null);
+  const [selectedUserDetail, setSelectedUserDetail] = useState<AdminUserDetailResponse | null>(null);
   const [selectedClubDetail, setSelectedClubDetail] = useState<any | null>(null);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
+  const [userActionForm, setUserActionForm] = useState({ note: '', durationDays: 7 });
 
   const [announcementDraft, setAnnouncementDraft] = useState({
     title: '',
@@ -258,6 +411,7 @@ export default function AdminRoot() {
 
   const pageTitle = useMemo(() => NAV_ITEMS.find((item) => item.key === page)?.label ?? 'Dashboard', [page]);
   const searchKey = useMemo(() => getSearchKey(page, search), [page, search]);
+  const usersQueryContext = useMemo(() => (page === 'users' ? JSON.stringify(userFilters) : ''), [page, userFilters]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -274,6 +428,16 @@ export default function AdminRoot() {
       window.location.replace('/');
     }
   }, [token, authLoading]);
+
+  useEffect(() => {
+    if (page !== 'users') return;
+    setUserFilters((current) => (current.page === 1 ? current : { ...current, page: 1 }));
+  }, [page, searchKey]);
+
+  useEffect(() => {
+    if (page !== 'users') return;
+    setSelectedUserIds([]);
+  }, [page, searchKey, userFilters]);
 
   useEffect(() => {
     if (!token) {
@@ -307,8 +471,8 @@ export default function AdminRoot() {
   const canQueryAdmin = Boolean(token && admin);
 
   const dashboardQuery = useQuery({
-    queryKey: token ? getAdminQueryKey(token, 'dashboard', '', dashboardRange) : ['admin', 'dashboard', 'anon', dashboardRange],
-    queryFn: () => fetchAdminPageData('dashboard', token!, '', dashboardRange),
+    queryKey: token ? getAdminQueryKey(token, 'dashboard', '', dashboardRange) : ['admin', 'dashboard', 'anon', dashboardRange, ''],
+    queryFn: () => fetchAdminPageData('dashboard', token!, '', dashboardRange, userFilters),
     enabled: canQueryAdmin,
     staleTime: ADMIN_CACHE_MS,
     gcTime: ADMIN_CACHE_MS * 10,
@@ -316,8 +480,8 @@ export default function AdminRoot() {
   });
 
   const currentPageQuery = useQuery({
-    queryKey: token ? getAdminQueryKey(token, page, searchKey, dashboardRange) : ['admin', page, searchKey, 'anon', dashboardRange],
-    queryFn: () => fetchAdminPageData(page, token!, searchKey, dashboardRange),
+    queryKey: token ? getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext) : ['admin', page, searchKey, 'anon', dashboardRange, usersQueryContext],
+    queryFn: () => fetchAdminPageData(page, token!, searchKey, dashboardRange, userFilters),
     enabled: canQueryAdmin && page !== 'dashboard',
     staleTime: ADMIN_CACHE_MS,
     gcTime: ADMIN_CACHE_MS * 10,
@@ -325,7 +489,10 @@ export default function AdminRoot() {
   });
 
   const dashboard = (dashboardQuery.data as AdminDashboardResponse | null) ?? null;
-  const users = page === 'users' ? ((currentPageQuery.data as any[]) ?? []) : [];
+  const usersResponse = page === 'users' ? ((currentPageQuery.data as AdminUserListResponse | null) ?? null) : null;
+  const users = usersResponse?.items ?? [];
+  const usersPageInfo = usersResponse?.pageInfo ?? null;
+  const userFilterOptions = usersResponse?.filterOptions ?? { departments: [] };
   const clubs = page === 'clubs' ? ((currentPageQuery.data as any[]) ?? []) : [];
   const posts = page === 'posts' ? ((currentPageQuery.data as any[]) ?? []) : [];
   const reports = page === 'reports' ? ((currentPageQuery.data as any[]) ?? []) : [];
@@ -359,8 +526,8 @@ export default function AdminRoot() {
     if (!token || !admin) return;
     const nextSearchKey = getSearchKey(nextPage, search);
     void queryClient.prefetchQuery({
-      queryKey: getAdminQueryKey(token, nextPage, nextSearchKey, dashboardRange),
-      queryFn: () => fetchAdminPageData(nextPage, token, nextSearchKey, dashboardRange),
+      queryKey: getAdminQueryKey(token, nextPage, nextSearchKey, dashboardRange, nextPage === 'users' ? JSON.stringify(userFilters) : ''),
+      queryFn: () => fetchAdminPageData(nextPage, token, nextSearchKey, dashboardRange, userFilters),
       staleTime: ADMIN_CACHE_MS,
     });
   };
@@ -373,18 +540,24 @@ export default function AdminRoot() {
 
   const refreshCurrentPage = async () => {
     if (!token) return;
-    await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, page, searchKey, dashboardRange), exact: true });
+    await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext), exact: true });
     if (page !== 'dashboard') {
       await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, 'dashboard', '', dashboardRange), exact: true });
     }
   };
 
-  const runUserAction = async (userId: string, action: string, note?: string) => {
+  const runUserAction = async (userId: string, action: UserActionName, options?: { note?: string; durationDays?: number }) => {
     if (!token) return;
-    await apiAdminPost(`/admin/users/${userId}/actions`, token, { action, note });
-    await refreshCurrentPage();
-    if (selectedUser?.id === userId) {
-      setSelectedUserDetail(await apiAdminGet(`/admin/users/${userId}`, token));
+    try {
+      await apiAdminPost(`/admin/users/${userId}/actions`, token, { action, note: options?.note, durationDays: options?.durationDays });
+      toast.success(`User ${action} completed`);
+      setUserActionForm((current) => ({ ...current, note: '' }));
+      await refreshCurrentPage();
+      if (selectedUser?.id === userId) {
+        setSelectedUserDetail(await apiAdminGet<AdminUserDetailResponse>(`/admin/users/${userId}`, token));
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : `Unable to ${action} user`);
     }
   };
 
@@ -403,10 +576,15 @@ export default function AdminRoot() {
     await refreshCurrentPage();
   };
 
-  const openUserDrawer = async (user: any) => {
+  const openUserDrawer = async (user: AdminUserListItem) => {
     if (!token) return;
-    setSelectedUser(user);
-    setSelectedUserDetail(await apiAdminGet(`/admin/users/${user.id}`, token));
+    try {
+      setSelectedUser(user);
+      setUserActionForm({ note: '', durationDays: 7 });
+      setSelectedUserDetail(await apiAdminGet<AdminUserDetailResponse>(`/admin/users/${user.id}`, token));
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to load user details');
+    }
   };
 
   const openClubDrawer = async (club: any) => {
@@ -777,59 +955,127 @@ export default function AdminRoot() {
 
             {!pageLoading && page === 'users' ? (
               <>
-                <ShellCard title="User Management" action={<div className="flex gap-2"><Button variant="outline" size="sm" onClick={() => selectedUserIds.forEach((id) => void runUserAction(id, 'verify'))}>Bulk verify</Button><Button variant="outline" size="sm" onClick={() => selectedUserIds.forEach((id) => void runUserAction(id, 'suspend'))}>Bulk suspend</Button></div>}>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-[0.12em] text-slate-500">
-                          <th className="px-3 py-3 whitespace-nowrap"></th>
-                          <th className="px-3 py-3 whitespace-nowrap">User</th>
-                          <th className="px-3 py-3 whitespace-nowrap">College</th>
-                          <th className="px-3 py-3 whitespace-nowrap">Followers</th>
-                          <th className="px-3 py-3 whitespace-nowrap">Posts</th>
-                          <th className="px-3 py-3 whitespace-nowrap">Reports</th>
-                          <th className="px-3 py-3 whitespace-nowrap">Last active</th>
-                          <th className="px-3 py-3 whitespace-nowrap">Status</th>
-                          <th className="px-3 py-3 whitespace-nowrap">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {users.map((user) => (
-                          <tr key={user.id} className="border-b border-slate-100 hover:bg-slate-50">
-                            <td className="px-3 py-3">
-                              <input
-                                type="checkbox"
-                                checked={selectedUserIds.includes(user.id)}
-                                onChange={(event) => {
-                                  setSelectedUserIds((current) => event.target.checked ? [...current, user.id] : current.filter((id) => id !== user.id));
-                                }}
-                              />
-                            </td>
-                            <td className="px-3 py-3">
-                              <button type="button" onClick={() => void openUserDrawer(user)} className="text-left">
-                                <p className="font-medium text-slate-800">{user.username}</p>
-                                <p className="text-xs text-slate-500">{user.email}</p>
-                              </button>
-                            </td>
-                            <td className="px-3 py-3 text-slate-600">{user.college}</td>
-                            <td className="px-3 py-3 text-slate-600">{formatNumber(user.followers)}</td>
-                            <td className="px-3 py-3 text-slate-600">{formatNumber(user.postsCount)}</td>
-                            <td className="px-3 py-3 text-slate-600">{formatNumber(user.reportsCount)}</td>
-                            <td className="px-3 py-3 text-slate-500">{formatDate(user.lastActive)}</td>
-                            <td className="px-3 py-3"><StatusBadge value={user.status} /></td>
-                            <td className="px-3 py-3">
-                              <div className="flex flex-wrap gap-2">
-                                <Button variant="outline" size="sm" onClick={() => void runUserAction(user.id, 'warn', 'Admin warning issued')}>Warn</Button>
-                                <Button variant="outline" size="sm" onClick={() => void runUserAction(user.id, 'suspend')}>Suspend</Button>
-                                <Button variant="outline" size="sm" onClick={() => void runUserAction(user.id, 'ban')}>Ban</Button>
-                                <Button variant="outline" size="sm" onClick={() => void runUserAction(user.id, 'verify')}>Verify</Button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                <ShellCard title="User Filters">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+                    <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={userFilters.status} onChange={(event) => setUserFilters((current) => ({ ...current, status: event.target.value as UserFilterState['status'], page: 1 }))}>
+                      {USER_STATUS_OPTIONS.map((option) => <option key={option.label} value={option.value}>{option.label}</option>)}
+                    </select>
+                    <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={userFilters.verified} onChange={(event) => setUserFilters((current) => ({ ...current, verified: event.target.value as UserFilterState['verified'], page: 1 }))}>
+                      {USER_BOOLEAN_OPTIONS.map((option) => <option key={`verified-${option.label}`} value={option.value}>{`Verified: ${option.label}`}</option>)}
+                    </select>
+                    <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={userFilters.banned} onChange={(event) => setUserFilters((current) => ({ ...current, banned: event.target.value as UserFilterState['banned'], page: 1 }))}>
+                      {USER_BOOLEAN_OPTIONS.map((option) => <option key={`banned-${option.label}`} value={option.value}>{`Banned: ${option.label}`}</option>)}
+                    </select>
+                    <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={userFilters.department} onChange={(event) => setUserFilters((current) => ({ ...current, department: event.target.value, page: 1 }))}>
+                      <option value="">All departments</option>
+                      {userFilterOptions.departments.map((department) => <option key={department} value={department}>{department}</option>)}
+                    </select>
+                    <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={userFilters.sort} onChange={(event) => setUserFilters((current) => ({ ...current, sort: event.target.value as AdminUserSortKey, page: 1 }))}>
+                      {USER_SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                    <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={userFilters.order} onChange={(event) => setUserFilters((current) => ({ ...current, order: event.target.value as AdminSortOrder, page: 1 }))}>
+                      <option value="desc">Newest first</option>
+                      <option value="asc">Oldest first</option>
+                    </select>
                   </div>
+                </ShellCard>
+
+                <ShellCard
+                  title="User Management"
+                  action={
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" size="sm" disabled={selectedUserIds.length === 0} onClick={() => selectedUserIds.forEach((id) => void runUserAction(id, 'verify'))}>Bulk verify</Button>
+                      <Button variant="outline" size="sm" disabled={selectedUserIds.length === 0} onClick={() => selectedUserIds.forEach((id) => void runUserAction(id, 'suspend', { durationDays: 7 }))}>Bulk suspend</Button>
+                    </div>
+                  }
+                >
+                  {currentPageQuery.isError ? (
+                    <EmptyPanel title="Unable to load users" body={currentPageQuery.error instanceof Error ? currentPageQuery.error.message : 'Try refreshing this page.'} />
+                  ) : users.length === 0 ? (
+                    <EmptyPanel title="No users matched these filters" body="Adjust the search or filters to broaden the results." />
+                  ) : (
+                    <>
+                      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500">
+                        <span>{formatNumber(usersPageInfo?.total ?? 0)} users found</span>
+                        <span>Page {usersPageInfo?.page ?? 1} of {usersPageInfo?.totalPages ?? 1}</span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-[0.12em] text-slate-500">
+                              <th className="px-3 py-3 whitespace-nowrap"></th>
+                              <th className="px-3 py-3 whitespace-nowrap">User</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Department</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Followers</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Posts</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Reports</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Last active</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Status</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {users.map((user) => (
+                              <tr key={user.id} className="border-b border-slate-100 hover:bg-slate-50">
+                                <td className="px-3 py-3">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedUserIds.includes(user.id)}
+                                    onChange={(event) => {
+                                      setSelectedUserIds((current) => event.target.checked ? [...current, user.id] : current.filter((id) => id !== user.id));
+                                    }}
+                                  />
+                                </td>
+                                <td className="px-3 py-3">
+                                  <button type="button" onClick={() => void openUserDrawer(user)} className="text-left">
+                                    <p className="font-medium text-slate-800">{user.username}</p>
+                                    <p className="text-xs text-slate-500">{user.email}</p>
+                                  </button>
+                                </td>
+                                <td className="px-3 py-3 text-slate-600">{user.department || 'Unknown'}</td>
+                                <td className="px-3 py-3 text-slate-600">{formatNumber(user.followers)}</td>
+                                <td className="px-3 py-3 text-slate-600">{formatNumber(user.postsCount)}</td>
+                                <td className="px-3 py-3 text-slate-600">{formatNumber(user.reportsCount)}</td>
+                                <td className="px-3 py-3 text-slate-500">{formatDate(user.lastActive)}</td>
+                                <td className="px-3 py-3">
+                                  <div className="flex flex-wrap gap-2">
+                                    <StatusBadge value={user.status} />
+                                    <StatusBadge value={user.verified ? 'verified' : 'unverified'} />
+                                  </div>
+                                </td>
+                                <td className="px-3 py-3">
+                                  <div className="flex flex-wrap gap-2">
+                                    {getUserActionOptions(user).map((option) => (
+                                      <Button
+                                        key={option.action}
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => void runUserAction(user.id, option.action, option.action === 'suspend' ? { durationDays: 7 } : undefined)}
+                                      >
+                                        {option.label}
+                                      </Button>
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+                        <div className="flex items-center gap-2 text-sm text-slate-500">
+                          <span>Rows per page</span>
+                          <select className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700" value={userFilters.limit} onChange={(event) => setUserFilters((current) => ({ ...current, limit: Number(event.target.value), page: 1 }))}>
+                            {[10, 20, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
+                          </select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="sm" disabled={!usersPageInfo?.hasPreviousPage} onClick={() => setUserFilters((current) => ({ ...current, page: Math.max(1, current.page - 1) }))}>Previous</Button>
+                          <Button variant="outline" size="sm" disabled={!usersPageInfo?.hasNextPage} onClick={() => setUserFilters((current) => ({ ...current, page: current.page + 1 }))}>Next</Button>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </ShellCard>
               </>
             ) : null}
@@ -1170,6 +1416,8 @@ export default function AdminRoot() {
           </main>
         </div>
 
+      <Toaster richColors position="top-right" />
+
       <RightDrawer
         open={Boolean(selectedUser && selectedUserDetail)}
         title={selectedUserDetail?.username ?? selectedUser?.username ?? 'User detail'}
@@ -1177,6 +1425,7 @@ export default function AdminRoot() {
         onClose={() => {
           setSelectedUser(null);
           setSelectedUserDetail(null);
+          setUserActionForm({ note: '', durationDays: 7 });
         }}
       >
         {selectedUserDetail ? (
@@ -1192,9 +1441,80 @@ export default function AdminRoot() {
               </div>
             </div>
 
+            <ShellCard title="Profile Overview">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-md border border-slate-200 px-3 py-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">College</p>
+                  <p className="mt-1 text-sm text-slate-800">{selectedUserDetail.college}</p>
+                </div>
+                <div className="rounded-md border border-slate-200 px-3 py-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Department</p>
+                  <p className="mt-1 text-sm text-slate-800">{selectedUserDetail.department || 'Unknown'}</p>
+                </div>
+                <div className="rounded-md border border-slate-200 px-3 py-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Created</p>
+                  <p className="mt-1 text-sm text-slate-800">{formatDate(selectedUserDetail.createdAt)}</p>
+                </div>
+                <div className="rounded-md border border-slate-200 px-3 py-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Last seen</p>
+                  <p className="mt-1 text-sm text-slate-800">{formatDate(selectedUserDetail.lastSeenAt)}</p>
+                </div>
+                <div className="rounded-md border border-slate-200 px-3 py-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Suspended until</p>
+                  <p className="mt-1 text-sm text-slate-800">{formatDate(selectedUserDetail.suspendedUntil)}</p>
+                </div>
+                <div className="rounded-md border border-slate-200 px-3 py-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Headline</p>
+                  <p className="mt-1 text-sm text-slate-800">{selectedUserDetail.headline || 'No headline set'}</p>
+                </div>
+              </div>
+              <div className="mt-3 rounded-md border border-slate-200 px-3 py-3">
+                <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Bio</p>
+                <p className="mt-1 text-sm text-slate-700">{selectedUserDetail.bio || 'No bio available.'}</p>
+              </div>
+            </ShellCard>
+
+            <ShellCard title="Moderation Actions">
+              <div className="space-y-3">
+                <Textarea
+                  rows={4}
+                  placeholder="Add an internal moderation note"
+                  value={userActionForm.note}
+                  onChange={(event) => setUserActionForm((current) => ({ ...current, note: event.target.value }))}
+                />
+                <div className="grid gap-3 sm:grid-cols-[160px_1fr]">
+                  <Input
+                    type="number"
+                    min={1}
+                    max={365}
+                    value={userActionForm.durationDays}
+                    onChange={(event) => setUserActionForm((current) => ({ ...current, durationDays: Number(event.target.value) || 7 }))}
+                    placeholder="Suspension days"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    {getUserActionOptions({ status: selectedUserDetail.status, verified: selectedUserDetail.verified }).map((option) => (
+                      <Button
+                        key={option.action}
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          void runUserAction(selectedUserDetail.id, option.action, {
+                            note: userActionForm.note.trim() || undefined,
+                            durationDays: option.action === 'suspend' ? userActionForm.durationDays : undefined,
+                          })
+                        }
+                      >
+                        {option.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </ShellCard>
+
             <ShellCard title="Recent Posts">
               <div className="space-y-3">
-                {(selectedUserDetail.recentPosts ?? []).map((post: any) => (
+                {(selectedUserDetail.recentPosts ?? []).length === 0 ? <EmptyPanel title="No recent posts" body="Recent authored posts will appear here." /> : (selectedUserDetail.recentPosts ?? []).map((post: any) => (
                   <div key={post.id} className="rounded-md border border-slate-200 px-3 py-3">
                     <p className="text-sm font-medium text-slate-800">{post.title || 'Untitled post'}</p>
                     <p className="mt-1 text-sm text-slate-500">{post.preview || 'No preview available.'}</p>
@@ -1209,7 +1529,7 @@ export default function AdminRoot() {
 
             <ShellCard title="Clubs Joined">
               <div className="space-y-2">
-                {(selectedUserDetail.clubs ?? []).map((club: any) => (
+                {(selectedUserDetail.clubs ?? []).length === 0 ? <EmptyPanel title="No clubs joined" body="Club memberships will appear here." /> : (selectedUserDetail.clubs ?? []).map((club: any) => (
                   <div key={club.id} className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2">
                     <span className="text-sm text-slate-700">{club.name}</span>
                     <div className="flex gap-2">
@@ -1223,10 +1543,32 @@ export default function AdminRoot() {
 
             <ShellCard title="Reports">
               <div className="space-y-2">
-                {(selectedUserDetail.reports ?? []).map((report: any) => (
+                {(selectedUserDetail.reports ?? []).length === 0 ? <EmptyPanel title="No reports" body="Reports targeting this user will appear here." /> : (selectedUserDetail.reports ?? []).map((report: any) => (
                   <div key={report.id} className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2">
-                    <span className="text-sm text-slate-700">{report.reason}</span>
+                    <div>
+                      <span className="text-sm text-slate-700">{report.reason}</span>
+                      <p className="mt-1 text-xs text-slate-500">{formatDate(report.createdAt)}</p>
+                    </div>
                     <StatusBadge value={report.status} />
+                  </div>
+                ))}
+              </div>
+            </ShellCard>
+
+            <ShellCard title="Moderation History">
+              <div className="space-y-3">
+                {(selectedUserDetail.moderationHistory ?? []).length === 0 ? <EmptyPanel title="No moderation history" body="Admin actions on this user will appear here." /> : (selectedUserDetail.moderationHistory ?? []).map((entry) => (
+                  <div key={entry.id} className="rounded-md border border-slate-200 px-3 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-slate-800">{entry.summary}</p>
+                        <p className="mt-1 text-xs uppercase tracking-[0.1em] text-slate-500">{entry.actor} · {entry.actionType}</p>
+                      </div>
+                      <StatusBadge value={entry.severity} />
+                    </div>
+                    {'note' in (entry.metadata ?? {}) ? <p className="mt-2 text-sm text-slate-600">{String(entry.metadata?.note ?? '')}</p> : null}
+                    {'durationDays' in (entry.metadata ?? {}) ? <p className="mt-2 text-xs text-slate-500">Suspension length: {String(entry.metadata?.durationDays)} days</p> : null}
+                    <p className="mt-2 text-xs text-slate-500">{formatDate(entry.timestamp)}</p>
                   </div>
                 ))}
               </div>
@@ -1234,7 +1576,7 @@ export default function AdminRoot() {
 
             <ShellCard title="Login History">
               <div className="space-y-2">
-                {(selectedUserDetail.loginHistory ?? []).map((entry: any) => (
+                {(selectedUserDetail.loginHistory ?? []).length === 0 ? <EmptyPanel title="No login history" body="Recent user sessions will appear here." /> : (selectedUserDetail.loginHistory ?? []).map((entry: any) => (
                   <div key={entry.id} className="rounded-md border border-slate-200 px-3 py-3">
                     <p className="text-sm font-medium text-slate-800">{entry.browser} · {entry.platform}</p>
                     <p className="mt-1 text-sm text-slate-500">{entry.location}</p>
