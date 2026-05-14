@@ -47,6 +47,10 @@ import {
   type AdminAnnouncementStatus,
   type AdminAnalyticsResponse,
   type AdminAnalyticsSegment,
+  type AdminLogDetailResponse,
+  type AdminLogListItem,
+  type AdminLogListResponse,
+  type AdminLogSeverity,
   type AdminDashboardRange,
   type AdminDashboardResponse,
   type AdminDashboardTrendDirection,
@@ -376,6 +380,17 @@ type AnnouncementFilterState = {
   pushEnabled: '' | 'true' | 'false';
 };
 
+type LogFilterState = {
+  severity: '' | AdminLogSeverity;
+  actionType: string;
+  targetType: string;
+  actor: string;
+  from: string;
+  to: string;
+  page: number;
+  limit: number;
+};
+
 const DEFAULT_POST_FILTERS: PostFilterState = {
   status: '',
   severity: '',
@@ -439,6 +454,17 @@ const DEFAULT_ANNOUNCEMENT_FILTERS: AnnouncementFilterState = {
   status: '',
   pinned: '',
   pushEnabled: '',
+};
+
+const DEFAULT_LOG_FILTERS: LogFilterState = {
+  severity: '',
+  actionType: '',
+  targetType: '',
+  actor: '',
+  from: '',
+  to: '',
+  page: 1,
+  limit: 20,
 };
 
 const POST_STATUS_OPTIONS: Array<{ value: PostFilterState['status']; label: string }> = [
@@ -552,6 +578,20 @@ function buildAnnouncementsQueryString(filters: AnnouncementFilterState) {
     status: filters.status,
     pinned: filters.pinned,
     pushEnabled: filters.pushEnabled,
+  });
+}
+
+function buildLogsQueryString(search: string, filters: LogFilterState) {
+  return buildQueryString({
+    q: search,
+    severity: filters.severity,
+    actionType: filters.actionType,
+    targetType: filters.targetType,
+    actor: filters.actor,
+    from: filters.from,
+    to: filters.to,
+    page: filters.page,
+    limit: filters.limit,
   });
 }
 
@@ -672,6 +712,7 @@ async function fetchAdminPageData(
   reportFilters: ReportFilterState = DEFAULT_REPORT_FILTERS,
   analyticsSegment: AdminAnalyticsSegment = 'all',
   announcementFilters: AnnouncementFilterState = DEFAULT_ANNOUNCEMENT_FILTERS,
+  logFilters: LogFilterState = DEFAULT_LOG_FILTERS,
 ) {
   if (page === 'dashboard') return apiAdminGet<AdminDashboardResponse>(`/admin/dashboard?range=${encodeURIComponent(range)}`, token);
   if (page === 'users') return apiAdminGet<AdminUserListResponse>(`/admin/users?${buildUsersQueryString(search, userFilters)}`, token);
@@ -681,7 +722,7 @@ async function fetchAdminPageData(
   if (page === 'verification') return apiAdminGet('/admin/verification-requests', token);
   if (page === 'analytics') return apiAdminGet<AdminAnalyticsResponse>(`/admin/analytics?range=${encodeURIComponent(range)}&segment=${encodeURIComponent(analyticsSegment)}`, token);
   if (page === 'announcements') return apiAdminGet<AdminAnnouncementItem[]>(`/admin/announcements?${buildAnnouncementsQueryString(announcementFilters)}`, token);
-  if (page === 'logs') return apiAdminGet(`/admin/logs?q=${encodeURIComponent(search)}`, token);
+  if (page === 'logs') return apiAdminGet<AdminLogListResponse>(`/admin/logs?${buildLogsQueryString(search, logFilters)}`, token);
   return apiAdminGet('/admin/settings', token);
 }
 
@@ -942,6 +983,9 @@ export default function AdminRoot() {
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<AdminAnnouncementItem | null>(null);
   const [selectedAnnouncementDetail, setSelectedAnnouncementDetail] = useState<AdminAnnouncementDetailResponse | null>(null);
   const [announcementRecipientCount, setAnnouncementRecipientCount] = useState<number | null>(null);
+  const [logFilters, setLogFilters] = useState<LogFilterState>(DEFAULT_LOG_FILTERS);
+  const [selectedLog, setSelectedLog] = useState<AdminLogListItem | null>(null);
+  const [selectedLogDetail, setSelectedLogDetail] = useState<AdminLogDetailResponse | null>(null);
 
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [passwordState, setPasswordState] = useState({ isSaving: false, message: '', error: '' });
@@ -954,6 +998,7 @@ export default function AdminRoot() {
   const reportsQueryContext = useMemo(() => (page === 'reports' ? JSON.stringify(reportFilters) : ''), [page, reportFilters]);
   const analyticsQueryContext = useMemo(() => (page === 'analytics' ? analyticsSegment : ''), [page, analyticsSegment]);
   const announcementsQueryContext = useMemo(() => (page === 'announcements' ? JSON.stringify(announcementFilters) : ''), [page, announcementFilters]);
+  const logsQueryContext = useMemo(() => (page === 'logs' ? JSON.stringify(logFilters) : ''), [page, logFilters]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -989,6 +1034,11 @@ export default function AdminRoot() {
   useEffect(() => {
     if (page !== 'reports') return;
     setReportFilters((current) => (current.page === 1 ? current : { ...current, page: 1 }));
+  }, [page, searchKey]);
+
+  useEffect(() => {
+    if (page !== 'logs') return;
+    setLogFilters((current) => (current.page === 1 ? current : { ...current, page: 1 }));
   }, [page, searchKey]);
 
   useEffect(() => {
@@ -1068,8 +1118,8 @@ export default function AdminRoot() {
   });
 
   const currentPageQuery = useQuery({
-    queryKey: token ? getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext + reportsQueryContext + analyticsQueryContext + announcementsQueryContext) : ['admin', page, searchKey, 'anon', dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext + reportsQueryContext + analyticsQueryContext + announcementsQueryContext],
-    queryFn: () => fetchAdminPageData(page, token!, searchKey, dashboardRange, userFilters, clubFilters, postFilters, reportFilters, analyticsSegment, announcementFilters),
+    queryKey: token ? getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext + reportsQueryContext + analyticsQueryContext + announcementsQueryContext + logsQueryContext) : ['admin', page, searchKey, 'anon', dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext + reportsQueryContext + analyticsQueryContext + announcementsQueryContext + logsQueryContext],
+    queryFn: () => fetchAdminPageData(page, token!, searchKey, dashboardRange, userFilters, clubFilters, postFilters, reportFilters, analyticsSegment, announcementFilters, logFilters),
     enabled: canQueryAdmin && page !== 'dashboard',
     staleTime: ADMIN_CACHE_MS,
     gcTime: ADMIN_CACHE_MS * 10,
@@ -1093,7 +1143,9 @@ export default function AdminRoot() {
   const verification = page === 'verification' ? ((currentPageQuery.data as any[]) ?? []) : [];
   const analytics = page === 'analytics' ? ((currentPageQuery.data as AdminAnalyticsResponse | null) ?? null) : null;
   const announcements = page === 'announcements' ? ((currentPageQuery.data as AdminAnnouncementItem[]) ?? []) : [];
-  const logs = page === 'logs' ? ((currentPageQuery.data as any[]) ?? []) : [];
+  const logsResponse = page === 'logs' ? ((currentPageQuery.data as AdminLogListResponse | null) ?? null) : null;
+  const logs = logsResponse?.items ?? [];
+  const logsPageInfo = logsResponse?.pageInfo ?? null;
   const settings = page === 'settings' ? (currentPageQuery.data ?? null) : null;
   const activeQuery = page === 'dashboard' ? dashboardQuery : currentPageQuery;
   const pageLoading = activeQuery.isLoading;
@@ -1111,6 +1163,7 @@ export default function AdminRoot() {
   const clubDetailLoading = Boolean(selectedClub && !selectedClubDetail);
   const postDetailLoading = Boolean(selectedPost && !selectedPostDetail);
   const reportDetailLoading = Boolean(selectedReport && !selectedReportDetail);
+  const logDetailLoading = Boolean(selectedLog && !selectedLogDetail);
 
   const goTo = (nextPage: PageKey, params?: Record<string, string | null | undefined>) => {
     const url = new URL(window.location.href);
@@ -1147,7 +1200,7 @@ export default function AdminRoot() {
           : '';
     void queryClient.prefetchQuery({
       queryKey: getAdminQueryKey(token, nextPage, nextSearchKey, dashboardRange, nextContext),
-      queryFn: () => fetchAdminPageData(nextPage, token, nextSearchKey, dashboardRange, userFilters, clubFilters, postFilters, reportFilters, analyticsSegment, announcementFilters),
+      queryFn: () => fetchAdminPageData(nextPage, token, nextSearchKey, dashboardRange, userFilters, clubFilters, postFilters, reportFilters, analyticsSegment, announcementFilters, logFilters),
       staleTime: ADMIN_CACHE_MS,
     });
   };
@@ -1169,7 +1222,7 @@ export default function AdminRoot() {
 
   const refreshCurrentPage = async () => {
     if (!token) return;
-    await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext + reportsQueryContext + analyticsQueryContext + announcementsQueryContext), exact: true });
+    await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext + reportsQueryContext + analyticsQueryContext + announcementsQueryContext + logsQueryContext), exact: true });
     if (page !== 'dashboard') {
       await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, 'dashboard', '', dashboardRange), exact: true });
     }
@@ -1436,6 +1489,55 @@ export default function AdminRoot() {
   };
 
   const announcementRecipientPreview = selectedAnnouncementDetail?.recipientCount ?? announcements.find((item) => item.id === selectedAnnouncement?.id)?.recipientCount ?? 0;
+
+  const openLogDrawer = async (log: AdminLogListItem) => {
+    if (!token) return;
+    setSelectedLog(log);
+    try {
+      const detail = await apiAdminGet<AdminLogDetailResponse>(`/admin/logs/${log.id}`, token);
+      setSelectedLogDetail(detail);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to load log detail');
+    }
+  };
+
+  const exportLogsCsv = async () => {
+    if (!token) return;
+    if ((logsPageInfo?.total ?? 0) === 0) {
+      toast.error('No logs match the current filters.');
+      return;
+    }
+    try {
+      const exportResponse = await apiAdminGet<AdminLogListResponse>(`/admin/logs?${buildLogsQueryString(searchKey, { ...logFilters, page: 1, limit: Math.max(logsPageInfo?.total ?? logFilters.limit, logFilters.limit) })}`, token);
+      const detailRows = await Promise.all(exportResponse.items.map((item) => apiAdminGet<AdminLogDetailResponse>(`/admin/logs/${item.id}`, token)));
+      const escapeCsv = (value: string) => `"${value.replaceAll('"', '""')}"`;
+      const csvRows = [
+        ['timestamp', 'severity', 'actor', 'actionType', 'targetType', 'targetId', 'summary', 'metadata'].map(escapeCsv).join(','),
+        ...detailRows.map((item) => ([
+          item.createdAt,
+          item.severity,
+          item.actor.username,
+          item.actionType,
+          item.targetType ?? '',
+          item.targetId ?? '',
+          item.summary,
+          JSON.stringify(item.metadata ?? {}),
+        ].map((value) => escapeCsv(String(value))).join(','))),
+      ];
+      const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8' });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = downloadUrl;
+      anchor.download = `admin-audit-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+      toast.success('Logs exported');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to export logs');
+    }
+  };
 
   const openReportTarget = async (detail: AdminReportDetailResponse) => {
     const target = detail.targetPreview as AdminReportTargetPreview;
@@ -2749,30 +2851,136 @@ export default function AdminRoot() {
             ) : null}
 
             {!pageLoading && page === 'logs' ? (
-              <ShellCard title="System Logs">
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-[0.12em] text-slate-500">
-                        <th className="px-3 py-3 whitespace-nowrap">Timestamp</th>
-                        <th className="px-3 py-3 whitespace-nowrap">Severity</th>
-                        <th className="px-3 py-3 whitespace-nowrap">Actor</th>
-                        <th className="px-3 py-3 whitespace-nowrap">Action</th>
-                        <th className="px-3 py-3 whitespace-nowrap">Summary</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {logs.map((log) => (
-                        <tr key={log.id} className="border-b border-slate-100">
-                          <td className="px-3 py-3 text-slate-500">{formatDate(log.createdAt)}</td>
-                          <td className="px-3 py-3"><StatusBadge value={log.severity} /></td>
-                          <td className="px-3 py-3 text-slate-700">{log.actor}</td>
-                          <td className="px-3 py-3 text-slate-600">{log.actionType}</td>
-                          <td className="px-3 py-3 text-slate-600">{log.summary}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+              <ShellCard
+                title="System Logs"
+                action={(
+                  <Button variant="outline" size="sm" onClick={() => void exportLogsCsv()}>
+                    Export CSV
+                  </Button>
+                )}
+              >
+                <div className="space-y-4">
+                  <div className="grid gap-3 lg:grid-cols-3">
+                    <select
+                      className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm"
+                      value={logFilters.severity}
+                      onChange={(event) => setLogFilters((current) => ({ ...current, severity: event.target.value as LogFilterState['severity'], page: 1 }))}
+                    >
+                      <option value="">All severities</option>
+                      <option value="info">Info</option>
+                      <option value="warning">Warning</option>
+                      <option value="critical">Critical</option>
+                    </select>
+                    <Input
+                      placeholder="Filter by action type"
+                      value={logFilters.actionType}
+                      onChange={(event) => setLogFilters((current) => ({ ...current, actionType: event.target.value, page: 1 }))}
+                    />
+                    <Input
+                      placeholder="Filter by actor"
+                      value={logFilters.actor}
+                      onChange={(event) => setLogFilters((current) => ({ ...current, actor: event.target.value, page: 1 }))}
+                    />
+                  </div>
+
+                  <div className="grid gap-3 lg:grid-cols-3">
+                    <select
+                      className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm"
+                      value={logFilters.targetType}
+                      onChange={(event) => setLogFilters((current) => ({ ...current, targetType: event.target.value, page: 1 }))}
+                    >
+                      <option value="">All target types</option>
+                      <option value="user">User</option>
+                      <option value="club">Club</option>
+                      <option value="post">Post</option>
+                      <option value="report">Report</option>
+                      <option value="announcement">Announcement</option>
+                      <option value="comment">Comment</option>
+                    </select>
+                    <Input
+                      type="date"
+                      value={logFilters.from}
+                      onChange={(event) => setLogFilters((current) => ({ ...current, from: event.target.value, page: 1 }))}
+                    />
+                    <Input
+                      type="date"
+                      value={logFilters.to}
+                      onChange={(event) => setLogFilters((current) => ({ ...current, to: event.target.value, page: 1 }))}
+                    />
+                  </div>
+
+                  {logs.length === 0 ? (
+                    <EmptyPanel title="No logs found" body="Adjust the filters or search to inspect audit activity." />
+                  ) : (
+                    <>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-[0.12em] text-slate-500">
+                              <th className="px-3 py-3 whitespace-nowrap">Timestamp</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Severity</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Actor</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Action</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Target</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Summary</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Open</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {logs.map((log) => (
+                              <tr key={log.id} className="border-b border-slate-100 hover:bg-slate-50">
+                                <td className="px-3 py-3 text-slate-500">{formatDate(log.createdAt)}</td>
+                                <td className="px-3 py-3"><StatusBadge value={log.severity} /></td>
+                                <td className="px-3 py-3 text-slate-700">{log.actor}</td>
+                                <td className="px-3 py-3 text-slate-600">{log.actionType}</td>
+                                <td className="px-3 py-3 text-slate-600">{log.targetType ?? 'system'}</td>
+                                <td className="px-3 py-3 text-slate-600">{log.summary}</td>
+                                <td className="px-3 py-3">
+                                  <Button variant="outline" size="sm" onClick={() => void openLogDrawer(log)}>
+                                    Open
+                                  </Button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+                        <div className="flex items-center gap-2 text-sm text-slate-500">
+                          <span>Rows per page</span>
+                          <select
+                            className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700"
+                            value={logFilters.limit}
+                            onChange={(event) => setLogFilters((current) => ({ ...current, limit: Number(event.target.value), page: 1 }))}
+                          >
+                            {[10, 20, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
+                          </select>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={!logsPageInfo?.hasPreviousPage}
+                            onClick={() => setLogFilters((current) => ({ ...current, page: Math.max(1, current.page - 1) }))}
+                          >
+                            Previous
+                          </Button>
+                          <span className="text-sm text-slate-500">
+                            Page {logsPageInfo?.page ?? 1} of {logsPageInfo?.totalPages ?? 1}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={!logsPageInfo?.hasNextPage}
+                            onClick={() => setLogFilters((current) => ({ ...current, page: current.page + 1 }))}
+                          >
+                            Next
+                          </Button>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </ShellCard>
             ) : null}
@@ -3453,6 +3661,81 @@ export default function AdminRoot() {
                 <Button variant="outline" size="sm" onClick={() => void runAnnouncementAction(selectedAnnouncementDetail.id, 'delete')}>
                   Delete
                 </Button>
+              </div>
+            </ShellCard>
+          </div>
+        ) : null}
+      </RightDrawer>
+
+      <RightDrawer
+        open={Boolean(selectedLog)}
+        title={selectedLogDetail?.summary ?? selectedLog?.summary ?? 'Log detail'}
+        subtitle={selectedLogDetail?.actionType ?? selectedLog?.actionType ?? 'Audit event details'}
+        onClose={() => {
+          setSelectedLog(null);
+          setSelectedLogDetail(null);
+        }}
+      >
+        {logDetailLoading ? (
+          <DrawerSkeleton showFooterBlocks={3} />
+        ) : selectedLogDetail ? (
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Severity</p>
+                <div className="mt-2"><StatusBadge value={selectedLogDetail.severity} /></div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Timestamp</p>
+                <p className="mt-2 text-sm text-slate-800">{formatDate(selectedLogDetail.createdAt)}</p>
+              </div>
+            </div>
+
+            <ShellCard title="Event Overview">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Action type</p>
+                  <p className="mt-2 text-sm font-medium text-slate-800">{selectedLogDetail.actionType}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Target type</p>
+                  <p className="mt-2 text-sm font-medium text-slate-800">{selectedLogDetail.targetType ?? 'system'}</p>
+                </div>
+              </div>
+              <div className="mt-4 rounded-2xl border border-slate-200 px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Summary</p>
+                <p className="mt-2 text-sm leading-6 text-slate-700">{selectedLogDetail.summary}</p>
+              </div>
+            </ShellCard>
+
+            <ShellCard title="Actor">
+              <div className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+                  {selectedLogDetail.actor.username.slice(0, 2).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-slate-800">{selectedLogDetail.actor.username}</p>
+                  <p className="text-xs text-slate-500">{selectedLogDetail.actor.email}</p>
+                </div>
+              </div>
+            </ShellCard>
+
+            <ShellCard title="Target Reference">
+              <div className="space-y-3">
+                <div className="rounded-2xl border border-slate-200 px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Label</p>
+                  <p className="mt-2 text-sm text-slate-800">{selectedLogDetail.targetLabel ?? 'No target label available'}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Target ID</p>
+                  <p className="mt-2 break-all text-sm text-slate-800">{selectedLogDetail.targetId ?? 'No target id'}</p>
+                </div>
+              </div>
+            </ShellCard>
+
+            <ShellCard title="Metadata">
+              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-slate-950 p-4">
+                <pre className="text-xs leading-6 text-slate-100">{JSON.stringify(selectedLogDetail.metadata ?? {}, null, 2)}</pre>
               </div>
             </ShellCard>
           </div>

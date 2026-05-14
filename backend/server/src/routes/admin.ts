@@ -226,6 +226,7 @@ type AdminUserStatusFilter = 'active' | 'suspended' | 'banned';
 type AdminReportStatusFilter = 'open' | 'reviewing' | 'resolved' | 'rejected' | 'escalated';
 type AdminReportTargetTypeFilter = 'user' | 'post' | 'club';
 type AdminReportAssigneeFilter = 'all' | 'me' | 'unassigned';
+type AdminAuditLogSeverityFilter = 'info' | 'warning' | 'critical';
 
 function parseAdminBooleanFilter(raw: unknown): '' | 'true' | 'false' {
   const value = String(raw ?? '').trim().toLowerCase();
@@ -255,6 +256,13 @@ function parsePositiveInt(raw: unknown, fallback: number, min: number, max: numb
 function parseAdminSeverityFilter(raw: unknown): '' | 'warning' | 'critical' {
   const value = String(raw ?? '').trim().toLowerCase();
   return value === 'warning' || value === 'critical' ? value : '';
+}
+
+function parseAdminAuditLogSeverityFilter(raw: unknown): AdminAuditLogSeverityFilter | '' {
+  const value = String(raw ?? '').trim().toLowerCase();
+  return value === 'info' || value === 'warning' || value === 'critical'
+    ? value as AdminAuditLogSeverityFilter
+    : '';
 }
 
 function parseAdminReportStatusFilter(raw: unknown): AdminReportStatusFilter | '' {
@@ -3400,29 +3408,209 @@ router.delete('/announcements/:announcementId', async (req: Request<{ announceme
 
 router.get('/logs', async (req: Request, res: Response) => {
   const query = String(req.query.q ?? '').trim();
+  const severity = parseAdminAuditLogSeverityFilter(req.query.severity);
+  const actionType = String(req.query.actionType ?? '').trim();
+  const targetType = String(req.query.targetType ?? '').trim();
+  const actor = String(req.query.actor ?? '').trim();
+  const from = parseAdminDateFilter(req.query.from);
+  const to = parseAdminDateFilter(req.query.to, true);
+  const page = parsePositiveInt(req.query.page, 1, 1, 10_000);
+  const limit = parsePositiveInt(req.query.limit, 20, 1, 10_000);
+  const offset = (page - 1) * limit;
+  const queryPattern = `%${query}%`;
+  const actionPattern = `%${actionType}%`;
+  const targetTypePattern = `%${targetType}%`;
+  const actorPattern = `%${actor}%`;
+
+  const logBaseSql = `
+    FROM admin_audit_logs l
+    JOIN users actor_user ON actor_user.user_id = l.actor_user_id
+    WHERE
+      ($1 = '' OR (
+        l.summary ILIKE $2
+        OR l.action_type ILIKE $2
+        OR actor_user.username ILIKE $2
+      ))
+      AND ($3 = '' OR l.severity::text = $3)
+      AND ($4 = '' OR l.action_type ILIKE $5)
+      AND ($6 = '' OR COALESCE(l.target_type, '') ILIKE $7)
+      AND ($8 = '' OR actor_user.username ILIKE $9 OR actor_user.email ILIKE $9)
+      AND ($10::timestamp IS NULL OR l.created_at >= $10::timestamp)
+      AND ($11::timestamp IS NULL OR l.created_at <= $11::timestamp)
+  `;
 
   try {
-    const rows = await prisma.$queryRaw<Array<{ audit_log_id: string; action_type: string; target_type: string | null; target_id: string | null; severity: string; summary: string; created_at: Date; actor: string }>>`
-      SELECT l.audit_log_id, l.action_type, l.target_type, l.target_id, l.severity::text, l.summary, l.created_at, u.username AS actor
-      FROM admin_audit_logs l
-      JOIN users u ON u.user_id = l.actor_user_id
-      WHERE ${query} = '' OR l.summary ILIKE ${`%${query}%`} OR l.action_type ILIKE ${`%${query}%`} OR u.username ILIKE ${`%${query}%`}
-      ORDER BY l.created_at DESC
-      LIMIT 200
+    type AdminLogListRow = {
+      audit_log_id: string;
+      action_type: string;
+      target_type: string | null;
+      target_id: string | null;
+      severity: string;
+      summary: string;
+      created_at: Date;
+      actor: string;
+    };
+
+    const listSql = `
+      SELECT
+        l.audit_log_id,
+        l.action_type,
+        l.target_type,
+        l.target_id,
+        l.severity::text,
+        l.summary,
+        l.created_at,
+        actor_user.username AS actor
+      ${logBaseSql}
+      ORDER BY l.created_at DESC, l.audit_log_id DESC
+      LIMIT $12
+      OFFSET $13
     `;
 
-    return res.status(200).json(rows.map((row) => ({
+    const countSql = `
+      SELECT COUNT(*)::int AS total
+      ${logBaseSql}
+    `;
+
+    const [rows, totalRows] = await Promise.all([
+      prisma.$queryRawUnsafe<AdminLogListRow[]>(
+        listSql,
+        query,
+        queryPattern,
+        severity,
+        actionType,
+        actionPattern,
+        targetType,
+        targetTypePattern,
+        actor,
+        actorPattern,
+        from,
+        to,
+        limit,
+        offset,
+      ),
+      prisma.$queryRawUnsafe<Array<{ total: number }>>(
+        countSql,
+        query,
+        queryPattern,
+        severity,
+        actionType,
+        actionPattern,
+        targetType,
+        targetTypePattern,
+        actor,
+        actorPattern,
+        from,
+        to,
+      ),
+    ]);
+
+    const total = totalRows[0]?.total ?? 0;
+    const totalPages = total === 0 ? 1 : Math.ceil(total / limit);
+
+    return res.status(200).json({
+      items: rows.map((row) => ({
+        id: row.audit_log_id,
+        actionType: row.action_type,
+        targetType: row.target_type,
+        targetId: row.target_id,
+        severity: row.severity,
+        summary: row.summary,
+        actor: row.actor,
+        createdAt: row.created_at.toISOString(),
+      })),
+      pageInfo: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      },
+    });
+  } catch (err) {
+    console.error('Error loading system logs:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.get('/logs/:logId', async (req: Request<{ logId: string }>, res: Response) => {
+  const { logId } = req.params;
+
+  try {
+    type AdminLogDetailRow = {
+      audit_log_id: string;
+      action_type: string;
+      target_type: string | null;
+      target_id: string | null;
+      severity: string;
+      summary: string;
+      created_at: Date;
+      metadata: unknown;
+      actor_user_id: string;
+      actor_username: string;
+      actor_email: string;
+      actor_avatar_url: string | null;
+      target_label: string | null;
+    };
+
+    const rows = await prisma.$queryRaw<AdminLogDetailRow[]>`
+      SELECT
+        l.audit_log_id,
+        l.action_type,
+        l.target_type,
+        l.target_id,
+        l.severity::text,
+        l.summary,
+        l.created_at,
+        l.metadata,
+        actor_user.user_id AS actor_user_id,
+        actor_user.username AS actor_username,
+        actor_user.email AS actor_email,
+        actor_user.profile_photo_url AS actor_avatar_url,
+        CASE
+          WHEN l.target_type = 'user' THEN target_user.username
+          WHEN l.target_type = 'club' THEN target_club.name
+          WHEN l.target_type = 'post' THEN COALESCE(NULLIF(target_post.title, ''), NULLIF(LEFT(COALESCE(target_post.content_text, ''), 120), ''), l.target_id)
+          WHEN l.target_type = 'announcement' THEN target_announcement.title
+          WHEN l.target_type = 'report' THEN report_target.reason
+          ELSE NULL
+        END AS target_label
+      FROM admin_audit_logs l
+      JOIN users actor_user ON actor_user.user_id = l.actor_user_id
+      LEFT JOIN users target_user ON l.target_type = 'user' AND target_user.user_id::text = l.target_id
+      LEFT JOIN clubs target_club ON l.target_type = 'club' AND target_club.club_id::text = l.target_id
+      LEFT JOIN posts target_post ON l.target_type = 'post' AND target_post.post_id::text = l.target_id
+      LEFT JOIN admin_announcements target_announcement ON l.target_type = 'announcement' AND target_announcement.announcement_id::text = l.target_id
+      LEFT JOIN admin_reports report_target ON l.target_type = 'report' AND report_target.report_id::text = l.target_id
+      WHERE l.audit_log_id = ${logId}
+      LIMIT 1
+    `;
+
+    const row = rows[0];
+    if (!row) {
+      return res.status(404).json({ message: 'Log entry not found' });
+    }
+
+    return res.status(200).json({
       id: row.audit_log_id,
       actionType: row.action_type,
       targetType: row.target_type,
       targetId: row.target_id,
+      targetLabel: row.target_label ?? row.target_id,
       severity: row.severity,
       summary: row.summary,
-      actor: row.actor,
       createdAt: row.created_at.toISOString(),
-    })));
+      actor: {
+        id: row.actor_user_id,
+        username: row.actor_username,
+        email: row.actor_email,
+        avatarUrl: row.actor_avatar_url,
+      },
+      metadata: row.metadata && typeof row.metadata === 'object' ? row.metadata : {},
+    });
   } catch (err) {
-    console.error('Error loading system logs:', err);
+    console.error('Error loading system log detail:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });

@@ -429,28 +429,48 @@ Need to be done:
 
 ### 9. System Logs
 
-Status: Basic working log viewer
+Status: Implemented as an expanded audit-log review surface
 
 Done:
 
 - Real log route at `GET /admin/logs`
-- Search by summary/action type/actor
-- UI table shows timestamp, severity, actor, action, summary
+- Real log detail route at `GET /admin/logs/:logId`
 - Data comes from `admin_audit_logs`
+- Log list now supports:
+  - search
+  - severity filter
+  - action type filter
+  - target type filter
+  - actor filter
+  - date range
+  - pagination
+- `GET /admin/logs` now returns paginated list data instead of a raw array
+- Frontend logs page now provides:
+  - filter bar
+  - paginated audit table
+  - log detail drawer
+  - structured metadata viewer
+  - CSV export for the active filtered audit-log set
+- Table shows timestamp, severity, actor, action type, target type, and summary
+- Detail drawer shows:
+  - event overview
+  - actor summary
+  - target reference
+  - summary
+  - raw metadata JSON
 
 Exact limitations found:
 
-- No filters for severity, action type, target type, or date range
-- No export
-- No detail drilldown into metadata payload
-- No suspicious activity grouping or correlation view
-- Backend limits list to 200 results
+- This is still an admin audit-log page, not a full backend observability console
+- No suspicious activity grouping or correlation view yet
+- No saved views, scheduled exports, or background report generation
+- Target drilldown is reference-first; the logs page does not yet auto-open every target workflow from the drawer
 
 Need to be done:
 
-- Add filters and drilldown
-- Expose metadata in the UI
-- Add exports and operational audit workflows
+- Add suspicious activity grouping if moderators need correlation across multiple audit events
+- Add saved filters or scheduled exports only if operations need recurring audit review workflows
+- Add deeper target drilldowns if the logs drawer should directly jump into every moderation surface
 
 ### 10. Settings
 

@@ -320,6 +320,44 @@ export interface AdminAnnouncementOptionsResponse {
   branches: AdminAnnouncementAudienceOption[];
 }
 
+export type AdminLogSeverity = 'info' | 'warning' | 'critical';
+
+export interface AdminLogListItem {
+  id: string;
+  actionType: string;
+  targetType: string | null;
+  targetId: string | null;
+  severity: AdminLogSeverity;
+  summary: string;
+  actor: string;
+  createdAt: string;
+}
+
+export interface AdminLogListResponse {
+  items: AdminLogListItem[];
+  pageInfo: AdminListPageInfo;
+}
+
+export interface AdminLogActorSummary {
+  id: string;
+  username: string;
+  email: string;
+  avatarUrl: string | null;
+}
+
+export interface AdminLogDetailResponse {
+  id: string;
+  actionType: string;
+  targetType: string | null;
+  targetId: string | null;
+  targetLabel: string | null;
+  severity: AdminLogSeverity;
+  summary: string;
+  createdAt: string;
+  actor: AdminLogActorSummary;
+  metadata: Record<string, unknown>;
+}
+
 export async function apiAdminLogin(email: string, password: string): Promise<{ token: string; admin: AdminProfile }> {
   return safeFetch('/admin/auth/login', {
     method: 'POST',
