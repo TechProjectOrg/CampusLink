@@ -48,6 +48,15 @@ export function isRedisConfigured(): boolean {
   return getUpstashConfig() !== null;
 }
 
+export async function probeRedisHealth(): Promise<'healthy' | 'unconfigured' | 'unavailable'> {
+  if (!isRedisConfigured()) {
+    return 'unconfigured';
+  }
+
+  const result = await runCommand<string>(['PING']);
+  return result === 'PONG' ? 'healthy' : 'unavailable';
+}
+
 async function runCommand<T>(
   command: Array<string | number>,
   options: RedisCommandOptions = {},

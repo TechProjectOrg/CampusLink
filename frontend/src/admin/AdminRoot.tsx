@@ -34,7 +34,14 @@ import { Input } from '../components/ui/input';
 import { Badge } from '../components/ui/badge';
 import { Textarea } from '../components/ui/textarea';
 import { apiChangePassword, apiVerifyPasswordChange } from '../lib/authApi';
-import { apiAdminGet, apiAdminPost, type AdminProfile } from './api';
+import {
+  apiAdminGet,
+  apiAdminPost,
+  type AdminDashboardRange,
+  type AdminDashboardResponse,
+  type AdminDashboardTrendDirection,
+  type AdminProfile,
+} from './api';
 import { clearAdminSession, readAdminSession } from './session';
 
 type PageKey =
@@ -64,17 +71,35 @@ const NAV_ITEMS: Array<{ key: PageKey; label: string; icon: typeof LayoutDashboa
 
 const SEARCHABLE_PAGES = new Set<PageKey>(['users', 'posts', 'logs']);
 const ADMIN_CACHE_MS = 30_000;
+const DASHBOARD_RANGES: AdminDashboardRange[] = ['7d', '30d', '90d'];
+
+type DashboardRouteContext = {
+  source: string | null;
+  metric: string | null;
+};
 
 function getSearchKey(page: PageKey, search: string): string {
   return SEARCHABLE_PAGES.has(page) ? search.trim() : '';
 }
 
-function getAdminQueryKey(token: string, page: PageKey, search = '') {
-  return ['admin', token, page, search] as const;
+function parseDashboardRange(value: string | null | undefined): AdminDashboardRange {
+  return DASHBOARD_RANGES.includes(value as AdminDashboardRange) ? (value as AdminDashboardRange) : '7d';
 }
 
-async function fetchAdminPageData(page: PageKey, token: string, search: string) {
-  if (page === 'dashboard') return apiAdminGet('/admin/dashboard', token);
+function parseDashboardContext(search: string): DashboardRouteContext {
+  const params = new URLSearchParams(search);
+  return {
+    source: params.get('source'),
+    metric: params.get('metric'),
+  };
+}
+
+function getAdminQueryKey(token: string, page: PageKey, search = '', range: AdminDashboardRange = '7d') {
+  return ['admin', token, page, search, range] as const;
+}
+
+async function fetchAdminPageData(page: PageKey, token: string, search: string, range: AdminDashboardRange) {
+  if (page === 'dashboard') return apiAdminGet<AdminDashboardResponse>(`/admin/dashboard?range=${encodeURIComponent(range)}`, token);
   if (page === 'users') return apiAdminGet(`/admin/users?q=${encodeURIComponent(search)}`, token);
   if (page === 'clubs') return apiAdminGet('/admin/clubs', token);
   if (page === 'posts') return apiAdminGet(`/admin/posts?q=${encodeURIComponent(search)}`, token);
@@ -119,6 +144,22 @@ function statusTone(status: string | boolean | null | undefined): string {
 
 function StatusBadge({ value }: { value: string | boolean | null | undefined }) {
   return <span className={`inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium ${statusTone(value)}`}>{String(value ?? 'inactive')}</span>;
+}
+
+function formatRangeLabel(range: AdminDashboardRange): string {
+  if (range === '7d') return 'Last 7 days';
+  if (range === '30d') return 'Last 30 days';
+  return 'Last 90 days';
+}
+
+function trendTone(direction: AdminDashboardTrendDirection): string {
+  if (direction === 'up') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+  if (direction === 'down') return 'bg-red-50 text-red-700 border-red-200';
+  return 'bg-slate-100 text-slate-700 border-slate-200';
+}
+
+function TrendBadge({ label, direction }: { label: string; direction: AdminDashboardTrendDirection }) {
+  return <span className={`inline-flex items-center rounded-md border px-2 py-1 text-xs font-medium ${trendTone(direction)}`}>{label}</span>;
 }
 
 function ShellCard({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
@@ -190,6 +231,8 @@ function EmptyPanel({ title, body }: { title: string; body: string }) {
 export default function AdminRoot() {
   const queryClient = useQueryClient();
   const [page, setPage] = useState<PageKey>(() => parsePageFromPath(window.location.pathname));
+  const [dashboardRange, setDashboardRange] = useState<AdminDashboardRange>(() => parseDashboardRange(new URLSearchParams(window.location.search).get('range')));
+  const [dashboardContext, setDashboardContext] = useState<DashboardRouteContext>(() => parseDashboardContext(window.location.search));
   const [collapsed, setCollapsed] = useState(false);
   const [token, setToken] = useState<string | null>(() => readAdminSession()?.token ?? null);
   const [admin, setAdmin] = useState<AdminProfile | null>(null);
@@ -218,7 +261,11 @@ export default function AdminRoot() {
   const searchKey = useMemo(() => getSearchKey(page, search), [page, search]);
 
   useEffect(() => {
-    const handlePopState = () => setPage(parsePageFromPath(window.location.pathname));
+    const handlePopState = () => {
+      setPage(parsePageFromPath(window.location.pathname));
+      setDashboardRange(parseDashboardRange(new URLSearchParams(window.location.search).get('range')));
+      setDashboardContext(parseDashboardContext(window.location.search));
+    };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
@@ -261,8 +308,8 @@ export default function AdminRoot() {
   const canQueryAdmin = Boolean(token && admin);
 
   const dashboardQuery = useQuery({
-    queryKey: token ? getAdminQueryKey(token, 'dashboard') : ['admin', 'dashboard', 'anon'],
-    queryFn: () => fetchAdminPageData('dashboard', token!, ''),
+    queryKey: token ? getAdminQueryKey(token, 'dashboard', '', dashboardRange) : ['admin', 'dashboard', 'anon', dashboardRange],
+    queryFn: () => fetchAdminPageData('dashboard', token!, '', dashboardRange),
     enabled: canQueryAdmin,
     staleTime: ADMIN_CACHE_MS,
     gcTime: ADMIN_CACHE_MS * 10,
@@ -270,15 +317,15 @@ export default function AdminRoot() {
   });
 
   const currentPageQuery = useQuery({
-    queryKey: token ? getAdminQueryKey(token, page, searchKey) : ['admin', page, searchKey, 'anon'],
-    queryFn: () => fetchAdminPageData(page, token!, searchKey),
+    queryKey: token ? getAdminQueryKey(token, page, searchKey, dashboardRange) : ['admin', page, searchKey, 'anon', dashboardRange],
+    queryFn: () => fetchAdminPageData(page, token!, searchKey, dashboardRange),
     enabled: canQueryAdmin && page !== 'dashboard',
     staleTime: ADMIN_CACHE_MS,
     gcTime: ADMIN_CACHE_MS * 10,
     refetchInterval: page === 'reports' || page === 'logs' ? ADMIN_CACHE_MS : false,
   });
 
-  const dashboard = dashboardQuery.data ?? null;
+  const dashboard = (dashboardQuery.data as AdminDashboardResponse | null) ?? null;
   const users = page === 'users' ? ((currentPageQuery.data as any[]) ?? []) : [];
   const clubs = page === 'clubs' ? ((currentPageQuery.data as any[]) ?? []) : [];
   const posts = page === 'posts' ? ((currentPageQuery.data as any[]) ?? []) : [];
@@ -292,18 +339,29 @@ export default function AdminRoot() {
   const pageLoading = activeQuery.isLoading;
   const pageRefreshing = activeQuery.isFetching && !activeQuery.isLoading;
 
-  const goTo = (nextPage: PageKey) => {
-    const nextPath = nextPage === 'dashboard' ? '/admin' : `/admin/${nextPage}`;
-    window.history.pushState({ page: nextPage }, '', nextPath);
+  const goTo = (nextPage: PageKey, params?: Record<string, string | null | undefined>) => {
+    const url = new URL(window.location.href);
+    url.pathname = nextPage === 'dashboard' ? '/admin' : `/admin/${nextPage}`;
+    url.search = '';
+    if (params) {
+      for (const [key, value] of Object.entries(params)) {
+        if (value) {
+          url.searchParams.set(key, value);
+        }
+      }
+    }
+    window.history.pushState({ page: nextPage }, '', `${url.pathname}${url.search}`);
     setPage(nextPage);
+    setDashboardRange(parseDashboardRange(url.searchParams.get('range')));
+    setDashboardContext(parseDashboardContext(url.search));
   };
 
   const prefetchPage = (nextPage: PageKey) => {
-    if (!token || !admin || nextPage === 'dashboard') return;
+    if (!token || !admin) return;
     const nextSearchKey = getSearchKey(nextPage, search);
     void queryClient.prefetchQuery({
-      queryKey: getAdminQueryKey(token, nextPage, nextSearchKey),
-      queryFn: () => fetchAdminPageData(nextPage, token, nextSearchKey),
+      queryKey: getAdminQueryKey(token, nextPage, nextSearchKey, dashboardRange),
+      queryFn: () => fetchAdminPageData(nextPage, token, nextSearchKey, dashboardRange),
       staleTime: ADMIN_CACHE_MS,
     });
   };
@@ -316,9 +374,9 @@ export default function AdminRoot() {
 
   const refreshCurrentPage = async () => {
     if (!token) return;
-    await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, page, searchKey), exact: true });
+    await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, page, searchKey, dashboardRange), exact: true });
     if (page !== 'dashboard') {
-      await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, 'dashboard'), exact: true });
+      await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, 'dashboard', '', dashboardRange), exact: true });
     }
   };
 
@@ -379,6 +437,40 @@ export default function AdminRoot() {
     } catch (error) {
       setPasswordState({ isSaving: false, message: '', error: error instanceof Error ? error.message : 'Unable to change password.' });
     }
+  };
+
+  const dashboardHealthSummary = useMemo(() => {
+    const entries = dashboard?.health ?? [];
+    if (entries.some((entry) => entry.tone === 'critical')) {
+      return { label: 'Attention needed', tone: 'critical' as const };
+    }
+    if (entries.some((entry) => entry.tone === 'warning')) {
+      return { label: 'Monitor services', tone: 'warning' as const };
+    }
+    if (entries.some((entry) => entry.tone === 'neutral')) {
+      return { label: 'Partially configured', tone: 'neutral' as const };
+    }
+    return { label: 'All healthy', tone: 'healthy' as const };
+  }, [dashboard]);
+
+  const databaseLatencyEntry = useMemo(
+    () => dashboard?.health.find((entry) => entry.key === 'databaseLatency') ?? null,
+    [dashboard],
+  );
+
+  const dashboardMetricTarget = (metricKey: string): PageKey => {
+    if (metricKey === 'totalUsers' || metricKey === 'activeUsers' || metricKey === 'newSignups') return 'users';
+    if (metricKey === 'posts' || metricKey === 'activeChats') return 'posts';
+    if (metricKey === 'activeClubs') return 'clubs';
+    if (metricKey === 'pendingReports') return 'reports';
+    if (metricKey === 'verificationRequests') return 'verification';
+    return 'dashboard';
+  };
+
+  const openDashboardDrilldown = (metricKey: string) => {
+    const targetPage = dashboardMetricTarget(metricKey);
+    if (targetPage === 'dashboard') return;
+    goTo(targetPage, { source: 'dashboard', metric: metricKey, range: dashboardRange });
   };
 
   const notificationCount = dashboard?.moderationQueue?.length ?? reports.filter((item) => ['open', 'reviewing', 'escalated'].includes(item.status)).length ?? 0;
@@ -471,7 +563,11 @@ export default function AdminRoot() {
               <div className="min-w-0 flex-1">
                 <h1 className="text-lg font-semibold text-slate-900">{pageTitle}</h1>
                 <p className="mt-1 text-xs text-slate-500">
-                  {dashboard ? `${dashboard.health?.apiResponseTime ?? 0} ms API · ${dashboard.health?.databaseLatency ?? 0} ms DB` : 'Operational visibility for CampusLink.'}
+                  {page === 'dashboard' && dashboard
+                    ? `${formatRangeLabel(dashboard.range)} · ${databaseLatencyEntry?.value ?? 'DB probe unavailable'} · Updated ${formatDate(dashboard.generatedAt)}`
+                    : dashboardContext.source === 'dashboard'
+                      ? `Opened from dashboard · ${formatRangeLabel(dashboardRange)}`
+                      : 'Operational visibility for CampusLink.'}
                 </p>
               </div>
 
@@ -486,10 +582,16 @@ export default function AdminRoot() {
               </div>
 
               <div className="hidden items-center gap-2 lg:flex">
-                <Badge variant="outline" className="border-emerald-200 bg-emerald-50 text-emerald-700">Server healthy</Badge>
-                <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700">
-                  {formatNumber(dashboard?.metrics?.[1]?.value ?? 0)} active today
-                </Badge>
+                {page === 'dashboard' ? (
+                  <>
+                    <Badge variant="outline" className={dashboardHealthSummary.tone === 'critical' ? 'border-red-200 bg-red-50 text-red-700' : dashboardHealthSummary.tone === 'warning' ? 'border-amber-200 bg-amber-50 text-amber-700' : dashboardHealthSummary.tone === 'neutral' ? 'border-slate-200 bg-slate-50 text-slate-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}>
+                      {dashboardHealthSummary.label}
+                    </Badge>
+                    <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700">
+                      {formatNumber(dashboard?.metrics?.find((metric) => metric.key === 'activeUsers')?.value ?? 0)} active in range
+                    </Badge>
+                  </>
+                ) : null}
                 {pageRefreshing ? <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-600">Refreshing...</Badge> : null}
               </div>
 
@@ -513,22 +615,65 @@ export default function AdminRoot() {
               </div>
             ) : null}
 
+            {!pageLoading && page !== 'dashboard' && dashboardContext.source === 'dashboard' ? (
+              <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                Dashboard drilldown: {dashboardContext.metric ?? 'overview'} · {formatRangeLabel(dashboardRange)}
+              </div>
+            ) : null}
+
+            {!pageLoading && page === 'dashboard' ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="inline-flex rounded-full border border-slate-200 bg-white p-1 shadow-sm">
+                  {DASHBOARD_RANGES.map((rangeOption) => {
+                    const isActive = dashboardRange === rangeOption;
+                    return (
+                      <button
+                        key={rangeOption}
+                        type="button"
+                        onClick={() => goTo('dashboard', { range: rangeOption })}
+                        aria-pressed={isActive}
+                        className={`rounded-full px-3 py-1.5 text-xs font-medium transition ${isActive ? '' : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}
+                        style={
+                          isActive
+                            ? {
+                                backgroundColor: '#dbeafe',
+                                border: '1px solid #93c5fd',
+                                color: '#1e3a8a',
+                                boxShadow: '0 1px 2px rgba(59, 130, 246, 0.16)',
+                              }
+                            : undefined
+                        }
+                      >
+                        {rangeOption.toUpperCase()}
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-slate-500">Time range</p>
+              </div>
+            ) : null}
+
             {!pageLoading && page === 'dashboard' && dashboard ? (
               <>
                 <div className="grid gap-4 xl:grid-cols-4">
-                  {dashboard.metrics?.map((metric: any) => (
-                    <div key={metric.key} className="rounded-lg border border-slate-200 bg-white p-4">
+                  {dashboard.metrics.map((metric) => (
+                    <button
+                      key={metric.key}
+                      type="button"
+                      onClick={() => openDashboardDrilldown(metric.key)}
+                      className="rounded-lg border border-slate-200 bg-white p-4 text-left transition hover:border-slate-300 hover:shadow-sm"
+                    >
                       <div className="flex items-start justify-between">
                         <div>
                           <p className="text-xs font-medium uppercase tracking-[0.12em] text-slate-500">{metric.title}</p>
                           <p className="mt-2 text-2xl font-semibold text-slate-900">{formatNumber(metric.value)}</p>
                         </div>
-                        <StatusBadge value={metric.trend} />
+                        <TrendBadge label={metric.trendLabel} direction={metric.trendDirection} />
                       </div>
                       <div className="mt-4">
                         <MiniSparkline values={metric.series ?? []} />
                       </div>
-                    </div>
+                    </button>
                   ))}
                 </div>
 
@@ -616,20 +761,12 @@ export default function AdminRoot() {
 
                     <ShellCard title="Platform Health">
                       <div className="space-y-3">
-                        {[
-                          ['API response time', `${dashboard.health?.apiResponseTime ?? 0} ms`, 'healthy'],
-                          ['Database latency', `${dashboard.health?.databaseLatency ?? 0} ms`, 'healthy'],
-                          ['WebSocket connections', formatNumber(dashboard.health?.websocketConnections ?? 0), 'healthy'],
-                          ['Redis', dashboard.health?.redisHealth ?? 'healthy', dashboard.health?.redisHealth ?? 'healthy'],
-                          ['Failed jobs', formatNumber(dashboard.health?.failedJobs ?? 0), dashboard.health?.failedJobs ? 'warning' : 'healthy'],
-                          ['Storage usage', `${dashboard.health?.storageUsage ?? 0}%`, 'healthy'],
-                          ['Cache hit rate', `${dashboard.health?.cacheHitRate ?? 0}%`, 'healthy'],
-                        ].map(([label, value, tone]) => (
-                          <div key={label} className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2">
-                            <span className="text-sm text-slate-600">{label}</span>
+                        {(dashboard.health ?? []).map((entry) => (
+                          <div key={entry.key} className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2">
+                            <span className="text-sm text-slate-600">{entry.label}</span>
                             <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium text-slate-900">{value}</span>
-                              <StatusBadge value={tone} />
+                              <span className="text-sm font-medium text-slate-900">{entry.value}</span>
+                              <StatusBadge value={entry.tone} />
                             </div>
                           </div>
                         ))}

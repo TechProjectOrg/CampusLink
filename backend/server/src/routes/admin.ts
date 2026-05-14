@@ -1,9 +1,11 @@
 import crypto from 'crypto';
 import express, { Request, Response } from 'express';
 import prisma from '../prisma';
-import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
+import authenticateToken from '../middleware/authenticateToken';
 import requireAdmin, { type AdminAuthedRequest } from '../middleware/requireAdmin';
 import { hashPassword, signAuthToken, verifyPassword } from '../lib/auth';
+import { probeRedisHealth } from '../lib/cache';
+import { socketsByUserId } from '../lib/realtime';
 import {
   getAdminAccountByUserId,
   markAdminLogin,
@@ -77,6 +79,63 @@ async function createAuthSession(userId: string, req: Request): Promise<string> 
   `;
 
   return sessionId;
+}
+
+type DashboardRange = '7d' | '30d' | '90d';
+type DashboardTrendDirection = 'up' | 'down' | 'flat';
+
+const DASHBOARD_RANGE_DAYS: Record<DashboardRange, number> = {
+  '7d': 7,
+  '30d': 30,
+  '90d': 90,
+};
+
+function parseDashboardRange(raw: unknown): DashboardRange | null {
+  if (raw == null || raw === '') return '7d';
+  if (raw === '7d' || raw === '30d' || raw === '90d') return raw;
+  return null;
+}
+
+function getSqlWindowExpressions(dayCount: number) {
+  return {
+    currentStart: `CURRENT_DATE - INTERVAL '${dayCount - 1} day'`,
+    previousStart: `CURRENT_DATE - INTERVAL '${dayCount * 2 - 1} day'`,
+    todayEnd: `CURRENT_DATE + INTERVAL '1 day'`,
+  };
+}
+
+function buildTrend(currentValue: number, previousValue: number): {
+  trendValue: number;
+  trendDirection: DashboardTrendDirection;
+  trendLabel: string;
+} {
+  if (currentValue === previousValue) {
+    return { trendValue: 0, trendDirection: 'flat', trendLabel: '0%' };
+  }
+
+  if (previousValue === 0) {
+    return {
+      trendValue: currentValue > 0 ? 100 : 0,
+      trendDirection: currentValue > 0 ? 'up' : 'flat',
+      trendLabel: currentValue > 0 ? '+100%' : '0%',
+    };
+  }
+
+  const rawPercent = ((currentValue - previousValue) / Math.abs(previousValue)) * 100;
+  const rounded = Math.round(rawPercent * 10) / 10;
+  return {
+    trendValue: rounded,
+    trendDirection: rounded > 0 ? 'up' : 'down',
+    trendLabel: `${rounded > 0 ? '+' : ''}${rounded}%`,
+  };
+}
+
+function getOpenWebSocketCount(): number {
+  let count = 0;
+  for (const sockets of socketsByUserId.values()) {
+    count += sockets.size;
+  }
+  return count;
 }
 
 router.post('/auth/login', async (req: Request, res: Response) => {
@@ -161,60 +220,140 @@ router.get('/auth/session', async (req: Request, res: Response) => {
 });
 
 router.get('/dashboard', async (req: Request, res: Response) => {
+  const range = parseDashboardRange(req.query.range);
+  if (!range) {
+    return res.status(400).json({ message: 'Invalid dashboard range. Use 7d, 30d, or 90d.' });
+  }
+
+  const dayCount = DASHBOARD_RANGE_DAYS[range];
+  const { currentStart, previousStart, todayEnd } = getSqlWindowExpressions(dayCount);
+
   try {
+    const dbProbeStartedAt = Date.now();
+    await prisma.$queryRaw`SELECT 1`;
+    const databaseLatency = Date.now() - dbProbeStartedAt;
+
     const [
-      totals,
-      signupSeries,
+      totalUsersSeries,
+      activeUsersSeries,
       postsSeries,
-      clubsSeries,
+      activeClubsSeries,
+      pendingReportsSeries,
+      verificationPendingSeries,
+      signupsSeries,
+      activeChatsSeries,
+      metricComparisons,
       reports,
       activity,
-      chatMetrics,
-      dbHealth,
+      redisStatus,
     ] = await Promise.all([
-      prisma.$queryRaw<
-        Array<{
-          total_users: number;
-          active_users_today: number;
-          posts_today: number;
-          active_clubs: number;
-          pending_reports: number;
-          verification_requests: number;
-          new_signups: number;
-        }>
-      >`
-        SELECT
-          (SELECT COUNT(*)::int FROM users WHERE is_active = TRUE) AS total_users,
-          (SELECT COUNT(*)::int FROM users WHERE COALESCE(last_seen_at, created_at) >= NOW() - INTERVAL '1 day') AS active_users_today,
-          (SELECT COUNT(*)::int FROM posts WHERE created_at >= NOW() - INTERVAL '1 day' AND deleted_at IS NULL) AS posts_today,
-          (SELECT COUNT(*)::int FROM clubs WHERE deleted_at IS NULL) AS active_clubs,
-          (SELECT COUNT(*)::int FROM admin_reports WHERE status IN (CAST('open' AS "AdminReportStatus"), CAST('reviewing' AS "AdminReportStatus"), CAST('escalated' AS "AdminReportStatus"))) AS pending_reports,
-          (SELECT COUNT(*)::int FROM admin_verification_requests WHERE status = CAST('pending' AS "VerificationRequestStatus")) AS verification_requests,
-          (SELECT COUNT(*)::int FROM users WHERE created_at >= NOW() - INTERVAL '7 day') AS new_signups
-      `,
-      prisma.$queryRaw<Array<{ label: string; value: number }>>`
+      prisma.$queryRawUnsafe<Array<{ label: string; value: number }>>(`
         SELECT TO_CHAR(day_bucket, 'Mon DD') AS label, COUNT(u.user_id)::int AS value
-        FROM generate_series(CURRENT_DATE - INTERVAL '6 day', CURRENT_DATE, INTERVAL '1 day') AS day_bucket
-        LEFT JOIN users u ON DATE_TRUNC('day', u.created_at) = day_bucket
+        FROM generate_series(${currentStart}, CURRENT_DATE, INTERVAL '1 day') AS day_bucket
+        LEFT JOIN users u ON u.is_active = TRUE AND u.created_at < day_bucket + INTERVAL '1 day'
         GROUP BY day_bucket
         ORDER BY day_bucket
-      `,
-      prisma.$queryRaw<Array<{ label: string; value: number }>>`
+      `),
+      prisma.$queryRawUnsafe<Array<{ label: string; value: number }>>(`
+        SELECT TO_CHAR(day_bucket, 'Mon DD') AS label, COUNT(u.user_id)::int AS value
+        FROM generate_series(${currentStart}, CURRENT_DATE, INTERVAL '1 day') AS day_bucket
+        LEFT JOIN users u ON DATE_TRUNC('day', COALESCE(u.last_seen_at, u.created_at)) = day_bucket
+        GROUP BY day_bucket
+        ORDER BY day_bucket
+      `),
+      prisma.$queryRawUnsafe<Array<{ label: string; value: number }>>(`
         SELECT TO_CHAR(day_bucket, 'Mon DD') AS label, COUNT(p.post_id)::int AS value
-        FROM generate_series(CURRENT_DATE - INTERVAL '6 day', CURRENT_DATE, INTERVAL '1 day') AS day_bucket
+        FROM generate_series(${currentStart}, CURRENT_DATE, INTERVAL '1 day') AS day_bucket
         LEFT JOIN posts p ON DATE_TRUNC('day', p.created_at) = day_bucket AND p.deleted_at IS NULL
         GROUP BY day_bucket
         ORDER BY day_bucket
-      `,
-      prisma.$queryRaw<Array<{ label: string; value: number }>>`
-        SELECT c.name AS label, COUNT(p.post_id)::int AS value
-        FROM clubs c
-        LEFT JOIN posts p ON p.club_id = c.club_id AND p.created_at >= NOW() - INTERVAL '14 day' AND p.deleted_at IS NULL
-        WHERE c.deleted_at IS NULL
-        GROUP BY c.club_id, c.name
-        ORDER BY value DESC, c.name ASC
-        LIMIT 5
-      `,
+      `),
+      prisma.$queryRawUnsafe<Array<{ label: string; value: number }>>(`
+        SELECT TO_CHAR(day_bucket, 'Mon DD') AS label, COUNT(c.club_id)::int AS value
+        FROM generate_series(${currentStart}, CURRENT_DATE, INTERVAL '1 day') AS day_bucket
+        LEFT JOIN clubs c
+          ON c.created_at < day_bucket + INTERVAL '1 day'
+         AND (c.deleted_at IS NULL OR c.deleted_at >= day_bucket + INTERVAL '1 day')
+        GROUP BY day_bucket
+        ORDER BY day_bucket
+      `),
+      prisma.$queryRawUnsafe<Array<{ label: string; value: number }>>(`
+        SELECT TO_CHAR(day_bucket, 'Mon DD') AS label, COUNT(r.report_id)::int AS value
+        FROM generate_series(${currentStart}, CURRENT_DATE, INTERVAL '1 day') AS day_bucket
+        LEFT JOIN admin_reports r
+          ON r.created_at < day_bucket + INTERVAL '1 day'
+         AND (r.resolved_at IS NULL OR r.resolved_at >= day_bucket + INTERVAL '1 day')
+        GROUP BY day_bucket
+        ORDER BY day_bucket
+      `),
+      prisma.$queryRawUnsafe<Array<{ label: string; value: number }>>(`
+        SELECT TO_CHAR(day_bucket, 'Mon DD') AS label, COUNT(v.verification_request_id)::int AS value
+        FROM generate_series(${currentStart}, CURRENT_DATE, INTERVAL '1 day') AS day_bucket
+        LEFT JOIN admin_verification_requests v
+          ON v.requested_at < day_bucket + INTERVAL '1 day'
+         AND (v.reviewed_at IS NULL OR v.reviewed_at >= day_bucket + INTERVAL '1 day')
+        GROUP BY day_bucket
+        ORDER BY day_bucket
+      `),
+      prisma.$queryRawUnsafe<Array<{ label: string; value: number }>>(`
+        SELECT TO_CHAR(day_bucket, 'Mon DD') AS label, COUNT(u.user_id)::int AS value
+        FROM generate_series(${currentStart}, CURRENT_DATE, INTERVAL '1 day') AS day_bucket
+        LEFT JOIN users u ON DATE_TRUNC('day', u.created_at) = day_bucket
+        GROUP BY day_bucket
+        ORDER BY day_bucket
+      `),
+      prisma.$queryRawUnsafe<Array<{ label: string; value: number }>>(`
+        SELECT TO_CHAR(day_bucket, 'Mon DD') AS label, COUNT(DISTINCT c.chat_id)::int AS value
+        FROM generate_series(${currentStart}, CURRENT_DATE, INTERVAL '1 day') AS day_bucket
+        LEFT JOIN chats c ON DATE_TRUNC('day', c.updated_at) = day_bucket
+        GROUP BY day_bucket
+        ORDER BY day_bucket
+      `),
+      prisma.$queryRawUnsafe<
+        Array<{
+          total_users_previous: number;
+          active_users_current: number;
+          active_users_previous: number;
+          posts_current: number;
+          posts_previous: number;
+          active_clubs_previous: number;
+          pending_reports_previous: number;
+          verification_requests_previous: number;
+          signups_current: number;
+          signups_previous: number;
+          active_chats_current: number;
+          active_chats_previous: number;
+        }>
+      >(`
+        SELECT
+          (SELECT COUNT(u.user_id)::int FROM users u WHERE u.is_active = TRUE AND u.created_at < ${currentStart}) AS total_users_previous,
+          (SELECT COUNT(DISTINCT u.user_id)::int FROM users u WHERE COALESCE(u.last_seen_at, u.created_at) >= ${currentStart}) AS active_users_current,
+          (SELECT COUNT(DISTINCT u.user_id)::int FROM users u WHERE COALESCE(u.last_seen_at, u.created_at) >= ${previousStart} AND COALESCE(u.last_seen_at, u.created_at) < ${currentStart}) AS active_users_previous,
+          (SELECT COUNT(p.post_id)::int FROM posts p WHERE p.created_at >= ${currentStart} AND p.created_at < ${todayEnd} AND p.deleted_at IS NULL) AS posts_current,
+          (SELECT COUNT(p.post_id)::int FROM posts p WHERE p.created_at >= ${previousStart} AND p.created_at < ${currentStart} AND p.deleted_at IS NULL) AS posts_previous,
+          (
+            SELECT COUNT(c.club_id)::int
+            FROM clubs c
+            WHERE c.created_at < ${currentStart}
+              AND (c.deleted_at IS NULL OR c.deleted_at >= ${currentStart})
+          ) AS active_clubs_previous,
+          (
+            SELECT COUNT(r.report_id)::int
+            FROM admin_reports r
+            WHERE r.created_at < ${currentStart}
+              AND (r.resolved_at IS NULL OR r.resolved_at >= ${currentStart})
+          ) AS pending_reports_previous,
+          (
+            SELECT COUNT(v.verification_request_id)::int
+            FROM admin_verification_requests v
+            WHERE v.requested_at < ${currentStart}
+              AND (v.reviewed_at IS NULL OR v.reviewed_at >= ${currentStart})
+          ) AS verification_requests_previous,
+          (SELECT COUNT(u.user_id)::int FROM users u WHERE u.created_at >= ${currentStart} AND u.created_at < ${todayEnd}) AS signups_current,
+          (SELECT COUNT(u.user_id)::int FROM users u WHERE u.created_at >= ${previousStart} AND u.created_at < ${currentStart}) AS signups_previous,
+          (SELECT COUNT(DISTINCT c.chat_id)::int FROM chats c WHERE c.updated_at >= ${currentStart} AND c.updated_at < ${todayEnd}) AS active_chats_current,
+          (SELECT COUNT(DISTINCT c.chat_id)::int FROM chats c WHERE c.updated_at >= ${previousStart} AND c.updated_at < ${currentStart}) AS active_chats_previous
+      `),
       prisma.$queryRaw<Array<{ report_id: string; target_type: string; reason: string; severity: string; report_count: number; created_at: Date; target_id: string; reporter: string | null }>>`
         SELECT
           r.report_id,
@@ -255,33 +394,122 @@ router.get('/dashboard', async (req: Request, res: Response) => {
         ORDER BY created_at DESC
         LIMIT 10
       `,
-      prisma.$queryRaw<Array<{ active_chats: number; websocket_connections: number }>>`
-        SELECT
-          (SELECT COUNT(*)::int FROM chats WHERE updated_at >= NOW() - INTERVAL '1 day') AS active_chats,
-          (SELECT COUNT(*)::int FROM chat_participants WHERE left_at IS NULL) AS websocket_connections
-      `,
-      prisma.$queryRaw<Array<{ db_ms: number }>>`SELECT 12::int AS db_ms`,
+      probeRedisHealth(),
     ]);
 
-    const base = totals[0];
-    const chats = chatMetrics[0];
+    const comparisons = metricComparisons[0] ?? {
+      total_users_previous: 0,
+      active_users_current: 0,
+      active_users_previous: 0,
+      posts_current: 0,
+      posts_previous: 0,
+      active_clubs_previous: 0,
+      pending_reports_previous: 0,
+      verification_requests_previous: 0,
+      signups_current: 0,
+      signups_previous: 0,
+      active_chats_current: 0,
+      active_chats_previous: 0,
+    };
+
+    const totalUsersCurrent = totalUsersSeries.at(-1)?.value ?? 0;
+    const totalUsersPrevious = comparisons.total_users_previous;
+    const activeClubsCurrent = activeClubsSeries.at(-1)?.value ?? 0;
+    const activeClubsPrevious = comparisons.active_clubs_previous;
+    const pendingReportsCurrent = pendingReportsSeries.at(-1)?.value ?? 0;
+    const pendingReportsPrevious = comparisons.pending_reports_previous;
+    const verificationPendingCurrent = verificationPendingSeries.at(-1)?.value ?? 0;
+    const verificationPendingPrevious = comparisons.verification_requests_previous;
+
+    const websocketConnections = getOpenWebSocketCount();
+    const health = [
+      {
+        key: 'databaseLatency',
+        label: 'Database latency',
+        value: `${databaseLatency} ms`,
+        tone: databaseLatency > 400 ? 'warning' : 'healthy',
+      },
+      {
+        key: 'websocketConnections',
+        label: 'WebSocket connections',
+        value: String(websocketConnections),
+        tone: 'healthy',
+      },
+      {
+        key: 'redisStatus',
+        label: 'Redis',
+        value: redisStatus,
+        tone: redisStatus === 'healthy' ? 'healthy' : redisStatus === 'unavailable' ? 'critical' : 'neutral',
+      },
+    ] as const;
+
     const response = {
+      range,
+      generatedAt: new Date().toISOString(),
       metrics: [
-        { title: 'Total Users', value: base.total_users, trend: '+4.2%', key: 'totalUsers', series: signupSeries.map((item) => item.value) },
-        { title: 'Active Users Today', value: base.active_users_today, trend: '+2.1%', key: 'activeUsersToday', series: signupSeries.map((item) => item.value) },
-        { title: 'Posts Today', value: base.posts_today, trend: '+3.8%', key: 'postsToday', series: postsSeries.map((item) => item.value) },
-        { title: 'Active Clubs', value: base.active_clubs, trend: '+1.3%', key: 'activeClubs', series: clubsSeries.map((item) => item.value) },
-        { title: 'Pending Reports', value: base.pending_reports, trend: `${base.pending_reports > 0 ? '+' : ''}${base.pending_reports}`, key: 'pendingReports', series: reports.map((item) => item.report_count) },
-        { title: 'Verification Requests', value: base.verification_requests, trend: `${base.verification_requests}`, key: 'verificationRequests', series: signupSeries.map((item) => 0) },
-        { title: 'New Signups', value: base.new_signups, trend: '+6.4%', key: 'newSignups', series: signupSeries.map((item) => item.value) },
-        { title: 'Active Chats', value: chats.active_chats, trend: '+1.9%', key: 'activeChats', series: postsSeries.map((item) => item.value) },
+        {
+          title: 'Total Users',
+          value: totalUsersCurrent,
+          key: 'totalUsers',
+          series: totalUsersSeries.map((item) => item.value),
+          ...buildTrend(totalUsersCurrent, totalUsersPrevious),
+        },
+        {
+          title: 'Active Users',
+          value: comparisons.active_users_current,
+          key: 'activeUsers',
+          series: activeUsersSeries.map((item) => item.value),
+          ...buildTrend(comparisons.active_users_current, comparisons.active_users_previous),
+        },
+        {
+          title: 'Posts',
+          value: comparisons.posts_current,
+          key: 'posts',
+          series: postsSeries.map((item) => item.value),
+          ...buildTrend(comparisons.posts_current, comparisons.posts_previous),
+        },
+        {
+          title: 'Active Clubs',
+          value: activeClubsCurrent,
+          key: 'activeClubs',
+          series: activeClubsSeries.map((item) => item.value),
+          ...buildTrend(activeClubsCurrent, activeClubsPrevious),
+        },
+        {
+          title: 'Pending Reports',
+          value: pendingReportsCurrent,
+          key: 'pendingReports',
+          series: pendingReportsSeries.map((item) => item.value),
+          ...buildTrend(pendingReportsCurrent, pendingReportsPrevious),
+        },
+        {
+          title: 'Verification Requests',
+          value: verificationPendingCurrent,
+          key: 'verificationRequests',
+          series: verificationPendingSeries.map((item) => item.value),
+          ...buildTrend(verificationPendingCurrent, verificationPendingPrevious),
+        },
+        {
+          title: 'New Signups',
+          value: comparisons.signups_current,
+          key: 'newSignups',
+          series: signupsSeries.map((item) => item.value),
+          ...buildTrend(comparisons.signups_current, comparisons.signups_previous),
+        },
+        {
+          title: 'Active Chats',
+          value: comparisons.active_chats_current,
+          key: 'activeChats',
+          series: activeChatsSeries.map((item) => item.value),
+          ...buildTrend(comparisons.active_chats_current, comparisons.active_chats_previous),
+        },
       ],
       charts: {
-        dailyActiveUsers: signupSeries,
-        weeklySignups: signupSeries,
+        dailyActiveUsers: activeUsersSeries,
+        weeklySignups: signupsSeries,
         postsPerDay: postsSeries,
-        clubEngagement: clubsSeries,
-        trafficPeaks: signupSeries.map((item, index) => ({ label: item.label, value: item.value + (postsSeries[index]?.value ?? 0) })),
+        clubEngagement: activeClubsSeries,
+        trafficPeaks: activeUsersSeries.map((item, index) => ({ label: item.label, value: item.value + (postsSeries[index]?.value ?? 0) })),
       },
       moderationQueue: reports.map((item) => ({
         id: item.report_id,
@@ -298,15 +526,7 @@ router.get('/dashboard', async (req: Request, res: Response) => {
         description: item.summary,
         timestamp: item.created_at.toISOString(),
       })),
-      health: {
-        apiResponseTime: 124,
-        databaseLatency: dbHealth[0]?.db_ms ?? 0,
-        websocketConnections: chats.websocket_connections,
-        redisHealth: 'healthy',
-        failedJobs: 0,
-        storageUsage: 42,
-        cacheHitRate: 91,
-      },
+      health: [...health],
     };
 
     return res.status(200).json(response);

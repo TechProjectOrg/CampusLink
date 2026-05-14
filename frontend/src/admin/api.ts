@@ -30,6 +30,65 @@ export interface AdminProfile {
   lastLoginAt: string | null;
 }
 
+export type AdminDashboardRange = '7d' | '30d' | '90d';
+export type AdminDashboardTrendDirection = 'up' | 'down' | 'flat';
+export type AdminDashboardHealthTone = 'healthy' | 'warning' | 'critical' | 'neutral';
+
+export interface AdminDashboardSeriesPoint {
+  label: string;
+  value: number;
+}
+
+export interface AdminDashboardMetric {
+  title: string;
+  value: number;
+  trendValue: number;
+  trendDirection: AdminDashboardTrendDirection;
+  trendLabel: string;
+  key: string;
+  series: number[];
+}
+
+export interface AdminDashboardHealthEntry {
+  key: string;
+  label: string;
+  value: string;
+  tone: AdminDashboardHealthTone;
+}
+
+export interface AdminDashboardModerationQueueItem {
+  id: string;
+  reportedItem: string;
+  user: string;
+  reason: string;
+  severity: string;
+  reportsCount: number;
+  time: string;
+}
+
+export interface AdminDashboardActivityFeedItem {
+  id: string;
+  type: string;
+  description: string;
+  timestamp: string;
+}
+
+export interface AdminDashboardResponse {
+  range: AdminDashboardRange;
+  generatedAt: string;
+  metrics: AdminDashboardMetric[];
+  charts: {
+    dailyActiveUsers: AdminDashboardSeriesPoint[];
+    weeklySignups: AdminDashboardSeriesPoint[];
+    postsPerDay: AdminDashboardSeriesPoint[];
+    clubEngagement: AdminDashboardSeriesPoint[];
+    trafficPeaks: AdminDashboardSeriesPoint[];
+  };
+  moderationQueue: AdminDashboardModerationQueueItem[];
+  activityFeed: AdminDashboardActivityFeedItem[];
+  health: AdminDashboardHealthEntry[];
+}
+
 export async function apiAdminLogin(email: string, password: string): Promise<{ token: string; admin: AdminProfile }> {
   return safeFetch('/admin/auth/login', {
     method: 'POST',
