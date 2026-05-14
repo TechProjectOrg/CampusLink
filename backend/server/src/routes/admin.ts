@@ -5,6 +5,7 @@ import authenticateToken from '../middleware/authenticateToken';
 import requireAdmin, { type AdminAuthedRequest } from '../middleware/requireAdmin';
 import { hashPassword, signAuthToken, verifyPassword } from '../lib/auth';
 import { probeRedisHealth } from '../lib/cache';
+import { invalidateUserFeedCache, getPostFeedRecipientIds } from '../lib/feedCache';
 import { socketsByUserId } from '../lib/realtime';
 import {
   getAdminAccountByUserId,
@@ -12,6 +13,7 @@ import {
   recordAdminAuditLog,
 } from '../lib/admin';
 import {
+  invalidateClubFeedCaches,
   invalidateClubMembershipCache,
   invalidateClubMetaCache,
   invalidateClubStatsCache,
@@ -185,6 +187,14 @@ async function invalidateAdminClubCaches(clubId: string, memberUserIds: string[]
     invalidateClubMetaCache(clubId),
     invalidateClubStatsCache(clubId),
     ...memberUserIds.map((userId) => invalidateClubMembershipCache(clubId, userId)),
+  ]);
+}
+
+async function invalidateAdminPostCaches(postId: string, clubId: string | null): Promise<void> {
+  const recipientUserIds = await getPostFeedRecipientIds(postId);
+  await Promise.allSettled([
+    ...recipientUserIds.map((userId) => invalidateUserFeedCache(userId)),
+    ...(clubId ? [invalidateClubFeedCaches(clubId)] : []),
   ]);
 }
 
@@ -1312,65 +1322,304 @@ router.get('/clubs/:clubId/members', async (req: Request<{ clubId: string }>, re
 
 router.get('/posts', async (req: Request, res: Response) => {
   const query = String(req.query.q ?? '').trim();
+  const clubFilter = String(req.query.club ?? '').trim();
+  const statusFilter = (() => {
+    const value = String(req.query.status ?? '').trim().toLowerCase();
+    return ['live', 'hidden', 'deleted', 'all'].includes(value) ? value : '';
+  })();
+  const severityFilter = (() => {
+    const value = String(req.query.severity ?? '').trim().toLowerCase();
+    return value === 'warning' || value === 'critical' ? value : '';
+  })();
+  const sortRaw = String(req.query.sort ?? '').trim();
+  const validSorts: Record<string, string> = {
+    createdAt: 'p.created_at',
+    reports: 'reports_count',
+    engagement: 'engagement_total',
+  };
+  const sortColumn = validSorts[sortRaw] ?? 'p.created_at';
+  const order = parseAdminSortOrder(req.query.order).toUpperCase();
+  const page = parsePositiveInt(req.query.page, 1, 1, 10_000);
+  const limit = parsePositiveInt(req.query.limit, 20, 1, 100);
+  const offset = (page - 1) * limit;
+  const searchPattern = `%${query}%`;
+  const clubPattern = `%${clubFilter}%`;
 
   try {
-    const rows = await prisma.$queryRaw<
-      Array<{
-        post_id: string;
-        title: string | null;
-        content_text: string | null;
-        username: string;
-        club_name: string | null;
-        media_url: string | null;
-        likes: number;
-        comments: number;
-        reports: number;
-        hidden_at: Date | null;
-        deleted_at: Date | null;
-        created_at: Date;
-        author_user_id: string;
-      }>
-    >`
+    const listSql = `
       SELECT
         p.post_id,
         p.title,
         p.content_text,
         u.username,
         c.name AS club_name,
+        c.slug AS club_slug,
+        p.club_id,
         (SELECT pm.media_url FROM post_media pm WHERE pm.post_id = p.post_id ORDER BY pm.sort_order ASC, pm.created_at ASC LIMIT 1) AS media_url,
         (SELECT COUNT(*)::int FROM post_likes pl WHERE pl.post_id = p.post_id) AS likes,
         (SELECT COUNT(*)::int FROM post_comments pc WHERE pc.post_id = p.post_id) AS comments,
-        (SELECT COUNT(*)::int FROM admin_reports r WHERE r.target_type = CAST('post' AS "AdminReportTargetType") AND r.target_id = p.post_id::text) AS reports,
+        (SELECT COUNT(*)::int FROM admin_reports r WHERE r.target_type = CAST('post' AS "AdminReportTargetType") AND r.target_id = p.post_id::text) AS reports_count,
+        COALESCE((
+          SELECT CASE
+            WHEN BOOL_OR(r.severity = CAST('critical' AS "AdminSeverity")) THEN 'critical'
+            WHEN BOOL_OR(r.severity = CAST('warning' AS "AdminSeverity")) THEN 'warning'
+            ELSE ''
+          END
+          FROM admin_reports r
+          WHERE r.target_type = CAST('post' AS "AdminReportTargetType") AND r.target_id = p.post_id::text
+        ), '') AS highest_severity,
         p.hidden_at,
+        p.hidden_reason,
         p.deleted_at,
         p.created_at,
-        p.author_user_id
+        p.author_user_id,
+        ((SELECT COUNT(*)::int FROM post_likes pl WHERE pl.post_id = p.post_id) + (SELECT COUNT(*)::int FROM post_comments pc WHERE pc.post_id = p.post_id)) AS engagement_total
       FROM posts p
       JOIN users u ON u.user_id = p.author_user_id
       LEFT JOIN clubs c ON c.club_id = p.club_id
-      WHERE ${query} = '' OR COALESCE(p.title, '') ILIKE ${`%${query}%`} OR COALESCE(p.content_text, '') ILIKE ${`%${query}%`} OR u.username ILIKE ${`%${query}%`}
-      ORDER BY p.created_at DESC
-      LIMIT 100
+      WHERE
+        ($1 = '' OR COALESCE(p.title, '') ILIKE $2 OR COALESCE(p.content_text, '') ILIKE $2 OR u.username ILIKE $2 OR COALESCE(c.name, '') ILIKE $2)
+        AND ($3 = '' OR COALESCE(c.name, '') ILIKE $4)
+        AND (
+          $5 = ''
+          OR ($5 = 'live' AND p.deleted_at IS NULL AND p.hidden_at IS NULL)
+          OR ($5 = 'hidden' AND p.deleted_at IS NULL AND p.hidden_at IS NOT NULL)
+          OR ($5 = 'deleted' AND p.deleted_at IS NOT NULL)
+          OR ($5 = 'all')
+        )
+        AND ($5 != '' OR p.deleted_at IS NULL)
+        AND (
+          $6 = ''
+          OR (
+            $6 = COALESCE((
+              SELECT CASE
+                WHEN BOOL_OR(r.severity = CAST('critical' AS "AdminSeverity")) THEN 'critical'
+                WHEN BOOL_OR(r.severity = CAST('warning' AS "AdminSeverity")) THEN 'warning'
+                ELSE ''
+              END
+              FROM admin_reports r
+              WHERE r.target_type = CAST('post' AS "AdminReportTargetType") AND r.target_id = p.post_id::text
+            ), '')
+          )
+        )
+      ORDER BY ${sortColumn} ${order}, p.post_id ${order}
+      LIMIT $7 OFFSET $8
+    `;
+    const countSql = `
+      SELECT COUNT(*)::int AS total
+      FROM posts p
+      JOIN users u ON u.user_id = p.author_user_id
+      LEFT JOIN clubs c ON c.club_id = p.club_id
+      WHERE
+        ($1 = '' OR COALESCE(p.title, '') ILIKE $2 OR COALESCE(p.content_text, '') ILIKE $2 OR u.username ILIKE $2 OR COALESCE(c.name, '') ILIKE $2)
+        AND ($3 = '' OR COALESCE(c.name, '') ILIKE $4)
+        AND (
+          $5 = ''
+          OR ($5 = 'live' AND p.deleted_at IS NULL AND p.hidden_at IS NULL)
+          OR ($5 = 'hidden' AND p.deleted_at IS NULL AND p.hidden_at IS NOT NULL)
+          OR ($5 = 'deleted' AND p.deleted_at IS NOT NULL)
+          OR ($5 = 'all')
+        )
+        AND ($5 != '' OR p.deleted_at IS NULL)
+        AND (
+          $6 = ''
+          OR (
+            $6 = COALESCE((
+              SELECT CASE
+                WHEN BOOL_OR(r.severity = CAST('critical' AS "AdminSeverity")) THEN 'critical'
+                WHEN BOOL_OR(r.severity = CAST('warning' AS "AdminSeverity")) THEN 'warning'
+                ELSE ''
+              END
+              FROM admin_reports r
+              WHERE r.target_type = CAST('post' AS "AdminReportTargetType") AND r.target_id = p.post_id::text
+            ), '')
+          )
+        )
     `;
 
-    return res.status(200).json(rows.map((row) => ({
-      id: row.post_id,
-      author: row.username,
-      authorUserId: row.author_user_id,
-      club: row.club_name,
-      title: row.title,
-      preview: row.content_text,
-      mediaUrl: row.media_url,
-      engagement: {
-        likes: row.likes,
-        comments: row.comments,
+    type AdminPostRow = {
+      post_id: string;
+      title: string | null;
+      content_text: string | null;
+      username: string;
+      club_name: string | null;
+      club_slug: string | null;
+      club_id: string | null;
+      media_url: string | null;
+      likes: number;
+      comments: number;
+      reports_count: number;
+      highest_severity: '' | 'warning' | 'critical';
+      hidden_at: Date | null;
+      hidden_reason: string | null;
+      deleted_at: Date | null;
+      created_at: Date;
+      author_user_id: string;
+      engagement_total: number;
+    };
+
+    const [rows, totalRows] = await Promise.all([
+      prisma.$queryRawUnsafe<AdminPostRow[]>(listSql, query, searchPattern, clubFilter, clubPattern, statusFilter, severityFilter, limit, offset),
+      prisma.$queryRawUnsafe<Array<{ total: number }>>(countSql, query, searchPattern, clubFilter, clubPattern, statusFilter, severityFilter),
+    ]);
+
+    const total = totalRows[0]?.total ?? 0;
+    const totalPages = total === 0 ? 1 : Math.ceil(total / limit);
+
+    return res.status(200).json({
+      items: rows.map((row) => ({
+        id: row.post_id,
+        author: row.username,
+        authorUserId: row.author_user_id,
+        club: row.club_name ? { id: row.club_id, name: row.club_name, slug: row.club_slug } : null,
+        title: row.title,
+        preview: row.content_text,
+        mediaUrl: row.media_url,
+        engagement: {
+          likes: row.likes,
+          comments: row.comments,
+          total: row.engagement_total,
+        },
+        reportsCount: row.reports_count,
+        highestSeverity: row.highest_severity,
+        hiddenReason: row.hidden_reason,
+        status: row.deleted_at ? 'deleted' : row.hidden_at ? 'hidden' : 'live',
+        createdAt: row.created_at.toISOString(),
+      })),
+      pageInfo: {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
       },
-      reportsCount: row.reports,
-      status: row.deleted_at ? 'deleted' : row.hidden_at ? 'hidden' : 'live',
-      createdAt: row.created_at.toISOString(),
-    })));
+    });
   } catch (err) {
     console.error('Error loading admin posts:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.get('/posts/:postId', async (req: Request<{ postId: string }>, res: Response) => {
+  const { postId } = req.params;
+
+  try {
+    const [postRows, mediaRows, reportRows, historyRows] = await Promise.all([
+      prisma.$queryRaw<Array<{
+        post_id: string;
+        title: string | null;
+        content_text: string | null;
+        hidden_reason: string | null;
+        hidden_at: Date | null;
+        deleted_at: Date | null;
+        created_at: Date;
+        author_user_id: string;
+        author_username: string;
+        author_email: string;
+        author_avatar_url: string | null;
+        club_id: string | null;
+        club_name: string | null;
+        club_slug: string | null;
+        likes: number;
+        comments: number;
+      }>>`
+        SELECT
+          p.post_id,
+          p.title,
+          p.content_text,
+          p.hidden_reason,
+          p.hidden_at,
+          p.deleted_at,
+          p.created_at,
+          u.user_id AS author_user_id,
+          u.username AS author_username,
+          u.email AS author_email,
+          u.profile_photo_url AS author_avatar_url,
+          c.club_id,
+          c.name AS club_name,
+          c.slug AS club_slug,
+          (SELECT COUNT(*)::int FROM post_likes pl WHERE pl.post_id = p.post_id) AS likes,
+          (SELECT COUNT(*)::int FROM post_comments pc WHERE pc.post_id = p.post_id) AS comments
+        FROM posts p
+        JOIN users u ON u.user_id = p.author_user_id
+        LEFT JOIN clubs c ON c.club_id = p.club_id
+        WHERE p.post_id = ${postId}
+        LIMIT 1
+      `,
+      prisma.$queryRaw<Array<{ post_media_id: string; media_url: string; media_type: string; sort_order: number }>>`
+        SELECT post_media_id, media_url, media_type::text, sort_order
+        FROM post_media
+        WHERE post_id = ${postId}
+        ORDER BY sort_order ASC, created_at ASC
+      `,
+      prisma.$queryRaw<Array<{ report_id: string; reason: string; severity: string; status: string; created_at: Date }>>`
+        SELECT report_id, reason, severity::text, status::text, created_at
+        FROM admin_reports
+        WHERE target_type = CAST('post' AS "AdminReportTargetType")
+          AND target_id = ${postId}
+        ORDER BY created_at DESC
+        LIMIT 20
+      `,
+      prisma.$queryRaw<Array<{ audit_log_id: string; action_type: string; summary: string; severity: string; created_at: Date; actor: string; metadata: unknown }>>`
+        SELECT l.audit_log_id, l.action_type, l.summary, l.severity::text, l.created_at, actor.username AS actor, l.metadata
+        FROM admin_audit_logs l
+        JOIN users actor ON actor.user_id = l.actor_user_id
+        WHERE l.target_type = 'post' AND l.target_id = ${postId}
+        ORDER BY l.created_at DESC
+        LIMIT 20
+      `,
+    ]);
+
+    const post = postRows[0];
+    if (!post) {
+      return res.status(404).json({ message: 'Post not found' });
+    }
+
+    return res.status(200).json({
+      id: post.post_id,
+      title: post.title,
+      content: post.content_text,
+      hiddenReason: post.hidden_reason,
+      status: post.deleted_at ? 'deleted' : post.hidden_at ? 'hidden' : 'live',
+      createdAt: post.created_at.toISOString(),
+      author: {
+        id: post.author_user_id,
+        username: post.author_username,
+        email: post.author_email,
+        avatarUrl: post.author_avatar_url,
+      },
+      club: post.club_id && post.club_name ? { id: post.club_id, name: post.club_name, slug: post.club_slug } : null,
+      engagement: {
+        likes: post.likes,
+        comments: post.comments,
+        total: post.likes + post.comments,
+      },
+      media: mediaRows.map((media) => ({
+        id: media.post_media_id,
+        url: media.media_url,
+        type: media.media_type,
+        sortOrder: media.sort_order,
+      })),
+      linkedReports: reportRows.map((report) => ({
+        id: report.report_id,
+        reason: report.reason,
+        severity: report.severity,
+        status: report.status,
+        createdAt: report.created_at.toISOString(),
+      })),
+      moderationHistory: historyRows.map((entry) => ({
+        id: entry.audit_log_id,
+        actionType: entry.action_type,
+        actor: entry.actor,
+        severity: entry.severity,
+        summary: entry.summary,
+        timestamp: entry.created_at.toISOString(),
+        metadata: entry.metadata ?? {},
+      })),
+    });
+  } catch (err) {
+    console.error('Error loading admin post detail:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });
@@ -1379,18 +1628,28 @@ router.post('/posts/:postId/actions', async (req: Request<{ postId: string }>, r
   const adminReq = req as AdminAuthedRequest;
   const { postId } = req.params;
   const { action, note } = req.body as { action?: string; note?: string };
+  const normalizedNote = note?.trim() || '';
 
   try {
-    const postRows = await prisma.$queryRaw<Array<{ author_user_id: string }>>`
-      SELECT author_user_id FROM posts WHERE post_id = ${postId} LIMIT 1
+    const postRows = await prisma.$queryRaw<Array<{ author_user_id: string; club_id: string | null }>>`
+      SELECT author_user_id, club_id FROM posts WHERE post_id = ${postId} LIMIT 1
     `;
     const post = postRows[0];
     if (!post) return res.status(404).json({ message: 'Post not found' });
 
     if (action === 'hide') {
+      if (!normalizedNote) {
+        return res.status(400).json({ message: 'A moderation note is required to hide a post' });
+      }
       await prisma.$queryRaw`
         UPDATE posts
-        SET hidden_at = NOW(), hidden_reason = ${note ?? 'Hidden by admin'}, hidden_by_user_id = ${adminReq.auth!.userId}, updated_at = NOW()
+        SET hidden_at = NOW(), hidden_reason = ${normalizedNote}, hidden_by_user_id = ${adminReq.auth!.userId}, updated_at = NOW()
+        WHERE post_id = ${postId}
+      `;
+    } else if (action === 'unhide') {
+      await prisma.$queryRaw`
+        UPDATE posts
+        SET hidden_at = NULL, hidden_reason = NULL, hidden_by_user_id = NULL, updated_at = NOW()
         WHERE post_id = ${postId}
       `;
     } else if (action === 'delete') {
@@ -1399,14 +1658,24 @@ router.post('/posts/:postId/actions', async (req: Request<{ postId: string }>, r
         SET deleted_at = NOW(), deleted_by_user_id = ${adminReq.auth!.userId}, updated_at = NOW()
         WHERE post_id = ${postId}
       `;
+    } else if (action === 'restore') {
+      await prisma.$queryRaw`
+        UPDATE posts
+        SET deleted_at = NULL, deleted_by_user_id = NULL, updated_at = NOW()
+        WHERE post_id = ${postId}
+      `;
     } else if (action === 'warn') {
+      if (!normalizedNote) {
+        return res.status(400).json({ message: 'A moderation note is required to warn an author' });
+      }
       await recordAdminAuditLog({
         actorUserId: adminReq.auth!.userId,
         actionType: 'post.warn_author',
         targetType: 'post',
         targetId: postId,
         severity: 'warning',
-        summary: note?.trim() || 'Author warned for post',
+        summary: normalizedNote,
+        metadata: { note: normalizedNote },
       });
       return res.status(200).json({ success: true });
     } else if (action === 'suspend_author') {
@@ -1416,7 +1685,10 @@ router.post('/posts/:postId/actions', async (req: Request<{ postId: string }>, r
         WHERE user_id = ${post.author_user_id}
       `;
     } else if (action === 'escalate') {
-      await prisma.$queryRaw`
+      if (!normalizedNote) {
+        return res.status(400).json({ message: 'A moderation note is required to escalate a post' });
+      }
+      const reportRows = await prisma.$queryRaw<Array<{ report_id: string }>>`
         INSERT INTO admin_reports (
           reporter_user_id,
           target_type,
@@ -1434,14 +1706,26 @@ router.post('/posts/:postId/actions', async (req: Request<{ postId: string }>, r
           CAST('post' AS "AdminReportTargetType"),
           ${postId},
           ${post.author_user_id},
-          ${note?.trim() || 'Escalated by admin during moderation'},
+          ${normalizedNote},
           CAST('critical' AS "AdminSeverity"),
           CAST('escalated' AS "AdminReportStatus"),
           1,
           ${adminReq.auth!.userId},
-          ${note?.trim() || null}
+          ${normalizedNote}
         )
+        RETURNING report_id
       `;
+      await recordAdminAuditLog({
+        actorUserId: adminReq.auth!.userId,
+        actionType: 'post.escalate',
+        targetType: 'post',
+        targetId: postId,
+        severity: 'critical',
+        summary: 'Admin escalated post into a moderation report',
+        metadata: { note: normalizedNote, reportId: reportRows[0]?.report_id ?? null },
+      });
+      await invalidateAdminPostCaches(postId, post.club_id);
+      return res.status(200).json({ success: true, reportId: reportRows[0]?.report_id ?? null });
     } else {
       return res.status(400).json({ message: 'Unsupported action' });
     }
@@ -1451,11 +1735,12 @@ router.post('/posts/:postId/actions', async (req: Request<{ postId: string }>, r
       actionType: `post.${action}`,
       targetType: 'post',
       targetId: postId,
-      severity: action === 'delete' || action === 'escalate' ? 'critical' : 'warning',
+      severity: action === 'delete' ? 'critical' : 'warning',
       summary: `Admin performed ${action} on post`,
-      metadata: note ? { note } : undefined,
+      metadata: normalizedNote ? { note: normalizedNote } : undefined,
     });
 
+    await invalidateAdminPostCaches(postId, post.club_id);
     return res.status(200).json({ success: true });
   } catch (err) {
     console.error('Error performing post action:', err);

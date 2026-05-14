@@ -221,6 +221,103 @@ type ClubFilterState = {
 
 type ClubActionName = 'verify' | 'feature' | 'unfeature' | 'freeze' | 'unfreeze' | 'delete' | 'restore';
 
+type AdminPostStatus = 'live' | 'hidden' | 'deleted';
+type AdminPostSeverity = '' | 'warning' | 'critical';
+type AdminPostSortKey = 'createdAt' | 'reports' | 'engagement';
+
+type AdminPostListItem = {
+  id: string;
+  author: string;
+  authorUserId: string;
+  club: { id: string | null; name: string; slug: string | null } | null;
+  title: string | null;
+  preview: string | null;
+  mediaUrl: string | null;
+  engagement: { likes: number; comments: number; total: number };
+  reportsCount: number;
+  highestSeverity: AdminPostSeverity;
+  hiddenReason: string | null;
+  status: AdminPostStatus;
+  createdAt: string;
+};
+
+type AdminPostListResponse = {
+  items: AdminPostListItem[];
+  pageInfo: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+  };
+};
+
+type AdminPostDetailResponse = {
+  id: string;
+  title: string | null;
+  content: string | null;
+  hiddenReason: string | null;
+  status: AdminPostStatus;
+  createdAt: string;
+  author: { id: string; username: string; email: string; avatarUrl: string | null };
+  club: { id: string; name: string; slug: string | null } | null;
+  engagement: { likes: number; comments: number; total: number };
+  media: Array<{ id: string; url: string; type: string; sortOrder: number }>;
+  linkedReports: Array<{ id: string; reason: string; severity: string; status: string; createdAt: string }>;
+  moderationHistory: Array<{
+    id: string;
+    actionType: string;
+    actor: string;
+    severity: string;
+    summary: string;
+    timestamp: string;
+    metadata?: Record<string, unknown>;
+  }>;
+};
+
+type PostFilterState = {
+  status: '' | AdminPostStatus | 'all';
+  severity: AdminPostSeverity;
+  club: string;
+  sort: AdminPostSortKey;
+  order: AdminSortOrder;
+  page: number;
+  limit: number;
+};
+
+type PostActionName = 'hide' | 'unhide' | 'delete' | 'restore' | 'warn' | 'suspend_author' | 'escalate';
+
+const DEFAULT_POST_FILTERS: PostFilterState = {
+  status: '',
+  severity: '',
+  club: '',
+  sort: 'createdAt',
+  order: 'desc',
+  page: 1,
+  limit: 20,
+};
+
+const POST_STATUS_OPTIONS: Array<{ value: PostFilterState['status']; label: string }> = [
+  { value: '', label: 'All visible posts' },
+  { value: 'live', label: 'Live' },
+  { value: 'hidden', label: 'Hidden' },
+  { value: 'deleted', label: 'Deleted' },
+  { value: 'all', label: 'All (incl. deleted)' },
+];
+
+const POST_SEVERITY_OPTIONS: Array<{ value: AdminPostSeverity; label: string }> = [
+  { value: '', label: 'All severities' },
+  { value: 'warning', label: 'Warning' },
+  { value: 'critical', label: 'Critical' },
+];
+
+const POST_SORT_OPTIONS: Array<{ value: AdminPostSortKey; label: string }> = [
+  { value: 'createdAt', label: 'Created date' },
+  { value: 'reports', label: 'Reports' },
+  { value: 'engagement', label: 'Engagement' },
+];
+
 const DEFAULT_CLUB_FILTERS: ClubFilterState = {
   status: '',
   verified: '',
@@ -278,6 +375,45 @@ function buildClubsQueryString(search: string, filters: ClubFilterState) {
     page: filters.page,
     limit: filters.limit,
   });
+}
+
+function buildPostsQueryString(search: string, filters: PostFilterState) {
+  return buildQueryString({
+    q: search,
+    status: filters.status,
+    severity: filters.severity,
+    club: filters.club,
+    sort: filters.sort,
+    order: filters.order,
+    page: filters.page,
+    limit: filters.limit,
+  });
+}
+
+function getPostActionOptions(post: Pick<AdminPostListItem, 'status'>): Array<{ action: PostActionName; label: string }> {
+  if (post.status === 'deleted') {
+    return [
+      { action: 'restore', label: 'Restore' },
+      { action: 'warn', label: 'Warn author' },
+      { action: 'suspend_author', label: 'Suspend author' },
+    ];
+  }
+  if (post.status === 'hidden') {
+    return [
+      { action: 'unhide', label: 'Unhide' },
+      { action: 'delete', label: 'Delete' },
+      { action: 'warn', label: 'Warn author' },
+      { action: 'suspend_author', label: 'Suspend author' },
+      { action: 'escalate', label: 'Escalate' },
+    ];
+  }
+  return [
+    { action: 'hide', label: 'Hide' },
+    { action: 'delete', label: 'Delete' },
+    { action: 'warn', label: 'Warn author' },
+    { action: 'suspend_author', label: 'Suspend author' },
+    { action: 'escalate', label: 'Escalate' },
+  ];
 }
 
 
@@ -360,11 +496,19 @@ function getAdminUserDetailQueryKey(token: string, userId: string) {
   return ['admin', token, 'user-detail', userId] as const;
 }
 
-async function fetchAdminPageData(page: PageKey, token: string, search: string, range: AdminDashboardRange, userFilters: UserFilterState, clubFilters: ClubFilterState = DEFAULT_CLUB_FILTERS) {
+async function fetchAdminPageData(
+  page: PageKey,
+  token: string,
+  search: string,
+  range: AdminDashboardRange,
+  userFilters: UserFilterState,
+  clubFilters: ClubFilterState = DEFAULT_CLUB_FILTERS,
+  postFilters: PostFilterState = DEFAULT_POST_FILTERS,
+) {
   if (page === 'dashboard') return apiAdminGet<AdminDashboardResponse>(`/admin/dashboard?range=${encodeURIComponent(range)}`, token);
   if (page === 'users') return apiAdminGet<AdminUserListResponse>(`/admin/users?${buildUsersQueryString(search, userFilters)}`, token);
   if (page === 'clubs') return apiAdminGet<AdminClubListResponse>(`/admin/clubs?${buildClubsQueryString(search, clubFilters)}`, token);
-  if (page === 'posts') return apiAdminGet(`/admin/posts?q=${encodeURIComponent(search)}`, token);
+  if (page === 'posts') return apiAdminGet<AdminPostListResponse>(`/admin/posts?${buildPostsQueryString(search, postFilters)}`, token);
   if (page === 'reports') return apiAdminGet('/admin/reports', token);
   if (page === 'verification') return apiAdminGet('/admin/verification-requests', token);
   if (page === 'analytics') return apiAdminGet('/admin/analytics', token);
@@ -566,6 +710,10 @@ export default function AdminRoot() {
   const [selectedClubDetail, setSelectedClubDetail] = useState<AdminClubDetailResponse | null>(null);
   const [clubFilters, setClubFilters] = useState<ClubFilterState>(DEFAULT_CLUB_FILTERS);
   const [clubMembers, setClubMembers] = useState<AdminClubMember[]>([]);
+  const [selectedPost, setSelectedPost] = useState<AdminPostListItem | null>(null);
+  const [selectedPostDetail, setSelectedPostDetail] = useState<AdminPostDetailResponse | null>(null);
+  const [postFilters, setPostFilters] = useState<PostFilterState>(DEFAULT_POST_FILTERS);
+  const [postActionNote, setPostActionNote] = useState('');
   const [transferTarget, setTransferTarget] = useState<string>('');
   const [transferConfirm, setTransferConfirm] = useState(false);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
@@ -588,6 +736,7 @@ export default function AdminRoot() {
   const searchKey = useMemo(() => getSearchKey(page, search), [page, search]);
   const usersQueryContext = useMemo(() => (page === 'users' ? JSON.stringify(userFilters) : ''), [page, userFilters]);
   const clubsQueryContext = useMemo(() => (page === 'clubs' ? JSON.stringify(clubFilters) : ''), [page, clubFilters]);
+  const postsQueryContext = useMemo(() => (page === 'posts' ? JSON.stringify(postFilters) : ''), [page, postFilters]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -613,6 +762,11 @@ export default function AdminRoot() {
   useEffect(() => {
     if (page !== 'clubs') return;
     setClubFilters((current) => (current.page === 1 ? current : { ...current, page: 1 }));
+  }, [page, searchKey]);
+
+  useEffect(() => {
+    if (page !== 'posts') return;
+    setPostFilters((current) => (current.page === 1 ? current : { ...current, page: 1 }));
   }, [page, searchKey]);
 
   useEffect(() => {
@@ -661,8 +815,8 @@ export default function AdminRoot() {
   });
 
   const currentPageQuery = useQuery({
-    queryKey: token ? getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext + clubsQueryContext) : ['admin', page, searchKey, 'anon', dashboardRange, usersQueryContext + clubsQueryContext],
-    queryFn: () => fetchAdminPageData(page, token!, searchKey, dashboardRange, userFilters, clubFilters),
+    queryKey: token ? getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext) : ['admin', page, searchKey, 'anon', dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext],
+    queryFn: () => fetchAdminPageData(page, token!, searchKey, dashboardRange, userFilters, clubFilters, postFilters),
     enabled: canQueryAdmin && page !== 'dashboard',
     staleTime: ADMIN_CACHE_MS,
     gcTime: ADMIN_CACHE_MS * 10,
@@ -677,7 +831,9 @@ export default function AdminRoot() {
   const clubsResponse = page === 'clubs' ? ((currentPageQuery.data as AdminClubListResponse | null) ?? null) : null;
   const clubs = clubsResponse?.items ?? [];
   const clubsPageInfo = clubsResponse?.pageInfo ?? null;
-  const posts = page === 'posts' ? ((currentPageQuery.data as any[]) ?? []) : [];
+  const postsResponse = page === 'posts' ? ((currentPageQuery.data as AdminPostListResponse | null) ?? null) : null;
+  const posts = postsResponse?.items ?? [];
+  const postsPageInfo = postsResponse?.pageInfo ?? null;
   const reports = page === 'reports' ? ((currentPageQuery.data as any[]) ?? []) : [];
   const verification = page === 'verification' ? ((currentPageQuery.data as any[]) ?? []) : [];
   const analytics = page === 'analytics' ? (currentPageQuery.data ?? null) : null;
@@ -717,9 +873,16 @@ export default function AdminRoot() {
   const prefetchPage = (nextPage: PageKey) => {
     if (!token || !admin) return;
     const nextSearchKey = getSearchKey(nextPage, search);
+    const nextContext = nextPage === 'users'
+      ? JSON.stringify(userFilters)
+      : nextPage === 'clubs'
+        ? JSON.stringify(clubFilters)
+        : nextPage === 'posts'
+          ? JSON.stringify(postFilters)
+          : '';
     void queryClient.prefetchQuery({
-      queryKey: getAdminQueryKey(token, nextPage, nextSearchKey, dashboardRange, nextPage === 'users' ? JSON.stringify(userFilters) : ''),
-      queryFn: () => fetchAdminPageData(nextPage, token, nextSearchKey, dashboardRange, userFilters),
+      queryKey: getAdminQueryKey(token, nextPage, nextSearchKey, dashboardRange, nextContext),
+      queryFn: () => fetchAdminPageData(nextPage, token, nextSearchKey, dashboardRange, userFilters, clubFilters, postFilters),
       staleTime: ADMIN_CACHE_MS,
     });
   };
@@ -741,7 +904,7 @@ export default function AdminRoot() {
 
   const refreshCurrentPage = async () => {
     if (!token) return;
-    await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext + clubsQueryContext), exact: true });
+    await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext), exact: true });
     if (page !== 'dashboard') {
       await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, 'dashboard', '', dashboardRange), exact: true });
     }
@@ -776,10 +939,25 @@ export default function AdminRoot() {
     }
   };
 
-  const runPostAction = async (postId: string, action: string) => {
+  const runPostAction = async (postId: string, action: PostActionName, options?: { note?: string }) => {
     if (!token) return;
-    await apiAdminPost(`/admin/posts/${postId}/actions`, token, { action });
-    await refreshCurrentPage();
+    try {
+      const response = await apiAdminPost<{ success: true; reportId?: string | null }>(`/admin/posts/${postId}/actions`, token, {
+        action,
+        note: options?.note,
+      });
+      toast.success(`Post ${action} completed`);
+      setPostActionNote('');
+      await refreshCurrentPage();
+      if (selectedPost?.id === postId) {
+        setSelectedPostDetail(await apiAdminGet<AdminPostDetailResponse>(`/admin/posts/${postId}`, token));
+      }
+      if (action === 'escalate' && response?.reportId) {
+        goTo('reports');
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : `Unable to ${action} post`);
+    }
   };
 
   const openUserDrawer = (user: AdminUserListItem) => {
@@ -794,6 +972,13 @@ export default function AdminRoot() {
     setTransferConfirm(false);
     setClubMembers([]);
     setSelectedClubDetail(await apiAdminGet<AdminClubDetailResponse>(`/admin/clubs/${club.id}`, token));
+  };
+
+  const openPostDrawer = async (post: AdminPostListItem) => {
+    if (!token) return;
+    setSelectedPost(post);
+    setPostActionNote(post.hiddenReason ?? '');
+    setSelectedPostDetail(await apiAdminGet<AdminPostDetailResponse>(`/admin/posts/${post.id}`, token));
   };
 
   const loadClubMembers = async (clubId: string, q = '') => {
@@ -1392,34 +1577,107 @@ export default function AdminRoot() {
             ) : null}
 
             {!pageLoading && page === 'posts' ? (
-              <ShellCard title="Post Moderation">
-                <div className="grid gap-4 lg:grid-cols-2">
-                  {posts.map((post) => (
-                    <div key={post.id} className="rounded-lg border border-slate-200 bg-white p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold text-slate-900">{post.title || 'Untitled post'}</p>
-                          <p className="mt-1 text-xs text-slate-500">by {post.author}{post.club ? ` · ${post.club}` : ''}</p>
+              <>
+                <ShellCard title="Post Filters">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+                    <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={postFilters.status} onChange={(event) => setPostFilters((current) => ({ ...current, status: event.target.value as PostFilterState['status'], page: 1 }))}>
+                      {POST_STATUS_OPTIONS.map((option) => <option key={option.label} value={option.value}>{option.label}</option>)}
+                    </select>
+                    <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={postFilters.severity} onChange={(event) => setPostFilters((current) => ({ ...current, severity: event.target.value as AdminPostSeverity, page: 1 }))}>
+                      {POST_SEVERITY_OPTIONS.map((option) => <option key={option.label} value={option.value}>{option.label}</option>)}
+                    </select>
+                    <Input
+                      className="h-10"
+                      placeholder="Filter by club name"
+                      value={postFilters.club}
+                      onChange={(event) => setPostFilters((current) => ({ ...current, club: event.target.value, page: 1 }))}
+                    />
+                    <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={postFilters.sort} onChange={(event) => setPostFilters((current) => ({ ...current, sort: event.target.value as AdminPostSortKey, page: 1 }))}>
+                      {POST_SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                    </select>
+                    <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={postFilters.order} onChange={(event) => setPostFilters((current) => ({ ...current, order: event.target.value as AdminSortOrder, page: 1 }))}>
+                      <option value="desc">Descending</option>
+                      <option value="asc">Ascending</option>
+                    </select>
+                  </div>
+                </ShellCard>
+
+                <ShellCard title="Post Moderation">
+                  {currentPageQuery.isError ? (
+                    <EmptyPanel title="Unable to load posts" body={currentPageQuery.error instanceof Error ? currentPageQuery.error.message : 'Try refreshing this page.'} />
+                  ) : posts.length === 0 ? (
+                    <EmptyPanel title="No posts matched these filters" body="Adjust the search or filters to broaden the results." />
+                  ) : (
+                    <>
+                      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm text-slate-500">
+                        <span>{formatNumber(postsPageInfo?.total ?? 0)} posts found</span>
+                        <span>Page {postsPageInfo?.page ?? 1} of {postsPageInfo?.totalPages ?? 1}</span>
+                      </div>
+                      <div className="overflow-x-auto">
+                        <table className="min-w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-[0.12em] text-slate-500">
+                              <th className="px-3 py-3 whitespace-nowrap">Post</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Author</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Engagement</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Reports</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Status</th>
+                              <th className="px-3 py-3 whitespace-nowrap">Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {posts.map((post) => (
+                              <tr key={post.id} className="border-b border-slate-100 hover:bg-slate-50">
+                                <td className="px-3 py-3">
+                                  <button type="button" onClick={() => void openPostDrawer(post)} className="text-left">
+                                    <p className="font-medium text-slate-800">{post.title || 'Untitled post'}</p>
+                                    <p className="mt-1 line-clamp-2 text-xs text-slate-500">{post.preview || 'No content preview available.'}</p>
+                                  </button>
+                                </td>
+                                <td className="px-3 py-3 text-slate-600">
+                                  <p>{post.author}</p>
+                                  <p className="mt-1 text-xs text-slate-500">{post.club?.name ?? 'Independent post'}</p>
+                                </td>
+                                <td className="px-3 py-3 text-slate-600">
+                                  <p>{formatNumber(post.engagement.likes)} likes</p>
+                                  <p className="mt-1 text-xs text-slate-500">{formatNumber(post.engagement.comments)} comments</p>
+                                </td>
+                                <td className="px-3 py-3">
+                                  <div className="flex flex-wrap gap-2">
+                                    <span className="text-slate-600">{formatNumber(post.reportsCount)}</span>
+                                    {post.highestSeverity ? <StatusBadge value={post.highestSeverity} /> : null}
+                                  </div>
+                                </td>
+                                <td className="px-3 py-3">
+                                  <div className="flex flex-wrap gap-2">
+                                    <StatusBadge value={post.status} />
+                                    {post.mediaUrl ? <Badge variant="outline">Media</Badge> : null}
+                                  </div>
+                                </td>
+                                <td className="px-3 py-3">
+                                  <Button variant="outline" size="sm" onClick={() => void openPostDrawer(post)}>Review</Button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 pt-4">
+                        <div className="flex items-center gap-2 text-sm text-slate-500">
+                          <span>Rows per page</span>
+                          <select className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700" value={postFilters.limit} onChange={(event) => setPostFilters((current) => ({ ...current, limit: Number(event.target.value), page: 1 }))}>
+                            {[10, 20, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
+                          </select>
                         </div>
-                        <StatusBadge value={post.status} />
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="sm" disabled={!postsPageInfo?.hasPreviousPage} onClick={() => setPostFilters((current) => ({ ...current, page: Math.max(1, current.page - 1) }))}>Previous</Button>
+                          <Button variant="outline" size="sm" disabled={!postsPageInfo?.hasNextPage} onClick={() => setPostFilters((current) => ({ ...current, page: current.page + 1 }))}>Next</Button>
+                        </div>
                       </div>
-                      <p className="mt-3 line-clamp-3 text-sm text-slate-600">{post.preview || 'No content preview available.'}</p>
-                      <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
-                        <span>{post.engagement.likes} likes</span>
-                        <span>{post.engagement.comments} comments</span>
-                        <span>{post.reportsCount} reports</span>
-                      </div>
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        <Button variant="outline" size="sm" onClick={() => void runPostAction(post.id, 'hide')}>Hide</Button>
-                        <Button variant="outline" size="sm" onClick={() => void runPostAction(post.id, 'delete')}>Delete</Button>
-                        <Button variant="outline" size="sm" onClick={() => void runPostAction(post.id, 'warn')}>Warn</Button>
-                        <Button variant="outline" size="sm" onClick={() => void runPostAction(post.id, 'suspend_author')}>Suspend author</Button>
-                        <Button variant="outline" size="sm" onClick={() => void runPostAction(post.id, 'escalate')}>Escalate</Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </ShellCard>
+                    </>
+                  )}
+                </ShellCard>
+              </>
             ) : null}
 
             {!pageLoading && page === 'reports' ? (
@@ -2046,6 +2304,177 @@ export default function AdminRoot() {
                 >
                   Transfer ownership
                 </Button>
+              </div>
+            </ShellCard>
+          </div>
+        ) : null}
+      </RightDrawer>
+
+      <RightDrawer
+        open={Boolean(selectedPost && selectedPostDetail)}
+        title={selectedPostDetail?.title ?? selectedPost?.title ?? 'Post detail'}
+        subtitle={`Review post moderation details${selectedPostDetail?.club?.name ? ` · ${selectedPostDetail.club.name}` : ''}`}
+        onClose={() => {
+          setSelectedPost(null);
+          setSelectedPostDetail(null);
+          setPostActionNote('');
+        }}
+      >
+        {selectedPostDetail ? (
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Status</p>
+                <div className="mt-2"><StatusBadge value={selectedPostDetail.status} /></div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Created</p>
+                <p className="mt-2 text-sm text-slate-800">{formatDate(selectedPostDetail.createdAt)}</p>
+              </div>
+            </div>
+
+            <ShellCard title="Author">
+              <div className="flex items-center gap-3 rounded-xl border border-slate-200 px-4 py-3">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-slate-900 text-sm font-semibold text-white">
+                  {selectedPostDetail.author.username.slice(0, 2).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-slate-800">{selectedPostDetail.author.username}</p>
+                  <p className="text-xs text-slate-500">{selectedPostDetail.author.email}</p>
+                </div>
+              </div>
+            </ShellCard>
+
+            <ShellCard title="Post Content">
+              <div className="space-y-3">
+                {selectedPostDetail.club ? (
+                  <div className="flex items-center gap-2 text-sm text-slate-500">
+                    <span>Club</span>
+                    <Badge variant="outline">{selectedPostDetail.club.name}</Badge>
+                  </div>
+                ) : null}
+                <p className="text-sm leading-6 text-slate-700">{selectedPostDetail.content || 'No content available.'}</p>
+                {selectedPostDetail.hiddenReason ? (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                    <p className="text-xs uppercase tracking-[0.12em] text-amber-700">Hidden reason</p>
+                    <p className="mt-2 text-sm text-amber-800">{selectedPostDetail.hiddenReason}</p>
+                  </div>
+                ) : null}
+              </div>
+            </ShellCard>
+
+            <ShellCard title="Media">
+              <div className="space-y-3">
+                {selectedPostDetail.media.length === 0 ? (
+                  <EmptyPanel title="No media" body="This post does not include attached media." />
+                ) : (
+                  selectedPostDetail.media.map((media) => (
+                    <div key={media.id} className="overflow-hidden rounded-xl border border-slate-200">
+                      <div className="border-b border-slate-200 px-4 py-2 text-xs uppercase tracking-[0.12em] text-slate-500">{media.type}</div>
+                      {media.type.startsWith('image') ? (
+                        <img src={media.url} alt="Post media" className="max-h-80 w-full object-cover" />
+                      ) : (
+                        <div className="p-4">
+                          <a href={media.url} target="_blank" rel="noreferrer" className="text-sm text-blue-600 underline">
+                            Open media
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </ShellCard>
+
+            <ShellCard title="Engagement">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-2xl border border-slate-200 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Likes</p>
+                  <p className="mt-2 text-lg font-semibold text-slate-900">{formatNumber(selectedPostDetail.engagement.likes)}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Comments</p>
+                  <p className="mt-2 text-lg font-semibold text-slate-900">{formatNumber(selectedPostDetail.engagement.comments)}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Total</p>
+                  <p className="mt-2 text-lg font-semibold text-slate-900">{formatNumber(selectedPostDetail.engagement.total)}</p>
+                </div>
+              </div>
+            </ShellCard>
+
+            <ShellCard title="Moderation Actions">
+              <div className="space-y-3">
+                <Textarea
+                  rows={4}
+                  placeholder="Add a moderation note for hide, warn, or escalate"
+                  value={postActionNote}
+                  onChange={(event) => setPostActionNote(event.target.value)}
+                />
+                <div className="flex flex-wrap gap-2">
+                  {getPostActionOptions(selectedPostDetail).map((option) => (
+                    <Button
+                      key={option.action}
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const trimmedNote = postActionNote.trim();
+                        if (['hide', 'warn', 'escalate'].includes(option.action) && !trimmedNote) {
+                          toast.error('Add a moderation note before this action.');
+                          return;
+                        }
+                        void runPostAction(selectedPostDetail.id, option.action, {
+                          note: trimmedNote || undefined,
+                        });
+                      }}
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </ShellCard>
+
+            <ShellCard title="Linked Reports">
+              <div className="space-y-3">
+                {selectedPostDetail.linkedReports.length === 0 ? (
+                  <EmptyPanel title="No reports" body="No moderation reports target this post yet." />
+                ) : (
+                  selectedPostDetail.linkedReports.map((report) => (
+                    <div key={report.id} className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
+                      <div>
+                        <span className="text-sm text-slate-700">{report.reason}</span>
+                        <p className="mt-1 text-xs text-slate-500">{formatDate(report.createdAt)}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <StatusBadge value={report.severity} />
+                        <StatusBadge value={report.status} />
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </ShellCard>
+
+            <ShellCard title="Moderation History">
+              <div className="space-y-3">
+                {selectedPostDetail.moderationHistory.length === 0 ? (
+                  <EmptyPanel title="No moderation history" body="Admin actions on this post will appear here." />
+                ) : (
+                  selectedPostDetail.moderationHistory.map((entry) => (
+                    <div key={entry.id} className="rounded-xl border border-slate-200 px-4 py-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-slate-800">{entry.summary}</p>
+                          <p className="mt-1 text-xs uppercase tracking-[0.1em] text-slate-500">{entry.actor} · {entry.actionType}</p>
+                        </div>
+                        <StatusBadge value={entry.severity} />
+                      </div>
+                      {'note' in (entry.metadata ?? {}) ? <p className="mt-3 text-sm leading-6 text-slate-600">{String(entry.metadata?.note ?? '')}</p> : null}
+                      <p className="mt-3 text-xs text-slate-500">{formatDate(entry.timestamp)}</p>
+                    </div>
+                  ))
+                )}
               </div>
             </ShellCard>
           </div>

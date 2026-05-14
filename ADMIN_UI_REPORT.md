@@ -193,36 +193,52 @@ Need to be done:
 
 ### 4. Posts
 
-Status: Implemented for moderation actions, thin on review UX
+Status: Implemented for core moderation workflows, still lighter than a full case-management surface
 
 Done:
 
 - Real post list route at `GET /admin/posts`
-- Search by title/content/author
-- Post cards show author, club, preview, likes, comments, report count, status
-- Backend exposes first `mediaUrl`
-- Actions are wired:
+- Post list now supports:
+  - free-text search
+  - status filter
+  - severity filter
+  - club filter
+  - sorting
+  - pagination
+- Post moderation list shows author, club, preview, engagement, report count, status, and media presence
+- Backend list returns paginated data instead of a fixed top-100 slice
+- Real post detail route exists at `GET /admin/posts/:postId`
+- Post detail drawer shows:
+  - title, author, club, created time, status
+  - full content
+  - media preview/gallery
+  - engagement metrics
+  - linked reports
+  - moderation history
+- Actions are wired with note-aware moderation flows:
   - hide
+  - unhide
   - delete
+  - restore
   - warn
   - suspend author
   - escalate
+- `hide`, `warn`, and `escalate` require a moderation note
+- `escalate` returns a report id and routes the admin back into the reports workflow
 
 Exact limitations found:
 
-- Frontend does not render media preview even though backend returns `mediaUrl`
-- No post detail drawer or evidence panel
-- No filters for status/report severity/date range/club
-- No pagination or sorting controls
-- Warn action only logs audit activity
-- Escalate creates a new `admin_reports` entry, but there is no post-to-ticket review flow in the UI afterward
+- The Posts page still delegates deeper investigation and assignee/state management to the Reports page
+- Filters cover status, severity, club, and sorting, but not date-range filtering yet
+- There is no dedicated evidence model beyond post content, attached media, linked reports, and audit history
+- Warn action remains an internal moderation record rather than a visible user-facing notification flow
+- Restore/unhide are available, but there is still no broader audit-note editor beyond the action-note capture flow
 
 Need to be done:
 
-- Add media preview and full post inspection UI
-- Add filters, sorting, pagination, and linked report navigation
-- Add moderation note capture when taking action
-- Add restore/unhide flow if soft moderation is intended
+- Add date-range filters if moderators need time-window review
+- Add direct report deep-link selection if the reports workflow should auto-open the newly created ticket
+- Add richer evidence/timeline UX if post investigations need more than the current drawer view
 
 ### 5. Reports
 
