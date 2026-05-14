@@ -11853,8 +11853,8 @@
       "source_file": "backend\\server\\src\\routes\\auth.ts",
       "source_location": "L489",
       "weight": 1.0,
-      "_src": "auth_createstudentuser",
-      "_tgt": "auth_hashpassword",
+      "_src": "auth_hashpassword",
+      "_tgt": "auth_createstudentuser",
       "source": "auth_hashpassword",
       "target": "auth_createstudentuser"
     },
@@ -11865,8 +11865,8 @@
       "source_file": "backend\\server\\src\\routes\\auth.ts",
       "source_location": "L415",
       "weight": 1.0,
-      "_src": "auth_buildauthenticatedresponse",
-      "_tgt": "auth_signauthtoken",
+      "_src": "auth_signauthtoken",
+      "_tgt": "auth_buildauthenticatedresponse",
       "source": "auth_signauthtoken",
       "target": "auth_buildauthenticatedresponse"
     },
@@ -20181,8 +20181,8 @@
       "source_file": "backend\\server\\src\\routes\\auth.ts",
       "source_location": "L511",
       "weight": 1.0,
-      "_src": "auth_createstudentuser",
-      "_tgt": "usercache_invalidateusercache",
+      "_src": "usercache_invalidateusercache",
+      "_tgt": "auth_createstudentuser",
       "source": "usercache_invalidateusercache",
       "target": "auth_createstudentuser"
     },
