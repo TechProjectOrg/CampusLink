@@ -208,6 +208,80 @@ export interface AdminReportDetailResponse {
   auditHistory: AdminReportAuditEntry[];
 }
 
+export type AdminAnalyticsSegment = 'all' | 'students' | 'alumni';
+
+export interface AdminAnalyticsSummaryMetric {
+  key: string;
+  label: string;
+  value: number;
+}
+
+export interface AdminAnalyticsSeriesPoint {
+  label: string;
+  users?: number;
+  posts?: number;
+  comments?: number;
+  likes?: number;
+  value?: number;
+}
+
+export interface AdminAnalyticsRetentionCohort {
+  cohortLabel: string;
+  cohortSize: number;
+  week1Rate: number | null;
+  week4Rate: number | null;
+}
+
+export interface AdminAnalyticsDepartmentRow {
+  label: string;
+  value: number;
+}
+
+export interface AdminAnalyticsClubRow {
+  id: string;
+  label: string;
+  engagement: number;
+  posts: number;
+  comments: number;
+  likes: number;
+}
+
+export interface AdminAnalyticsContentRow {
+  id: string;
+  title: string;
+  subtitle: string;
+  engagement: number;
+  likes: number;
+  comments: number;
+  createdAt: string;
+}
+
+export interface AdminAnalyticsHashtagRow {
+  tag: string;
+  postCount: number;
+  label: 'hot' | 'rising' | 'new' | 'ranked';
+}
+
+export interface AdminAnalyticsDeviceRow {
+  label: string;
+  value: number;
+}
+
+export interface AdminAnalyticsResponse {
+  range: AdminDashboardRange;
+  segment: AdminAnalyticsSegment;
+  generatedAt: string;
+  summary: AdminAnalyticsSummaryMetric[];
+  userGrowth: Array<{ label: string; value: number }>;
+  engagement: AdminAnalyticsSeriesPoint[];
+  retention: AdminAnalyticsRetentionCohort[];
+  activeDepartments: AdminAnalyticsDepartmentRow[];
+  topClubs: AdminAnalyticsClubRow[];
+  contentPerformance: AdminAnalyticsContentRow[];
+  trendingHashtags: AdminAnalyticsHashtagRow[];
+  deviceBreakdown: AdminAnalyticsDeviceRow[];
+}
+
 export async function apiAdminLogin(email: string, password: string): Promise<{ token: string; admin: AdminProfile }> {
   return safeFetch('/admin/auth/login', {
     method: 'POST',

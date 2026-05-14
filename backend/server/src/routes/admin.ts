@@ -23,6 +23,7 @@ import {
   invalidateClubMetaCache,
   invalidateClubStatsCache,
 } from '../lib/clubCache';
+import { getTrendingHashtagsForApi } from '../lib/socialInsights';
 
 const router = express.Router();
 
@@ -95,6 +96,7 @@ async function createAuthSession(userId: string, req: Request): Promise<string> 
 
 type DashboardRange = '7d' | '30d' | '90d';
 type DashboardTrendDirection = 'up' | 'down' | 'flat';
+type AdminAnalyticsSegment = 'all' | 'students' | 'alumni';
 
 const DASHBOARD_RANGE_DAYS: Record<DashboardRange, number> = {
   '7d': 7,
@@ -106,6 +108,13 @@ function parseDashboardRange(raw: unknown): DashboardRange | null {
   if (raw == null || raw === '') return '7d';
   if (raw === '7d' || raw === '30d' || raw === '90d') return raw;
   return null;
+}
+
+function parseAdminAnalyticsSegment(raw: unknown): AdminAnalyticsSegment {
+  const value = String(raw ?? '').trim().toLowerCase();
+  if (value === 'students') return 'students';
+  if (value === 'alumni') return 'alumni';
+  return 'all';
 }
 
 function getSqlWindowExpressions(dayCount: number) {
@@ -2694,49 +2703,282 @@ router.patch('/verification-requests/:requestId', async (req: Request<{ requestI
   }
 });
 
-router.get('/analytics', async (_req: Request, res: Response) => {
+router.get('/analytics', async (req: Request, res: Response) => {
+  const range = parseDashboardRange(req.query.range);
+  const segment = parseAdminAnalyticsSegment(req.query.segment);
+
+  if (!range) {
+    return res.status(400).json({ message: 'Invalid analytics range' });
+  }
+
+  const dayCount = DASHBOARD_RANGE_DAYS[range];
+  const segmentSql = segment === 'students'
+    ? "u.user_type = CAST('student' AS \"UserType\")"
+    : segment === 'alumni'
+      ? "u.user_type = CAST('alumni' AS \"UserType\")"
+      : 'TRUE';
+
   try {
-    const [userGrowth, activeColleges, topClubs] = await Promise.all([
-      prisma.$queryRaw<Array<{ label: string; value: number }>>`
+    const [summaryRows, userGrowth, engagement, activeDepartments, topClubs, contentPerformance, deviceBreakdown, retentionRows, trendingHashtags] = await Promise.all([
+      prisma.$queryRawUnsafe<Array<{
+        dau: number;
+        wau: number;
+        mau: number;
+        new_users: number;
+        posts_created: number;
+        comments_created: number;
+        likes_created: number;
+        active_clubs: number;
+      }>>(`
+        WITH scoped_users AS (
+          SELECT u.user_id
+          FROM users u
+          WHERE ${segmentSql}
+        )
+        SELECT
+          (SELECT COUNT(DISTINCT s.user_id)::int FROM user_sessions s JOIN scoped_users su ON su.user_id = s.user_id WHERE COALESCE(s.last_seen_at, s.created_at) >= NOW() - INTERVAL '1 day' AND s.revoked_at IS NULL) AS dau,
+          (SELECT COUNT(DISTINCT s.user_id)::int FROM user_sessions s JOIN scoped_users su ON su.user_id = s.user_id WHERE COALESCE(s.last_seen_at, s.created_at) >= NOW() - INTERVAL '7 day' AND s.revoked_at IS NULL) AS wau,
+          (SELECT COUNT(DISTINCT s.user_id)::int FROM user_sessions s JOIN scoped_users su ON su.user_id = s.user_id WHERE COALESCE(s.last_seen_at, s.created_at) >= NOW() - INTERVAL '30 day' AND s.revoked_at IS NULL) AS mau,
+          (SELECT COUNT(*)::int FROM users u WHERE ${segmentSql} AND u.created_at >= CURRENT_DATE - INTERVAL '${dayCount - 1} day') AS new_users,
+          (SELECT COUNT(*)::int FROM posts p JOIN users u ON u.user_id = p.author_user_id WHERE ${segmentSql} AND p.created_at >= CURRENT_DATE - INTERVAL '${dayCount - 1} day' AND p.deleted_at IS NULL) AS posts_created,
+          (SELECT COUNT(*)::int FROM post_comments c JOIN users u ON u.user_id = c.author_user_id WHERE ${segmentSql} AND c.created_at >= CURRENT_DATE - INTERVAL '${dayCount - 1} day') AS comments_created,
+          (SELECT COUNT(*)::int FROM post_likes pl JOIN users u ON u.user_id = pl.user_id WHERE ${segmentSql} AND pl.created_at >= CURRENT_DATE - INTERVAL '${dayCount - 1} day') AS likes_created,
+          (SELECT COUNT(DISTINCT p.club_id)::int FROM posts p JOIN users u ON u.user_id = p.author_user_id WHERE ${segmentSql} AND p.club_id IS NOT NULL AND p.created_at >= CURRENT_DATE - INTERVAL '${dayCount - 1} day' AND p.deleted_at IS NULL) AS active_clubs
+      `),
+      prisma.$queryRawUnsafe<Array<{ label: string; value: number }>>(`
         SELECT TO_CHAR(day_bucket, 'Mon DD') AS label, COUNT(u.user_id)::int AS value
-        FROM generate_series(CURRENT_DATE - INTERVAL '29 day', CURRENT_DATE, INTERVAL '1 day') AS day_bucket
-        LEFT JOIN users u ON DATE_TRUNC('day', u.created_at) = day_bucket
+        FROM generate_series(CURRENT_DATE - INTERVAL '${dayCount - 1} day', CURRENT_DATE, INTERVAL '1 day') AS day_bucket
+        LEFT JOIN users u ON DATE_TRUNC('day', u.created_at) = day_bucket AND ${segmentSql}
         GROUP BY day_bucket
         ORDER BY day_bucket
-      `,
-      prisma.$queryRaw<Array<{ label: string; value: number }>>`
+      `),
+      prisma.$queryRawUnsafe<Array<{ label: string; posts: number; comments: number; likes: number }>>(`
+        SELECT
+          TO_CHAR(day_bucket, 'Mon DD') AS label,
+          COALESCE(posts.value, 0)::int AS posts,
+          COALESCE(comments.value, 0)::int AS comments,
+          COALESCE(likes.value, 0)::int AS likes
+        FROM generate_series(CURRENT_DATE - INTERVAL '${dayCount - 1} day', CURRENT_DATE, INTERVAL '1 day') AS day_bucket
+        LEFT JOIN LATERAL (
+          SELECT COUNT(*)::int AS value
+          FROM posts p
+          JOIN users u ON u.user_id = p.author_user_id
+          WHERE ${segmentSql} AND DATE_TRUNC('day', p.created_at) = day_bucket AND p.deleted_at IS NULL
+        ) posts ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT COUNT(*)::int AS value
+          FROM post_comments c
+          JOIN users u ON u.user_id = c.author_user_id
+          WHERE ${segmentSql} AND DATE_TRUNC('day', c.created_at) = day_bucket
+        ) comments ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT COUNT(*)::int AS value
+          FROM post_likes pl
+          JOIN users u ON u.user_id = pl.user_id
+          WHERE ${segmentSql} AND DATE_TRUNC('day', pl.created_at) = day_bucket
+        ) likes ON TRUE
+        ORDER BY day_bucket
+      `),
+      prisma.$queryRawUnsafe<Array<{ label: string; value: number }>>(`
         SELECT COALESCE(sp.branch, ap.branch, 'Unknown') AS label, COUNT(*)::int AS value
         FROM users u
         LEFT JOIN student_profiles sp ON sp.user_id = u.user_id
         LEFT JOIN alumni_profiles ap ON ap.user_id = u.user_id
+        WHERE ${segmentSql}
         GROUP BY label
-        ORDER BY value DESC
+        ORDER BY value DESC, label ASC
         LIMIT 8
-      `,
-      prisma.$queryRaw<Array<{ label: string; value: number }>>`
-        SELECT c.name AS label, COUNT(p.post_id)::int AS value
+      `),
+      prisma.$queryRawUnsafe<Array<{
+        club_id: string;
+        label: string;
+        posts: number;
+        comments: number;
+        likes: number;
+        engagement: number;
+      }>>(`
+        SELECT
+          c.club_id,
+          c.name AS label,
+          COUNT(DISTINCT p.post_id)::int AS posts,
+          COUNT(DISTINCT pc.comment_id)::int AS comments,
+          COUNT(DISTINCT pl.user_id || ':' || pl.post_id)::int AS likes,
+          (COUNT(DISTINCT pc.comment_id) + COUNT(DISTINCT pl.user_id || ':' || pl.post_id))::int AS engagement
         FROM clubs c
-        LEFT JOIN posts p ON p.club_id = c.club_id AND p.deleted_at IS NULL
-        WHERE c.deleted_at IS NULL
+        JOIN posts p ON p.club_id = c.club_id AND p.deleted_at IS NULL AND p.created_at >= CURRENT_DATE - INTERVAL '${dayCount - 1} day'
+        JOIN users u ON u.user_id = p.author_user_id
+        LEFT JOIN post_comments pc ON pc.post_id = p.post_id AND pc.created_at >= CURRENT_DATE - INTERVAL '${dayCount - 1} day'
+        LEFT JOIN post_likes pl ON pl.post_id = p.post_id AND pl.created_at >= CURRENT_DATE - INTERVAL '${dayCount - 1} day'
+        WHERE c.deleted_at IS NULL AND ${segmentSql}
         GROUP BY c.club_id, c.name
-        ORDER BY value DESC, c.name ASC
-        LIMIT 5
-      `,
+        ORDER BY engagement DESC, likes DESC, comments DESC, c.name ASC
+        LIMIT 6
+      `),
+      prisma.$queryRawUnsafe<Array<{
+        post_id: string;
+        title: string | null;
+        preview: string | null;
+        author_username: string;
+        created_at: Date;
+        likes: number;
+        comments: number;
+        engagement: number;
+      }>>(`
+        SELECT
+          p.post_id,
+          p.title,
+          LEFT(COALESCE(p.content_text, ''), 160) AS preview,
+          u.username AS author_username,
+          p.created_at,
+          (SELECT COUNT(*)::int FROM post_likes pl WHERE pl.post_id = p.post_id AND pl.created_at >= CURRENT_DATE - INTERVAL '${dayCount - 1} day') AS likes,
+          (SELECT COUNT(*)::int FROM post_comments pc WHERE pc.post_id = p.post_id AND pc.created_at >= CURRENT_DATE - INTERVAL '${dayCount - 1} day') AS comments,
+          (
+            (SELECT COUNT(*)::int FROM post_likes pl WHERE pl.post_id = p.post_id AND pl.created_at >= CURRENT_DATE - INTERVAL '${dayCount - 1} day')
+            + (SELECT COUNT(*)::int FROM post_comments pc WHERE pc.post_id = p.post_id AND pc.created_at >= CURRENT_DATE - INTERVAL '${dayCount - 1} day')
+          ) AS engagement
+        FROM posts p
+        JOIN users u ON u.user_id = p.author_user_id
+        WHERE ${segmentSql} AND p.deleted_at IS NULL AND p.created_at >= CURRENT_DATE - INTERVAL '${dayCount - 1} day'
+        ORDER BY engagement DESC, p.created_at DESC
+        LIMIT 8
+      `),
+      prisma.$queryRawUnsafe<Array<{ label: string; value: number }>>(`
+        SELECT COALESCE(NULLIF(platform, ''), NULLIF(device_name, ''), 'Unknown') AS label, COUNT(*)::int AS value
+        FROM user_sessions s
+        JOIN users u ON u.user_id = s.user_id
+        WHERE ${segmentSql} AND COALESCE(s.last_seen_at, s.created_at) >= CURRENT_DATE - INTERVAL '${dayCount - 1} day' AND s.revoked_at IS NULL
+        GROUP BY label
+        ORDER BY value DESC, label ASC
+        LIMIT 8
+      `),
+      prisma.$queryRawUnsafe<Array<{
+        cohort_label: string;
+        cohort_size: number;
+        week1_retained: number;
+        week4_retained: number;
+      }>>(`
+        WITH cohorts AS (
+          SELECT
+            DATE_TRUNC('week', u.created_at) AS cohort_week,
+            u.user_id,
+            u.created_at
+          FROM users u
+          WHERE ${segmentSql} AND u.created_at >= CURRENT_DATE - INTERVAL '${dayCount - 1} day'
+        )
+        SELECT
+          TO_CHAR(cohort_week, 'Mon DD') AS cohort_label,
+          COUNT(*)::int AS cohort_size,
+          COUNT(*) FILTER (
+            WHERE EXISTS (
+              SELECT 1
+              FROM user_sessions s
+              WHERE s.user_id = c.user_id
+                AND s.revoked_at IS NULL
+                AND COALESCE(s.last_seen_at, s.created_at) >= c.created_at + INTERVAL '7 day'
+            )
+          )::int AS week1_retained,
+          COUNT(*) FILTER (
+            WHERE EXISTS (
+              SELECT 1
+              FROM user_sessions s
+              WHERE s.user_id = c.user_id
+                AND s.revoked_at IS NULL
+                AND COALESCE(s.last_seen_at, s.created_at) >= c.created_at + INTERVAL '28 day'
+            )
+          )::int AS week4_retained
+        FROM cohorts c
+        GROUP BY cohort_week
+        ORDER BY cohort_week DESC
+        LIMIT 8
+      `),
+      (async () => {
+        const cached = await getTrendingHashtagsForApi(6);
+        if (cached.length > 0) {
+          return cached.map((item) => ({
+            tag: item.tag,
+            postCount: item.post_count,
+            label: item.label,
+          }));
+        }
+        const fallbackRows = await prisma.$queryRawUnsafe<Array<{ tag: string; post_count: number }>>(`
+          SELECT h.tag_name AS tag, COUNT(ph.post_id)::int AS post_count
+          FROM hashtags h
+          JOIN post_hashtags ph ON ph.hashtag_id = h.hashtag_id
+          JOIN posts p ON p.post_id = ph.post_id
+          JOIN users u ON u.user_id = p.author_user_id
+          WHERE ${segmentSql}
+            AND p.deleted_at IS NULL
+            AND p.created_at >= CURRENT_DATE - INTERVAL '${dayCount - 1} day'
+          GROUP BY h.tag_name
+          ORDER BY post_count DESC, h.tag_name ASC
+          LIMIT 8
+        `);
+        return fallbackRows.map((item) => ({
+          tag: item.tag,
+          postCount: item.post_count,
+          label: 'ranked' as const,
+        }));
+      })(),
     ]);
 
+    const summary = summaryRows[0] ?? {
+      dau: 0,
+      wau: 0,
+      mau: 0,
+      new_users: 0,
+      posts_created: 0,
+      comments_created: 0,
+      likes_created: 0,
+      active_clubs: 0,
+    };
+
     return res.status(200).json({
-      userGrowth,
-      retention: userGrowth.slice(-7),
-      engagement: topClubs,
-      activeColleges,
-      topClubs,
-      trendingHashtags: [],
-      contentPerformance: topClubs,
-      trafficSources: [
-        { label: 'Direct', value: 54 },
-        { label: 'Campus referrals', value: 31 },
-        { label: 'Notifications', value: 15 },
+      range,
+      segment,
+      generatedAt: new Date().toISOString(),
+      summary: [
+        { key: 'dau', label: 'DAU', value: summary.dau },
+        { key: 'wau', label: 'WAU', value: summary.wau },
+        { key: 'mau', label: 'MAU', value: summary.mau },
+        { key: 'newUsers', label: 'New users', value: summary.new_users },
+        { key: 'postsCreated', label: 'Posts', value: summary.posts_created },
+        { key: 'commentsCreated', label: 'Comments', value: summary.comments_created },
+        { key: 'likesCreated', label: 'Likes', value: summary.likes_created },
+        { key: 'activeClubs', label: 'Active clubs', value: summary.active_clubs },
       ],
+      userGrowth,
+      engagement: engagement.map((row) => ({
+        label: row.label,
+        posts: row.posts,
+        comments: row.comments,
+        likes: row.likes,
+      })),
+      retention: retentionRows.map((row) => ({
+        cohortLabel: row.cohort_label,
+        cohortSize: row.cohort_size,
+        week1Rate: row.cohort_size > 0 ? Math.round((row.week1_retained / row.cohort_size) * 1000) / 10 : null,
+        week4Rate: row.cohort_size > 0 && dayCount >= 30 ? Math.round((row.week4_retained / row.cohort_size) * 1000) / 10 : null,
+      })),
+      activeDepartments,
+      topClubs: topClubs.map((row) => ({
+        id: row.club_id,
+        label: row.label,
+        engagement: row.engagement,
+        posts: row.posts,
+        comments: row.comments,
+        likes: row.likes,
+      })),
+      contentPerformance: contentPerformance.map((row) => ({
+        id: row.post_id,
+        title: row.title || 'Untitled post',
+        subtitle: row.preview || `By ${row.author_username}`,
+        engagement: row.engagement,
+        likes: row.likes,
+        comments: row.comments,
+        createdAt: row.created_at.toISOString(),
+      })),
+      trendingHashtags,
+      deviceBreakdown,
     });
   } catch (err) {
     console.error('Error loading analytics:', err);

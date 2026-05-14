@@ -38,6 +38,8 @@ import { apiChangePassword, apiVerifyPasswordChange } from '../lib/authApi';
 import {
   apiAdminGet,
   apiAdminPost,
+  type AdminAnalyticsResponse,
+  type AdminAnalyticsSegment,
   type AdminDashboardRange,
   type AdminDashboardResponse,
   type AdminDashboardTrendDirection,
@@ -78,6 +80,7 @@ const NAV_ITEMS: Array<{ key: PageKey; label: string; icon: typeof LayoutDashboa
 const SEARCHABLE_PAGES = new Set<PageKey>(['users', 'clubs', 'posts', 'reports', 'logs']);
 const ADMIN_CACHE_MS = 30_000;
 const DASHBOARD_RANGES: AdminDashboardRange[] = ['7d', '30d', '90d'];
+const ANALYTICS_SEGMENTS: AdminAnalyticsSegment[] = ['all', 'students', 'alumni'];
 
 type DashboardRouteContext = {
   source: string | null;
@@ -620,6 +623,7 @@ async function fetchAdminPageData(
   clubFilters: ClubFilterState = DEFAULT_CLUB_FILTERS,
   postFilters: PostFilterState = DEFAULT_POST_FILTERS,
   reportFilters: ReportFilterState = DEFAULT_REPORT_FILTERS,
+  analyticsSegment: AdminAnalyticsSegment = 'all',
 ) {
   if (page === 'dashboard') return apiAdminGet<AdminDashboardResponse>(`/admin/dashboard?range=${encodeURIComponent(range)}`, token);
   if (page === 'users') return apiAdminGet<AdminUserListResponse>(`/admin/users?${buildUsersQueryString(search, userFilters)}`, token);
@@ -627,7 +631,7 @@ async function fetchAdminPageData(
   if (page === 'posts') return apiAdminGet<AdminPostListResponse>(`/admin/posts?${buildPostsQueryString(search, postFilters)}`, token);
   if (page === 'reports') return apiAdminGet<AdminReportListResponse>(`/admin/reports?${buildReportsQueryString(search, reportFilters)}`, token);
   if (page === 'verification') return apiAdminGet('/admin/verification-requests', token);
-  if (page === 'analytics') return apiAdminGet('/admin/analytics', token);
+  if (page === 'analytics') return apiAdminGet<AdminAnalyticsResponse>(`/admin/analytics?range=${encodeURIComponent(range)}&segment=${encodeURIComponent(analyticsSegment)}`, token);
   if (page === 'announcements') return apiAdminGet('/admin/announcements', token);
   if (page === 'logs') return apiAdminGet(`/admin/logs?q=${encodeURIComponent(search)}`, token);
   return apiAdminGet('/admin/settings', token);
@@ -851,6 +855,7 @@ export default function AdminRoot() {
   const [page, setPage] = useState<PageKey>(() => parsePageFromPath(window.location.pathname));
   const [dashboardRange, setDashboardRange] = useState<AdminDashboardRange>(() => parseDashboardRange(new URLSearchParams(window.location.search).get('range')));
   const [dashboardContext, setDashboardContext] = useState<DashboardRouteContext>(() => parseDashboardContext(window.location.search));
+  const [analyticsSegment, setAnalyticsSegment] = useState<AdminAnalyticsSegment>('all');
   const [collapsed, setCollapsed] = useState(false);
   const [token, setToken] = useState<string | null>(() => readAdminSession()?.token ?? null);
   const [admin, setAdmin] = useState<AdminProfile | null>(null);
@@ -902,6 +907,7 @@ export default function AdminRoot() {
   const clubsQueryContext = useMemo(() => (page === 'clubs' ? JSON.stringify(clubFilters) : ''), [page, clubFilters]);
   const postsQueryContext = useMemo(() => (page === 'posts' ? JSON.stringify(postFilters) : ''), [page, postFilters]);
   const reportsQueryContext = useMemo(() => (page === 'reports' ? JSON.stringify(reportFilters) : ''), [page, reportFilters]);
+  const analyticsQueryContext = useMemo(() => (page === 'analytics' ? analyticsSegment : ''), [page, analyticsSegment]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -985,8 +991,8 @@ export default function AdminRoot() {
   });
 
   const currentPageQuery = useQuery({
-    queryKey: token ? getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext + reportsQueryContext) : ['admin', page, searchKey, 'anon', dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext + reportsQueryContext],
-    queryFn: () => fetchAdminPageData(page, token!, searchKey, dashboardRange, userFilters, clubFilters, postFilters, reportFilters),
+    queryKey: token ? getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext + reportsQueryContext + analyticsQueryContext) : ['admin', page, searchKey, 'anon', dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext + reportsQueryContext + analyticsQueryContext],
+    queryFn: () => fetchAdminPageData(page, token!, searchKey, dashboardRange, userFilters, clubFilters, postFilters, reportFilters, analyticsSegment),
     enabled: canQueryAdmin && page !== 'dashboard',
     staleTime: ADMIN_CACHE_MS,
     gcTime: ADMIN_CACHE_MS * 10,
@@ -1008,7 +1014,7 @@ export default function AdminRoot() {
   const reports = reportsResponse?.items ?? [];
   const reportsPageInfo = reportsResponse?.pageInfo ?? null;
   const verification = page === 'verification' ? ((currentPageQuery.data as any[]) ?? []) : [];
-  const analytics = page === 'analytics' ? (currentPageQuery.data ?? null) : null;
+  const analytics = page === 'analytics' ? ((currentPageQuery.data as AdminAnalyticsResponse | null) ?? null) : null;
   const announcements = page === 'announcements' ? ((currentPageQuery.data as any[]) ?? []) : [];
   const logs = page === 'logs' ? ((currentPageQuery.data as any[]) ?? []) : [];
   const settings = page === 'settings' ? (currentPageQuery.data ?? null) : null;
@@ -1057,10 +1063,12 @@ export default function AdminRoot() {
           ? JSON.stringify(postFilters)
           : nextPage === 'reports'
             ? JSON.stringify(reportFilters)
+            : nextPage === 'analytics'
+              ? analyticsSegment
           : '';
     void queryClient.prefetchQuery({
       queryKey: getAdminQueryKey(token, nextPage, nextSearchKey, dashboardRange, nextContext),
-      queryFn: () => fetchAdminPageData(nextPage, token, nextSearchKey, dashboardRange, userFilters, clubFilters, postFilters, reportFilters),
+      queryFn: () => fetchAdminPageData(nextPage, token, nextSearchKey, dashboardRange, userFilters, clubFilters, postFilters, reportFilters, analyticsSegment),
       staleTime: ADMIN_CACHE_MS,
     });
   };
@@ -1082,7 +1090,7 @@ export default function AdminRoot() {
 
   const refreshCurrentPage = async () => {
     if (!token) return;
-    await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext + reportsQueryContext), exact: true });
+    await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext + reportsQueryContext + analyticsQueryContext), exact: true });
     if (page !== 'dashboard') {
       await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, 'dashboard', '', dashboardRange), exact: true });
     }
@@ -2166,50 +2174,176 @@ export default function AdminRoot() {
             ) : null}
 
             {!pageLoading && page === 'analytics' && analytics ? (
-              <div className="grid gap-4 xl:grid-cols-2">
-                <ShellCard title="User Growth">
-                  <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={analytics.userGrowth ?? []}>
-                        <CartesianGrid stroke="#e2e8f0" vertical={false} />
-                        <XAxis dataKey="label" tick={{ fontSize: 12 }} />
-                        <YAxis tick={{ fontSize: 12 }} />
-                        <Tooltip />
-                        <Line dataKey="value" stroke="#0f172a" strokeWidth={2} dot={false} />
-                      </LineChart>
-                    </ResponsiveContainer>
+              <div className="space-y-4">
+                <ShellCard title="Analytics Controls">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      {DASHBOARD_RANGES.map((rangeOption) => (
+                        <Button
+                          key={`analytics-${rangeOption}`}
+                          variant={dashboardRange === rangeOption ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setDashboardRange(rangeOption)}
+                        >
+                          {formatRangeLabel(rangeOption)}
+                        </Button>
+                      ))}
+                    </div>
+                    <select
+                      className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm"
+                      value={analyticsSegment}
+                      onChange={(event) => setAnalyticsSegment(event.target.value as AdminAnalyticsSegment)}
+                    >
+                      {ANALYTICS_SEGMENTS.map((segment) => (
+                        <option key={segment} value={segment}>
+                          {segment === 'all' ? 'All users' : segment === 'students' ? 'Students only' : 'Alumni only'}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="text-xs text-slate-500">Generated {formatDate(analytics.generatedAt)}</span>
                   </div>
                 </ShellCard>
-                <ShellCard title="Active Colleges / Departments">
-                  <div className="space-y-2">
-                    {(analytics.activeColleges ?? []).map((item: any) => (
-                      <div key={item.label} className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2">
-                        <span className="text-sm text-slate-700">{item.label}</span>
-                        <span className="text-sm font-medium text-slate-900">{formatNumber(item.value)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </ShellCard>
-                <ShellCard title="Top Clubs">
-                  <div className="space-y-2">
-                    {(analytics.topClubs ?? []).map((item: any) => (
-                      <div key={item.label} className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2">
-                        <span className="text-sm text-slate-700">{item.label}</span>
-                        <span className="text-sm font-medium text-slate-900">{formatNumber(item.value)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </ShellCard>
-                <ShellCard title="Traffic Sources">
-                  <div className="space-y-2">
-                    {(analytics.trafficSources ?? []).map((item: any) => (
-                      <div key={item.label} className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2">
-                        <span className="text-sm text-slate-700">{item.label}</span>
-                        <span className="text-sm font-medium text-slate-900">{formatNumber(item.value)}%</span>
-                      </div>
-                    ))}
-                  </div>
-                </ShellCard>
+
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  {analytics.summary.map((metric) => (
+                    <div key={metric.key} className="rounded-2xl border border-slate-200 bg-white px-4 py-4">
+                      <p className="text-xs uppercase tracking-[0.12em] text-slate-500">{metric.label}</p>
+                      <p className="mt-3 text-2xl font-semibold text-slate-900">{formatNumber(metric.value)}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <ShellCard title="User Growth">
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={analytics.userGrowth}>
+                          <CartesianGrid stroke="#e2e8f0" vertical={false} />
+                          <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+                          <YAxis tick={{ fontSize: 12 }} />
+                          <Tooltip />
+                          <Line dataKey="value" stroke="#0f172a" strokeWidth={2} dot={false} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </ShellCard>
+
+                  <ShellCard title="Engagement Activity">
+                    <div className="h-64">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={analytics.engagement}>
+                          <CartesianGrid stroke="#e2e8f0" vertical={false} />
+                          <XAxis dataKey="label" tick={{ fontSize: 12 }} />
+                          <YAxis tick={{ fontSize: 12 }} />
+                          <Tooltip />
+                          <Bar dataKey="posts" fill="#0f172a" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="comments" fill="#475569" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="likes" fill="#94a3b8" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </ShellCard>
+
+                  <ShellCard title="Retention Cohorts">
+                    <div className="space-y-3">
+                      {analytics.retention.length === 0 ? (
+                        <EmptyPanel title="No retention cohorts yet" body="Retention will appear once enough user and session history exists in the selected range." />
+                      ) : analytics.retention.map((cohort) => (
+                        <div key={cohort.cohortLabel} className="rounded-xl border border-slate-200 px-4 py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-medium text-slate-800">{cohort.cohortLabel}</p>
+                              <p className="mt-1 text-xs text-slate-500">{formatNumber(cohort.cohortSize)} users</p>
+                            </div>
+                            <div className="text-right text-sm text-slate-700">
+                              <p>Week 1: {cohort.week1Rate == null ? 'N/A' : `${cohort.week1Rate}%`}</p>
+                              <p className="mt-1 text-xs text-slate-500">Week 4: {cohort.week4Rate == null ? 'N/A' : `${cohort.week4Rate}%`}</p>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ShellCard>
+
+                  <ShellCard title="Device Breakdown">
+                    <div className="space-y-2">
+                      {analytics.deviceBreakdown.length === 0 ? (
+                        <EmptyPanel title="No session device data" body="Active session platform data will appear here." />
+                      ) : analytics.deviceBreakdown.map((item) => (
+                        <div key={item.label} className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2">
+                          <span className="text-sm text-slate-700">{item.label}</span>
+                          <span className="text-sm font-medium text-slate-900">{formatNumber(item.value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </ShellCard>
+
+                  <ShellCard title="Active Departments">
+                    <div className="space-y-2">
+                      {analytics.activeDepartments.length === 0 ? (
+                        <EmptyPanel title="No department data" body="Department aggregation will appear here when profile data is present." />
+                      ) : analytics.activeDepartments.map((item) => (
+                        <div key={item.label} className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2">
+                          <span className="text-sm text-slate-700">{item.label}</span>
+                          <span className="text-sm font-medium text-slate-900">{formatNumber(item.value)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </ShellCard>
+
+                  <ShellCard title="Top Clubs">
+                    <div className="space-y-2">
+                      {analytics.topClubs.length === 0 ? (
+                        <EmptyPanel title="No club engagement data" body="Club rankings will appear when club activity exists in the selected range." />
+                      ) : analytics.topClubs.map((club) => (
+                        <div key={club.id} className="rounded-md border border-slate-200 px-3 py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-sm font-medium text-slate-800">{club.label}</span>
+                            <span className="text-sm font-semibold text-slate-900">{formatNumber(club.engagement)}</span>
+                          </div>
+                          <p className="mt-2 text-xs text-slate-500">
+                            {formatNumber(club.posts)} posts · {formatNumber(club.comments)} comments · {formatNumber(club.likes)} likes
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </ShellCard>
+
+                  <ShellCard title="Content Performance">
+                    <div className="space-y-2">
+                      {analytics.contentPerformance.length === 0 ? (
+                        <EmptyPanel title="No content performance data" body="Content rankings will appear when posts exist in the selected range." />
+                      ) : analytics.contentPerformance.map((item) => (
+                        <div key={item.id} className="rounded-md border border-slate-200 px-3 py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-sm font-medium text-slate-800">{item.title}</span>
+                            <span className="text-sm font-semibold text-slate-900">{formatNumber(item.engagement)}</span>
+                          </div>
+                          <p className="mt-1 text-sm text-slate-600">{item.subtitle}</p>
+                          <p className="mt-2 text-xs text-slate-500">
+                            {formatNumber(item.likes)} likes · {formatNumber(item.comments)} comments · {formatDate(item.createdAt)}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </ShellCard>
+
+                  <ShellCard title="Trending Hashtags">
+                    <div className="space-y-2">
+                      {analytics.trendingHashtags.length === 0 ? (
+                        <EmptyPanel title="No hashtag trends yet" body="Trending hashtags will appear once enough tagged activity exists." />
+                      ) : analytics.trendingHashtags.map((item) => (
+                        <div key={`${item.label}-${item.tag}`} className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2">
+                          <div>
+                            <span className="text-sm font-medium text-slate-800">#{item.tag}</span>
+                            <p className="mt-1 text-xs text-slate-500">{item.label}</p>
+                          </div>
+                          <span className="text-sm font-semibold text-slate-900">{formatNumber(item.postCount)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </ShellCard>
+                </div>
               </div>
             ) : null}
 

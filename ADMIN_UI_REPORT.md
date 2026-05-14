@@ -17,7 +17,7 @@ This report is based on code inspection of the current repository, not a live ma
 
 The admin area is implemented as a separate frontend shell mounted on `/admin`, backed by a dedicated admin API and its own database tables. Core moderation and management actions are real for users, clubs, posts, reports, verification requests, announcements, logs, and admin password change.
 
-Stages 1 through 5 are now implemented in code. The biggest remaining gaps are no longer around basic moderation existence, but around deeper verification review UX, richer analytics fidelity, editable settings, and broader operational tooling.
+Stages 1 through 7 are now implemented in code. The biggest remaining gaps are no longer around basic moderation existence, but around deeper verification review UX, richer operational settings, export/reporting tooling, and broader platform operations.
 
 ## Architecture status
 
@@ -329,38 +329,57 @@ Need to be done:
 
 ### 7. Analytics
 
-Status: MVP shell only
+Status: Implemented as a real analytics surface built from current platform data
 
 Done:
 
 - Real analytics route at `GET /admin/analytics`
-- Real user growth data for last 30 days
-- Real active college/department aggregation
-- Real top clubs aggregation
-- UI renders:
-  - user growth line chart
-  - active colleges/departments list
-  - top clubs list
-  - traffic sources list
+- Analytics route now supports:
+  - `range=7d|30d|90d`
+  - `segment=all|students|alumni`
+- Real summary metrics now exist for:
+  - DAU
+  - WAU
+  - MAU
+  - new users
+  - posts
+  - comments
+  - likes
+  - active clubs
+- Real user growth time series based on actual user creation dates
+- Real engagement time series based on posts/comments/likes in the selected window
+- Real session-return retention cohorts based on `user_sessions`
+- Real department aggregation from student/alumni profile branch fields
+- Real top club ranking based on engagement in the selected window
+- Real content performance ranking based on post engagement
+- Real device/session breakdown based on `user_sessions.platform` / `device_name`
+- Trending hashtags now attempt to use existing social insights data and fall back to DB-backed hashtag rankings when cached trend data is unavailable
+- Frontend analytics page now renders:
+  - range controls
+  - segment selector
+  - summary cards
+  - user growth chart
+  - engagement chart
+  - retention cohorts
+  - active departments
+  - top clubs
+  - content performance
+  - trending hashtags
+  - device breakdown
 
 Exact limitations found:
 
-- `retention` is just `userGrowth.slice(-7)`, not real retention analysis
-- `engagement` is reused from `topClubs`
-- `trendingHashtags` is an empty array
-- `contentPerformance` is also reused from `topClubs`
-- `trafficSources` are hardcoded values:
-  - Direct 54
-  - Campus referrals 31
-  - Notifications 15
-- No date filters, cohorting, exports, rankings, or segmentation
+- True traffic attribution is still not implemented because there is no trustworthy referral / UTM / traffic-source event model yet
+- Analytics are read-only; no export/report-generation flow yet
+- Retention is intentionally defined as session-return retention, not creator-retention or hybrid retention
+- Club/content rankings use current engagement logic, but no separate weighted scoring model has been introduced yet
+- Trend quality for hashtags depends on existing social-insights cache freshness; the DB fallback is real but less nuanced than the cached hot/rising/new computation
 
 Need to be done:
 
-- Build real retention/cohort analytics
-- Add real traffic attribution and content performance metrics
-- Add trending hashtags/topics
-- Add date range filters, segmentation, and export/reporting features
+- Add true traffic attribution only if new tracking infrastructure is introduced
+- Add exports/reporting if admin operations require downloadable analytics
+- Expand segmentation if the team later needs college/club/role-level filters
 
 ### 8. Announcements
 
