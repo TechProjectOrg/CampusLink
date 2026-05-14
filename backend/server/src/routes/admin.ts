@@ -3211,9 +3211,9 @@ router.get('/analytics', async (req: Request, res: Response) => {
       segment,
       generatedAt: new Date().toISOString(),
       summary: [
-        { key: 'dau', label: 'DAU', value: summary.dau },
-        { key: 'wau', label: 'WAU', value: summary.wau },
-        { key: 'mau', label: 'MAU', value: summary.mau },
+        { key: 'dau', label: 'Daily Active Users', value: summary.dau },
+        { key: 'wau', label: 'Weekly Active Users', value: summary.wau },
+        { key: 'mau', label: 'Monthly Active Users', value: summary.mau },
         { key: 'newUsers', label: 'New users', value: summary.new_users },
         { key: 'postsCreated', label: 'Posts', value: summary.posts_created },
         { key: 'commentsCreated', label: 'Comments', value: summary.comments_created },

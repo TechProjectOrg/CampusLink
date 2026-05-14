@@ -297,35 +297,53 @@ Need to be done:
 
 ### 6. Verification
 
-Status: Backend workflow exists, frontend review UX is thin
+Status: Partial implementation; current workflow does not yet match the intended identity policy
 
 Done:
 
 - Real verification queue route at `GET /admin/verification-requests`
 - Real update route at `PATCH /admin/verification-requests/:requestId`
 - Backend approval updates underlying entities:
-  - approving a user request sets `users.verified_at`
+  - approving a user request currently sets `users.verified_at`
   - approving a club request sets `clubs.is_verified = TRUE`
 - Frontend actions are wired:
   - Approve
   - Reject
   - Request more info
 
+Intended policy this section should now describe:
+
+- Students should be verified through Google sign-in using a `@gbpuat.ac.in` account
+- Standard student verification should be automatic after successful Google OAuth and should not rely on the admin verification queue
+- Alumni should submit proof and remain blocked until an admin approves the request
+- Alumni verification should be evidence-based and admin-reviewed, with explicit pending, approved, rejected, or more-info states
+- Club verification can remain a separate admin-reviewed workflow if club verification remains in scope
+
 Exact limitations found:
 
-- Backend returns `documentUrls`, but frontend does not display documents
-- Backend stores `profile_preview` in schema, but current route does not return it
-- Frontend shows only request type, request date, notes, and status
-- No reviewer note entry UI
-- No document/image preview
-- No target user/club preview panel
+- Google student auth is not yet implemented in the current codebase, so student verification is still not policy-based
+- Alumni verification is not yet modeled as a first-class workflow; the current system still treats user verification too generically
+- The current verification request typing is narrower than the intended student/alumni/club policy split
+- Backend stores `documentUrls` and `profile_preview`, but the current route does not return enough structured request context for a real review workspace
+- Frontend still shows only a thin list with request type, request date, notes, and status
+- There is no alumni-specific applicant summary, proof preview, reviewer note entry UI, or side-by-side target context
+- Pending alumni access is not yet described or enforced as a blocked-until-approved flow in this report section
 
 Need to be done:
 
-- Render uploaded verification documents
-- Return and display profile preview data
+- Add Google OAuth student onboarding using the college domain as the source of truth for student verification
+- Extend verification requests so alumni verification is explicit rather than folded into a generic user-verification path
+- Store and return alumni proof metadata through `documentUrls` plus structured `profilePreview`
+- Add explicit verification states the workflow can reason about:
+  - `student_google_verified`
+  - `alumni_pending_review`
+  - `alumni_verified`
+  - `alumni_rejected`
+- Gate alumni login and normal platform access until admin approval
+- Render uploaded proof documents and images in the admin verification workflow
 - Add reviewer notes and decision rationale UI
-- Add side-by-side request, documents, and target profile/club details
+- Add a request detail experience with side-by-side request data, proof, and target profile context
+- Keep club verification review separate if the product still requires admin-reviewed club verification
 
 ### 7. Analytics
 
@@ -530,7 +548,7 @@ Need to be done:
 
 - Limited filtering and sorting on some remaining pages, especially logs and analytics
 - No realtime/live update channel
-- Verification and analytics still need deeper review UX
+- Verification still needs policy-aligned identity flows and deeper review UX
 
 ### Exact backend-only capabilities not exposed in frontend yet
 
@@ -545,7 +563,9 @@ Next active milestone: Verification policy decisions and remaining operational d
 ### Priority 1
 
 - Add standalone admin login UI
-- Improve verification review with document previews and target previews
+- Add Google OAuth student onboarding for policy-based student verification
+- Improve verification review with alumni proof previews, applicant summaries, and target previews
+- Block pending alumni access until verification is approved
 - Add richer report evidence presentation only if report payloads expand beyond text evidence
 
 ### Priority 2
@@ -558,8 +578,10 @@ Next active milestone: Verification policy decisions and remaining operational d
 
 - Make settings editable and persistent
 - Add export/reporting and richer log inspection
-- Expand verification review depth once the user/club verification policy is finalized
+- Expand verification review depth once the alumni proof model and Google student auth flow are implemented
 
 ## Final assessment
 
 The admin console is not fake or purely mock. It is a real MVP admin system with working schema changes, protected backend routes, and multiple live moderation actions. The main gap is not existence, but depth: several pages stop at list-and-action level and still need stronger review workflows, operational controls, analytics fidelity, and a proper dedicated admin login experience.
+
+For verification specifically, the current implementation is still behind the intended product policy. The report should now treat student verification as Google-based and automatic, and alumni verification as a blocked-until-approved proof review workflow that still needs backend and admin UI depth to be fully real.
