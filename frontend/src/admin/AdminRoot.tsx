@@ -163,7 +163,7 @@ function TrendBadge({ label, direction }: { label: string; direction: AdminDashb
 
 function ShellCard({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-slate-200 bg-white">
+    <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
         <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
         {action}
@@ -555,9 +555,12 @@ export default function AdminRoot() {
 
         <div
           style={{ marginLeft: collapsed ? 84 : 246 }}
-          className="min-h-screen transition-all duration-200"
+          className="relative z-0 min-h-screen transition-all duration-200"
         >
-          <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
+          <header
+            className="sticky top-0 z-40 isolate border-b border-slate-200 shadow-sm"
+            style={{ backgroundColor: '#ffffff', opacity: 1 }}
+          >
             <div className="flex items-center gap-4 px-6 py-4">
               <div className="min-w-0 flex-1">
                 <h1 className="text-lg font-semibold text-slate-900">{pageTitle}</h1>
@@ -656,7 +659,7 @@ export default function AdminRoot() {
                       key={metric.key}
                       type="button"
                       onClick={() => openDashboardDrilldown(metric.key)}
-                      className="rounded-lg border border-slate-200 bg-white p-4 text-left transition hover:border-slate-300 hover:shadow-sm"
+                      className="overflow-hidden rounded-lg border border-slate-200 bg-white p-4 text-left transition hover:border-slate-300 hover:shadow-sm"
                     >
                       <div className="flex items-start justify-between">
                         <div>
