@@ -233,6 +233,10 @@ function getAdminQueryKey(token: string, page: PageKey, search = '', range: Admi
   return ['admin', token, page, search, range, context] as const;
 }
 
+function getAdminUserDetailQueryKey(token: string, userId: string) {
+  return ['admin', token, 'user-detail', userId] as const;
+}
+
 async function fetchAdminPageData(page: PageKey, token: string, search: string, range: AdminDashboardRange, userFilters: UserFilterState) {
   if (page === 'dashboard') return apiAdminGet<AdminDashboardResponse>(`/admin/dashboard?range=${encodeURIComponent(range)}`, token);
   if (page === 'users') return apiAdminGet<AdminUserListResponse>(`/admin/users?${buildUsersQueryString(search, userFilters)}`, token);
@@ -350,18 +354,63 @@ function RightDrawer({
   onClose: () => void;
   children: React.ReactNode;
 }) {
+  const handleDrawerWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    event.stopPropagation();
+  };
+
+  const handleBackdropWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+    event.preventDefault();
+  };
+
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/20">
-      <div className="absolute inset-y-0 right-0 w-[520px] max-w-[95vw] border-l border-slate-200 bg-white shadow-xl">
-        <div className="flex items-start justify-between border-b border-slate-200 px-5 py-4">
-          <div>
+    <div
+      className="z-50 bg-slate-900/20"
+      style={{
+        position: 'fixed',
+        inset: 0,
+        overflow: 'hidden',
+        overscrollBehavior: 'contain',
+      }}
+      onWheel={handleBackdropWheel}
+    >
+      <div
+        className="border-l border-slate-200 bg-white shadow-xl"
+        onWheel={handleDrawerWheel}
+        style={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          bottom: 0,
+          display: 'flex',
+          width: 'min(520px, 95vw)',
+          height: '100dvh',
+          maxHeight: '100dvh',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          overscrollBehavior: 'contain',
+        }}
+      >
+        <div className="flex items-start justify-between border-b border-slate-200 px-4 py-4 sm:px-5 sm:py-5" style={{ flex: '0 0 auto' }}>
+          <div className="min-w-0 pr-4">
             <h2 className="text-base font-semibold text-slate-900">{title}</h2>
             {subtitle ? <p className="mt-1 text-sm text-slate-500">{subtitle}</p> : null}
           </div>
           <Button variant="ghost" size="sm" onClick={onClose}>Close</Button>
         </div>
-        <div className="h-[calc(100vh-73px)] overflow-y-auto p-5">{children}</div>
+        <div
+          className="px-4 py-4 sm:px-5 sm:py-5"
+          style={{
+            flex: '1 1 0%',
+            minHeight: 0,
+            overflowY: 'auto',
+            overscrollBehavior: 'contain',
+            WebkitOverflowScrolling: 'touch',
+            touchAction: 'pan-y',
+          }}
+        >
+          {children}
+        </div>
       </div>
     </div>
   );
@@ -391,7 +440,6 @@ export default function AdminRoot() {
   const [userFilters, setUserFilters] = useState<UserFilterState>(DEFAULT_USER_FILTERS);
   const [selectedUser, setSelectedUser] = useState<AdminUserListItem | null>(null);
   const [selectedClub, setSelectedClub] = useState<any | null>(null);
-  const [selectedUserDetail, setSelectedUserDetail] = useState<AdminUserDetailResponse | null>(null);
   const [selectedClubDetail, setSelectedClubDetail] = useState<any | null>(null);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [userActionForm, setUserActionForm] = useState({ note: '', durationDays: 7 });
@@ -504,6 +552,15 @@ export default function AdminRoot() {
   const activeQuery = page === 'dashboard' ? dashboardQuery : currentPageQuery;
   const pageLoading = activeQuery.isLoading;
   const pageRefreshing = activeQuery.isFetching && !activeQuery.isLoading;
+  const selectedUserDetailQuery = useQuery({
+    queryKey: selectedUser && token ? getAdminUserDetailQueryKey(token, selectedUser.id) : ['admin', 'user-detail', 'idle'],
+    queryFn: () => apiAdminGet<AdminUserDetailResponse>(`/admin/users/${selectedUser!.id}`, token!),
+    enabled: Boolean(token && selectedUser),
+    staleTime: ADMIN_CACHE_MS,
+    gcTime: ADMIN_CACHE_MS * 10,
+  });
+  const selectedUserDetail = selectedUserDetailQuery.data ?? null;
+  const userDetailLoading = selectedUserDetailQuery.isLoading || (selectedUserDetailQuery.isFetching && !selectedUserDetail);
 
   const goTo = (nextPage: PageKey, params?: Record<string, string | null | undefined>) => {
     const url = new URL(window.location.href);
@@ -532,6 +589,15 @@ export default function AdminRoot() {
     });
   };
 
+  const prefetchUserDetail = (userId: string) => {
+    if (!token || !admin) return;
+    void queryClient.prefetchQuery({
+      queryKey: getAdminUserDetailQueryKey(token, userId),
+      queryFn: () => apiAdminGet<AdminUserDetailResponse>(`/admin/users/${userId}`, token),
+      staleTime: ADMIN_CACHE_MS,
+    });
+  };
+
   const handleLogout = () => {
     clearAdminSession();
     queryClient.removeQueries({ queryKey: ['admin'] });
@@ -554,7 +620,7 @@ export default function AdminRoot() {
       setUserActionForm((current) => ({ ...current, note: '' }));
       await refreshCurrentPage();
       if (selectedUser?.id === userId) {
-        setSelectedUserDetail(await apiAdminGet<AdminUserDetailResponse>(`/admin/users/${userId}`, token));
+        await queryClient.invalidateQueries({ queryKey: getAdminUserDetailQueryKey(token, userId), exact: true });
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : `Unable to ${action} user`);
@@ -576,15 +642,9 @@ export default function AdminRoot() {
     await refreshCurrentPage();
   };
 
-  const openUserDrawer = async (user: AdminUserListItem) => {
-    if (!token) return;
-    try {
-      setSelectedUser(user);
-      setUserActionForm({ note: '', durationDays: 7 });
-      setSelectedUserDetail(await apiAdminGet<AdminUserDetailResponse>(`/admin/users/${user.id}`, token));
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Unable to load user details');
-    }
+  const openUserDrawer = (user: AdminUserListItem) => {
+    setSelectedUser(user);
+    setUserActionForm({ note: '', durationDays: 7 });
   };
 
   const openClubDrawer = async (club: any) => {
@@ -655,7 +715,7 @@ export default function AdminRoot() {
   if (!token) return null;
 
   return (
-    <div className="min-h-screen bg-slate-100 text-slate-900">
+    <div className="h-screen overflow-hidden bg-slate-100 text-slate-900">
       <aside
         style={{ width: collapsed ? 64 : 246 }}
         className="fixed inset-y-0 left-0 z-30 border-r border-slate-200 bg-slate-50 transition-all duration-200"
@@ -733,7 +793,7 @@ export default function AdminRoot() {
 
         <div
           style={{ marginLeft: collapsed ? 84 : 246 }}
-          className="relative z-0 min-h-screen transition-all duration-200"
+          className="relative z-0 flex h-screen min-h-0 flex-col overflow-hidden transition-all duration-200"
         >
           <header
             className="sticky top-0 z-40 isolate border-b border-slate-200 shadow-sm"
@@ -782,7 +842,8 @@ export default function AdminRoot() {
             </div>
           </header>
 
-          <main className="space-y-6 px-6 py-6">
+          <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-6">
+            <div className="space-y-6">
             {pageLoading ? (
               <div className="grid gap-4 lg:grid-cols-3">
                 {Array.from({ length: 6 }).map((_, index) => (
@@ -1027,7 +1088,13 @@ export default function AdminRoot() {
                                   />
                                 </td>
                                 <td className="px-3 py-3">
-                                  <button type="button" onClick={() => void openUserDrawer(user)} className="text-left">
+                                  <button
+                                    type="button"
+                                    onClick={() => openUserDrawer(user)}
+                                    onMouseEnter={() => prefetchUserDetail(user.id)}
+                                    onFocus={() => prefetchUserDetail(user.id)}
+                                    className="text-left"
+                                  >
                                     <p className="font-medium text-slate-800">{user.username}</p>
                                     <p className="text-xs text-slate-500">{user.email}</p>
                                   </button>
@@ -1413,64 +1480,96 @@ export default function AdminRoot() {
                 </ShellCard>
               </div>
             ) : null}
+            </div>
           </main>
         </div>
 
       <Toaster richColors position="top-right" />
 
       <RightDrawer
-        open={Boolean(selectedUser && selectedUserDetail)}
+        open={Boolean(selectedUser)}
         title={selectedUserDetail?.username ?? selectedUser?.username ?? 'User detail'}
-        subtitle={selectedUserDetail?.email}
+        subtitle={selectedUserDetail?.email ?? selectedUser?.email}
         onClose={() => {
           setSelectedUser(null);
-          setSelectedUserDetail(null);
           setUserActionForm({ note: '', durationDays: 7 });
         }}
       >
-        {selectedUserDetail ? (
-          <div className="space-y-5">
+        {selectedUserDetailQuery.isError ? (
+          <EmptyPanel title="Unable to load user details" body={selectedUserDetailQuery.error instanceof Error ? selectedUserDetailQuery.error.message : 'Try opening this user again.'} />
+        ) : userDetailLoading ? (
+          <div className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg border border-slate-200 p-4">
+              {Array.from({ length: 2 }).map((_, index) => (
+                <div key={index} className="rounded-2xl border border-slate-200 px-5 py-4">
+                  <div className="h-3 w-16 animate-pulse rounded bg-slate-200" />
+                  <div className="mt-4 h-8 w-24 animate-pulse rounded-full bg-slate-100" />
+                </div>
+              ))}
+            </div>
+            <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+              <div className="border-b border-slate-200 px-5 py-4">
+                <div className="h-5 w-40 animate-pulse rounded bg-slate-200" />
+              </div>
+              <div className="space-y-4 px-5 py-5">
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {Array.from({ length: 6 }).map((_, index) => (
+                    <div key={index} className="rounded-2xl border border-slate-200 px-4 py-4">
+                      <div className="h-3 w-20 animate-pulse rounded bg-slate-200" />
+                      <div className="mt-3 h-4 w-28 animate-pulse rounded bg-slate-100" />
+                    </div>
+                  ))}
+                </div>
+                <div className="rounded-2xl border border-slate-200 px-4 py-4">
+                  <div className="h-3 w-14 animate-pulse rounded bg-slate-200" />
+                  <div className="mt-3 h-16 animate-pulse rounded-xl bg-slate-100" />
+                </div>
+              </div>
+            </section>
+          </div>
+        ) : selectedUserDetail ? (
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 px-4 py-3">
                 <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Status</p>
                 <div className="mt-2"><StatusBadge value={selectedUserDetail.status} /></div>
               </div>
-              <div className="rounded-lg border border-slate-200 p-4">
+              <div className="rounded-2xl border border-slate-200 px-4 py-3">
                 <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Verified</p>
                 <div className="mt-2"><StatusBadge value={selectedUserDetail.verified ? 'verified' : 'unverified'} /></div>
               </div>
             </div>
 
             <ShellCard title="Profile Overview">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-md border border-slate-200 px-3 py-3">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 px-4 py-4">
                   <p className="text-xs uppercase tracking-[0.12em] text-slate-500">College</p>
-                  <p className="mt-1 text-sm text-slate-800">{selectedUserDetail.college}</p>
+                  <p className="mt-2 text-sm text-slate-800">{selectedUserDetail.college}</p>
                 </div>
-                <div className="rounded-md border border-slate-200 px-3 py-3">
+                <div className="rounded-2xl border border-slate-200 px-4 py-4">
                   <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Department</p>
-                  <p className="mt-1 text-sm text-slate-800">{selectedUserDetail.department || 'Unknown'}</p>
+                  <p className="mt-2 text-sm text-slate-800">{selectedUserDetail.department || 'Unknown'}</p>
                 </div>
-                <div className="rounded-md border border-slate-200 px-3 py-3">
+                <div className="rounded-2xl border border-slate-200 px-4 py-4">
                   <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Created</p>
-                  <p className="mt-1 text-sm text-slate-800">{formatDate(selectedUserDetail.createdAt)}</p>
+                  <p className="mt-2 text-sm text-slate-800">{formatDate(selectedUserDetail.createdAt)}</p>
                 </div>
-                <div className="rounded-md border border-slate-200 px-3 py-3">
+                <div className="rounded-2xl border border-slate-200 px-4 py-4">
                   <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Last seen</p>
-                  <p className="mt-1 text-sm text-slate-800">{formatDate(selectedUserDetail.lastSeenAt)}</p>
+                  <p className="mt-2 text-sm text-slate-800">{formatDate(selectedUserDetail.lastSeenAt)}</p>
                 </div>
-                <div className="rounded-md border border-slate-200 px-3 py-3">
+                <div className="rounded-2xl border border-slate-200 px-4 py-4">
                   <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Suspended until</p>
-                  <p className="mt-1 text-sm text-slate-800">{formatDate(selectedUserDetail.suspendedUntil)}</p>
+                  <p className="mt-2 text-sm text-slate-800">{formatDate(selectedUserDetail.suspendedUntil)}</p>
                 </div>
-                <div className="rounded-md border border-slate-200 px-3 py-3">
+                <div className="rounded-2xl border border-slate-200 px-4 py-4">
                   <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Headline</p>
-                  <p className="mt-1 text-sm text-slate-800">{selectedUserDetail.headline || 'No headline set'}</p>
+                  <p className="mt-2 text-sm text-slate-800">{selectedUserDetail.headline || 'No headline set'}</p>
                 </div>
               </div>
-              <div className="mt-3 rounded-md border border-slate-200 px-3 py-3">
+              <div className="mt-4 rounded-2xl border border-slate-200 px-4 py-4">
                 <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Bio</p>
-                <p className="mt-1 text-sm text-slate-700">{selectedUserDetail.bio || 'No bio available.'}</p>
+                <p className="mt-2 text-sm leading-6 text-slate-700">{selectedUserDetail.bio || 'No bio available.'}</p>
               </div>
             </ShellCard>
 
@@ -1515,10 +1614,10 @@ export default function AdminRoot() {
             <ShellCard title="Recent Posts">
               <div className="space-y-3">
                 {(selectedUserDetail.recentPosts ?? []).length === 0 ? <EmptyPanel title="No recent posts" body="Recent authored posts will appear here." /> : (selectedUserDetail.recentPosts ?? []).map((post: any) => (
-                  <div key={post.id} className="rounded-md border border-slate-200 px-3 py-3">
+                  <div key={post.id} className="rounded-xl border border-slate-200 px-4 py-4">
                     <p className="text-sm font-medium text-slate-800">{post.title || 'Untitled post'}</p>
-                    <p className="mt-1 text-sm text-slate-500">{post.preview || 'No preview available.'}</p>
-                    <div className="mt-2 flex items-center justify-between">
+                    <p className="mt-2 text-sm leading-6 text-slate-500">{post.preview || 'No preview available.'}</p>
+                    <div className="mt-3 flex items-center justify-between">
                       <StatusBadge value={post.status} />
                       <p className="text-xs text-slate-500">{formatDate(post.createdAt)}</p>
                     </div>
@@ -1528,9 +1627,9 @@ export default function AdminRoot() {
             </ShellCard>
 
             <ShellCard title="Clubs Joined">
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {(selectedUserDetail.clubs ?? []).length === 0 ? <EmptyPanel title="No clubs joined" body="Club memberships will appear here." /> : (selectedUserDetail.clubs ?? []).map((club: any) => (
-                  <div key={club.id} className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2">
+                  <div key={club.id} className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
                     <span className="text-sm text-slate-700">{club.name}</span>
                     <div className="flex gap-2">
                       <StatusBadge value={club.role} />
@@ -1542,9 +1641,9 @@ export default function AdminRoot() {
             </ShellCard>
 
             <ShellCard title="Reports">
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {(selectedUserDetail.reports ?? []).length === 0 ? <EmptyPanel title="No reports" body="Reports targeting this user will appear here." /> : (selectedUserDetail.reports ?? []).map((report: any) => (
-                  <div key={report.id} className="flex items-center justify-between rounded-md border border-slate-200 px-3 py-2">
+                  <div key={report.id} className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3">
                     <div>
                       <span className="text-sm text-slate-700">{report.reason}</span>
                       <p className="mt-1 text-xs text-slate-500">{formatDate(report.createdAt)}</p>
@@ -1558,7 +1657,7 @@ export default function AdminRoot() {
             <ShellCard title="Moderation History">
               <div className="space-y-3">
                 {(selectedUserDetail.moderationHistory ?? []).length === 0 ? <EmptyPanel title="No moderation history" body="Admin actions on this user will appear here." /> : (selectedUserDetail.moderationHistory ?? []).map((entry) => (
-                  <div key={entry.id} className="rounded-md border border-slate-200 px-3 py-3">
+                  <div key={entry.id} className="rounded-xl border border-slate-200 px-4 py-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-medium text-slate-800">{entry.summary}</p>
@@ -1566,21 +1665,21 @@ export default function AdminRoot() {
                       </div>
                       <StatusBadge value={entry.severity} />
                     </div>
-                    {'note' in (entry.metadata ?? {}) ? <p className="mt-2 text-sm text-slate-600">{String(entry.metadata?.note ?? '')}</p> : null}
-                    {'durationDays' in (entry.metadata ?? {}) ? <p className="mt-2 text-xs text-slate-500">Suspension length: {String(entry.metadata?.durationDays)} days</p> : null}
-                    <p className="mt-2 text-xs text-slate-500">{formatDate(entry.timestamp)}</p>
+                    {'note' in (entry.metadata ?? {}) ? <p className="mt-3 text-sm leading-6 text-slate-600">{String(entry.metadata?.note ?? '')}</p> : null}
+                    {'durationDays' in (entry.metadata ?? {}) ? <p className="mt-3 text-xs text-slate-500">Suspension length: {String(entry.metadata?.durationDays)} days</p> : null}
+                    <p className="mt-3 text-xs text-slate-500">{formatDate(entry.timestamp)}</p>
                   </div>
                 ))}
               </div>
             </ShellCard>
 
             <ShellCard title="Login History">
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {(selectedUserDetail.loginHistory ?? []).length === 0 ? <EmptyPanel title="No login history" body="Recent user sessions will appear here." /> : (selectedUserDetail.loginHistory ?? []).map((entry: any) => (
-                  <div key={entry.id} className="rounded-md border border-slate-200 px-3 py-3">
+                  <div key={entry.id} className="rounded-xl border border-slate-200 px-4 py-4">
                     <p className="text-sm font-medium text-slate-800">{entry.browser} · {entry.platform}</p>
-                    <p className="mt-1 text-sm text-slate-500">{entry.location}</p>
-                    <p className="mt-2 text-xs text-slate-500">{formatDate(entry.lastSeenAt || entry.createdAt)}</p>
+                    <p className="mt-2 text-sm text-slate-500">{entry.location}</p>
+                    <p className="mt-3 text-xs text-slate-500">{formatDate(entry.lastSeenAt || entry.createdAt)}</p>
                   </div>
                 ))}
               </div>
@@ -1599,13 +1698,13 @@ export default function AdminRoot() {
         }}
       >
         {selectedClubDetail ? (
-          <div className="space-y-5">
+          <div className="space-y-3">
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg border border-slate-200 p-4">
+              <div className="rounded-2xl border border-slate-200 px-4 py-3">
                 <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Verification</p>
                 <div className="mt-2"><StatusBadge value={selectedClubDetail.verificationStatus} /></div>
               </div>
-              <div className="rounded-lg border border-slate-200 p-4">
+              <div className="rounded-2xl border border-slate-200 px-4 py-3">
                 <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Status</p>
                 <div className="mt-2"><StatusBadge value={selectedClubDetail.status} /></div>
               </div>
