@@ -474,27 +474,44 @@ Need to be done:
 
 ### 10. Settings
 
-Status: Password change is real, operational settings are read-only demo data
+Status: Password change is real, and operational settings are now persisted and editable
 
 Done:
 
 - Real session-backed password change flow in frontend
 - Admin must-change-password state is surfaced in the UI
-- Backend `GET /admin/settings` returns grouped settings metadata
-- Settings page renders each returned section/value pair
+- Backend `GET /admin/settings` now returns persisted grouped settings
+- Backend `PATCH /admin/settings` now updates persisted operational settings
+- A singleton `admin_settings` JSON-backed store now holds the admin configuration payload
+- Settings are seeded with real defaults for:
+  - `moderation`
+  - `feedRanking`
+  - `uploads`
+  - `notifications`
+  - `security`
+  - `rateLimiting`
+  - `featureFlags`
+- Frontend settings page now renders editable controls instead of read-only metadata rows:
+  - booleans as checkboxes
+  - numeric values as number inputs
+  - save changes
+  - reset unsaved changes
+- Successful settings updates now record admin audit log entries with:
+  - changed keys
+  - previous settings snapshot
+  - next settings snapshot
 
 Exact limitations found:
 
-- There is no backend update route for settings
-- Settings values are static JSON returned from the route
-- Feature flags such as `auditLogExport` and `moderatorRoles` are display-only
-- No editable toggles/sliders/forms
+- The settings store is intentionally a singleton JSON payload rather than a broader config platform
+- There is still no multi-role settings permission model; edits assume the current admin can manage all settings
+- Feature flags remain configuration only; this stage persists them but does not automatically implement broader product behavior behind every flag
 
 Need to be done:
 
-- Add persistent settings storage and update APIs
-- Turn display values into editable controls
-- Wire feature flags and operational knobs to real backend behavior
+- Add finer-grained settings permissions if moderator/sub-admin roles are introduced
+- Expand validation and section coverage only if new settings groups are added
+- Wire additional feature flags and operational knobs to deeper backend behavior as those features are implemented
 
 ## Cross-cutting observations
 

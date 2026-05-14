@@ -358,6 +358,34 @@ export interface AdminLogDetailResponse {
   metadata: Record<string, unknown>;
 }
 
+export interface AdminSettingsResponse {
+  moderation: {
+    autoEscalateCriticalReports: boolean;
+    retainSoftDeletedContentDays: number;
+  };
+  feedRanking: {
+    allowManualIntervention: boolean;
+  };
+  uploads: {
+    maxImageMb: number;
+  };
+  notifications: {
+    sendOperationalAlerts: boolean;
+  };
+  security: {
+    forcePasswordChangeForSeededAdmin: boolean;
+  };
+  rateLimiting: {
+    adminApiBurst: number;
+  };
+  featureFlags: {
+    auditLogExport: boolean;
+    moderatorRoles: boolean;
+  };
+}
+
+export type AdminSettingsUpdatePayload = AdminSettingsResponse;
+
 export async function apiAdminLogin(email: string, password: string): Promise<{ token: string; admin: AdminProfile }> {
   return safeFetch('/admin/auth/login', {
     method: 'POST',

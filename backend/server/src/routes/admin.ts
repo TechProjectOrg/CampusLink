@@ -228,6 +228,34 @@ type AdminReportTargetTypeFilter = 'user' | 'post' | 'club';
 type AdminReportAssigneeFilter = 'all' | 'me' | 'unassigned';
 type AdminAuditLogSeverityFilter = 'info' | 'warning' | 'critical';
 
+type AdminSettingsPayload = {
+  moderation: {
+    autoEscalateCriticalReports: boolean;
+    retainSoftDeletedContentDays: number;
+  };
+  feedRanking: {
+    allowManualIntervention: boolean;
+  };
+  uploads: {
+    maxImageMb: number;
+  };
+  notifications: {
+    sendOperationalAlerts: boolean;
+  };
+  security: {
+    forcePasswordChangeForSeededAdmin: boolean;
+  };
+  rateLimiting: {
+    adminApiBurst: number;
+  };
+  featureFlags: {
+    auditLogExport: boolean;
+    moderatorRoles: boolean;
+  };
+};
+
+const ADMIN_SETTINGS_SINGLETON_KEY = 'global';
+
 function parseAdminBooleanFilter(raw: unknown): '' | 'true' | 'false' {
   const value = String(raw ?? '').trim().toLowerCase();
   return value === 'true' || value === 'false' ? value : '';
@@ -290,6 +318,191 @@ function parseAdminDateFilter(raw: unknown, endOfDay = false): Date | null {
     : value;
   const parsed = new Date(normalized);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function getDefaultAdminSettings(): AdminSettingsPayload {
+  return {
+    moderation: {
+      autoEscalateCriticalReports: true,
+      retainSoftDeletedContentDays: 30,
+    },
+    feedRanking: {
+      allowManualIntervention: false,
+    },
+    uploads: {
+      maxImageMb: 10,
+    },
+    notifications: {
+      sendOperationalAlerts: true,
+    },
+    security: {
+      forcePasswordChangeForSeededAdmin: true,
+    },
+    rateLimiting: {
+      adminApiBurst: 60,
+    },
+    featureFlags: {
+      auditLogExport: false,
+      moderatorRoles: false,
+    },
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function getBooleanSetting(
+  group: Record<string, unknown>,
+  key: string,
+): boolean | null {
+  const value = group[key];
+  return typeof value === 'boolean' ? value : null;
+}
+
+function getPositiveNumberSetting(
+  group: Record<string, unknown>,
+  key: string,
+): number | null {
+  const value = group[key];
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function validateAdminSettingsPayload(raw: unknown): { value: AdminSettingsPayload | null; message?: string } {
+  const defaults = getDefaultAdminSettings();
+  if (!isRecord(raw)) {
+    return { value: null, message: 'Settings payload must be an object' };
+  }
+
+  const expectedGroups = Object.keys(defaults);
+  const incomingGroups = Object.keys(raw);
+  if (incomingGroups.length !== expectedGroups.length || incomingGroups.some((key) => !expectedGroups.includes(key))) {
+    return { value: null, message: 'Settings payload includes unsupported groups' };
+  }
+
+  const moderation = raw.moderation;
+  const feedRanking = raw.feedRanking;
+  const uploads = raw.uploads;
+  const notifications = raw.notifications;
+  const security = raw.security;
+  const rateLimiting = raw.rateLimiting;
+  const featureFlags = raw.featureFlags;
+
+  if (!isRecord(moderation) || !isRecord(feedRanking) || !isRecord(uploads) || !isRecord(notifications) || !isRecord(security) || !isRecord(rateLimiting) || !isRecord(featureFlags)) {
+    return { value: null, message: 'Settings groups must be objects' };
+  }
+
+  const hasOnlyKeys = (group: Record<string, unknown>, keys: string[]) =>
+    Object.keys(group).length === keys.length && Object.keys(group).every((key) => keys.includes(key));
+
+  if (
+    !hasOnlyKeys(moderation, Object.keys(defaults.moderation)) ||
+    !hasOnlyKeys(feedRanking, Object.keys(defaults.feedRanking)) ||
+    !hasOnlyKeys(uploads, Object.keys(defaults.uploads)) ||
+    !hasOnlyKeys(notifications, Object.keys(defaults.notifications)) ||
+    !hasOnlyKeys(security, Object.keys(defaults.security)) ||
+    !hasOnlyKeys(rateLimiting, Object.keys(defaults.rateLimiting)) ||
+    !hasOnlyKeys(featureFlags, Object.keys(defaults.featureFlags))
+  ) {
+    return { value: null, message: 'Settings payload includes unsupported keys' };
+  }
+
+  const normalized: AdminSettingsPayload = {
+    moderation: {
+      autoEscalateCriticalReports: getBooleanSetting(moderation, 'autoEscalateCriticalReports') ?? defaults.moderation.autoEscalateCriticalReports,
+      retainSoftDeletedContentDays: getPositiveNumberSetting(moderation, 'retainSoftDeletedContentDays') ?? -1,
+    },
+    feedRanking: {
+      allowManualIntervention: getBooleanSetting(feedRanking, 'allowManualIntervention') ?? defaults.feedRanking.allowManualIntervention,
+    },
+    uploads: {
+      maxImageMb: getPositiveNumberSetting(uploads, 'maxImageMb') ?? -1,
+    },
+    notifications: {
+      sendOperationalAlerts: getBooleanSetting(notifications, 'sendOperationalAlerts') ?? defaults.notifications.sendOperationalAlerts,
+    },
+    security: {
+      forcePasswordChangeForSeededAdmin: getBooleanSetting(security, 'forcePasswordChangeForSeededAdmin') ?? defaults.security.forcePasswordChangeForSeededAdmin,
+    },
+    rateLimiting: {
+      adminApiBurst: getPositiveNumberSetting(rateLimiting, 'adminApiBurst') ?? -1,
+    },
+    featureFlags: {
+      auditLogExport: getBooleanSetting(featureFlags, 'auditLogExport') ?? defaults.featureFlags.auditLogExport,
+      moderatorRoles: getBooleanSetting(featureFlags, 'moderatorRoles') ?? defaults.featureFlags.moderatorRoles,
+    },
+  };
+
+  if (
+    typeof moderation.autoEscalateCriticalReports !== 'boolean' ||
+    typeof feedRanking.allowManualIntervention !== 'boolean' ||
+    typeof notifications.sendOperationalAlerts !== 'boolean' ||
+    typeof security.forcePasswordChangeForSeededAdmin !== 'boolean' ||
+    typeof featureFlags.auditLogExport !== 'boolean' ||
+    typeof featureFlags.moderatorRoles !== 'boolean'
+  ) {
+    return { value: null, message: 'Boolean settings must stay boolean' };
+  }
+
+  if (
+    normalized.moderation.retainSoftDeletedContentDays <= 0 ||
+    normalized.uploads.maxImageMb <= 0 ||
+    normalized.rateLimiting.adminApiBurst <= 0
+  ) {
+    return { value: null, message: 'Numeric settings must be positive numbers' };
+  }
+
+  return { value: normalized };
+}
+
+function flattenAdminSettingsChanges(previous: AdminSettingsPayload, next: AdminSettingsPayload): string[] {
+  const changedKeys: string[] = [];
+  for (const [groupKey, groupValue] of Object.entries(next)) {
+    const previousGroup = previous[groupKey as keyof AdminSettingsPayload] as Record<string, unknown>;
+    for (const [settingKey, settingValue] of Object.entries(groupValue)) {
+      if (previousGroup[settingKey] !== settingValue) {
+        changedKeys.push(`${groupKey}.${settingKey}`);
+      }
+    }
+  }
+  return changedKeys;
+}
+
+async function ensureAdminSettingsRecord(): Promise<AdminSettingsPayload> {
+  type AdminSettingsRow = { settings: unknown };
+  let existingRows: AdminSettingsRow[];
+  try {
+    existingRows = await prisma.$queryRaw<AdminSettingsRow[]>`
+      SELECT settings
+      FROM admin_settings
+      WHERE settings_key = ${ADMIN_SETTINGS_SINGLETON_KEY}
+      LIMIT 1
+    `;
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError
+      && error.code === 'P2010'
+      && String(error.meta?.message ?? '').includes('relation "admin_settings" does not exist')
+    ) {
+      return getDefaultAdminSettings();
+    }
+    throw error;
+  }
+
+  const existing = existingRows[0]?.settings;
+  const validatedExisting = validateAdminSettingsPayload(existing);
+  if (validatedExisting.value) {
+    return validatedExisting.value;
+  }
+
+  const defaults = getDefaultAdminSettings();
+  await prisma.$queryRaw`
+    INSERT INTO admin_settings (settings_key, settings)
+    VALUES (${ADMIN_SETTINGS_SINGLETON_KEY}, ${JSON.stringify(defaults)}::jsonb)
+    ON CONFLICT (settings_key)
+    DO UPDATE SET settings = EXCLUDED.settings, updated_at = NOW()
+  `;
+  return defaults;
 }
 
 async function invalidateAdminClubCaches(clubId: string, memberUserIds: string[] = []): Promise<void> {
@@ -3616,31 +3829,67 @@ router.get('/logs/:logId', async (req: Request<{ logId: string }>, res: Response
 });
 
 router.get('/settings', async (_req: Request, res: Response) => {
-  return res.status(200).json({
-    moderation: {
-      autoEscalateCriticalReports: true,
-      retainSoftDeletedContentDays: 30,
-    },
-    feedRanking: {
-      allowManualIntervention: false,
-    },
-    uploads: {
-      maxImageMb: 10,
-    },
-    notifications: {
-      sendOperationalAlerts: true,
-    },
-    security: {
-      forcePasswordChangeForSeededAdmin: true,
-    },
-    rateLimiting: {
-      adminApiBurst: 60,
-    },
-    featureFlags: {
-      auditLogExport: false,
-      moderatorRoles: false,
-    },
-  });
+  try {
+    const settings = await ensureAdminSettingsRecord();
+    return res.status(200).json(settings);
+  } catch (err) {
+    console.error('Error loading admin settings:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.patch('/settings', async (req: Request, res: Response) => {
+  const adminReq = req as AdminAuthedRequest;
+  const validation = validateAdminSettingsPayload(req.body);
+
+  if (!validation.value) {
+    return res.status(400).json({ message: validation.message ?? 'Invalid settings payload' });
+  }
+
+  try {
+    const previousSettings = await ensureAdminSettingsRecord();
+    const nextSettings = validation.value;
+    const changedKeys = flattenAdminSettingsChanges(previousSettings, nextSettings);
+
+    try {
+      await prisma.$queryRaw`
+        UPDATE admin_settings
+        SET
+          settings = ${JSON.stringify(nextSettings)}::jsonb,
+          updated_at = NOW(),
+          updated_by_user_id = ${adminReq.auth!.userId}
+        WHERE settings_key = ${ADMIN_SETTINGS_SINGLETON_KEY}
+      `;
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError
+        && error.code === 'P2010'
+        && String(error.meta?.message ?? '').includes('relation "admin_settings" does not exist')
+      ) {
+        return res.status(503).json({ message: 'Settings persistence is unavailable until the admin_settings migration is applied' });
+      }
+      throw error;
+    }
+
+    await recordAdminAuditLog({
+      actorUserId: adminReq.auth!.userId,
+      actionType: 'settings.updated',
+      targetType: 'settings',
+      targetId: ADMIN_SETTINGS_SINGLETON_KEY,
+      severity: 'info',
+      summary: 'Operational settings updated',
+      metadata: {
+        changedKeys,
+        previousSettings,
+        nextSettings,
+      },
+    });
+
+    return res.status(200).json(nextSettings);
+  } catch (err) {
+    console.error('Error updating admin settings:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
 });
 
 export default router;

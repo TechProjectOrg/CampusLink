@@ -60,6 +60,8 @@ import {
   type AdminReportListItem,
   type AdminReportListResponse,
   type AdminReportTargetPreview,
+  type AdminSettingsResponse,
+  type AdminSettingsUpdatePayload,
 } from './api';
 import { clearAdminSession, readAdminSession } from './session';
 
@@ -467,6 +469,16 @@ const DEFAULT_LOG_FILTERS: LogFilterState = {
   limit: 20,
 };
 
+const SETTINGS_SECTION_LABELS: Record<keyof AdminSettingsResponse, string> = {
+  moderation: 'Moderation',
+  feedRanking: 'Feed Ranking',
+  uploads: 'Uploads',
+  notifications: 'Notifications',
+  security: 'Security',
+  rateLimiting: 'Rate Limiting',
+  featureFlags: 'Feature Flags',
+};
+
 const POST_STATUS_OPTIONS: Array<{ value: PostFilterState['status']; label: string }> = [
   { value: '', label: 'All visible posts' },
   { value: 'live', label: 'Live' },
@@ -723,7 +735,7 @@ async function fetchAdminPageData(
   if (page === 'analytics') return apiAdminGet<AdminAnalyticsResponse>(`/admin/analytics?range=${encodeURIComponent(range)}&segment=${encodeURIComponent(analyticsSegment)}`, token);
   if (page === 'announcements') return apiAdminGet<AdminAnnouncementItem[]>(`/admin/announcements?${buildAnnouncementsQueryString(announcementFilters)}`, token);
   if (page === 'logs') return apiAdminGet<AdminLogListResponse>(`/admin/logs?${buildLogsQueryString(search, logFilters)}`, token);
-  return apiAdminGet('/admin/settings', token);
+  return apiAdminGet<AdminSettingsResponse>('/admin/settings', token);
 }
 
 function parsePageFromPath(pathname: string): PageKey {
@@ -746,6 +758,13 @@ function formatDate(value: string | null | undefined): string {
 function formatShortDate(value: string | null | undefined): string {
   if (!value) return 'â€”';
   return new Date(value).toLocaleDateString();
+}
+
+function humanizeSettingKey(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2')
+    .replace(/^./, (character) => character.toUpperCase());
 }
 
 function getReportTargetKindLabel(targetType: AdminReportTargetType): string {
@@ -986,6 +1005,8 @@ export default function AdminRoot() {
   const [logFilters, setLogFilters] = useState<LogFilterState>(DEFAULT_LOG_FILTERS);
   const [selectedLog, setSelectedLog] = useState<AdminLogListItem | null>(null);
   const [selectedLogDetail, setSelectedLogDetail] = useState<AdminLogDetailResponse | null>(null);
+  const [settingsDraft, setSettingsDraft] = useState<AdminSettingsResponse | null>(null);
+  const [settingsSaving, setSettingsSaving] = useState(false);
 
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [passwordState, setPasswordState] = useState({ isSaving: false, message: '', error: '' });
@@ -1146,11 +1167,16 @@ export default function AdminRoot() {
   const logsResponse = page === 'logs' ? ((currentPageQuery.data as AdminLogListResponse | null) ?? null) : null;
   const logs = logsResponse?.items ?? [];
   const logsPageInfo = logsResponse?.pageInfo ?? null;
-  const settings = page === 'settings' ? (currentPageQuery.data ?? null) : null;
+  const settings = page === 'settings' ? ((currentPageQuery.data as AdminSettingsResponse | null) ?? null) : null;
   const activeQuery = page === 'dashboard' ? dashboardQuery : currentPageQuery;
   const pageLoading = activeQuery.isLoading;
   const pageRefreshing = activeQuery.isFetching && !activeQuery.isLoading;
   const reportTimeline = useMemo(() => buildReportTimeline(selectedReportDetail), [selectedReportDetail]);
+  useEffect(() => {
+    if (page !== 'settings') return;
+    setSettingsDraft(settings ? JSON.parse(JSON.stringify(settings)) as AdminSettingsResponse : null);
+  }, [page, settings]);
+
   const selectedUserDetailQuery = useQuery({
     queryKey: selectedUser && token ? getAdminUserDetailQueryKey(token, selectedUser.id) : ['admin', 'user-detail', 'idle'],
     queryFn: () => apiAdminGet<AdminUserDetailResponse>(`/admin/users/${selectedUser!.id}`, token!),
@@ -1651,6 +1677,24 @@ export default function AdminRoot() {
       setPasswordState({ isSaving: false, message: 'Password changed successfully.', error: '' });
     } catch (error) {
       setPasswordState({ isSaving: false, message: '', error: error instanceof Error ? error.message : 'Unable to change password.' });
+    }
+  };
+
+  const resetSettingsDraft = () => {
+    setSettingsDraft(settings ? JSON.parse(JSON.stringify(settings)) as AdminSettingsResponse : null);
+  };
+
+  const handleSaveSettings = async () => {
+    if (!token || !settingsDraft) return;
+    setSettingsSaving(true);
+    try {
+      await apiAdminPost<AdminSettingsResponse>('/admin/settings', token, settingsDraft as AdminSettingsUpdatePayload, 'PATCH');
+      toast.success('Operational settings updated');
+      await refreshCurrentPage();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to save settings');
+    } finally {
+      setSettingsSaving(false);
     }
   };
 
@@ -2999,22 +3043,84 @@ export default function AdminRoot() {
                     <Input type="password" placeholder="Confirm new password" value={passwordForm.confirmPassword} onChange={(event) => setPasswordForm((current) => ({ ...current, confirmPassword: event.target.value }))} />
                     {passwordState.error ? <p className="text-sm text-red-600">{passwordState.error}</p> : null}
                     {passwordState.message ? <p className="text-sm text-emerald-600">{passwordState.message}</p> : null}
-                    <Button className="bg-slate-900 text-white hover:bg-slate-800" onClick={() => void handlePasswordChange()} disabled={passwordState.isSaving}>
-                      {passwordState.isSaving ? 'Saving...' : 'Change password'}
-                    </Button>
+                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-4">
+                      <p className="text-sm text-slate-600">Update the current admin password for this account.</p>
+                      <div className="mt-4 flex justify-start">
+                        <Button
+                          size="lg"
+                          variant="outline"
+                          className="shrink-0 rounded-md border-slate-300 bg-white px-6 text-slate-900 shadow-sm transition-all duration-150 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-100 hover:text-slate-900 hover:shadow-md active:scale-[0.99]"
+                          onClick={() => void handlePasswordChange()}
+                          disabled={passwordState.isSaving}
+                        >
+                          {passwordState.isSaving ? 'Saving...' : 'Change password'}
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 </ShellCard>
                 <ShellCard title="Operational Settings">
-                  {settings ? (
+                  {settingsDraft ? (
                     <div className="space-y-4">
-                      {Object.entries(settings).map(([section, values]) => (
+                      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                        <p className="text-sm text-slate-600">Changes here update the persistent admin configuration used by the backend.</p>
+                        <div className="flex gap-2">
+                          <Button variant="outline" onClick={resetSettingsDraft} disabled={settingsSaving}>
+                            Reset unsaved changes
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="border-slate-300 bg-white text-slate-900 shadow-sm transition-all duration-150 hover:scale-[1.02] hover:border-slate-400 hover:bg-slate-100 hover:text-slate-900 hover:shadow-md active:scale-[0.99]"
+                            onClick={() => void handleSaveSettings()}
+                            disabled={settingsSaving}
+                          >
+                            {settingsSaving ? 'Saving...' : 'Save changes'}
+                          </Button>
+                        </div>
+                      </div>
+                      {Object.entries(settingsDraft).map(([section, values]) => (
                         <div key={section} className="rounded-lg border border-slate-200 p-4">
-                          <p className="text-sm font-semibold capitalize text-slate-900">{section}</p>
+                          <p className="text-sm font-semibold text-slate-900">{SETTINGS_SECTION_LABELS[section as keyof AdminSettingsResponse] ?? humanizeSettingKey(section)}</p>
                           <div className="mt-3 space-y-2">
                             {Object.entries(values as Record<string, unknown>).map(([key, value]) => (
-                              <div key={key} className="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm">
-                                <span className="text-slate-600">{key}</span>
-                                <span className="font-medium text-slate-900">{String(value)}</span>
+                              <div key={key} className="flex items-center justify-between gap-3 rounded-md bg-slate-50 px-3 py-3 text-sm">
+                                <span className="text-slate-600">{humanizeSettingKey(key)}</span>
+                                {typeof value === 'boolean' ? (
+                                  <label className="flex items-center gap-2 text-sm font-medium text-slate-900">
+                                    <input
+                                      type="checkbox"
+                                      checked={value}
+                                      onChange={(event) => setSettingsDraft((current) => {
+                                        if (!current) return current;
+                                        return {
+                                          ...current,
+                                          [section]: {
+                                            ...current[section as keyof AdminSettingsResponse],
+                                            [key]: event.target.checked,
+                                          },
+                                        };
+                                      })}
+                                    />
+                                    {value ? 'Enabled' : 'Disabled'}
+                                  </label>
+                                ) : (
+                                  <Input
+                                    type="number"
+                                    min={1}
+                                    className="max-w-32"
+                                    value={String(value)}
+                                    onChange={(event) => setSettingsDraft((current) => {
+                                      if (!current) return current;
+                                      return {
+                                        ...current,
+                                        [section]: {
+                                          ...current[section as keyof AdminSettingsResponse],
+                                          [key]: Math.max(1, Number(event.target.value) || 1),
+                                        },
+                                      };
+                                    })}
+                                  />
+                                )}
                               </div>
                             ))}
                           </div>
@@ -3022,7 +3128,7 @@ export default function AdminRoot() {
                       ))}
                     </div>
                   ) : (
-                    <EmptyPanel title="No settings available" body="Settings metadata will appear here once loaded." />
+                    <EmptyPanel title="No settings available" body="Settings will appear here once the configuration record loads." />
                   )}
                 </ShellCard>
               </div>
