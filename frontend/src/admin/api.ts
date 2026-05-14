@@ -282,6 +282,44 @@ export interface AdminAnalyticsResponse {
   deviceBreakdown: AdminAnalyticsDeviceRow[];
 }
 
+export type AdminAnnouncementAudienceType = 'all_users' | 'specific_clubs' | 'specific_branches';
+export type AdminAnnouncementStatus = 'draft' | 'scheduled' | 'published';
+
+export interface AdminAnnouncementCreatorSummary {
+  id: string;
+  username: string;
+  email: string;
+}
+
+export interface AdminAnnouncementItem {
+  id: string;
+  title: string;
+  content: string;
+  audienceType: AdminAnnouncementAudienceType;
+  audienceIds: string[];
+  status: AdminAnnouncementStatus;
+  pinned: boolean;
+  pushEnabled: boolean;
+  scheduledFor: string | null;
+  createdAt: string;
+  updatedAt: string;
+  publishedAt: string | null;
+  recipientCount: number;
+  createdBy: AdminAnnouncementCreatorSummary;
+}
+
+export interface AdminAnnouncementDetailResponse extends AdminAnnouncementItem {}
+
+export interface AdminAnnouncementAudienceOption {
+  id: string;
+  label: string;
+}
+
+export interface AdminAnnouncementOptionsResponse {
+  clubs: AdminAnnouncementAudienceOption[];
+  branches: AdminAnnouncementAudienceOption[];
+}
+
 export async function apiAdminLogin(email: string, password: string): Promise<{ token: string; admin: AdminProfile }> {
   return safeFetch('/admin/auth/login', {
     method: 'POST',
@@ -303,5 +341,12 @@ export async function apiAdminPost<T>(path: string, token: string, body?: unknow
     method,
     headers: buildHeaders(token, true),
     body: JSON.stringify(body ?? {}),
+  });
+}
+
+export async function apiAdminDelete<T>(path: string, token: string): Promise<T> {
+  return safeFetch(path, {
+    method: 'DELETE',
+    headers: buildHeaders(token),
   });
 }

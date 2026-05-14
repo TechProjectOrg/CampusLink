@@ -383,36 +383,49 @@ Need to be done:
 
 ### 8. Announcements
 
-Status: Working create-and-list MVP
+Status: Implemented as a fuller admin operations workflow
 
 Done:
 
 - Real announcement list route at `GET /admin/announcements`
 - Real create route at `POST /admin/announcements`
-- Frontend supports:
-  - title
-  - content
-  - audience type
-  - audience IDs
-  - scheduled time
-  - pinned flag
-  - push notification flag
-- Backend stores scheduled vs published status based on `scheduledFor`
+- Real detail route at `GET /admin/announcements/:announcementId`
+- Real update route at `PATCH /admin/announcements/:announcementId`
+- Real delete route at `DELETE /admin/announcements/:announcementId`
+- Real audience options route at `GET /admin/announcements/options`
+- Real recipient preview route at `POST /admin/announcements/preview`
+- Frontend announcements page now supports:
+  - create and edit in the same admin workflow
+  - structured targeting for all users, specific clubs, and specific branches
+  - recipient preview before save
+  - scheduled publishing
+  - pinned and push-enabled flags
+  - status, pinned, and push filters
+  - row-level lifecycle actions
+  - detail drawer with lifecycle and delivery metadata
+- Lifecycle actions now exist for:
+  - publish now
+  - unpublish
+  - cancel schedule
+  - delete
+- Backend derives recipient counts for:
+  - all users
+  - selected clubs via membership
+  - selected branches via student/alumni branch data
+- Audit log entries are now recorded for create, edit, delete, publish, unpublish, and cancel-schedule flows
 
 Exact limitations found:
 
-- No edit/delete/unpublish/cancel schedule actions
-- No rich text editor
-- Audience targeting is manual comma-separated IDs
-- No preview of targeted recipients
-- No delivery status, publish history, or push delivery reporting
+- Authoring is still plain text; there is no rich text editor
+- Delivery reporting is intentionally limited to supportable metadata such as recipient count, push enabled state, creator, and lifecycle timestamps
+- There is no per-recipient delivery/open/click tracking table yet
+- The queue is still list-based rather than a calendar or campaign board
 
 Need to be done:
 
-- Add edit/delete lifecycle actions
-- Add better audience selectors
-- Add preview, delivery state, and schedule management
-- Add richer content authoring if required
+- Add richer content authoring only if plain text becomes a workflow blocker
+- Add real delivery/open metrics only if a dedicated announcement delivery event model is introduced
+- Add deeper campaign-style reporting if operations need more than lifecycle and targeting metadata
 
 ### 9. System Logs
 
@@ -490,7 +503,7 @@ Need to be done:
 
 ## Recommended implementation priorities
 
-Next active milestone after stage 5: Verification review depth
+Next active milestone: Verification policy decisions and remaining operational depth
 
 ### Priority 1
 
@@ -507,8 +520,8 @@ Next active milestone after stage 5: Verification review depth
 ### Priority 3
 
 - Make settings editable and persistent
-- Expand announcements lifecycle management
 - Add export/reporting and richer log inspection
+- Expand verification review depth once the user/club verification policy is finalized
 
 ## Final assessment
 

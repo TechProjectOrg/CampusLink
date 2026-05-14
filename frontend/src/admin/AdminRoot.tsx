@@ -36,8 +36,15 @@ import { Skeleton } from '../components/ui/skeleton';
 import { Textarea } from '../components/ui/textarea';
 import { apiChangePassword, apiVerifyPasswordChange } from '../lib/authApi';
 import {
+  apiAdminDelete,
   apiAdminGet,
   apiAdminPost,
+  type AdminAnnouncementAudienceOption,
+  type AdminAnnouncementAudienceType,
+  type AdminAnnouncementDetailResponse,
+  type AdminAnnouncementItem,
+  type AdminAnnouncementOptionsResponse,
+  type AdminAnnouncementStatus,
   type AdminAnalyticsResponse,
   type AdminAnalyticsSegment,
   type AdminDashboardRange,
@@ -353,6 +360,22 @@ type ReportTimelineItem =
       metadata?: Record<string, unknown>;
     };
 
+type AnnouncementDraftState = {
+  title: string;
+  content: string;
+  audienceType: AdminAnnouncementAudienceType;
+  audienceIds: string[];
+  scheduledFor: string;
+  pinned: boolean;
+  pushEnabled: boolean;
+};
+
+type AnnouncementFilterState = {
+  status: '' | AdminAnnouncementStatus;
+  pinned: '' | 'true' | 'false';
+  pushEnabled: '' | 'true' | 'false';
+};
+
 const DEFAULT_POST_FILTERS: PostFilterState = {
   status: '',
   severity: '',
@@ -401,6 +424,22 @@ const REPORT_ASSIGNEE_OPTIONS: Array<{ value: ReportFilterState['assignee']; lab
   { value: 'me', label: 'Assigned to me' },
   { value: 'unassigned', label: 'Unassigned' },
 ];
+
+const DEFAULT_ANNOUNCEMENT_DRAFT: AnnouncementDraftState = {
+  title: '',
+  content: '',
+  audienceType: 'all_users',
+  audienceIds: [],
+  scheduledFor: '',
+  pinned: false,
+  pushEnabled: false,
+};
+
+const DEFAULT_ANNOUNCEMENT_FILTERS: AnnouncementFilterState = {
+  status: '',
+  pinned: '',
+  pushEnabled: '',
+};
 
 const POST_STATUS_OPTIONS: Array<{ value: PostFilterState['status']; label: string }> = [
   { value: '', label: 'All visible posts' },
@@ -505,6 +544,14 @@ function buildReportsQueryString(search: string, filters: ReportFilterState) {
     to: filters.to,
     page: filters.page,
     limit: filters.limit,
+  });
+}
+
+function buildAnnouncementsQueryString(filters: AnnouncementFilterState) {
+  return buildQueryString({
+    status: filters.status,
+    pinned: filters.pinned,
+    pushEnabled: filters.pushEnabled,
   });
 }
 
@@ -624,6 +671,7 @@ async function fetchAdminPageData(
   postFilters: PostFilterState = DEFAULT_POST_FILTERS,
   reportFilters: ReportFilterState = DEFAULT_REPORT_FILTERS,
   analyticsSegment: AdminAnalyticsSegment = 'all',
+  announcementFilters: AnnouncementFilterState = DEFAULT_ANNOUNCEMENT_FILTERS,
 ) {
   if (page === 'dashboard') return apiAdminGet<AdminDashboardResponse>(`/admin/dashboard?range=${encodeURIComponent(range)}`, token);
   if (page === 'users') return apiAdminGet<AdminUserListResponse>(`/admin/users?${buildUsersQueryString(search, userFilters)}`, token);
@@ -632,7 +680,7 @@ async function fetchAdminPageData(
   if (page === 'reports') return apiAdminGet<AdminReportListResponse>(`/admin/reports?${buildReportsQueryString(search, reportFilters)}`, token);
   if (page === 'verification') return apiAdminGet('/admin/verification-requests', token);
   if (page === 'analytics') return apiAdminGet<AdminAnalyticsResponse>(`/admin/analytics?range=${encodeURIComponent(range)}&segment=${encodeURIComponent(analyticsSegment)}`, token);
-  if (page === 'announcements') return apiAdminGet('/admin/announcements', token);
+  if (page === 'announcements') return apiAdminGet<AdminAnnouncementItem[]>(`/admin/announcements?${buildAnnouncementsQueryString(announcementFilters)}`, token);
   if (page === 'logs') return apiAdminGet(`/admin/logs?q=${encodeURIComponent(search)}`, token);
   return apiAdminGet('/admin/settings', token);
 }
@@ -888,15 +936,12 @@ export default function AdminRoot() {
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
   const [userActionForm, setUserActionForm] = useState({ note: '', durationDays: 7 });
 
-  const [announcementDraft, setAnnouncementDraft] = useState({
-    title: '',
-    content: '',
-    audienceType: 'all_users',
-    audienceIds: '',
-    scheduledFor: '',
-    pinned: false,
-    pushEnabled: false,
-  });
+  const [announcementDraft, setAnnouncementDraft] = useState<AnnouncementDraftState>(DEFAULT_ANNOUNCEMENT_DRAFT);
+  const [announcementFilters, setAnnouncementFilters] = useState<AnnouncementFilterState>(DEFAULT_ANNOUNCEMENT_FILTERS);
+  const [announcementOptions, setAnnouncementOptions] = useState<AdminAnnouncementOptionsResponse>({ clubs: [], branches: [] });
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<AdminAnnouncementItem | null>(null);
+  const [selectedAnnouncementDetail, setSelectedAnnouncementDetail] = useState<AdminAnnouncementDetailResponse | null>(null);
+  const [announcementRecipientCount, setAnnouncementRecipientCount] = useState<number | null>(null);
 
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [passwordState, setPasswordState] = useState({ isSaving: false, message: '', error: '' });
@@ -908,6 +953,7 @@ export default function AdminRoot() {
   const postsQueryContext = useMemo(() => (page === 'posts' ? JSON.stringify(postFilters) : ''), [page, postFilters]);
   const reportsQueryContext = useMemo(() => (page === 'reports' ? JSON.stringify(reportFilters) : ''), [page, reportFilters]);
   const analyticsQueryContext = useMemo(() => (page === 'analytics' ? analyticsSegment : ''), [page, analyticsSegment]);
+  const announcementsQueryContext = useMemo(() => (page === 'announcements' ? JSON.stringify(announcementFilters) : ''), [page, announcementFilters]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -951,6 +997,37 @@ export default function AdminRoot() {
   }, [page, searchKey, userFilters]);
 
   useEffect(() => {
+    if (!token || page !== 'announcements') return;
+    let cancelled = false;
+    apiAdminGet<AdminAnnouncementOptionsResponse>('/admin/announcements/options', token)
+      .then((result) => {
+        if (!cancelled) setAnnouncementOptions(result);
+      })
+      .catch(() => {
+        if (!cancelled) setAnnouncementOptions({ clubs: [], branches: [] });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, page]);
+
+  useEffect(() => {
+    if (!token || page !== 'announcements') return;
+    let cancelled = false;
+    apiAdminPost<{ recipientCount: number }>('/admin/announcements/preview', token, {
+      audienceType: announcementDraft.audienceType,
+      audienceIds: announcementDraft.audienceIds,
+    }).then((result) => {
+      if (!cancelled) setAnnouncementRecipientCount(result.recipientCount);
+    }).catch(() => {
+      if (!cancelled) setAnnouncementRecipientCount(null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, page, announcementDraft.audienceType, announcementDraft.audienceIds]);
+
+  useEffect(() => {
     if (!token) {
       setAuthLoading(false);
       setAdmin(null);
@@ -991,8 +1068,8 @@ export default function AdminRoot() {
   });
 
   const currentPageQuery = useQuery({
-    queryKey: token ? getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext + reportsQueryContext + analyticsQueryContext) : ['admin', page, searchKey, 'anon', dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext + reportsQueryContext + analyticsQueryContext],
-    queryFn: () => fetchAdminPageData(page, token!, searchKey, dashboardRange, userFilters, clubFilters, postFilters, reportFilters, analyticsSegment),
+    queryKey: token ? getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext + reportsQueryContext + analyticsQueryContext + announcementsQueryContext) : ['admin', page, searchKey, 'anon', dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext + reportsQueryContext + analyticsQueryContext + announcementsQueryContext],
+    queryFn: () => fetchAdminPageData(page, token!, searchKey, dashboardRange, userFilters, clubFilters, postFilters, reportFilters, analyticsSegment, announcementFilters),
     enabled: canQueryAdmin && page !== 'dashboard',
     staleTime: ADMIN_CACHE_MS,
     gcTime: ADMIN_CACHE_MS * 10,
@@ -1015,7 +1092,7 @@ export default function AdminRoot() {
   const reportsPageInfo = reportsResponse?.pageInfo ?? null;
   const verification = page === 'verification' ? ((currentPageQuery.data as any[]) ?? []) : [];
   const analytics = page === 'analytics' ? ((currentPageQuery.data as AdminAnalyticsResponse | null) ?? null) : null;
-  const announcements = page === 'announcements' ? ((currentPageQuery.data as any[]) ?? []) : [];
+  const announcements = page === 'announcements' ? ((currentPageQuery.data as AdminAnnouncementItem[]) ?? []) : [];
   const logs = page === 'logs' ? ((currentPageQuery.data as any[]) ?? []) : [];
   const settings = page === 'settings' ? (currentPageQuery.data ?? null) : null;
   const activeQuery = page === 'dashboard' ? dashboardQuery : currentPageQuery;
@@ -1065,10 +1142,12 @@ export default function AdminRoot() {
             ? JSON.stringify(reportFilters)
             : nextPage === 'analytics'
               ? analyticsSegment
+              : nextPage === 'announcements'
+                ? JSON.stringify(announcementFilters)
           : '';
     void queryClient.prefetchQuery({
       queryKey: getAdminQueryKey(token, nextPage, nextSearchKey, dashboardRange, nextContext),
-      queryFn: () => fetchAdminPageData(nextPage, token, nextSearchKey, dashboardRange, userFilters, clubFilters, postFilters, reportFilters, analyticsSegment),
+      queryFn: () => fetchAdminPageData(nextPage, token, nextSearchKey, dashboardRange, userFilters, clubFilters, postFilters, reportFilters, analyticsSegment, announcementFilters),
       staleTime: ADMIN_CACHE_MS,
     });
   };
@@ -1090,7 +1169,7 @@ export default function AdminRoot() {
 
   const refreshCurrentPage = async () => {
     if (!token) return;
-    await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext + reportsQueryContext + analyticsQueryContext), exact: true });
+    await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, page, searchKey, dashboardRange, usersQueryContext + clubsQueryContext + postsQueryContext + reportsQueryContext + analyticsQueryContext + announcementsQueryContext), exact: true });
     if (page !== 'dashboard') {
       await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, 'dashboard', '', dashboardRange), exact: true });
     }
@@ -1263,6 +1342,100 @@ export default function AdminRoot() {
       toast.error(error instanceof Error ? error.message : 'Unable to add report note');
     }
   };
+
+  const resetAnnouncementDraft = () => {
+    setAnnouncementDraft(DEFAULT_ANNOUNCEMENT_DRAFT);
+  };
+
+  const openAnnouncementDrawer = async (announcement: AdminAnnouncementItem) => {
+    if (!token) return;
+    setSelectedAnnouncement(announcement);
+    const detail = await apiAdminGet<AdminAnnouncementDetailResponse>(`/admin/announcements/${announcement.id}`, token);
+    setSelectedAnnouncementDetail(detail);
+    setAnnouncementDraft({
+      title: detail.title,
+      content: detail.content,
+      audienceType: detail.audienceType,
+      audienceIds: detail.audienceIds,
+      scheduledFor: detail.scheduledFor ? detail.scheduledFor.slice(0, 16) : '',
+      pinned: detail.pinned,
+      pushEnabled: detail.pushEnabled,
+    });
+  };
+
+  const refreshSelectedAnnouncement = async (announcementId: string) => {
+    if (!token) return;
+    const detail = await apiAdminGet<AdminAnnouncementDetailResponse>(`/admin/announcements/${announcementId}`, token);
+    setSelectedAnnouncementDetail(detail);
+    setSelectedAnnouncement((current) => (current?.id === announcementId ? detail : current));
+  };
+
+  const saveAnnouncement = async () => {
+    if (!token) return;
+    if (!announcementDraft.title.trim() || !announcementDraft.content.trim()) {
+      toast.error('Title and content are required.');
+      return;
+    }
+    try {
+      const payload = {
+        title: announcementDraft.title,
+        content: announcementDraft.content,
+        audienceType: announcementDraft.audienceType,
+        audienceIds: announcementDraft.audienceIds,
+        scheduledFor: announcementDraft.scheduledFor || null,
+        pinned: announcementDraft.pinned,
+        pushEnabled: announcementDraft.pushEnabled,
+      };
+      if (selectedAnnouncement) {
+        await apiAdminPost(`/admin/announcements/${selectedAnnouncement.id}`, token, payload, 'PATCH');
+        toast.success('Announcement updated');
+        await refreshCurrentPage();
+        await refreshSelectedAnnouncement(selectedAnnouncement.id);
+      } else {
+        await apiAdminPost('/admin/announcements', token, payload);
+        toast.success(payload.scheduledFor ? 'Announcement scheduled' : 'Announcement published');
+        resetAnnouncementDraft();
+        await refreshCurrentPage();
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to save announcement');
+    }
+  };
+
+  const runAnnouncementAction = async (announcementId: string, action: 'publish_now' | 'unpublish' | 'cancel_schedule' | 'delete') => {
+    if (!token) return;
+    try {
+      if (action === 'delete') {
+        await apiAdminDelete(`/admin/announcements/${announcementId}`, token);
+        toast.success('Announcement deleted');
+        if (selectedAnnouncement?.id === announcementId) {
+          setSelectedAnnouncement(null);
+          setSelectedAnnouncementDetail(null);
+          resetAnnouncementDraft();
+        }
+      } else {
+        await apiAdminPost(`/admin/announcements/${announcementId}`, token, { action }, 'PATCH');
+        toast.success(`Announcement ${action.replace('_', ' ')}`);
+        if (selectedAnnouncement?.id === announcementId) {
+          await refreshSelectedAnnouncement(announcementId);
+        }
+      }
+      await refreshCurrentPage();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Unable to update announcement');
+    }
+  };
+
+  const toggleAnnouncementAudienceId = (id: string) => {
+    setAnnouncementDraft((current) => ({
+      ...current,
+      audienceIds: current.audienceIds.includes(id)
+        ? current.audienceIds.filter((item) => item !== id)
+        : [...current.audienceIds, id],
+    }));
+  };
+
+  const announcementRecipientPreview = selectedAnnouncementDetail?.recipientCount ?? announcements.find((item) => item.id === selectedAnnouncement?.id)?.recipientCount ?? 0;
 
   const openReportTarget = async (detail: AdminReportDetailResponse) => {
     const target = detail.targetPreview as AdminReportTargetPreview;
@@ -1846,7 +2019,7 @@ export default function AdminRoot() {
                       </div>
                     </>
                   )}
-                </ShellCard>
+                  </ShellCard>
               </>
             ) : null}
 
@@ -2141,7 +2314,7 @@ export default function AdminRoot() {
                       </div>
                     </>
                   )}
-                </ShellCard>
+                  </ShellCard>
               </>
             ) : null}
 
@@ -2349,67 +2522,229 @@ export default function AdminRoot() {
 
             {!pageLoading && page === 'announcements' ? (
               <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
-                <ShellCard title="Create Announcement">
-                  <div className="space-y-4">
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <Input placeholder="Announcement title" value={announcementDraft.title} onChange={(event) => setAnnouncementDraft((current) => ({ ...current, title: event.target.value }))} />
-                      <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={announcementDraft.audienceType} onChange={(event) => setAnnouncementDraft((current) => ({ ...current, audienceType: event.target.value }))}>
-                        <option value="all_users">All users</option>
-                        <option value="specific_colleges">Specific colleges</option>
-                        <option value="specific_clubs">Specific clubs</option>
-                      </select>
-                    </div>
-                    <Textarea rows={8} placeholder="Announcement body" value={announcementDraft.content} onChange={(event) => setAnnouncementDraft((current) => ({ ...current, content: event.target.value }))} />
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <Input placeholder="Audience IDs (comma-separated)" value={announcementDraft.audienceIds} onChange={(event) => setAnnouncementDraft((current) => ({ ...current, audienceIds: event.target.value }))} />
-                      <Input type="datetime-local" value={announcementDraft.scheduledFor} onChange={(event) => setAnnouncementDraft((current) => ({ ...current, scheduledFor: event.target.value }))} />
-                    </div>
-                    <div className="flex flex-wrap items-center gap-4 text-sm text-slate-600">
-                      <label className="flex items-center gap-2"><input type="checkbox" checked={announcementDraft.pinned} onChange={(event) => setAnnouncementDraft((current) => ({ ...current, pinned: event.target.checked }))} /> Pin announcement</label>
-                      <label className="flex items-center gap-2"><input type="checkbox" checked={announcementDraft.pushEnabled} onChange={(event) => setAnnouncementDraft((current) => ({ ...current, pushEnabled: event.target.checked }))} /> Push notification</label>
-                    </div>
-                    <Button
-                      className="bg-slate-900 text-white hover:bg-slate-800"
-                      onClick={() =>
-                        void apiAdminPost('/admin/announcements', token!, {
-                          ...announcementDraft,
-                          audienceIds: announcementDraft.audienceIds.split(',').map((item) => item.trim()).filter(Boolean),
-                        }).then(async () => {
-                          setAnnouncementDraft({
-                            title: '',
-                            content: '',
-                            audienceType: 'all_users',
-                            audienceIds: '',
-                            scheduledFor: '',
-                            pinned: false,
-                            pushEnabled: false,
-                          });
-                          await refreshCurrentPage();
-                        })
-                      }
-                    >
-                      Publish announcement
-                    </Button>
-                  </div>
-                </ShellCard>
-                <ShellCard title="Recent Announcements">
-                  {announcements.length === 0 ? (
-                    <EmptyPanel title="No announcements yet" body="Published or scheduled announcements will appear here." />
-                  ) : (
-                    <div className="space-y-3">
-                      {announcements.map((item) => (
-                        <div key={item.id} className="rounded-lg border border-slate-200 px-4 py-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-sm font-semibold text-slate-900">{item.title}</p>
-                            <StatusBadge value={item.status} />
+                <div className="space-y-4">
+                  <ShellCard title={selectedAnnouncement ? 'Edit Announcement' : 'Create Announcement'}>
+                    <div className="space-y-4">
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <Input
+                          placeholder="Announcement title"
+                          value={announcementDraft.title}
+                          onChange={(event) => setAnnouncementDraft((current) => ({ ...current, title: event.target.value }))}
+                        />
+                        <select
+                          className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm"
+                          value={announcementDraft.audienceType}
+                          onChange={(event) => setAnnouncementDraft((current) => ({ ...current, audienceType: event.target.value as AnnouncementDraftState['audienceType'], audienceIds: [] }))}
+                        >
+                          <option value="all_users">All users</option>
+                          <option value="specific_clubs">Specific clubs</option>
+                          <option value="specific_branches">Specific branches</option>
+                        </select>
+                      </div>
+                      <Textarea
+                        rows={8}
+                        placeholder="Announcement body"
+                        value={announcementDraft.content}
+                        onChange={(event) => setAnnouncementDraft((current) => ({ ...current, content: event.target.value }))}
+                      />
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <Input
+                          type="datetime-local"
+                          value={announcementDraft.scheduledFor}
+                          onChange={(event) => setAnnouncementDraft((current) => ({ ...current, scheduledFor: event.target.value }))}
+                        />
+                        <div className="flex flex-wrap items-center gap-4 rounded-md border border-slate-200 px-3 py-2 text-sm text-slate-600">
+                          <label className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={announcementDraft.pinned}
+                              onChange={(event) => setAnnouncementDraft((current) => ({ ...current, pinned: event.target.checked }))}
+                            />
+                            Pin announcement
+                          </label>
+                          <label className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={announcementDraft.pushEnabled}
+                              onChange={(event) => setAnnouncementDraft((current) => ({ ...current, pushEnabled: event.target.checked }))}
+                            />
+                            Push notification
+                          </label>
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-slate-200 px-4 py-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">Audience Targeting</p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {announcementDraft.audienceType === 'all_users'
+                                ? 'This announcement will target the entire current user base.'
+                                : announcementDraft.audienceType === 'specific_clubs'
+                                  ? 'Select one or more clubs to reach their active members.'
+                                  : 'Select one or more branches to target matching student and alumni profiles.'}
+                            </p>
                           </div>
-                          <p className="mt-2 text-sm text-slate-600">{item.content}</p>
+                          <Badge variant="outline">{formatNumber(announcementRecipientCount)} recipients</Badge>
+                        </div>
+                        {announcementDraft.audienceType === 'all_users' ? (
+                          <div className="mt-4 rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                            All current users are included. No additional selectors are needed.
+                          </div>
+                        ) : (
+                          <div className="mt-4">
+                            {(announcementDraft.audienceType === 'specific_clubs' ? announcementOptions.clubs : announcementOptions.branches).length === 0 ? (
+                              <EmptyPanel
+                                title={announcementDraft.audienceType === 'specific_clubs' ? 'No clubs available' : 'No branches available'}
+                                body={announcementDraft.audienceType === 'specific_clubs'
+                                  ? 'Club options will appear here once club data is available.'
+                                  : 'Branch options will appear here once profile branch data exists.'}
+                              />
+                            ) : (
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                {(announcementDraft.audienceType === 'specific_clubs' ? announcementOptions.clubs : announcementOptions.branches).map((option) => {
+                                  const checked = announcementDraft.audienceIds.includes(option.id);
+                                  return (
+                                    <label
+                                      key={option.id}
+                                      className={`flex items-center justify-between rounded-lg border px-3 py-2 text-sm transition ${checked ? 'border-slate-900 bg-slate-50 text-slate-900' : 'border-slate-200 text-slate-600 hover:border-slate-300'}`}
+                                    >
+                                      <span className="truncate pr-3">{option.label}</span>
+                                      <input type="checkbox" checked={checked} onChange={() => toggleAnnouncementAudienceId(option.id)} />
+                                    </label>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className="rounded-xl border border-slate-200 px-4 py-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">Announcement Preview</p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {announcementDraft.scheduledFor ? `Scheduled for ${formatDate(announcementDraft.scheduledFor)}` : 'No schedule selected. Saving will publish immediately.'}
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <StatusBadge value={announcementDraft.scheduledFor ? 'scheduled' : 'published'} />
+                            {announcementDraft.pinned ? <Badge variant="outline">Pinned</Badge> : null}
+                            {announcementDraft.pushEnabled ? <Badge variant="outline">Push enabled</Badge> : null}
+                          </div>
+                        </div>
+                        <div className="mt-4 rounded-lg bg-slate-50 px-4 py-4">
+                          <p className="text-base font-semibold text-slate-900">{announcementDraft.title.trim() || 'Announcement title preview'}</p>
+                          <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+                            {announcementDraft.content.trim() || 'Announcement content preview will appear here as you write.'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button className="bg-slate-900 text-white hover:bg-slate-800" onClick={() => void saveAnnouncement()}>
+                          {selectedAnnouncement ? 'Save announcement' : 'Create announcement'}
+                        </Button>
+                        {selectedAnnouncement ? (
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedAnnouncement(null);
+                              setSelectedAnnouncementDetail(null);
+                              resetAnnouncementDraft();
+                            }}
+                          >
+                            Cancel editing
+                          </Button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </ShellCard>
+                </div>
+                <div className="space-y-4">
+                  <ShellCard title="Announcement Queue">
+                    <div className="space-y-4">
+                      <div className="grid gap-3 md:grid-cols-3">
+                        <select
+                          className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm"
+                          value={announcementFilters.status}
+                          onChange={(event) => setAnnouncementFilters((current) => ({ ...current, status: event.target.value }))}
+                        >
+                          <option value="all">All statuses</option>
+                          <option value="draft">Draft</option>
+                          <option value="scheduled">Scheduled</option>
+                          <option value="published">Published</option>
+                        </select>
+                        <select
+                          className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm"
+                          value={announcementFilters.pinned}
+                          onChange={(event) => setAnnouncementFilters((current) => ({ ...current, pinned: event.target.value }))}
+                        >
+                          <option value="all">All pin states</option>
+                          <option value="true">Pinned</option>
+                          <option value="false">Not pinned</option>
+                        </select>
+                        <select
+                          className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm"
+                          value={announcementFilters.pushEnabled}
+                          onChange={(event) => setAnnouncementFilters((current) => ({ ...current, pushEnabled: event.target.value }))}
+                        >
+                          <option value="all">All push states</option>
+                          <option value="true">Push enabled</option>
+                          <option value="false">Push disabled</option>
+                        </select>
+                      </div>
+                      {announcements.length === 0 ? (
+                        <EmptyPanel title="No announcements yet" body="Published, scheduled, and draft announcements will appear here." />
+                      ) : (
+                        <div className="space-y-3">
+                          {announcements.map((item) => (
+                            <div key={item.id} className="rounded-xl border border-slate-200 px-4 py-4">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="truncate text-sm font-semibold text-slate-900">{item.title}</p>
+                                <StatusBadge value={item.status} />
+                                {item.pinned ? <Badge variant="outline">Pinned</Badge> : null}
+                                {item.pushEnabled ? <Badge variant="outline">Push</Badge> : null}
+                              </div>
+                              <p className="mt-2 line-clamp-3 text-sm text-slate-600">{item.content}</p>
+                              <div className="mt-3 flex flex-wrap gap-3 text-xs text-slate-500">
+                                <span>{item.audienceType.replaceAll('_', ' ')}</span>
+                                <span>{formatNumber(item.recipientCount)} recipients</span>
+                                <span>{item.scheduledFor ? `Scheduled ${formatDate(item.scheduledFor)}` : `Created ${formatDate(item.createdAt)}`}</span>
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <Button variant="outline" size="sm" onClick={() => void openAnnouncementDrawer(item)}>
+                                Edit
+                              </Button>
+                              {item.status !== 'published' ? (
+                                <Button variant="outline" size="sm" onClick={() => void runAnnouncementAction(item.id, 'publish_now')}>
+                                  Publish now
+                                </Button>
+                              ) : null}
+                              {item.status === 'published' ? (
+                                <Button variant="outline" size="sm" onClick={() => void runAnnouncementAction(item.id, 'unpublish')}>
+                                  Unpublish
+                                </Button>
+                              ) : null}
+                              {item.status === 'scheduled' ? (
+                                <Button variant="outline" size="sm" onClick={() => void runAnnouncementAction(item.id, 'cancel_schedule')}>
+                                  Cancel schedule
+                                </Button>
+                              ) : null}
+                              <Button variant="outline" size="sm" onClick={() => void runAnnouncementAction(item.id, 'delete')}>
+                                Delete
+                              </Button>
+                            </div>
+                          </div>
                           <p className="mt-3 text-xs text-slate-500">{item.audienceType} · {formatDate(item.scheduledFor || item.createdAt)}</p>
                         </div>
                       ))}
+                        </div>
+                      )}
                     </div>
-                  )}
-                </ShellCard>
+                  </ShellCard>
+                </div>
               </div>
             ) : null}
 
@@ -3005,6 +3340,119 @@ export default function AdminRoot() {
                     </div>
                   ))
                 )}
+              </div>
+            </ShellCard>
+          </div>
+        ) : null}
+      </RightDrawer>
+
+      <RightDrawer
+        open={Boolean(selectedAnnouncement)}
+        title={selectedAnnouncementDetail?.title ?? selectedAnnouncement?.title ?? 'Announcement detail'}
+        subtitle={selectedAnnouncementDetail?.status ? `Lifecycle: ${selectedAnnouncementDetail.status}` : 'Announcement lifecycle and delivery details'}
+        onClose={() => {
+          setSelectedAnnouncement(null);
+          setSelectedAnnouncementDetail(null);
+          resetAnnouncementDraft();
+        }}
+      >
+        {selectedAnnouncementDetail ? (
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Status</p>
+                <div className="mt-2"><StatusBadge value={selectedAnnouncementDetail.status} /></div>
+              </div>
+              <div className="rounded-2xl border border-slate-200 px-4 py-3">
+                <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Intended recipients</p>
+                <p className="mt-2 text-lg font-semibold text-slate-900">{formatNumber(announcementRecipientPreview)}</p>
+              </div>
+            </div>
+
+            <ShellCard title="Lifecycle">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border border-slate-200 px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Created by</p>
+                  <p className="mt-2 text-sm font-medium text-slate-800">{selectedAnnouncementDetail.createdBy.username}</p>
+                  <p className="mt-1 text-xs text-slate-500">{selectedAnnouncementDetail.createdBy.email}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Push delivery</p>
+                  <div className="mt-2">
+                    <StatusBadge value={selectedAnnouncementDetail.pushEnabled ? 'enabled' : 'disabled'} />
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Created</p>
+                  <p className="mt-2 text-sm text-slate-800">{formatDate(selectedAnnouncementDetail.createdAt)}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Updated</p>
+                  <p className="mt-2 text-sm text-slate-800">{formatDate(selectedAnnouncementDetail.updatedAt)}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Published</p>
+                  <p className="mt-2 text-sm text-slate-800">{formatDate(selectedAnnouncementDetail.publishedAt)}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Scheduled</p>
+                  <p className="mt-2 text-sm text-slate-800">{formatDate(selectedAnnouncementDetail.scheduledFor)}</p>
+                </div>
+              </div>
+            </ShellCard>
+
+            <ShellCard title="Audience">
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusBadge value={selectedAnnouncementDetail.audienceType} />
+                  {selectedAnnouncementDetail.pinned ? <Badge variant="outline">Pinned</Badge> : null}
+                  {selectedAnnouncementDetail.pushEnabled ? <Badge variant="outline">Push enabled</Badge> : null}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {selectedAnnouncementDetail.audienceType === 'all_users' ? (
+                    <Badge variant="outline">All users</Badge>
+                  ) : selectedAnnouncementDetail.audienceIds.length === 0 ? (
+                    <p className="text-sm text-slate-500">No specific audience IDs are selected.</p>
+                  ) : (
+                    selectedAnnouncementDetail.audienceIds.map((audienceId) => {
+                      const label = [...announcementOptions.clubs, ...announcementOptions.branches].find((option) => option.id === audienceId)?.label ?? audienceId;
+                      return <Badge key={audienceId} variant="outline">{label}</Badge>;
+                    })
+                  )}
+                </div>
+              </div>
+            </ShellCard>
+
+            <ShellCard title="Message">
+              <div className="space-y-3">
+                <p className="text-base font-semibold text-slate-900">{selectedAnnouncementDetail.title}</p>
+                <p className="whitespace-pre-wrap text-sm leading-6 text-slate-700">{selectedAnnouncementDetail.content}</p>
+              </div>
+            </ShellCard>
+
+            <ShellCard title="Actions">
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => void saveAnnouncement()}>
+                  Save current edits
+                </Button>
+                {selectedAnnouncementDetail.status !== 'published' ? (
+                  <Button variant="outline" size="sm" onClick={() => void runAnnouncementAction(selectedAnnouncementDetail.id, 'publish_now')}>
+                    Publish now
+                  </Button>
+                ) : null}
+                {selectedAnnouncementDetail.status === 'published' ? (
+                  <Button variant="outline" size="sm" onClick={() => void runAnnouncementAction(selectedAnnouncementDetail.id, 'unpublish')}>
+                    Unpublish
+                  </Button>
+                ) : null}
+                {selectedAnnouncementDetail.status === 'scheduled' ? (
+                  <Button variant="outline" size="sm" onClick={() => void runAnnouncementAction(selectedAnnouncementDetail.id, 'cancel_schedule')}>
+                    Cancel schedule
+                  </Button>
+                ) : null}
+                <Button variant="outline" size="sm" onClick={() => void runAnnouncementAction(selectedAnnouncementDetail.id, 'delete')}>
+                  Delete
+                </Button>
               </div>
             </ShellCard>
           </div>

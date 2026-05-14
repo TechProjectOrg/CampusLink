@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import express, { Request, Response } from 'express';
+import { Prisma } from '@prisma/client';
 import prisma from '../prisma';
 import authenticateToken from '../middleware/authenticateToken';
 import requireAdmin, { type AdminAuthedRequest } from '../middleware/requireAdmin';
@@ -115,6 +116,58 @@ function parseAdminAnalyticsSegment(raw: unknown): AdminAnalyticsSegment {
   if (value === 'students') return 'students';
   if (value === 'alumni') return 'alumni';
   return 'all';
+}
+
+type AdminAnnouncementAudienceType = 'all_users' | 'specific_clubs' | 'specific_branches';
+type AdminAnnouncementLifecycleAction = 'publish_now' | 'unpublish' | 'cancel_schedule';
+
+function parseAnnouncementAudienceType(raw: unknown): AdminAnnouncementAudienceType | null {
+  const value = String(raw ?? '').trim().toLowerCase();
+  if (value === 'all_users' || value === 'specific_clubs' || value === 'specific_branches') {
+    return value as AdminAnnouncementAudienceType;
+  }
+  return null;
+}
+
+function parseAnnouncementLifecycleAction(raw: unknown): AdminAnnouncementLifecycleAction | null {
+  const value = String(raw ?? '').trim().toLowerCase();
+  if (value === 'publish_now' || value === 'unpublish' || value === 'cancel_schedule') {
+    return value as AdminAnnouncementLifecycleAction;
+  }
+  return null;
+}
+
+function normalizeAnnouncementAudienceIds(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((item) => String(item ?? '').trim()).filter(Boolean);
+}
+
+async function getAnnouncementRecipientCount(audienceType: AdminAnnouncementAudienceType, audienceIds: string[]): Promise<number> {
+  if (audienceType === 'all_users') {
+    const rows = await prisma.$queryRaw<Array<{ count: number }>>`SELECT COUNT(*)::int AS count FROM users`;
+    return rows[0]?.count ?? 0;
+  }
+
+  if (audienceIds.length === 0) return 0;
+
+  if (audienceType === 'specific_clubs') {
+    const rows = await prisma.$queryRaw<Array<{ count: number }>>`
+      SELECT COUNT(DISTINCT cm.user_id)::int AS count
+      FROM club_memberships cm
+      WHERE cm.club_id::text IN (${Prisma.join(audienceIds)})
+        AND cm.status = CAST('active' AS "ClubMembershipStatus")
+    `;
+    return rows[0]?.count ?? 0;
+  }
+
+  const rows = await prisma.$queryRaw<Array<{ count: number }>>`
+    SELECT COUNT(*)::int AS count
+    FROM users u
+    LEFT JOIN student_profiles sp ON sp.user_id = u.user_id
+    LEFT JOIN alumni_profiles ap ON ap.user_id = u.user_id
+    WHERE COALESCE(sp.branch, ap.branch, 'Unknown') IN (${Prisma.join(audienceIds)})
+  `;
+  return rows[0]?.count ?? 0;
 }
 
 function getSqlWindowExpressions(dayCount: number) {
@@ -2986,26 +3039,195 @@ router.get('/analytics', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/announcements', async (_req: Request, res: Response) => {
+router.get('/announcements/options', async (_req: Request, res: Response) => {
   try {
-    const rows = await prisma.$queryRaw<Array<{ announcement_id: string; title: string; content: string; audience_type: string; status: string; pinned: boolean; scheduled_for: Date | null; created_at: Date }>>`
-      SELECT announcement_id, title, content, audience_type, status::text, pinned, scheduled_for, created_at
-      FROM admin_announcements
-      ORDER BY created_at DESC
+    const [clubs, branches] = await Promise.all([
+      prisma.$queryRaw<Array<{ id: string; label: string }>>`
+        SELECT club_id::text AS id, name AS label
+        FROM clubs
+        WHERE deleted_at IS NULL
+        ORDER BY name ASC
+      `,
+      prisma.$queryRaw<Array<{ id: string; label: string }>>`
+        SELECT DISTINCT COALESCE(sp.branch, ap.branch, 'Unknown') AS id, COALESCE(sp.branch, ap.branch, 'Unknown') AS label
+        FROM users u
+        LEFT JOIN student_profiles sp ON sp.user_id = u.user_id
+        LEFT JOIN alumni_profiles ap ON ap.user_id = u.user_id
+        ORDER BY label ASC
+      `,
+    ]);
+
+    return res.status(200).json({ clubs, branches });
+  } catch (err) {
+    console.error('Error loading announcement options:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.post('/announcements/preview', async (req: Request, res: Response) => {
+  const { audienceType, audienceIds } = req.body as { audienceType?: string; audienceIds?: string[] };
+  const normalizedAudienceType = parseAnnouncementAudienceType(audienceType);
+  if (!normalizedAudienceType) {
+    return res.status(400).json({ message: 'Invalid audienceType' });
+  }
+
+  try {
+    const recipientCount = await getAnnouncementRecipientCount(normalizedAudienceType, normalizeAnnouncementAudienceIds(audienceIds));
+    return res.status(200).json({ recipientCount });
+  } catch (err) {
+    console.error('Error previewing announcement recipients:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.get('/announcements', async (req: Request, res: Response) => {
+  const status = String(req.query.status ?? '').trim().toLowerCase();
+  const pinned = parseAdminBooleanFilter(req.query.pinned);
+  const pushEnabled = parseAdminBooleanFilter(req.query.pushEnabled);
+
+  try {
+    const rows = await prisma.$queryRaw<Array<{
+      announcement_id: string;
+      title: string;
+      content: string;
+      audience_type: string;
+      audience_ids: unknown;
+      status: string;
+      pinned: boolean;
+      push_enabled: boolean;
+      scheduled_for: Date | null;
+      created_at: Date;
+      updated_at: Date;
+      created_by_user_id: string;
+      creator_username: string;
+      creator_email: string;
+    }>>`
+      SELECT
+        a.announcement_id,
+        a.title,
+        a.content,
+        a.audience_type,
+        a.audience_ids,
+        a.status::text,
+        a.pinned,
+        a.push_enabled,
+        a.scheduled_for,
+        a.created_at,
+        a.updated_at,
+        a.created_by_user_id,
+        u.username AS creator_username,
+        u.email AS creator_email
+      FROM admin_announcements a
+      JOIN users u ON u.user_id = a.created_by_user_id
+      WHERE
+        (${status} = '' OR a.status::text = ${status})
+        AND (${pinned} = '' OR (${pinned} = 'true' AND a.pinned = TRUE) OR (${pinned} = 'false' AND a.pinned = FALSE))
+        AND (${pushEnabled} = '' OR (${pushEnabled} = 'true' AND a.push_enabled = TRUE) OR (${pushEnabled} = 'false' AND a.push_enabled = FALSE))
+      ORDER BY a.created_at DESC
     `;
 
-    return res.status(200).json(rows.map((row) => ({
+    const items = await Promise.all(rows.map(async (row) => {
+      const audienceType = parseAnnouncementAudienceType(row.audience_type) ?? 'all_users';
+      const audienceIds = Array.isArray(row.audience_ids) ? row.audience_ids.map((item) => String(item)) : [];
+      const recipientCount = await getAnnouncementRecipientCount(audienceType, audienceIds);
+      return {
+        id: row.announcement_id,
+        title: row.title,
+        content: row.content,
+        audienceType,
+        audienceIds,
+        status: row.status,
+        pinned: row.pinned,
+        pushEnabled: row.push_enabled,
+        scheduledFor: row.scheduled_for ? row.scheduled_for.toISOString() : null,
+        createdAt: row.created_at.toISOString(),
+        updatedAt: row.updated_at.toISOString(),
+        publishedAt: row.status === 'published' ? row.updated_at.toISOString() : null,
+        recipientCount,
+        createdBy: {
+          id: row.created_by_user_id,
+          username: row.creator_username,
+          email: row.creator_email,
+        },
+      };
+    }));
+
+    return res.status(200).json(items);
+  } catch (err) {
+    console.error('Error loading announcements:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.get('/announcements/:announcementId', async (req: Request<{ announcementId: string }>, res: Response) => {
+  const { announcementId } = req.params;
+
+  try {
+    const rows = await prisma.$queryRaw<Array<{
+      announcement_id: string;
+      title: string;
+      content: string;
+      audience_type: string;
+      audience_ids: unknown;
+      status: string;
+      pinned: boolean;
+      push_enabled: boolean;
+      scheduled_for: Date | null;
+      created_at: Date;
+      updated_at: Date;
+      created_by_user_id: string;
+      creator_username: string;
+      creator_email: string;
+    }>>`
+      SELECT
+        a.announcement_id,
+        a.title,
+        a.content,
+        a.audience_type,
+        a.audience_ids,
+        a.status::text,
+        a.pinned,
+        a.push_enabled,
+        a.scheduled_for,
+        a.created_at,
+        a.updated_at,
+        a.created_by_user_id,
+        u.username AS creator_username,
+        u.email AS creator_email
+      FROM admin_announcements a
+      JOIN users u ON u.user_id = a.created_by_user_id
+      WHERE a.announcement_id = ${announcementId}
+      LIMIT 1
+    `;
+
+    const row = rows[0];
+    if (!row) return res.status(404).json({ message: 'Announcement not found' });
+    const audienceType = parseAnnouncementAudienceType(row.audience_type) ?? 'all_users';
+    const audienceIds = Array.isArray(row.audience_ids) ? row.audience_ids.map((item) => String(item)) : [];
+    const recipientCount = await getAnnouncementRecipientCount(audienceType, audienceIds);
+
+    return res.status(200).json({
       id: row.announcement_id,
       title: row.title,
       content: row.content,
-      audienceType: row.audience_type,
+      audienceType,
+      audienceIds,
       status: row.status,
       pinned: row.pinned,
+      pushEnabled: row.push_enabled,
       scheduledFor: row.scheduled_for ? row.scheduled_for.toISOString() : null,
       createdAt: row.created_at.toISOString(),
-    })));
+      updatedAt: row.updated_at.toISOString(),
+      publishedAt: row.status === 'published' ? row.updated_at.toISOString() : null,
+      recipientCount,
+      createdBy: {
+        id: row.created_by_user_id,
+        username: row.creator_username,
+        email: row.creator_email,
+      },
+    });
   } catch (err) {
-    console.error('Error loading announcements:', err);
+    console.error('Error loading announcement detail:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });
@@ -3022,11 +3244,15 @@ router.post('/announcements', async (req: Request, res: Response) => {
     pushEnabled?: boolean;
   };
 
-  if (!title?.trim() || !content?.trim() || !audienceType?.trim()) {
+  const normalizedAudienceType = parseAnnouncementAudienceType(audienceType);
+  const normalizedAudienceIds = normalizeAnnouncementAudienceIds(audienceIds);
+
+  if (!title?.trim() || !content?.trim() || !normalizedAudienceType) {
     return res.status(400).json({ message: 'Title, content, and audienceType are required' });
   }
 
   try {
+    const isScheduled = Boolean(scheduledFor && new Date(scheduledFor).getTime() > Date.now());
     await prisma.$queryRaw`
       INSERT INTO admin_announcements (
         title,
@@ -3042,12 +3268,12 @@ router.post('/announcements', async (req: Request, res: Response) => {
       VALUES (
         ${title.trim()},
         ${content.trim()},
-        ${audienceType.trim()},
-        ${JSON.stringify(Array.isArray(audienceIds) ? audienceIds : [])}::jsonb,
+        ${normalizedAudienceType},
+        ${JSON.stringify(normalizedAudienceIds)}::jsonb,
         ${scheduledFor ? new Date(scheduledFor) : null},
         ${Boolean(pinned)},
         ${Boolean(pushEnabled)},
-        CAST(${scheduledFor ? 'scheduled' : 'published'} AS "AnnouncementStatus"),
+        CAST(${isScheduled ? 'scheduled' : 'published'} AS "AnnouncementStatus"),
         ${adminReq.auth!.userId}
       )
     `;
@@ -3063,6 +3289,111 @@ router.post('/announcements', async (req: Request, res: Response) => {
     return res.status(201).json({ success: true });
   } catch (err) {
     console.error('Error creating announcement:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.patch('/announcements/:announcementId', async (req: Request<{ announcementId: string }>, res: Response) => {
+  const adminReq = req as AdminAuthedRequest;
+  const { announcementId } = req.params;
+  const { title, content, audienceType, audienceIds, scheduledFor, pinned, pushEnabled, action } = req.body as {
+    title?: string;
+    content?: string;
+    audienceType?: string;
+    audienceIds?: string[];
+    scheduledFor?: string | null;
+    pinned?: boolean;
+    pushEnabled?: boolean;
+    action?: string;
+  };
+
+  const lifecycleAction = parseAnnouncementLifecycleAction(action);
+  const normalizedAudienceType = audienceType === undefined ? undefined : parseAnnouncementAudienceType(audienceType);
+  if (audienceType !== undefined && !normalizedAudienceType) {
+    return res.status(400).json({ message: 'Invalid audienceType' });
+  }
+  const normalizedAudienceIds = audienceIds === undefined ? undefined : normalizeAnnouncementAudienceIds(audienceIds);
+  const hasScheduledFor = Object.prototype.hasOwnProperty.call(req.body, 'scheduledFor');
+  const hasPinned = Object.prototype.hasOwnProperty.call(req.body, 'pinned');
+  const hasPushEnabled = Object.prototype.hasOwnProperty.call(req.body, 'pushEnabled');
+
+  try {
+    const existingRows = await prisma.$queryRaw<Array<{ announcement_id: string; status: string; scheduled_for: Date | null }>>`
+      SELECT announcement_id, status::text, scheduled_for
+      FROM admin_announcements
+      WHERE announcement_id = ${announcementId}
+      LIMIT 1
+    `;
+    const existing = existingRows[0];
+    if (!existing) return res.status(404).json({ message: 'Announcement not found' });
+
+    let nextStatus = existing.status;
+    let nextScheduledFor = hasScheduledFor ? (scheduledFor ? new Date(scheduledFor) : null) : existing.scheduled_for;
+    if (lifecycleAction === 'publish_now') {
+      nextStatus = 'published';
+      nextScheduledFor = null;
+    } else if (lifecycleAction === 'cancel_schedule') {
+      nextStatus = 'draft';
+      nextScheduledFor = null;
+    } else if (lifecycleAction === 'unpublish') {
+      nextStatus = 'draft';
+    } else if (hasScheduledFor) {
+      nextStatus = nextScheduledFor && nextScheduledFor.getTime() > Date.now() ? 'scheduled' : 'published';
+    }
+
+    await prisma.$queryRaw`
+      UPDATE admin_announcements
+      SET
+        title = CASE WHEN ${title === undefined} THEN title ELSE ${title?.trim() || title} END,
+        content = CASE WHEN ${content === undefined} THEN content ELSE ${content?.trim() || content} END,
+        audience_type = CASE WHEN ${normalizedAudienceType === undefined} THEN audience_type ELSE ${normalizedAudienceType} END,
+        audience_ids = CASE WHEN ${normalizedAudienceIds === undefined} THEN audience_ids ELSE ${JSON.stringify(normalizedAudienceIds)}::jsonb END,
+        scheduled_for = ${nextScheduledFor},
+        pinned = CASE WHEN ${hasPinned} THEN ${Boolean(pinned)} ELSE pinned END,
+        push_enabled = CASE WHEN ${hasPushEnabled} THEN ${Boolean(pushEnabled)} ELSE push_enabled END,
+        status = CAST(${nextStatus} AS "AnnouncementStatus"),
+        updated_at = NOW()
+      WHERE announcement_id = ${announcementId}
+    `;
+
+    await recordAdminAuditLog({
+      actorUserId: adminReq.auth!.userId,
+      actionType: lifecycleAction ? `announcement.${lifecycleAction}` : 'announcement.updated',
+      targetType: 'announcement',
+      targetId: announcementId,
+      severity: 'info',
+      summary: lifecycleAction ? `Announcement ${lifecycleAction.replace('_', ' ')}` : 'Announcement updated',
+    });
+
+    return res.status(200).json({ success: true });
+  } catch (err) {
+    console.error('Error updating announcement:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.delete('/announcements/:announcementId', async (req: Request<{ announcementId: string }>, res: Response) => {
+  const adminReq = req as AdminAuthedRequest;
+  const { announcementId } = req.params;
+
+  try {
+    await prisma.$queryRaw`
+      DELETE FROM admin_announcements
+      WHERE announcement_id = ${announcementId}
+    `;
+
+    await recordAdminAuditLog({
+      actorUserId: adminReq.auth!.userId,
+      actionType: 'announcement.deleted',
+      targetType: 'announcement',
+      targetId: announcementId,
+      severity: 'info',
+      summary: 'Announcement deleted',
+    });
+
+    return res.status(204).send();
+  } catch (err) {
+    console.error('Error deleting announcement:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });
