@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
   AlertTriangle,
@@ -61,6 +62,30 @@ const NAV_ITEMS: Array<{ key: PageKey; label: string; icon: typeof LayoutDashboa
   { key: 'logs', label: 'System Logs', icon: Activity },
   { key: 'settings', label: 'Settings', icon: Settings },
 ];
+
+const SEARCHABLE_PAGES = new Set<PageKey>(['users', 'posts', 'logs']);
+const ADMIN_CACHE_MS = 30_000;
+
+function getSearchKey(page: PageKey, search: string): string {
+  return SEARCHABLE_PAGES.has(page) ? search.trim() : '';
+}
+
+function getAdminQueryKey(token: string, page: PageKey, search = '') {
+  return ['admin', token, page, search] as const;
+}
+
+async function fetchAdminPageData(page: PageKey, token: string, search: string) {
+  if (page === 'dashboard') return apiAdminGet('/admin/dashboard', token);
+  if (page === 'users') return apiAdminGet(`/admin/users?q=${encodeURIComponent(search)}`, token);
+  if (page === 'clubs') return apiAdminGet('/admin/clubs', token);
+  if (page === 'posts') return apiAdminGet(`/admin/posts?q=${encodeURIComponent(search)}`, token);
+  if (page === 'reports') return apiAdminGet('/admin/reports', token);
+  if (page === 'verification') return apiAdminGet('/admin/verification-requests', token);
+  if (page === 'analytics') return apiAdminGet('/admin/analytics', token);
+  if (page === 'announcements') return apiAdminGet('/admin/announcements', token);
+  if (page === 'logs') return apiAdminGet(`/admin/logs?q=${encodeURIComponent(search)}`, token);
+  return apiAdminGet('/admin/settings', token);
+}
 
 function parsePageFromPath(pathname: string): PageKey {
   const [, admin, section] = pathname.split('/');
@@ -236,6 +261,7 @@ function AdminLogin({
 }
 
 export default function AdminRoot() {
+  const queryClient = useQueryClient();
   const [page, setPage] = useState<PageKey>(() => parsePageFromPath(window.location.pathname));
   const [collapsed, setCollapsed] = useState(false);
   const [token, setToken] = useState<string | null>(() => readAdminSession()?.token ?? null);
@@ -243,18 +269,6 @@ export default function AdminRoot() {
   const [authLoading, setAuthLoading] = useState(Boolean(readAdminSession()?.token));
   const [authError, setAuthError] = useState('');
   const [search, setSearch] = useState('');
-  const [pageLoading, setPageLoading] = useState(false);
-
-  const [dashboard, setDashboard] = useState<any>(null);
-  const [users, setUsers] = useState<any[]>([]);
-  const [clubs, setClubs] = useState<any[]>([]);
-  const [posts, setPosts] = useState<any[]>([]);
-  const [reports, setReports] = useState<any[]>([]);
-  const [verification, setVerification] = useState<any[]>([]);
-  const [analytics, setAnalytics] = useState<any>(null);
-  const [announcements, setAnnouncements] = useState<any[]>([]);
-  const [logs, setLogs] = useState<any[]>([]);
-  const [settings, setSettings] = useState<any>(null);
   const [selectedUser, setSelectedUser] = useState<any | null>(null);
   const [selectedClub, setSelectedClub] = useState<any | null>(null);
   const [selectedUserDetail, setSelectedUserDetail] = useState<any | null>(null);
@@ -275,6 +289,7 @@ export default function AdminRoot() {
   const [passwordState, setPasswordState] = useState({ isSaving: false, message: '', error: '' });
 
   const pageTitle = useMemo(() => NAV_ITEMS.find((item) => item.key === page)?.label ?? 'Dashboard', [page]);
+  const searchKey = useMemo(() => getSearchKey(page, search), [page, search]);
 
   useEffect(() => {
     const handlePopState = () => setPage(parsePageFromPath(window.location.pathname));
@@ -313,64 +328,54 @@ export default function AdminRoot() {
     };
   }, [token]);
 
-  useEffect(() => {
-    if (!token || !admin) return;
+  const canQueryAdmin = Boolean(token && admin);
 
-    const load = async () => {
-      setPageLoading(true);
-      try {
-        if (page === 'dashboard') {
-          setDashboard(await apiAdminGet('/admin/dashboard', token));
-        } else if (page === 'users') {
-          setUsers(await apiAdminGet(`/admin/users?q=${encodeURIComponent(search)}`, token));
-        } else if (page === 'clubs') {
-          setClubs(await apiAdminGet('/admin/clubs', token));
-        } else if (page === 'posts') {
-          setPosts(await apiAdminGet(`/admin/posts?q=${encodeURIComponent(search)}`, token));
-        } else if (page === 'reports') {
-          setReports(await apiAdminGet('/admin/reports', token));
-        } else if (page === 'verification') {
-          setVerification(await apiAdminGet('/admin/verification-requests', token));
-        } else if (page === 'analytics') {
-          setAnalytics(await apiAdminGet('/admin/analytics', token));
-        } else if (page === 'announcements') {
-          setAnnouncements(await apiAdminGet('/admin/announcements', token));
-        } else if (page === 'logs') {
-          setLogs(await apiAdminGet(`/admin/logs?q=${encodeURIComponent(search)}`, token));
-        } else if (page === 'settings') {
-          setSettings(await apiAdminGet('/admin/settings', token));
-        }
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setPageLoading(false);
-      }
-    };
+  const dashboardQuery = useQuery({
+    queryKey: token ? getAdminQueryKey(token, 'dashboard') : ['admin', 'dashboard', 'anon'],
+    queryFn: () => fetchAdminPageData('dashboard', token!, ''),
+    enabled: canQueryAdmin,
+    staleTime: ADMIN_CACHE_MS,
+    gcTime: ADMIN_CACHE_MS * 10,
+    refetchInterval: ADMIN_CACHE_MS,
+  });
 
-    void load();
-  }, [page, search, token, admin]);
+  const currentPageQuery = useQuery({
+    queryKey: token ? getAdminQueryKey(token, page, searchKey) : ['admin', page, searchKey, 'anon'],
+    queryFn: () => fetchAdminPageData(page, token!, searchKey),
+    enabled: canQueryAdmin && page !== 'dashboard',
+    staleTime: ADMIN_CACHE_MS,
+    gcTime: ADMIN_CACHE_MS * 10,
+    refetchInterval: page === 'reports' || page === 'logs' ? ADMIN_CACHE_MS : false,
+  });
 
-  useEffect(() => {
-    if (!token || !admin) return;
-    const interval = window.setInterval(() => {
-      if (page === 'dashboard') {
-        void apiAdminGet('/admin/dashboard', token).then(setDashboard).catch(() => undefined);
-      }
-      if (page === 'reports') {
-        void apiAdminGet('/admin/reports', token).then(setReports).catch(() => undefined);
-      }
-      if (page === 'logs') {
-        void apiAdminGet('/admin/logs', token).then(setLogs).catch(() => undefined);
-      }
-    }, 30000);
-
-    return () => window.clearInterval(interval);
-  }, [page, token, admin]);
+  const dashboard = dashboardQuery.data ?? null;
+  const users = page === 'users' ? ((currentPageQuery.data as any[]) ?? []) : [];
+  const clubs = page === 'clubs' ? ((currentPageQuery.data as any[]) ?? []) : [];
+  const posts = page === 'posts' ? ((currentPageQuery.data as any[]) ?? []) : [];
+  const reports = page === 'reports' ? ((currentPageQuery.data as any[]) ?? []) : [];
+  const verification = page === 'verification' ? ((currentPageQuery.data as any[]) ?? []) : [];
+  const analytics = page === 'analytics' ? (currentPageQuery.data ?? null) : null;
+  const announcements = page === 'announcements' ? ((currentPageQuery.data as any[]) ?? []) : [];
+  const logs = page === 'logs' ? ((currentPageQuery.data as any[]) ?? []) : [];
+  const settings = page === 'settings' ? (currentPageQuery.data ?? null) : null;
+  const activeQuery = page === 'dashboard' ? dashboardQuery : currentPageQuery;
+  const pageLoading = activeQuery.isLoading;
+  const pageRefreshing = activeQuery.isFetching && !activeQuery.isLoading;
 
   const goTo = (nextPage: PageKey) => {
     const nextPath = nextPage === 'dashboard' ? '/admin' : `/admin/${nextPage}`;
     window.history.pushState({ page: nextPage }, '', nextPath);
     setPage(nextPage);
+  };
+
+  const prefetchPage = (nextPage: PageKey) => {
+    if (!token || !admin || nextPage === 'dashboard') return;
+    const nextSearchKey = getSearchKey(nextPage, search);
+    void queryClient.prefetchQuery({
+      queryKey: getAdminQueryKey(token, nextPage, nextSearchKey),
+      queryFn: () => fetchAdminPageData(nextPage, token, nextSearchKey),
+      staleTime: ADMIN_CACHE_MS,
+    });
   };
 
   const handleLogin = async (email: string, password: string) => {
@@ -392,6 +397,7 @@ export default function AdminRoot() {
 
   const handleLogout = () => {
     clearAdminSession();
+    queryClient.removeQueries({ queryKey: ['admin'] });
     setToken(null);
     setAdmin(null);
     setSelectedUser(null);
@@ -404,16 +410,10 @@ export default function AdminRoot() {
 
   const refreshCurrentPage = async () => {
     if (!token) return;
-    if (page === 'dashboard') setDashboard(await apiAdminGet('/admin/dashboard', token));
-    if (page === 'users') setUsers(await apiAdminGet(`/admin/users?q=${encodeURIComponent(search)}`, token));
-    if (page === 'clubs') setClubs(await apiAdminGet('/admin/clubs', token));
-    if (page === 'posts') setPosts(await apiAdminGet(`/admin/posts?q=${encodeURIComponent(search)}`, token));
-    if (page === 'reports') setReports(await apiAdminGet('/admin/reports', token));
-    if (page === 'verification') setVerification(await apiAdminGet('/admin/verification-requests', token));
-    if (page === 'analytics') setAnalytics(await apiAdminGet('/admin/analytics', token));
-    if (page === 'announcements') setAnnouncements(await apiAdminGet('/admin/announcements', token));
-    if (page === 'logs') setLogs(await apiAdminGet(`/admin/logs?q=${encodeURIComponent(search)}`, token));
-    if (page === 'settings') setSettings(await apiAdminGet('/admin/settings', token));
+    await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, page, searchKey), exact: true });
+    if (page !== 'dashboard') {
+      await queryClient.invalidateQueries({ queryKey: getAdminQueryKey(token, 'dashboard'), exact: true });
+    }
   };
 
   const runUserAction = async (userId: string, action: string, note?: string) => {
@@ -516,6 +516,8 @@ export default function AdminRoot() {
                     key={item.key}
                     type="button"
                     onClick={() => goTo(item.key)}
+                    onMouseEnter={() => prefetchPage(item.key)}
+                    onFocus={() => prefetchPage(item.key)}
                     className={
                       base + (collapsed ? collapsedClasses : expandedClasses) +
                       (active ? ' border-slate-300 bg-white font-medium text-slate-900' : ' border-transparent text-slate-600 hover:border-slate-200 hover:bg-white hover:text-slate-900')
@@ -584,6 +586,7 @@ export default function AdminRoot() {
                 <Badge variant="outline" className="border-blue-200 bg-blue-50 text-blue-700">
                   {formatNumber(dashboard?.metrics?.[1]?.value ?? 0)} active today
                 </Badge>
+                {pageRefreshing ? <Badge variant="outline" className="border-slate-200 bg-slate-50 text-slate-600">Refreshing...</Badge> : null}
               </div>
 
               <button type="button" onClick={() => goTo('reports')} className="relative rounded-md border border-slate-200 bg-slate-50 p-2 text-slate-600 hover:bg-white">
