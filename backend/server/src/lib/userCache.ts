@@ -15,6 +15,7 @@ export interface CachedUserSummary {
   userId: string;
   username: string;
   email: string;
+  authProvider: 'google' | 'local';
   bio: string | null;
   headline: string | null;
   profilePictureUrl: string | null;
@@ -24,6 +25,7 @@ export interface CachedUserSummary {
   isOnline: boolean;
   lastSeenAt: string | null;
   createdAt: string;
+  onboardingCompletedAt: string | null;
   type: 'student' | 'alumni';
   verificationState: string | null;
   details: {
@@ -70,6 +72,7 @@ interface UserSummaryRow {
   user_id: string;
   username: string;
   email: string;
+  auth_provider: 'google' | 'local';
   bio: string | null;
   headline: string | null;
   profile_photo_url: string | null;
@@ -79,6 +82,7 @@ interface UserSummaryRow {
   is_online: boolean;
   last_seen_at: Date | null;
   created_at: Date;
+  onboarding_completed_at: Date | null;
   user_type: 'student' | 'alumni';
   verification_state: string | null;
   student_branch: string | null;
@@ -125,6 +129,7 @@ function mapSummaryRow(row: UserSummaryRow): CachedUserSummary {
     userId: row.user_id,
     username: row.username,
     email: row.email,
+    authProvider: row.auth_provider,
     bio: row.bio,
     headline: row.headline,
     profilePictureUrl: row.profile_photo_url,
@@ -134,6 +139,7 @@ function mapSummaryRow(row: UserSummaryRow): CachedUserSummary {
     isOnline: row.is_online,
     lastSeenAt: row.last_seen_at ? row.last_seen_at.toISOString() : null,
     createdAt: row.created_at.toISOString(),
+    onboardingCompletedAt: row.onboarding_completed_at ? row.onboarding_completed_at.toISOString() : null,
     type: row.user_type,
     verificationState: row.verification_state,
     details,
@@ -158,6 +164,7 @@ async function fetchUserSummariesByIdsFromDb(userIds: string[]): Promise<Map<str
       u.user_id,
       u.username,
       u.email,
+      u.auth_provider::text AS auth_provider,
       u.bio,
       u.headline,
       u.profile_photo_url,
@@ -167,6 +174,7 @@ async function fetchUserSummariesByIdsFromDb(userIds: string[]): Promise<Map<str
       u.is_online,
       u.last_seen_at,
       u.created_at,
+      u.onboarding_completed_at,
       u.user_type,
       u.verification_state::text AS verification_state,
       sp.branch AS student_branch,

@@ -8,6 +8,7 @@ import authenticateToken, { type AuthedRequest } from '../middleware/authenticat
 import { hashPassword, signAuthToken, verifyPassword } from '../lib/auth';
 import { uploadVerificationProofToStorage } from '../lib/objectStorage';
 import { invalidateUserCache } from '../lib/userCache';
+import { sendSignupOtpEmail } from '../lib/authEmail';
 
 const router = express.Router();
 const alumniProofUpload = multer({
@@ -18,92 +19,13 @@ const alumniProofUpload = multer({
   },
 });
 
-async function emailExists(email: string): Promise<boolean> {
-  const result = await prisma.$queryRaw<{ exists: boolean }[]>`
-    SELECT EXISTS(SELECT 1 FROM "users" WHERE email = ${email}) as "exists"
-  `;
-
-  return result[0]?.exists ?? false;
-}
-
-async function generateUsername(email: string, name?: string): Promise<string> {
-  let base: string;
-  if (name) {
-    base = name; // Use name directly if provided
-  } else {
-    base = email.split('@')[0]; // Fallback to email if name is not provided
-    base = base.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 20) || 'user'; // Clean up if from email
-  }
-
-  let candidate = base;
-  let suffix = 1;
-
-  // Ensure uniqueness against existing usernames
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const existsResult = await prisma.$queryRaw<{ exists: boolean }[]>`
-      SELECT EXISTS(SELECT 1 FROM "users" WHERE username = ${candidate}) as "exists"
-    `;
-
-    if (!existsResult[0]?.exists) {
-      return candidate;
-    }
-
-    candidate = `${base}${suffix}`;
-    suffix += 1;
-  }
-}
-
-function buildResponseWithToken(profile: NonNullable<Awaited<ReturnType<typeof getUserProfileById>>>) {
-  const token = signAuthToken({
-    userId: profile.userId,
-    email: profile.email,
-    username: profile.username,
-    type: profile.type,
-    sessionId: crypto.randomUUID(),
-  });
-  return { ...profile, token };
-}
-
-async function createDefaultUserSettings(userId: string): Promise<void> {
-  await prisma.$queryRaw`
-    INSERT INTO user_settings (
-      user_id,
-      email_notifications,
-      follow_request_notifications,
-      message_notifications,
-      opportunity_alerts,
-      club_update_notifications,
-      weekly_digest_enabled,
-      show_email,
-      show_projects,
-      allow_messages
-    )
-    VALUES (
-      ${userId},
-      TRUE,
-      TRUE,
-      TRUE,
-      TRUE,
-      TRUE,
-      FALSE,
-      TRUE,
-      TRUE,
-      TRUE
-    )
-    ON CONFLICT (user_id)
-    DO UPDATE SET
-      email_notifications = EXCLUDED.email_notifications,
-      follow_request_notifications = EXCLUDED.follow_request_notifications,
-      message_notifications = EXCLUDED.message_notifications,
-      opportunity_alerts = EXCLUDED.opportunity_alerts,
-      club_update_notifications = EXCLUDED.club_update_notifications,
-      weekly_digest_enabled = EXCLUDED.weekly_digest_enabled,
-      show_email = EXCLUDED.show_email,
-      show_projects = EXCLUDED.show_projects,
-      allow_messages = EXCLUDED.allow_messages
-  `;
-}
+type UserType = 'student' | 'alumni';
+type UserVerificationState =
+  | 'student_google_verified'
+  | 'alumni_pending_review'
+  | 'alumni_verified'
+  | 'alumni_rejected';
+type AuthProvider = 'google' | 'local';
 
 interface UserSessionRow {
   session_id: string;
@@ -117,6 +39,187 @@ interface UserSessionRow {
   created_at: Date;
   last_seen_at: Date | null;
   revoked_at: Date | null;
+}
+
+interface StudentGoogleAuthBody {
+  idToken: string;
+  intent?: 'login' | 'signup';
+}
+
+interface GoogleOnboardingBody {
+  sessionId: string;
+  fullName?: string;
+  username?: string;
+  branch?: string;
+  year?: string | number;
+  accountType?: 'student';
+}
+
+interface StudentSignupOtpRequestBody {
+  name: string;
+  email: string;
+  password: string;
+  branch: string;
+  year: string | number;
+}
+
+interface StudentSignupOtpVerifyBody {
+  verificationId: string;
+  otp: string;
+}
+
+interface AlumniSignupBody {
+  name: string;
+  email: string;
+  graduationYear: string | number;
+  branch: string;
+  currentStatus: string;
+  password: string;
+}
+
+interface LoginBody {
+  email: string;
+  password: string;
+}
+
+interface GoogleTokenInfo {
+  aud?: string;
+  email?: string;
+  email_verified?: string;
+  hd?: string;
+  given_name?: string;
+  family_name?: string;
+  name?: string;
+  picture?: string;
+  sub?: string;
+}
+
+interface AuthOtpChallengeRow {
+  auth_otp_challenge_id: string;
+  email: string;
+  purpose: string;
+  otp_hash: string;
+  payload: StudentSignupOtpRequestBody;
+  attempts: number;
+  expires_at: Date;
+  consumed_at: Date | null;
+}
+
+interface AuthOnboardingSessionRow {
+  auth_onboarding_session_id: string;
+  provider: AuthProvider;
+  email: string;
+  google_subject: string | null;
+  full_name: string;
+  profile_photo_url: string | null;
+  suggested_username: string | null;
+  payload: Record<string, unknown> | null;
+  expires_at: Date;
+  completed_at: Date | null;
+}
+
+function getGoogleClientId(): string {
+  const clientId =
+    process.env.GOOGLE_CLIENT_ID?.trim()
+    || process.env.GOOGLE_OAUTH_CLIENT_ID?.trim();
+
+  if (!clientId) {
+    throw new Error('Google sign-in is not configured on the server');
+  }
+
+  return clientId;
+}
+
+function getAllowedStudentDomain(): string {
+  return (process.env.AUTH_ALLOWED_EMAIL_DOMAIN?.trim() || 'gbpuat.ac.in').toLowerCase();
+}
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+function normalizeDisplayName(name: string): string {
+  return name.trim().replace(/\s+/g, ' ').slice(0, 50);
+}
+
+function normalizePersonName(name: string): string {
+  return name.trim().replace(/\s+/g, ' ').slice(0, 150);
+}
+
+function buildOnboardingResponse(session: AuthOnboardingSessionRow) {
+  return {
+    onboardingRequired: true as const,
+    sessionId: session.auth_onboarding_session_id,
+    provider: session.provider,
+    email: session.email,
+    fullName: session.full_name,
+    profilePhotoUrl: session.profile_photo_url,
+    suggestedUsername: session.suggested_username,
+    accountType: 'student' as const,
+    missingFields: ['branch', 'year', 'accountType'],
+  };
+}
+
+async function verifyGoogleIdToken(idToken: string): Promise<GoogleTokenInfo> {
+  const clientId = getGoogleClientId();
+  const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
+
+  if (!response.ok) {
+    throw new Error('Unable to verify Google sign-in token');
+  }
+
+  const payload = (await response.json()) as GoogleTokenInfo;
+
+  if (payload.aud !== clientId) {
+    throw new Error('Google token audience mismatch');
+  }
+
+  if (payload.email_verified !== 'true') {
+    throw new Error('Google account email is not verified');
+  }
+
+  return payload;
+}
+
+function isAllowedStudentEmail(email: string, hostedDomain?: string): boolean {
+  const allowedDomain = getAllowedStudentDomain();
+  return email.endsWith(`@${allowedDomain}`) && hostedDomain === allowedDomain;
+}
+
+async function emailExists(email: string): Promise<boolean> {
+  const result = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+    SELECT EXISTS(SELECT 1 FROM "users" WHERE email = ${email}) AS "exists"
+  `;
+
+  return result[0]?.exists ?? false;
+}
+
+async function generateUniqueUsername(baseValue: string): Promise<string> {
+  const sanitizedBase = normalizeDisplayName(baseValue) || 'CampusLynk User';
+  let candidate = sanitizedBase;
+  let suffix = 2;
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const existing = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+      SELECT EXISTS(SELECT 1 FROM "users" WHERE username = ${candidate}) AS "exists"
+    `;
+
+    if (!existing[0]?.exists) {
+      return candidate;
+    }
+
+    candidate = `${sanitizedBase} ${suffix}`.slice(0, 50);
+    suffix += 1;
+  }
+}
+
+function parseRequiredNumericValue(raw: string | number | undefined, label: string): number {
+  const numericValue = typeof raw === 'string' ? parseInt(raw, 10) : raw;
+  if (!numericValue || Number.isNaN(numericValue)) {
+    throw new Error(`${label} is required`);
+  }
+  return numericValue;
 }
 
 function getClientIp(req: Request): string | null {
@@ -143,15 +246,15 @@ function getSingleHeaderValue(req: Request, headerName: string): string | null {
 
 function inferLocationLabel(req: Request, ipAddress: string | null): string {
   const city =
-    getSingleHeaderValue(req, 'x-vercel-ip-city') ||
-    getSingleHeaderValue(req, 'x-appengine-city');
+    getSingleHeaderValue(req, 'x-vercel-ip-city')
+    || getSingleHeaderValue(req, 'x-appengine-city');
   const region =
-    getSingleHeaderValue(req, 'x-vercel-ip-country-region') ||
-    getSingleHeaderValue(req, 'x-appengine-region');
+    getSingleHeaderValue(req, 'x-vercel-ip-country-region')
+    || getSingleHeaderValue(req, 'x-appengine-region');
   const country =
-    getSingleHeaderValue(req, 'x-vercel-ip-country') ||
-    getSingleHeaderValue(req, 'cf-ipcountry') ||
-    getSingleHeaderValue(req, 'x-appengine-country');
+    getSingleHeaderValue(req, 'x-vercel-ip-country')
+    || getSingleHeaderValue(req, 'cf-ipcountry')
+    || getSingleHeaderValue(req, 'x-appengine-country');
 
   const parts = [city, region, country].filter((part): part is string => !!part);
   if (parts.length > 0) {
@@ -251,86 +354,231 @@ function sessionToResponse(row: UserSessionRow, currentSessionId?: string) {
   };
 }
 
-interface StudentSignupBody {
-  name: string;
+async function createDefaultUserSettings(userId: string): Promise<void> {
+  await prisma.$queryRaw`
+    INSERT INTO user_settings (
+      user_id,
+      email_notifications,
+      follow_request_notifications,
+      message_notifications,
+      opportunity_alerts,
+      club_update_notifications,
+      weekly_digest_enabled,
+      show_email,
+      show_projects,
+      allow_messages
+    )
+    VALUES (
+      ${userId},
+      TRUE,
+      TRUE,
+      TRUE,
+      TRUE,
+      TRUE,
+      FALSE,
+      TRUE,
+      TRUE,
+      TRUE
+    )
+    ON CONFLICT (user_id)
+    DO UPDATE SET
+      email_notifications = EXCLUDED.email_notifications,
+      follow_request_notifications = EXCLUDED.follow_request_notifications,
+      message_notifications = EXCLUDED.message_notifications,
+      opportunity_alerts = EXCLUDED.opportunity_alerts,
+      club_update_notifications = EXCLUDED.club_update_notifications,
+      weekly_digest_enabled = EXCLUDED.weekly_digest_enabled,
+      show_email = EXCLUDED.show_email,
+      show_projects = EXCLUDED.show_projects,
+      allow_messages = EXCLUDED.allow_messages
+  `;
+}
+
+async function buildAuthenticatedResponse(userId: string, req: Request, fallback?: {
+  username: string;
   email: string;
-  password: string;
+  type: UserType;
+  createdAt: Date;
+  verificationState?: UserVerificationState | null;
+  details?: {
+    branch?: string;
+    year?: number;
+    passingYear?: number;
+  };
+}): Promise<Record<string, unknown>> {
+  const session = await createAuthSession(userId, req);
+  const profile = await getUserProfileById(userId);
+
+  if (profile) {
+    return {
+      ...profile,
+      token: signAuthToken({
+        userId: profile.userId,
+        email: profile.email,
+        username: profile.username,
+        type: profile.type,
+        sessionId: session.session_id,
+      }),
+    };
+  }
+
+  if (!fallback) {
+    throw new Error('Unable to build authenticated user profile');
+  }
+
+  return {
+    userId,
+    username: fallback.username,
+    email: fallback.email,
+    type: fallback.type,
+    verificationState: fallback.verificationState ?? null,
+    createdAt: fallback.createdAt.toISOString(),
+    bio: null,
+    headline: null,
+    profilePictureUrl: null,
+    coverPhotoUrl: null,
+    isPublic: true,
+    isActive: true,
+    isOnline: false,
+    lastSeenAt: null,
+    details: fallback.details ?? {},
+    stats: {
+      followerCount: 0,
+      followingCount: 0,
+      postCount: 0,
+    },
+    token: signAuthToken({
+      userId,
+      email: fallback.email,
+      username: fallback.username,
+      type: fallback.type,
+      sessionId: session.session_id,
+    }),
+  };
+}
+
+async function createStudentUser(params: {
+  username: string;
+  email: string;
   branch: string;
-  year: string | number;
-  googleIdToken: string;
+  year: number;
+  authProvider: AuthProvider;
+  googleSubject?: string | null;
+  profilePhotoUrl?: string | null;
+  passwordHash?: string;
+  verificationState?: UserVerificationState | null;
+}): Promise<{ userId: string; createdAt: Date }> {
+  const createdUsers = await prisma.$queryRaw<Array<{ user_id: string; created_at: Date }>>`
+    INSERT INTO users (
+      username,
+      email,
+      password_hash,
+      user_type,
+      auth_provider,
+      google_subject,
+      profile_photo_url,
+      is_private,
+      onboarding_completed_at,
+      verified_at,
+      verification_state,
+      updated_at
+    )
+    VALUES (
+      ${params.username},
+      ${params.email},
+      ${params.passwordHash ?? hashPassword(crypto.randomUUID())},
+      'student'::"UserType",
+      CAST(${params.authProvider} AS "AuthProvider"),
+      ${params.googleSubject ?? null},
+      ${params.profilePhotoUrl ?? null},
+      FALSE,
+      NOW(),
+      NOW(),
+      CAST(${params.verificationState ?? null} AS "UserVerificationState"),
+      NOW()
+    )
+    RETURNING user_id, created_at
+  `;
+
+  const user = createdUsers[0];
+
+  await prisma.$queryRaw`
+    INSERT INTO student_profiles (user_id, branch, year)
+    VALUES (${user.user_id}, ${params.branch}, ${params.year})
+  `;
+
+  await createDefaultUserSettings(user.user_id);
+  await invalidateUserCache(user.user_id);
+
+  return {
+    userId: user.user_id,
+    createdAt: user.created_at,
+  };
 }
 
-interface AlumniSignupBody {
-  name: string;
+function makeOtpCode(): string {
+  return String(crypto.randomInt(100000, 1000000));
+}
+
+function hashOtp(code: string): string {
+  return crypto.createHash('sha256').update(code).digest('hex');
+}
+
+async function upsertGoogleOnboardingSession(params: {
   email: string;
-  graduationYear: string | number;
-  branch: string;
-  currentStatus: string;
-  password: string;
+  googleSubject: string;
+  fullName: string;
+  profilePhotoUrl: string | null;
+  suggestedUsername: string;
+}): Promise<AuthOnboardingSessionRow> {
+  const rows = await prisma.$queryRaw<AuthOnboardingSessionRow[]>`
+    INSERT INTO auth_onboarding_sessions (
+      provider,
+      email,
+      google_subject,
+      full_name,
+      profile_photo_url,
+      suggested_username,
+      payload,
+      expires_at
+    )
+    VALUES (
+      'google'::"AuthProvider",
+      ${params.email},
+      ${params.googleSubject},
+      ${params.fullName},
+      ${params.profilePhotoUrl},
+      ${params.suggestedUsername},
+      '{}'::jsonb,
+      NOW() + INTERVAL '1 day'
+    )
+    ON CONFLICT (google_subject)
+    DO UPDATE SET
+      email = EXCLUDED.email,
+      full_name = EXCLUDED.full_name,
+      profile_photo_url = EXCLUDED.profile_photo_url,
+      suggested_username = EXCLUDED.suggested_username,
+      payload = EXCLUDED.payload,
+      expires_at = NOW() + INTERVAL '1 day',
+      completed_at = NULL,
+      updated_at = NOW()
+    RETURNING
+      auth_onboarding_session_id,
+      provider::text AS provider,
+      email,
+      google_subject,
+      full_name,
+      profile_photo_url,
+      suggested_username,
+      payload,
+      expires_at,
+      completed_at
+  `;
+
+  return rows[0];
 }
 
-interface LoginBody {
-  email: string;
-  password: string;
-}
-
-interface StudentGoogleAuthBody {
-  idToken: string;
-  branch?: string;
-  year?: string | number;
-}
-
-type UserVerificationState =
-  | 'student_google_verified'
-  | 'alumni_pending_review'
-  | 'alumni_verified'
-  | 'alumni_rejected';
-
-interface GoogleTokenInfo {
-  aud?: string;
-  email?: string;
-  email_verified?: string;
-  hd?: string;
-  given_name?: string;
-  family_name?: string;
-  name?: string;
-  sub?: string;
-}
-
-function getGoogleClientId(): string {
-  const clientId =
-    process.env.GOOGLE_CLIENT_ID?.trim() ||
-    process.env.GOOGLE_OAUTH_CLIENT_ID?.trim();
-
-  if (!clientId) {
-    throw new Error('Google sign-in is not configured on the server');
-  }
-
-  return clientId;
-}
-
-async function verifyGoogleIdToken(idToken: string): Promise<GoogleTokenInfo> {
-  const clientId = getGoogleClientId();
-  const response = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
-
-  if (!response.ok) {
-    throw new Error('Unable to verify Google sign-in token');
-  }
-
-  const payload = (await response.json()) as GoogleTokenInfo;
-
-  if (payload.aud !== clientId) {
-    throw new Error('Google token audience mismatch');
-  }
-
-  if (payload.email_verified !== 'true') {
-    throw new Error('Google account email is not verified');
-  }
-
-  return payload;
-}
-
-function assertAllowedAlumniProofFiles(files: Express.Multer.File[]): void {
+async function assertAllowedAlumniProofFiles(files: Express.Multer.File[]): Promise<void> {
   const allowedMimeTypes = new Set([
     'application/pdf',
     'image/jpeg',
@@ -346,16 +594,8 @@ function assertAllowedAlumniProofFiles(files: Express.Multer.File[]): void {
   }
 }
 
-function parseRequiredNumericValue(raw: string | number | undefined, label: string): number {
-  const numericValue = typeof raw === 'string' ? parseInt(raw, 10) : raw;
-  if (!numericValue || Number.isNaN(numericValue)) {
-    throw new Error(`${label} is required`);
-  }
-  return numericValue;
-}
-
-router.post('/google/student', async (req: Request, res: Response) => {
-  const { idToken, branch, year } = req.body as Partial<StudentGoogleAuthBody>;
+router.post('/google', async (req: Request, res: Response) => {
+  const { idToken } = req.body as Partial<StudentGoogleAuthBody>;
 
   if (!idToken) {
     return res.status(400).json({ message: 'Google ID token is required' });
@@ -363,22 +603,32 @@ router.post('/google/student', async (req: Request, res: Response) => {
 
   try {
     const tokenInfo = await verifyGoogleIdToken(idToken);
-    const email = tokenInfo.email?.trim().toLowerCase();
+    const email = normalizeEmail(tokenInfo.email ?? '');
+    const fullName = normalizePersonName(tokenInfo.name || `${tokenInfo.given_name ?? ''} ${tokenInfo.family_name ?? ''}`.trim() || email.split('@')[0]);
+    const profilePhotoUrl = tokenInfo.picture?.trim() || null;
+    const googleSubject = tokenInfo.sub?.trim();
 
-    if (!email || !email.endsWith('@gbpuat.ac.in') || tokenInfo.hd !== 'gbpuat.ac.in') {
-      return res.status(403).json({ message: 'Students must sign in with a GBPUAT Google account' });
+    if (!email || !googleSubject || !isAllowedStudentEmail(email, tokenInfo.hd)) {
+      return res.status(403).json({ message: `Students must sign in with an allowed ${getAllowedStudentDomain()} Google account` });
     }
 
-    const existingUsers = await prisma.$queryRaw<
-      Array<{
-        user_id: string;
-        username: string;
-        email: string;
-        created_at: Date;
-        user_type: 'student' | 'alumni';
-      }>
-    >`
-      SELECT user_id, username, email, created_at, user_type
+    const existingUsers = await prisma.$queryRaw<Array<{
+      user_id: string;
+      username: string;
+      email: string;
+      user_type: UserType;
+      auth_provider: AuthProvider;
+      google_subject: string | null;
+      created_at: Date;
+    }>>`
+      SELECT
+        user_id,
+        username,
+        email,
+        user_type::text AS user_type,
+        auth_provider::text AS auth_provider,
+        google_subject,
+        created_at
       FROM users
       WHERE email = ${email}
       LIMIT 1
@@ -386,247 +636,274 @@ router.post('/google/student', async (req: Request, res: Response) => {
 
     const existingUser = existingUsers[0];
 
-    let userId = existingUser?.user_id ?? null;
-    let username = existingUser?.username ?? null;
-    let createdAt = existingUser?.created_at ?? null;
-
-    if (existingUser && existingUser.user_type !== 'student') {
-      return res.status(409).json({ message: 'This email is already linked to a non-student account' });
-    }
-
-    const numericYear = year == null || year === '' ? null : parseRequiredNumericValue(year, 'Year');
-    const normalizedBranch = branch?.trim() || null;
-
-    if (!existingUser) {
-      if (!normalizedBranch || !numericYear) {
-        return res.status(400).json({ message: 'Branch and year are required to create a student account' });
+    if (existingUser) {
+      if (existingUser.user_type !== 'student') {
+        return res.status(409).json({ message: 'This email is already linked to a non-student account' });
       }
-
-      username = await generateUsername(email, tokenInfo.name || email.split('@')[0]);
-      const createdUsers = await prisma.$queryRaw<
-        { user_id: string; username: string; email: string; created_at: Date }[]
-      >`
-        INSERT INTO users (
-          username,
-          email,
-          password_hash,
-          user_type,
-          profile_photo_url,
-          is_private,
-          verified_at,
-          verification_state,
-          updated_at
-        )
-        VALUES (
-          ${username},
-          ${email},
-          ${hashPassword(crypto.randomUUID())},
-          'student'::"UserType",
-          NULL,
-          FALSE,
-          NOW(),
-          'student_google_verified'::"UserVerificationState",
-          NOW()
-        )
-        RETURNING user_id, username, email, created_at
-      `;
-
-      const user = createdUsers[0];
-      userId = user.user_id;
-      createdAt = user.created_at;
-
-      await prisma.$queryRaw`
-        INSERT INTO student_profiles (user_id, branch, year)
-        VALUES (${user.user_id}, ${normalizedBranch}, ${numericYear})
-      `;
-
-      await createDefaultUserSettings(user.user_id);
-      await invalidateUserCache(user.user_id);
-    } else {
-      userId = existingUser.user_id;
-      username = existingUser.username;
-      createdAt = existingUser.created_at;
 
       await prisma.$queryRaw`
         UPDATE users
-        SET verified_at = NOW(),
-            verification_state = 'student_google_verified'::"UserVerificationState",
-            updated_at = NOW()
-        WHERE user_id = ${userId}
+        SET
+          google_subject = COALESCE(google_subject, ${googleSubject}),
+          profile_photo_url = COALESCE(profile_photo_url, ${profilePhotoUrl}),
+          verified_at = NOW(),
+          updated_at = NOW()
+        WHERE user_id = ${existingUser.user_id}
       `;
 
-      if (normalizedBranch && numericYear) {
-        await prisma.$queryRaw`
-          INSERT INTO student_profiles (user_id, branch, year)
-          VALUES (${userId}, ${normalizedBranch}, ${numericYear})
-          ON CONFLICT (user_id)
-          DO UPDATE SET branch = EXCLUDED.branch, year = EXCLUDED.year, updated_at = NOW()
-        `;
-      }
-      await invalidateUserCache(userId);
+      await invalidateUserCache(existingUser.user_id);
+      const responsePayload = await buildAuthenticatedResponse(existingUser.user_id, req, {
+        username: existingUser.username,
+        email,
+        type: 'student',
+        createdAt: existingUser.created_at,
+      });
+
+      return res.status(200).json(responsePayload);
     }
 
-    const session = await createAuthSession(userId!, req);
-    const profile = await getUserProfileById(userId!);
-    const responsePayload = profile ?? {
-      userId,
-      username: username!,
+    const suggestedUsername = await generateUniqueUsername(fullName || email.split('@')[0]);
+    const onboardingSession = await upsertGoogleOnboardingSession({
       email,
-      type: 'student' as const,
-      verificationState: 'student_google_verified' as const,
-      createdAt: createdAt ?? new Date(),
-      bio: null,
-      headline: null,
-      profilePictureUrl: null,
-      coverPhotoUrl: null,
-      isPublic: true,
-      isActive: true,
-      isOnline: false,
-      lastSeenAt: null,
-      details: normalizedBranch && numericYear ? { branch: normalizedBranch, year: numericYear } : {},
-      stats: {
-        followerCount: 0,
-        followingCount: 0,
-        postCount: 0,
-      },
-    };
-
-    return res.status(existingUser ? 200 : 201).json({
-      ...responsePayload,
-      token: signAuthToken({
-        userId: responsePayload.userId,
-        email: responsePayload.email,
-        username: responsePayload.username,
-        type: responsePayload.type,
-        sessionId: session.session_id,
-      }),
+      googleSubject,
+      fullName,
+      profilePhotoUrl,
+      suggestedUsername,
     });
+
+    return res.status(200).json(buildOnboardingResponse(onboardingSession));
   } catch (err: any) {
-    console.error('Error during Google student sign-in:', err);
+    console.error('Error during Google auth:', err);
     return res.status(500).json({ message: err?.message || 'Unable to sign in with Google' });
   }
 });
 
-router.post('/signup/student', validatePassword, async (req: Request, res: Response) => {
-  const { name, email, password, branch, year, googleIdToken } = req.body as Partial<StudentSignupBody>;
+router.post('/google/onboarding', async (req: Request, res: Response) => {
+  const { sessionId, fullName, username, branch, year, accountType } = req.body as Partial<GoogleOnboardingBody>;
 
-  if (!name || !email || !password || !branch || !year || !googleIdToken) {
-    return res.status(400).json({ message: 'Missing required fields' });
+  if (!sessionId || !branch || !year) {
+    return res.status(400).json({ message: 'Session, branch, and year are required to finish Google signup' });
   }
 
-  if (!email.toLowerCase().endsWith('@gbpuat.ac.in')) {
-    return res.status(400).json({ message: 'Students must use a college email (@gbpuat.ac.in)' });
+  if (accountType && accountType !== 'student') {
+    return res.status(400).json({ message: 'Google onboarding currently supports student accounts only' });
   }
 
   try {
-    const tokenInfo = await verifyGoogleIdToken(googleIdToken);
-    const googleEmail = tokenInfo.email?.trim().toLowerCase();
+    const sessions = await prisma.$queryRaw<AuthOnboardingSessionRow[]>`
+      SELECT
+        auth_onboarding_session_id,
+        provider::text AS provider,
+        email,
+        google_subject,
+        full_name,
+        profile_photo_url,
+        suggested_username,
+        payload,
+        expires_at,
+        completed_at
+      FROM auth_onboarding_sessions
+      WHERE auth_onboarding_session_id = ${sessionId}
+      LIMIT 1
+    `;
 
-    if (!googleEmail || googleEmail !== email.trim().toLowerCase()) {
-      return res.status(400).json({ message: 'Google verification must match the student email you entered' });
+    const session = sessions[0];
+
+    if (!session || session.completed_at || session.expires_at <= new Date()) {
+      return res.status(400).json({ message: 'This Google signup session has expired. Please continue with Google again.' });
     }
 
-    if (tokenInfo.hd !== 'gbpuat.ac.in') {
-      return res.status(403).json({ message: 'Students must verify with a GBPUAT Google account' });
-    }
-
+    const email = normalizeEmail(session.email);
     const exists = await emailExists(email);
     if (exists) {
-      return res.status(409).json({ message: 'User already exists. Please sign in instead.' });
+      return res.status(409).json({ message: 'An account with this email already exists. Continue with Google to sign in.' });
     }
 
-    const username = await generateUsername(email, name);
-    const passwordHash = hashPassword(password);
     const numericYear = parseRequiredNumericValue(year, 'Year');
+    const finalName = normalizePersonName(fullName || session.full_name);
+    const finalUsername = await generateUniqueUsername(username?.trim() || finalName || session.suggested_username || email.split('@')[0]);
 
-    const createdUsers = await prisma.$queryRaw<
-      { user_id: string; username: string; email: string; created_at: Date }[]
-    >`
-      INSERT INTO users (
-        username,
-        email,
-        password_hash,
-        user_type,
-        profile_photo_url,
-        is_private,
-        verified_at,
-        verification_state,
-        updated_at
-      )
-      VALUES (
-        ${username},
-        ${email},
-        ${passwordHash},
-        'student'::"UserType",
-        NULL,
-        FALSE,
-        NOW(),
-        'student_google_verified'::"UserVerificationState",
-        NOW()
-      )
-      RETURNING user_id, username, email, created_at
-    `;
-
-    const user = createdUsers[0];
+    const created = await createStudentUser({
+      username: finalUsername,
+      email,
+      branch: branch.trim(),
+      year: numericYear,
+      authProvider: 'google',
+      googleSubject: session.google_subject,
+      profilePhotoUrl: session.profile_photo_url,
+      verificationState: 'student_google_verified',
+    });
 
     await prisma.$queryRaw`
-      INSERT INTO student_profiles (user_id, branch, year)
-      VALUES (${user.user_id}, ${branch}, ${numericYear})
+      UPDATE auth_onboarding_sessions
+      SET completed_at = NOW(), updated_at = NOW()
+      WHERE auth_onboarding_session_id = ${sessionId}
     `;
 
-    await createDefaultUserSettings(user.user_id);
-    await invalidateUserCache(user.user_id);
-
-    const session = await createAuthSession(user.user_id, req);
-    const profile = await getUserProfileById(user.user_id);
-    const responsePayload = profile ?? {
-      userId: user.user_id,
-      username: user.username,
-      email: user.email,
-      type: 'student' as const,
-      verificationState: 'student_google_verified' as const,
-      createdAt: user.created_at,
-      bio: null,
-      headline: null,
-      profilePictureUrl: null,
-      coverPhotoUrl: null,
-      isPublic: true,
-      isActive: true,
-      isOnline: false,
-      lastSeenAt: null,
+    const responsePayload = await buildAuthenticatedResponse(created.userId, req, {
+      username: finalUsername,
+      email,
+      type: 'student',
+      createdAt: created.createdAt,
+      verificationState: 'student_google_verified',
       details: {
-        branch,
+        branch: branch.trim(),
         year: numericYear,
       },
-      stats: {
-        followerCount: 0,
-        followingCount: 0,
-        postCount: 0,
-      },
-    };
+    });
 
-    return res.status(201).json({
-      ...responsePayload,
-      token: signAuthToken({
-        userId: responsePayload.userId,
-        email: responsePayload.email,
-        username: responsePayload.username,
-        type: responsePayload.type,
-        sessionId: session.session_id,
-      }),
+    return res.status(201).json(responsePayload);
+  } catch (err: any) {
+    console.error('Error completing Google onboarding:', err);
+    return res.status(500).json({ message: err?.message || 'Unable to complete Google signup' });
+  }
+});
+
+router.post('/signup/student/request-otp', validatePassword, async (req: Request, res: Response) => {
+  const { name, email, password, branch, year } = req.body as Partial<StudentSignupOtpRequestBody>;
+
+  if (!name || !email || !password || !branch || !year) {
+    return res.status(400).json({ message: 'Missing required fields' });
+  }
+
+  const normalizedEmail = normalizeEmail(email);
+  const allowedDomain = getAllowedStudentDomain();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    return res.status(400).json({ message: 'Please enter a valid college email address' });
+  }
+
+  if (!normalizedEmail.endsWith(`@${allowedDomain}`)) {
+    return res.status(400).json({ message: `Students must use a college email (@${allowedDomain})` });
+  }
+
+  try {
+    const numericYear = parseRequiredNumericValue(year, 'Year');
+    const verificationCode = makeOtpCode();
+    const otpHash = hashOtp(verificationCode);
+
+    const challengeRows = await prisma.$queryRaw<Array<{ auth_otp_challenge_id: string; expires_at: Date }>>`
+      INSERT INTO auth_otp_challenges (
+        email,
+        purpose,
+        otp_hash,
+        payload,
+        expires_at
+      )
+      VALUES (
+        ${normalizedEmail},
+        'student_signup',
+        ${otpHash},
+        ${JSON.stringify({
+          name: normalizePersonName(name),
+          email: normalizedEmail,
+          password,
+          branch: branch.trim(),
+          year: numericYear,
+        })}::jsonb,
+        NOW() + INTERVAL '10 minutes'
+      )
+      RETURNING auth_otp_challenge_id, expires_at
+    `;
+
+    const challenge = challengeRows[0];
+
+    await sendSignupOtpEmail({
+      email: normalizedEmail,
+      code: verificationCode,
+      fullName: normalizePersonName(name),
+    });
+
+    return res.status(200).json({
+      verificationId: challenge.auth_otp_challenge_id,
+      expiresAt: challenge.expires_at.toISOString(),
+      message: 'We sent a verification code to your college email.',
     });
   } catch (err: any) {
-    console.error('Error during student signup:', err);
-    return res.status(500).json({
-      message: err?.message || 'Internal server error',
-      error: {
-        name: err?.name,
-        message: err?.message,
-        code: err?.code,
-        meta: err?.meta,
-        stack: err?.stack,
+    console.error('Error requesting signup OTP:', err);
+    return res.status(500).json({ message: err?.message || 'Unable to send verification code' });
+  }
+});
+
+router.post('/signup/student/verify-otp', async (req: Request, res: Response) => {
+  const { verificationId, otp } = req.body as Partial<StudentSignupOtpVerifyBody>;
+
+  if (!verificationId || !otp) {
+    return res.status(400).json({ message: 'Verification ID and OTP are required' });
+  }
+
+  try {
+    const challengeRows = await prisma.$queryRaw<AuthOtpChallengeRow[]>`
+      SELECT
+        auth_otp_challenge_id,
+        email,
+        purpose,
+        otp_hash,
+        payload,
+        attempts,
+        expires_at,
+        consumed_at
+      FROM auth_otp_challenges
+      WHERE auth_otp_challenge_id = ${verificationId}
+      LIMIT 1
+    `;
+
+    const challenge = challengeRows[0];
+    if (!challenge || challenge.purpose !== 'student_signup' || challenge.consumed_at || challenge.expires_at <= new Date()) {
+      return res.status(400).json({ message: 'This verification code has expired. Please request a new one.' });
+    }
+
+    if (challenge.attempts >= 5) {
+      return res.status(429).json({ message: 'Too many incorrect attempts. Please request a new verification code.' });
+    }
+
+    if (challenge.otp_hash !== hashOtp(otp.trim())) {
+      await prisma.$queryRaw`
+        UPDATE auth_otp_challenges
+        SET attempts = attempts + 1, updated_at = NOW()
+        WHERE auth_otp_challenge_id = ${verificationId}
+      `;
+      return res.status(400).json({ message: 'Incorrect verification code' });
+    }
+
+    const normalizedEmail = normalizeEmail(challenge.email);
+    if (await emailExists(normalizedEmail)) {
+      return res.status(409).json({ message: 'An account with this email already exists. Please sign in instead.' });
+    }
+
+    const payload = challenge.payload;
+    const finalUsername = await generateUniqueUsername(payload.name);
+    const created = await createStudentUser({
+      username: finalUsername,
+      email: normalizedEmail,
+      branch: payload.branch.trim(),
+      year: parseRequiredNumericValue(payload.year, 'Year'),
+      authProvider: 'local',
+      passwordHash: hashPassword(payload.password),
+      verificationState: null,
+    });
+
+    await prisma.$queryRaw`
+      UPDATE auth_otp_challenges
+      SET consumed_at = NOW(), updated_at = NOW()
+      WHERE auth_otp_challenge_id = ${verificationId}
+    `;
+
+    const responsePayload = await buildAuthenticatedResponse(created.userId, req, {
+      username: finalUsername,
+      email: normalizedEmail,
+      type: 'student',
+      createdAt: created.createdAt,
+      verificationState: null,
+      details: {
+        branch: payload.branch.trim(),
+        year: parseRequiredNumericValue(payload.year, 'Year'),
       },
     });
+
+    return res.status(201).json(responsePayload);
+  } catch (err: any) {
+    console.error('Error verifying signup OTP:', err);
+    return res.status(500).json({ message: err?.message || 'Unable to verify the code' });
   }
 });
 
@@ -640,14 +917,14 @@ router.post('/signup/alumni', alumniProofUpload.array('proofFiles', 5), validate
   }
 
   try {
-    assertAllowedAlumniProofFiles(uploadedFiles);
+    await assertAllowedAlumniProofFiles(uploadedFiles);
 
-    const exists = await emailExists(email);
+    const exists = await emailExists(normalizeEmail(email));
     if (exists) {
       return res.status(409).json({ message: 'User already exists. Please sign in instead.' });
     }
 
-    const username = await generateUsername(email, name);
+    const username = await generateUniqueUsername(name);
     const passwordHash = hashPassword(password);
     const numericGradYear = parseRequiredNumericValue(graduationYear, 'Graduation year');
 
@@ -659,19 +936,23 @@ router.post('/signup/alumni', alumniProofUpload.array('proofFiles', 5), validate
         email,
         password_hash,
         user_type,
+        auth_provider,
         profile_photo_url,
         is_private,
         verification_state,
+        onboarding_completed_at,
         updated_at
       )
       VALUES (
         ${username},
-        ${email},
+        ${normalizeEmail(email)},
         ${passwordHash},
         'alumni'::"UserType",
+        'local'::"AuthProvider",
         NULL,
         FALSE,
         'alumni_pending_review'::"UserVerificationState",
+        NOW(),
         NOW()
       )
       RETURNING user_id, username, email, created_at
@@ -681,7 +962,7 @@ router.post('/signup/alumni', alumniProofUpload.array('proofFiles', 5), validate
 
     await prisma.$queryRaw`
       INSERT INTO alumni_profiles (user_id, branch, passing_year, current_status)
-      VALUES (${user.user_id}, ${branch}, ${numericGradYear}, ${currentStatus})
+      VALUES (${user.user_id}, ${branch.trim()}, ${numericGradYear}, ${currentStatus.trim()})
     `;
 
     await createDefaultUserSettings(user.user_id);
@@ -699,7 +980,7 @@ router.post('/signup/alumni', alumniProofUpload.array('proofFiles', 5), validate
 
     const profilePreview = {
       name: name.trim(),
-      email: email.trim().toLowerCase(),
+      email: normalizeEmail(email),
       branch: branch.trim(),
       passingYear: numericGradYear,
       currentStatus: currentStatus.trim(),
@@ -769,20 +1050,33 @@ router.post('/login', async (req: Request, res: Response) => {
         username: string;
         email: string;
         password_hash: string;
-        user_type: 'student' | 'alumni';
+        user_type: UserType;
+        auth_provider: AuthProvider;
         verification_state: UserVerificationState | null;
         created_at: Date;
       }[]
     >`
-      SELECT user_id, username, email, password_hash, user_type, verification_state::text, created_at
+      SELECT
+        user_id,
+        username,
+        email,
+        password_hash,
+        user_type::text AS user_type,
+        auth_provider::text AS auth_provider,
+        verification_state::text,
+        created_at
       FROM users
-      WHERE email = ${email}
+      WHERE email = ${normalizeEmail(email)}
+      LIMIT 1
     `;
 
     const user = users[0];
-
     if (!user) {
       return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    if (user.auth_provider === 'google') {
+      return res.status(403).json({ message: 'This account uses Google sign-in. Continue with Google to access it.' });
     }
 
     const incomingHash = hashPassword(password);
@@ -821,51 +1115,15 @@ router.post('/login', async (req: Request, res: Response) => {
       `;
     }
 
-    const session = await createAuthSession(user.user_id, req);
-    const profile = await getUserProfileById(user.user_id);
-    if (!profile) {
-      // Should never happen since we just fetched the user, but keep a safe fallback.
-      return res.status(200).json({
-        userId: user.user_id,
-        username: user.username,
-        email: user.email,
-        type: user.user_type,
-        createdAt: user.created_at,
-        bio: null,
-        headline: null,
-        profilePictureUrl: null,
-        isPublic: true,
-        isActive: true,
-        isOnline: false,
-        lastSeenAt: null,
-        details: {},
-        stats: {
-          followerCount: 0,
-          followingCount: 0,
-          postCount: 0,
-        },
-        token: signAuthToken(
-          {
-            userId: user.user_id,
-            email: user.email,
-            username: user.username,
-            type: user.user_type,
-            sessionId: session.session_id,
-          }
-        ),
-      });
-    }
-
-    return res.status(200).json({
-      ...profile,
-      token: signAuthToken({
-        userId: profile.userId,
-        email: profile.email,
-        username: profile.username,
-        type: profile.type,
-        sessionId: session.session_id,
-      }),
+    const responsePayload = await buildAuthenticatedResponse(user.user_id, req, {
+      username: user.username,
+      email: user.email,
+      type: user.user_type,
+      createdAt: user.created_at,
+      verificationState: user.verification_state,
     });
+
+    return res.status(200).json(responsePayload);
   } catch (err) {
     console.error('Error during login:', err);
     return res.status(500).json({ message: 'Internal server error' });

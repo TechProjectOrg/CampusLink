@@ -225,6 +225,7 @@ export type ApiUserVerificationState =
   | 'alumni_pending_review'
   | 'alumni_verified'
   | 'alumni_rejected';
+export type ApiAuthProvider = 'google' | 'local';
 
 export interface ApiUserProfile {
   userId: string;
@@ -237,7 +238,9 @@ export interface ApiUserProfile {
   isPublic: boolean;
   createdAt: string; // ISO string
   type: ApiUserType;
+  authProvider?: ApiAuthProvider;
   verificationState?: ApiUserVerificationState | null;
+  onboardingCompletedAt?: string | null;
   details?: {
     branch?: string;
     year?: number;

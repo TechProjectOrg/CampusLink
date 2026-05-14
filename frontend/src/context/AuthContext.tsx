@@ -1,15 +1,19 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ApiUserProfile, Student } from '../types';
 import {
+  apiAuthenticateWithGoogle,
+  apiCompleteGoogleOnboarding,
   apiDeleteAccount,
   apiFetchUserProfile,
-  apiLoginStudentWithGoogle,
   apiLogin,
+  apiRequestStudentSignupOtp,
   apiSignupAlumni,
-  apiSignupStudent,
+  apiVerifyStudentSignupOtp,
+  type GoogleAuthResult,
   type AlumniPendingVerificationResult,
   type AlumniSignupPayload,
   type StudentSignupPayload,
+  type StudentSignupOtpResponse,
 } from '../lib/authApi';
 import {
   clearStoredSession,
@@ -27,8 +31,17 @@ interface AuthContextValue {
   currentUser: Student | null;
 
   login: (email: string, password: string) => Promise<void>;
-  loginStudentWithGoogle: (idToken: string, payload?: { branch?: string; year?: string | number }) => Promise<void>;
-  signupStudent: (payload: StudentSignupPayload) => Promise<void>;
+  authenticateWithGoogle: (idToken: string) => Promise<GoogleAuthResult>;
+  completeGoogleOnboarding: (payload: {
+    sessionId: string;
+    fullName?: string;
+    username?: string;
+    branch: string;
+    year: string | number;
+    accountType?: 'student';
+  }) => Promise<void>;
+  requestStudentSignupOtp: (payload: StudentSignupPayload) => Promise<StudentSignupOtpResponse>;
+  verifyStudentSignupOtp: (verificationId: string, otp: string) => Promise<void>;
   signupAlumni: (payload: AlumniSignupPayload) => Promise<AlumniPendingVerificationResult>;
   refreshProfile: () => Promise<void>;
   deleteAccount: (password: string) => Promise<void>;
@@ -120,13 +133,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     persistAndSet(p, token);
   };
 
-  const signupStudent = async (payload: StudentSignupPayload) => {
-    const { profile: p, token } = await apiSignupStudent(payload);
+  const authenticateWithGoogle = async (idToken: string) => {
+    const result = await apiAuthenticateWithGoogle(idToken);
+    if ('onboardingRequired' in result) {
+      return result;
+    }
+
+    persistAndSet(result.profile, result.token);
+    return result;
+  };
+
+  const completeGoogleOnboarding = async (payload: {
+    sessionId: string;
+    fullName?: string;
+    username?: string;
+    branch: string;
+    year: string | number;
+    accountType?: 'student';
+  }) => {
+    const { profile: p, token } = await apiCompleteGoogleOnboarding(payload);
     persistAndSet(p, token);
   };
 
-  const loginStudentWithGoogle = async (idToken: string, payload?: { branch?: string; year?: string | number }) => {
-    const { profile: p, token } = await apiLoginStudentWithGoogle(idToken, payload);
+  const requestStudentSignupOtp = async (payload: StudentSignupPayload) => {
+    return await apiRequestStudentSignupOtp(payload);
+  };
+
+  const verifyStudentSignupOtp = async (verificationId: string, otp: string) => {
+    const { profile: p, token } = await apiVerifyStudentSignupOtp(verificationId, otp);
     persistAndSet(p, token);
   };
 
@@ -175,8 +209,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     profile,
     currentUser,
     login,
-    loginStudentWithGoogle,
-    signupStudent,
+    authenticateWithGoogle,
+    completeGoogleOnboarding,
+    requestStudentSignupOtp,
+    verifyStudentSignupOtp,
     signupAlumni,
     refreshProfile,
     deleteAccount,

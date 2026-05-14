@@ -12,6 +12,7 @@ export interface UserProfile {
   userId: string;
   username: string;
   email: string;
+  authProvider: 'google' | 'local';
   bio: string | null;
   profilePictureUrl: string | null;
   coverPhotoUrl: string | null;
@@ -21,6 +22,7 @@ export interface UserProfile {
   isOnline: boolean;
   lastSeenAt: Date | null;
   createdAt: Date;
+  onboardingCompletedAt: string | null;
   type: UserType;
   verificationState: UserVerificationState | null;
   details: {
@@ -65,6 +67,7 @@ export async function getUserProfileById(userId: string): Promise<UserProfile | 
     userId: summary.userId,
     username: summary.username,
     email: summary.email,
+    authProvider: summary.authProvider,
     bio: summary.bio,
     headline: summary.headline,
     profilePictureUrl: summary.profilePictureUrl,
@@ -74,6 +77,7 @@ export async function getUserProfileById(userId: string): Promise<UserProfile | 
     isOnline: summary.isOnline,
     lastSeenAt: summary.lastSeenAt ? new Date(summary.lastSeenAt) : null,
     createdAt: new Date(summary.createdAt),
+    onboardingCompletedAt: summary.onboardingCompletedAt,
     type: summary.type as UserType,
     verificationState: (summary.verificationState ?? null) as UserVerificationState | null,
     details: summary.details,

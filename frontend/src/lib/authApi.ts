@@ -25,8 +25,27 @@ export interface StudentSignupPayload {
   password: string;
   branch: string;
   year: string | number;
-  googleIdToken: string;
 }
+
+export interface StudentSignupOtpResponse {
+  verificationId: string;
+  expiresAt: string;
+  message: string;
+}
+
+export interface GoogleOnboardingResponse {
+  onboardingRequired: true;
+  sessionId: string;
+  provider: 'google';
+  email: string;
+  fullName: string;
+  profilePhotoUrl: string | null;
+  suggestedUsername: string | null;
+  accountType: 'student';
+  missingFields: string[];
+}
+
+export type GoogleAuthResult = LoginResult | GoogleOnboardingResponse;
 
 export interface AlumniSignupPayload {
   name: string;
@@ -69,22 +88,8 @@ export async function apiLogin(email: string, password: string): Promise<LoginRe
   return { profile: data, token: data.token };
 }
 
-export async function apiSignupStudent(payload: StudentSignupPayload): Promise<LoginResult> {
-  const response = await safeFetch(`${API_BASE}/auth/signup/student`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err?.message || 'Signup failed');
-  }
-
-  const data = (await response.json()) as ApiUserProfile & { token?: string };
-  return { profile: data, token: data.token };
+export async function apiSignupStudent(payload: StudentSignupPayload): Promise<StudentSignupOtpResponse> {
+  return apiRequestStudentSignupOtp(payload);
 }
 
 export async function apiSignupAlumni(payload: AlumniSignupPayload): Promise<AlumniPendingVerificationResult> {
@@ -112,25 +117,84 @@ export async function apiSignupAlumni(payload: AlumniSignupPayload): Promise<Alu
   return (await response.json()) as AlumniPendingVerificationResult;
 }
 
-export async function apiLoginStudentWithGoogle(
-  idToken: string,
-  payload?: { branch?: string; year?: string | number }
-): Promise<LoginResult> {
-  const response = await safeFetch(`${API_BASE}/auth/google/student`, {
+export async function apiAuthenticateWithGoogle(idToken: string): Promise<GoogleAuthResult> {
+  const response = await safeFetch(`${API_BASE}/auth/google`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
       idToken,
-      branch: payload?.branch,
-      year: payload?.year,
     }),
   });
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
     throw new Error(err?.message || 'Google sign-in failed');
+  }
+
+  const data = (await response.json()) as (ApiUserProfile & { token?: string }) | GoogleOnboardingResponse;
+  if ('onboardingRequired' in data) {
+    return data;
+  }
+
+  return { profile: data, token: data.token };
+}
+
+export async function apiCompleteGoogleOnboarding(payload: {
+  sessionId: string;
+  fullName?: string;
+  username?: string;
+  branch: string;
+  year: string | number;
+  accountType?: 'student';
+}): Promise<LoginResult> {
+  const response = await safeFetch(`${API_BASE}/auth/google/onboarding`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to complete Google signup');
+  }
+
+  const data = (await response.json()) as ApiUserProfile & { token?: string };
+  return { profile: data, token: data.token };
+}
+
+export async function apiRequestStudentSignupOtp(payload: StudentSignupPayload): Promise<StudentSignupOtpResponse> {
+  const response = await safeFetch(`${API_BASE}/auth/signup/student/request-otp`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to send verification code');
+  }
+
+  return (await response.json()) as StudentSignupOtpResponse;
+}
+
+export async function apiVerifyStudentSignupOtp(verificationId: string, otp: string): Promise<LoginResult> {
+  const response = await safeFetch(`${API_BASE}/auth/signup/student/verify-otp`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ verificationId, otp }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to verify the code');
   }
 
   const data = (await response.json()) as ApiUserProfile & { token?: string };
