@@ -6,7 +6,7 @@ import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 
 interface ProfileCardProps {
-  student: Student;
+  student: Student | null | undefined;
   followerCount: number;
   followingCount: number;
   onViewProfile: () => void;
@@ -15,6 +15,14 @@ interface ProfileCardProps {
 }
 
 export function ProfileCard({ student, followerCount, followingCount, onViewProfile, onEditProfile, onViewNetwork }: ProfileCardProps) {
+  const displayName = student?.name?.trim() || student?.displayName?.trim() || student?.username?.trim() || 'User';
+  const avatarSrc = student?.avatar || undefined;
+  const avatarFallback = displayName.charAt(0).toUpperCase() || 'U';
+  const branch = student?.branch?.trim() || 'Branch not added';
+  const year = typeof student?.year === 'number' && student.year > 0 ? student.year : null;
+  const bio = student?.bio?.trim() || 'Add a short bio to help others understand what you are interested in.';
+  const skills = Array.isArray(student?.skills) ? student.skills : [];
+
   return (
     <div className="space-y-4">
       {/* Main Profile Card */}
@@ -35,21 +43,21 @@ export function ProfileCard({ student, followerCount, followingCount, onViewProf
           {/* Avatar */}
           <div className="flex justify-center -mt-12 mb-4">
             <Avatar className="w-24 h-24 ring-4 ring-white shadow-xl">
-              <AvatarImage src={student.avatar} />
-              <AvatarFallback className="text-2xl">{student.name[0]}</AvatarFallback>
+              <AvatarImage src={avatarSrc} />
+              <AvatarFallback className="text-2xl">{avatarFallback}</AvatarFallback>
             </Avatar>
           </div>
 
           {/* Name & Info */}
           <div className="text-center space-y-1 mb-4">
-            <h3 className="text-gray-900">{student.name}</h3>
-            <p className="text-sm text-gray-600">{student.branch}</p>
-            <p className="text-sm text-secondary">Year {student.year}</p>
+            <h3 className="text-gray-900">{displayName}</h3>
+            <p className="text-sm text-gray-600">{branch}</p>
+            <p className="text-sm text-secondary">{year ? `Year ${year}` : 'Year not added'}</p>
           </div>
 
           {/* Bio */}
           <p className="text-sm text-gray-600 text-center mb-4 line-clamp-3">
-            {student.bio}
+            {bio}
           </p>
 
           {/* Stats */}
@@ -63,7 +71,7 @@ export function ProfileCard({ student, followerCount, followingCount, onViewProf
               <p className="text-xs text-gray-600">Following</p>
             </div>
             <div className="text-center">
-              <p className="text-xl text-primary">{student.skills.length}</p>
+              <p className="text-xl text-primary">{skills.length}</p>
               <p className="text-xs text-gray-600">Skills</p>
             </div>
           </div>
@@ -87,7 +95,7 @@ export function ProfileCard({ student, followerCount, followingCount, onViewProf
             <h4 className="text-gray-900">Top Skills</h4>
           </div>
           <div className="flex flex-wrap gap-2">
-            {student.skills.slice(0, 5).map(skill => (
+            {skills.slice(0, 5).map(skill => (
               <Badge 
                 key={skill} 
                 className="bg-primary/10 text-primary border-primary/20 transition-all duration-300 hover:scale-105 hover:bg-primary/20"
@@ -95,11 +103,16 @@ export function ProfileCard({ student, followerCount, followingCount, onViewProf
                 {skill}
               </Badge>
             ))}
-            {student.skills.length > 5 && (
+            {skills.length > 5 && (
               <Badge className="bg-gray-100 text-gray-600">
-                +{student.skills.length - 5} more
+                +{skills.length - 5} more
               </Badge>
             )}
+            {skills.length === 0 ? (
+              <Badge className="bg-gray-100 text-gray-600">
+                Add skills to highlight your profile
+              </Badge>
+            ) : null}
           </div>
         </CardContent>
       </Card>

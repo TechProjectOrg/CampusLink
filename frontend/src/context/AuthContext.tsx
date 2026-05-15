@@ -58,22 +58,29 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 function profileToStudent(profile: ApiUserProfile): Student {
+  const displayName = profile.displayName?.trim() || profile.username?.trim() || profile.email?.trim() || 'User';
+
   return {
     id: profile.userId,
-    name: profile.displayName,
-    displayName: profile.displayName,
+    name: displayName,
+    displayName,
     username: profile.username,
     email: profile.email,
+    createdAt: profile.createdAt,
     branch: profile.details?.branch ?? 'Unknown',
     year: profile.details?.year ?? profile.details?.passingYear ?? 0,
-    avatar: profile.profilePictureUrl || undefined,
+    avatar: profile.profilePictureUrl ?? '',
     coverPhotoUrl: profile.coverPhotoUrl || undefined,
     bio: profile.bio ?? '',
     skills: [],
     interests: [],
     certifications: [],
+    experience: [],
+    societies: [],
+    achievements: [],
     projects: [],
     accountType: profile.isPublic ? 'public' : 'private',
+    stats: profile.stats,
   };
 }
 

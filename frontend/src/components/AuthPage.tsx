@@ -57,6 +57,8 @@ declare global {
 }
 
 const GOOGLE_SCRIPT_SRC = 'https://accounts.google.com/gsi/client';
+let initializedGoogleClientId: string | null = null;
+let activeGoogleCredentialHandler: ((credential: string) => void | Promise<void>) | null = null;
 
 function loadGoogleScript(): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -82,6 +84,26 @@ function loadGoogleScript(): Promise<void> {
   });
 }
 
+function initializeGoogleIdentity(clientId: string) {
+  if (!window.google?.accounts?.id) {
+    return;
+  }
+
+  if (initializedGoogleClientId === clientId) {
+    return;
+  }
+
+  window.google.accounts.id.initialize({
+    client_id: clientId,
+    callback: (response) => {
+      if (response.credential && activeGoogleCredentialHandler) {
+        void activeGoogleCredentialHandler(response.credential);
+      }
+    },
+  });
+  initializedGoogleClientId = clientId;
+}
+
 function GoogleAuthButton({
   disabled,
   onCredential,
@@ -91,10 +113,17 @@ function GoogleAuthButton({
 }) {
   const [error, setError] = useState('');
   const buttonRef = useRef<HTMLDivElement | null>(null);
+  const onCredentialRef = useRef(onCredential);
   const googleClientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)?.trim();
 
   useEffect(() => {
+    onCredentialRef.current = onCredential;
+  }, [onCredential]);
+
+  useEffect(() => {
     let cancelled = false;
+    const handleCredential = (credential: string) => onCredentialRef.current(credential);
+    activeGoogleCredentialHandler = handleCredential;
 
     async function renderGoogleButton() {
       if (!googleClientId) {
@@ -111,14 +140,7 @@ function GoogleAuthButton({
 
         const width = Math.min(Math.max(Math.floor(buttonRef.current.clientWidth || 320), 280), 360);
         container.innerHTML = '';
-        window.google.accounts.id.initialize({
-          client_id: googleClientId,
-          callback: (response) => {
-            if (response.credential) {
-              void onCredential(response.credential);
-            }
-          },
-        });
+        initializeGoogleIdentity(googleClientId);
         window.google.accounts.id.renderButton(container, {
           theme: 'outline',
           size: 'large',
@@ -135,8 +157,11 @@ function GoogleAuthButton({
 
     return () => {
       cancelled = true;
+      if (activeGoogleCredentialHandler === handleCredential) {
+        activeGoogleCredentialHandler = null;
+      }
     };
-  }, [googleClientId, onCredential]);
+  }, [googleClientId]);
 
   return (
     <div className={disabled ? 'pointer-events-none opacity-60' : ''}>
