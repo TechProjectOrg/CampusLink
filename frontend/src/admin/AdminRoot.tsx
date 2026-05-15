@@ -635,6 +635,49 @@ function getPostActionOptions(post: Pick<AdminPostListItem, 'status'>): Array<{ 
   ];
 }
 
+function getVerificationActionOptions(
+  request: Pick<AdminVerificationRequestItem, 'status'>,
+): Array<{ status: 'approved' | 'rejected' | 'more_info'; label: string }> {
+  if (request.status !== 'pending') {
+    return [];
+  }
+  return [
+    { status: 'approved', label: 'Approve' },
+    { status: 'rejected', label: 'Reject' },
+    { status: 'more_info', label: 'Request more info' },
+  ].filter((action) => action.status !== request.status);
+}
+
+function getReportActionOptions(
+  report: Pick<AdminReportListItem, 'status'> & { assignedModerator?: string | null; assignee?: AdminReportActorSummary | null },
+): Array<
+  | { type: 'status'; label: string; body: { status: AdminReportStatus; assignToMe?: boolean } }
+  | { type: 'assignment'; label: string; body: { clearAssignee: true } }
+> {
+  const actions: Array<
+    | { type: 'status'; label: string; body: { status: AdminReportStatus; assignToMe?: boolean } }
+    | { type: 'assignment'; label: string; body: { clearAssignee: true } }
+  > = [];
+
+  if (report.status !== 'reviewing') {
+    actions.push({ type: 'status', label: 'Review and assign to me', body: { status: 'reviewing', assignToMe: true } });
+  }
+  if (report.status !== 'resolved') {
+    actions.push({ type: 'status', label: 'Resolve', body: { status: 'resolved' } });
+  }
+  if (report.status !== 'rejected') {
+    actions.push({ type: 'status', label: 'Reject', body: { status: 'rejected' } });
+  }
+  if (report.status !== 'escalated') {
+    actions.push({ type: 'status', label: 'Escalate', body: { status: 'escalated' } });
+  }
+  if (report.assignedModerator || report.assignee) {
+    actions.push({ type: 'assignment', label: 'Unassign', body: { clearAssignee: true } });
+  }
+
+  return actions;
+}
+
 
 const DEFAULT_USER_FILTERS: UserFilterState = {
   banned: '',
@@ -1011,6 +1054,7 @@ export default function AdminRoot() {
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [selectedVerificationId, setSelectedVerificationId] = useState<string | null>(null);
   const [verificationDecisionNote, setVerificationDecisionNote] = useState('');
+  const [hasOpenedVerificationRequest, setHasOpenedVerificationRequest] = useState(false);
 
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' });
   const [passwordState, setPasswordState] = useState({ isSaving: false, message: '', error: '' });
@@ -1167,7 +1211,7 @@ export default function AdminRoot() {
   const reportsPageInfo = reportsResponse?.pageInfo ?? null;
   const verification = page === 'verification' ? ((currentPageQuery.data as AdminVerificationRequestItem[]) ?? []) : [];
   const selectedVerification = useMemo(
-    () => verification.find((item) => item.id === selectedVerificationId) ?? verification[0] ?? null,
+    () => verification.find((item) => item.id === selectedVerificationId) ?? null,
     [verification, selectedVerificationId],
   );
   const analytics = page === 'analytics' ? ((currentPageQuery.data as AdminAnalyticsResponse | null) ?? null) : null;
@@ -1188,11 +1232,16 @@ export default function AdminRoot() {
   useEffect(() => {
     if (page !== 'verification') return;
     setSelectedVerificationId((current) => {
-      if (verification.length === 0) return null;
       if (current && verification.some((item) => item.id === current)) return current;
-      return verification[0]?.id ?? null;
+      return null;
     });
   }, [page, verification]);
+
+  useEffect(() => {
+    if (page !== 'verification') return;
+    setSelectedVerificationId(null);
+    setHasOpenedVerificationRequest(false);
+  }, [page]);
 
   useEffect(() => {
     setVerificationDecisionNote(selectedVerification?.decisionNote ?? '');
@@ -2478,7 +2527,9 @@ export default function AdminRoot() {
                           <td className="px-3 py-3">
                             <div className="flex flex-wrap gap-2">
                               <Button variant="outline" size="sm" onClick={() => void openReportDrawer(report)}>Open</Button>
-                              <Button variant="outline" size="sm" onClick={() => void runReportAction(report.id, { status: 'reviewing', assignToMe: true }, 'Report assigned and moved to review')}>Review</Button>
+                              {report.status !== 'reviewing' ? (
+                                <Button variant="outline" size="sm" onClick={() => void runReportAction(report.id, { status: 'reviewing', assignToMe: true }, 'Report assigned and moved to review')}>Review</Button>
+                              ) : null}
                             </div>
                           </td>
                         </tr>
@@ -2505,7 +2556,7 @@ export default function AdminRoot() {
             ) : null}
 
             {!pageLoading && page === 'verification' ? (
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.25fr)]">
+              <div className="relative">
                 <ShellCard title="Verification Queue">
                   {verification.length === 0 ? (
                     <EmptyPanel title="No verification requests" body="New alumni or club verification requests will appear here." />
@@ -2515,9 +2566,12 @@ export default function AdminRoot() {
                         <button
                           key={item.id}
                           type="button"
-                          onClick={() => setSelectedVerificationId(item.id)}
+                          onClick={() => {
+                            setSelectedVerificationId(item.id);
+                            setHasOpenedVerificationRequest(true);
+                          }}
                           className={`w-full rounded-lg border p-4 text-left transition ${
-                            selectedVerification?.id === item.id
+                            selectedVerification?.id === item.id && hasOpenedVerificationRequest
                               ? 'border-slate-900 bg-slate-50 shadow-sm'
                               : 'border-slate-200 bg-white hover:border-slate-300'
                           }`}
@@ -2541,14 +2595,12 @@ export default function AdminRoot() {
                   )}
                 </ShellCard>
 
-                <ShellCard title="Verification Review">
-                  {!selectedVerification ? (
-                    <EmptyPanel title="Select a request" body="Choose a verification request from the queue to review its proof and applicant details." />
-                  ) : (
-                    <div className="space-y-4">
-                      <div className="flex items-start justify-between gap-4">
-                        <div>
-                          <p className="text-lg font-semibold text-slate-900">
+                {selectedVerification && hasOpenedVerificationRequest ? (
+                  <div className="fixed inset-0 z-40 overflow-y-auto bg-slate-950/30 p-4 sm:p-6">
+                    <div className="mx-auto w-full max-w-5xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+                      <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-4 py-4 sm:px-6">
+                        <div className="min-w-0">
+                          <p className="text-2xl font-semibold leading-tight text-slate-900">
                             {selectedVerification.targetSummary?.label ?? selectedVerification.profilePreview?.name ?? 'Verification request'}
                           </p>
                           <p className="mt-1 text-sm text-slate-500">
@@ -2556,89 +2608,113 @@ export default function AdminRoot() {
                             {selectedVerification.verificationState ? ` • ${selectedVerification.verificationState}` : ''}
                           </p>
                         </div>
-                        <StatusBadge value={selectedVerification.status} />
-                      </div>
-
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div className="rounded-xl border border-slate-200 p-4">
-                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Applicant Summary</p>
-                          <div className="mt-3 space-y-2 text-sm text-slate-700">
-                            <p><span className="font-medium text-slate-900">Name:</span> {selectedVerification.profilePreview?.name ?? selectedVerification.targetSummary?.label ?? 'Unknown'}</p>
-                            <p><span className="font-medium text-slate-900">Email:</span> {selectedVerification.profilePreview?.email ?? selectedVerification.targetSummary?.email ?? 'Unknown'}</p>
-                            <p><span className="font-medium text-slate-900">Branch:</span> {selectedVerification.profilePreview?.branch ?? 'Not provided'}</p>
-                            <p><span className="font-medium text-slate-900">Passing year:</span> {selectedVerification.profilePreview?.passingYear ?? 'Not provided'}</p>
-                            <p><span className="font-medium text-slate-900">Current status:</span> {selectedVerification.profilePreview?.currentStatus ?? 'Not provided'}</p>
-                          </div>
-                        </div>
-
-                        <div className="rounded-xl border border-slate-200 p-4">
-                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Target Summary</p>
-                          <div className="mt-3 space-y-2 text-sm text-slate-700">
-                            <p><span className="font-medium text-slate-900">Type:</span> {selectedVerification.targetSummary?.kind ?? 'Unknown'}</p>
-                            <p><span className="font-medium text-slate-900">Label:</span> {selectedVerification.targetSummary?.label ?? 'Unknown'}</p>
-                            {'email' in (selectedVerification.targetSummary ?? {}) ? (
-                              <p><span className="font-medium text-slate-900">Email:</span> {selectedVerification.targetSummary?.email ?? 'Unknown'}</p>
-                            ) : null}
-                            <p><span className="font-medium text-slate-900">Reviewed by:</span> {selectedVerification.reviewedBy?.username ?? 'Not reviewed yet'}</p>
-                            <p><span className="font-medium text-slate-900">Reviewed at:</span> {selectedVerification.reviewedAt ? formatDate(selectedVerification.reviewedAt) : 'Not reviewed yet'}</p>
-                          </div>
+                        <div className="flex items-center gap-3 pl-4">
+                          <StatusBadge value={selectedVerification.status} />
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setHasOpenedVerificationRequest(false);
+                              setSelectedVerificationId(null);
+                            }}
+                          >
+                            Close
+                          </Button>
                         </div>
                       </div>
 
-                      <div className="rounded-xl border border-slate-200 p-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Submitted Proof</p>
-                        {selectedVerification.documentUrls.length === 0 ? (
-                          <p className="mt-3 text-sm text-slate-500">No proof documents uploaded.</p>
+                      <div className="max-h-[calc(90vh-6rem)] space-y-4 overflow-y-auto p-4 sm:p-6">
+                        <div className="grid items-start gap-4 md:grid-cols-2">
+                          <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 p-4 sm:p-5">
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Applicant Summary</p>
+                            <div className="mt-3 space-y-4 text-sm leading-6 text-slate-700">
+                              <p><span className="font-medium text-slate-900">Name:</span> {selectedVerification.profilePreview?.name ?? selectedVerification.targetSummary?.label ?? 'Unknown'}</p>
+                              <p><span className="font-medium text-slate-900">Email:</span> {selectedVerification.profilePreview?.email ?? selectedVerification.targetSummary?.email ?? 'Unknown'}</p>
+                              <p><span className="font-medium text-slate-900">Branch:</span> {selectedVerification.profilePreview?.branch ?? 'Not provided'}</p>
+                              <p><span className="font-medium text-slate-900">Passing year:</span> {selectedVerification.profilePreview?.passingYear ?? 'Not provided'}</p>
+                              <p><span className="font-medium text-slate-900">Current status:</span> {selectedVerification.profilePreview?.currentStatus ?? 'Not provided'}</p>
+                            </div>
+                          </div>
+
+                          <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200 p-4 sm:p-5">
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Target Summary</p>
+                            <div className="mt-3 space-y-4 text-sm leading-6 text-slate-700">
+                              <p><span className="font-medium text-slate-900">Type:</span> {selectedVerification.targetSummary?.kind ?? 'Unknown'}</p>
+                              <p><span className="font-medium text-slate-900">Label:</span> {selectedVerification.targetSummary?.label ?? 'Unknown'}</p>
+                              {'email' in (selectedVerification.targetSummary ?? {}) ? (
+                                <p><span className="font-medium text-slate-900">Email:</span> {selectedVerification.targetSummary?.email ?? 'Unknown'}</p>
+                              ) : null}
+                              <p><span className="font-medium text-slate-900">Reviewed by:</span> {selectedVerification.reviewedBy?.username ?? 'Not reviewed yet'}</p>
+                              <p><span className="font-medium text-slate-900">Reviewed at:</span> {selectedVerification.reviewedAt ? formatDate(selectedVerification.reviewedAt) : 'Not reviewed yet'}</p>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="overflow-hidden rounded-xl border border-slate-200 p-4 sm:p-5">
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Submitted Proof</p>
+                          {selectedVerification.documentUrls.length === 0 ? (
+                            <p className="mt-3 text-sm leading-6 text-slate-500">No proof documents uploaded.</p>
+                          ) : (
+                            <div className="mt-5 grid gap-4 md:grid-cols-2">
+                              {selectedVerification.documentUrls.map((url, index) => {
+                                const isImage = /\.(png|jpe?g|webp|gif)$/i.test(url);
+                                return (
+                                  <a
+                                    key={`${selectedVerification.id}-proof-${index}`}
+                                    href={url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="block min-w-0 rounded-lg border border-slate-200 p-4 transition hover:border-slate-300"
+                                  >
+                                    {isImage ? <img src={url} alt={`Proof ${index + 1}`} className="h-36 w-full rounded-lg object-cover" /> : null}
+                                    <p className="mt-2 text-sm font-medium text-slate-800">Proof {index + 1}</p>
+                                    <p className="mt-2 break-all text-xs leading-6 text-slate-500">{url}</p>
+                                  </a>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="overflow-hidden rounded-xl border border-slate-200 p-4 sm:p-5">
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Request Notes</p>
+                          <p className="mt-3 text-sm leading-6 text-slate-700">
+                            {selectedVerification.notes || 'No applicant notes provided.'}
+                          </p>
+                        </div>
+
+                        {selectedVerification.status === 'pending' ? (
+                          <div className="overflow-hidden rounded-xl border border-slate-200 p-4 sm:p-5">
+                            <Label htmlFor="verification-decision-note" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
+                              Reviewer Decision Note
+                            </Label>
+                            <Textarea
+                              id="verification-decision-note"
+                              value={verificationDecisionNote}
+                              onChange={(event) => setVerificationDecisionNote(event.target.value)}
+                              className="mt-3 min-h-[120px]"
+                              placeholder="Add the reason for approval, rejection, or more-information request."
+                            />
+                          </div>
+                        ) : null}
+
+                        {getVerificationActionOptions(selectedVerification).length > 0 ? (
+                          <div className="flex flex-wrap gap-3 pt-1">
+                            {getVerificationActionOptions(selectedVerification).map((action) => (
+                              <Button key={action.status} variant="outline" size="sm" onClick={() => void runVerificationAction(action.status)}>
+                                {action.label}
+                              </Button>
+                            ))}
+                          </div>
                         ) : (
-                          <div className="mt-3 grid gap-3 md:grid-cols-2">
-                            {selectedVerification.documentUrls.map((url, index) => {
-                              const isImage = /\.(png|jpe?g|webp|gif)$/i.test(url);
-                              return (
-                                <a
-                                  key={`${selectedVerification.id}-proof-${index}`}
-                                  href={url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="rounded-lg border border-slate-200 p-3 transition hover:border-slate-300"
-                                >
-                                  {isImage ? <img src={url} alt={`Proof ${index + 1}`} className="h-36 w-full rounded-md object-cover" /> : null}
-                                  <p className="mt-2 text-sm font-medium text-slate-800">Proof {index + 1}</p>
-                                  <p className="mt-1 break-all text-xs text-slate-500">{url}</p>
-                                </a>
-                              );
-                            })}
+                          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
+                            This verification request has already been reviewed and is now read-only.
                           </div>
                         )}
                       </div>
-
-                      <div className="rounded-xl border border-slate-200 p-4">
-                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">Request Notes</p>
-                        <p className="mt-3 text-sm text-slate-700">
-                          {selectedVerification.notes || 'No applicant notes provided.'}
-                        </p>
-                      </div>
-
-                      <div className="rounded-xl border border-slate-200 p-4">
-                        <Label htmlFor="verification-decision-note" className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-500">
-                          Reviewer Decision Note
-                        </Label>
-                        <Textarea
-                          id="verification-decision-note"
-                          value={verificationDecisionNote}
-                          onChange={(event) => setVerificationDecisionNote(event.target.value)}
-                          className="mt-3 min-h-[120px]"
-                          placeholder="Add the reason for approval, rejection, or more-information request."
-                        />
-                      </div>
-
-                      <div className="flex flex-wrap gap-2">
-                        <Button variant="outline" size="sm" onClick={() => void runVerificationAction('approved')}>Approve</Button>
-                        <Button variant="outline" size="sm" onClick={() => void runVerificationAction('rejected')}>Reject</Button>
-                        <Button variant="outline" size="sm" onClick={() => void runVerificationAction('more_info')}>Request more info</Button>
-                      </div>
                     </div>
-                  )}
-                </ShellCard>
+                  </div>
+                ) : null}
               </div>
             ) : null}
 
@@ -3763,11 +3839,26 @@ export default function AdminRoot() {
 
             <ShellCard title="Moderation Actions">
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" size="sm" onClick={() => void runReportAction(selectedReportDetail.id, { status: 'reviewing', assignToMe: true }, 'Report assigned and moved to review')}>Review and assign to me</Button>
-                <Button variant="outline" size="sm" onClick={() => void runReportAction(selectedReportDetail.id, { status: 'resolved' }, 'Report resolved')}>Resolve</Button>
-                <Button variant="outline" size="sm" onClick={() => void runReportAction(selectedReportDetail.id, { status: 'rejected' }, 'Report rejected')}>Reject</Button>
-                <Button variant="outline" size="sm" onClick={() => void runReportAction(selectedReportDetail.id, { status: 'escalated' }, 'Report escalated')}>Escalate</Button>
-                <Button variant="outline" size="sm" onClick={() => void runReportAction(selectedReportDetail.id, { clearAssignee: true }, 'Report unassigned')}>Unassign</Button>
+                {getReportActionOptions(selectedReportDetail).map((action) => (
+                  <Button
+                    key={`${action.type}-${action.label}`}
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      void runReportAction(
+                        selectedReportDetail.id,
+                        action.body,
+                        action.type === 'assignment'
+                          ? 'Report unassigned'
+                          : action.body.status === 'reviewing'
+                            ? 'Report assigned and moved to review'
+                            : `Report ${action.body.status}`,
+                      )
+                    }
+                  >
+                    {action.label}
+                  </Button>
+                ))}
               </div>
             </ShellCard>
 

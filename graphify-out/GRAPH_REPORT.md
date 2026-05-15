@@ -1,11 +1,11 @@
 # Graph Report - final-year-project  (2026-05-15)
 
 ## Corpus Check
-- 168 files · ~191,978 words
+- 168 files · ~192,263 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1312 nodes · 2105 edges · 40 communities detected
+- 1314 nodes · 2107 edges · 41 communities detected
 - Extraction: 86% EXTRACTED · 14% INFERRED · 0% AMBIGUOUS · INFERRED: 303 edges (avg confidence: 0.8)
 - Token cost: 0 input · 0 output
 
@@ -36,20 +36,21 @@
 - [[_COMMUNITY_Community 23|Community 23]]
 - [[_COMMUNITY_Community 24|Community 24]]
 - [[_COMMUNITY_Community 25|Community 25]]
-- [[_COMMUNITY_Community 28|Community 28]]
-- [[_COMMUNITY_Community 37|Community 37]]
+- [[_COMMUNITY_Community 26|Community 26]]
+- [[_COMMUNITY_Community 29|Community 29]]
 - [[_COMMUNITY_Community 38|Community 38]]
 - [[_COMMUNITY_Community 39|Community 39]]
-- [[_COMMUNITY_Community 41|Community 41]]
-- [[_COMMUNITY_Community 43|Community 43]]
-- [[_COMMUNITY_Community 46|Community 46]]
+- [[_COMMUNITY_Community 40|Community 40]]
+- [[_COMMUNITY_Community 42|Community 42]]
+- [[_COMMUNITY_Community 44|Community 44]]
 - [[_COMMUNITY_Community 47|Community 47]]
-- [[_COMMUNITY_Community 55|Community 55]]
-- [[_COMMUNITY_Community 58|Community 58]]
-- [[_COMMUNITY_Community 70|Community 70]]
-- [[_COMMUNITY_Community 98|Community 98]]
-- [[_COMMUNITY_Community 129|Community 129]]
+- [[_COMMUNITY_Community 48|Community 48]]
+- [[_COMMUNITY_Community 56|Community 56]]
+- [[_COMMUNITY_Community 59|Community 59]]
+- [[_COMMUNITY_Community 71|Community 71]]
+- [[_COMMUNITY_Community 99|Community 99]]
 - [[_COMMUNITY_Community 130|Community 130]]
+- [[_COMMUNITY_Community 131|Community 131]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `cacheSetJson()` - 22 edges
@@ -68,42 +69,42 @@
   backend\server\src\lib\cache.ts → backend\server\src\lib\chatCache.ts
 - `markChatAccepted()` --calls--> `autoAcceptRequestOnReply()`  [INFERRED]
   backend\server\src\lib\chat.ts → backend\server\src\routes\chat.ts
+- `getUserSummariesByIds()` --calls--> `formatMessagesForResponse()`  [INFERRED]
+  backend\server\src\lib\userCache.ts → backend\server\src\routes\chat.ts
 - `handleCreateClubPostFromModal()` --calls--> `apiCreateUserPost()`  [INFERRED]
   frontend\src\components\ClubActivityPage.tsx → frontend\src\lib\postsApi.ts
 - `handleSaveEducation()` --calls--> `apiUpdateUserProfile()`  [INFERRED]
   frontend\src\components\ProfilePage.tsx → frontend\src\lib\authApi.ts
-- `Legacy SQL Social Schema` --semantically_similar_to--> `Frontend Copy of Legacy SQL Social Schema`  [INFERRED] [semantically similar]
-  database/DATABASE_README.md → frontend/database/DATABASE_README.md
 
 ## Communities
 
 ### Community 0 - "Community 0"
-Cohesion: 0.04
-Nodes (81): buildAuthenticatedResponse(), getCounterValue(), incrementCounter(), cacheExpire(), cacheGetJson(), cacheHashGet(), cacheHashIncrementBy(), cacheHashMultiGet() (+73 more)
+Cohesion: 0.05
+Nodes (81): invalidateAdminClubCaches(), incrementCounter(), appendStreamMessage(), areRedisStreamsEnabled(), cacheDelete(), cacheExpire(), cacheHashDelete(), cacheHashIncrementBy() (+73 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.04
 Nodes (56): apiCreateUserCertification(), apiDeleteUserCertification(), apiFetchUserCertifications(), apiUpdateUserCertification(), authHeaders(), parseErrorMessage(), apiCreateUserExperience(), apiDeleteUserExperience() (+48 more)
 
 ### Community 2 - "Community 2"
-Cohesion: 0.05
-Nodes (67): appendStreamMessage(), areRedisStreamsEnabled(), cacheDelete(), cacheHashDelete(), cacheIncrement(), cacheSetAdd(), cacheSetCardinality(), cacheSetJson() (+59 more)
-
-### Community 3 - "Community 3"
 Cohesion: 0.04
 Nodes (45): areStringArraysEqual(), buildCreatePostPayloadFromDraft(), createInitialDiscussionPageState(), findCommentInTree(), findCommentStateById(), findOpportunityIdByCommentId(), getAccountType(), handleAcceptFollowRequest() (+37 more)
 
-### Community 4 - "Community 4"
+### Community 3 - "Community 3"
 Cohesion: 0.06
 Nodes (48): addReportNote(), async(), buildAnnouncementsQueryString(), buildClubsQueryString(), buildLogsQueryString(), buildPostsQueryString(), buildQueryString(), buildReportsQueryString() (+40 more)
 
-### Community 5 - "Community 5"
+### Community 4 - "Community 4"
 Cohesion: 0.04
 Nodes (23): Alert(), apiCreateGroupConversation(), ChatPage(), clearLongPressTimer(), formatDate(), formatMenuTimestamp(), handleCreateGroup(), handleDeleteMessage() (+15 more)
 
-### Community 6 - "Community 6"
+### Community 5 - "Community 5"
 Cohesion: 0.06
 Nodes (46): handleMarkAllAsRead(), compareVersions(), createCacheEntry(), createPageEntry(), enforcePolicyLimit(), estimateByteSize(), incrementCacheRevalidations(), invalidateCache() (+38 more)
+
+### Community 6 - "Community 6"
+Cohesion: 0.06
+Nodes (54): getCounterValue(), cacheGetJson(), cacheHashGet(), cacheHashMultiGet(), parseJson(), buildConversationListEntries(), cacheAndEmitMessage(), fetchConversationBaseRows() (+46 more)
 
 ### Community 7 - "Community 7"
 Cohesion: 0.05
@@ -126,146 +127,150 @@ Cohesion: 0.16
 Nodes (30): handleApproveRequest(), handleCreateClubPostFromModal(), handleDeleteClub(), handleInviteMember(), handleJoinCurrentClub(), handleRejectRequest(), handleSaveSettings(), handleToggleAdminRole() (+22 more)
 
 ### Community 12 - "Community 12"
-Cohesion: 0.13
-Nodes (30): invalidateAdminClubCaches(), cacheSetJsonIfNotExists(), acquireCacheLock(), buildEnvelope(), buildPermissionSnapshot(), cacheLockKey(), clubFeedKey(), clubMembershipKey() (+22 more)
-
-### Community 13 - "Community 13"
 Cohesion: 0.11
 Nodes (24): areUsersMutuallyFollowing(), emitChatDelete(), emitChatMessage(), emitChatReaction(), emitChatRead(), emitChatRequestAccepted(), emitTypingIndicator(), getOrCreateDirectChat() (+16 more)
 
+### Community 13 - "Community 13"
+Cohesion: 0.1
+Nodes (22): buildAuthenticatedResponse(), cacheHGetAll(), hydrateOrderedUsers(), mapMinimalUserFromSummary(), searchUsers(), chatConversationListKey(), fetchUserStatsByIdsFromDb(), fetchUserSummariesByIdsFromDb() (+14 more)
+
 ### Community 14 - "Community 14"
+Cohesion: 0.15
+Nodes (21): cacheSetAdd(), cacheSetCardinality(), cacheSetMembers(), applyDiversity(), dismissedKey(), dismissSuggestedUser(), getSuggestedUsersForApi(), getVectorMap() (+13 more)
+
+### Community 15 - "Community 15"
 Cohesion: 0.2
 Nodes (20): apiAddComment(), apiAddReply(), apiCreateUserPost(), apiDeleteComment(), apiDeletePost(), apiFetchCommentContext(), apiFetchHashtagPosts(), apiFetchPostById() (+12 more)
 
-### Community 15 - "Community 15"
+### Community 16 - "Community 16"
 Cohesion: 0.12
 Nodes (17): canViewerAccessClubPost(), ensureUniqueClubSlug(), getClubPermissionSnapshot(), loadClubAccess(), normalizeClubCategoryName(), normalizeClubTagName(), parseActiveRestrictions(), resolveOrCreateClubCategory() (+9 more)
 
-### Community 16 - "Community 16"
+### Community 17 - "Community 17"
 Cohesion: 0.15
 Nodes (12): handleAlumniSignup(), handleLogin(), handleLoginGoogle(), handleSendVerificationLink(), handleSignupGoogle(), handleStudentSignup(), moveToOnboarding(), openLogin() (+4 more)
 
-### Community 17 - "Community 17"
+### Community 18 - "Community 18"
 Cohesion: 0.2
 Nodes (13): buildGroupedLikeMessage(), createNotification(), fanoutNotification(), isNotificationEnabled(), loadNotificationRealtimeRow(), loadRecipientNotificationPreferences(), notifyCommentReply(), notifyPostComment() (+5 more)
 
-### Community 18 - "Community 18"
+### Community 19 - "Community 19"
 Cohesion: 0.32
 Nodes (16): buildStorageEnv(), deleteManagedChatMediaByUrl(), deleteManagedClubMediaByUrl(), deleteManagedPhotoByUrl(), deleteManagedPostMediaByUrl(), extensionFromMime(), getS3Client(), getStorageEnv() (+8 more)
 
-### Community 19 - "Community 19"
+### Community 20 - "Community 20"
 Cohesion: 0.14
 Nodes (7): handleLogout(), handOffAdminSession(), clearStoredSession(), getAuthToken(), readStoredSession(), clearAdminSession(), writeAdminSession()
 
-### Community 20 - "Community 20"
+### Community 21 - "Community 21"
 Cohesion: 0.16
 Nodes (5): AppDataProvider(), createInitialState(), createStore(), upsertTimelinePost(), upsertUniquePostIds()
 
-### Community 21 - "Community 21"
+### Community 22 - "Community 22"
 Cohesion: 0.18
 Nodes (4): mapUserPostRow(), normalizeHashtag(), normalizeHashtags(), parseMediaValue()
 
-### Community 22 - "Community 22"
+### Community 23 - "Community 23"
 Cohesion: 0.21
 Nodes (4): handleEventSubmit(), handleOpportunitySubmit(), handlePostSubmit(), resetAllForms()
 
-### Community 23 - "Community 23"
+### Community 24 - "Community 24"
 Cohesion: 0.4
 Nodes (10): handleMarkAsRead(), apiDeletePushSubscription(), apiFetchNotifications(), apiFetchPushPublicKey(), apiMarkAllNotificationsRead(), apiMarkNotificationRead(), apiSavePushSubscription(), authHeaders() (+2 more)
 
-### Community 24 - "Community 24"
+### Community 25 - "Community 25"
 Cohesion: 0.22
 Nodes (2): SidebarMenuButton(), useSidebar()
 
-### Community 25 - "Community 25"
+### Community 26 - "Community 26"
 Cohesion: 0.25
 Nodes (2): mergeConversationPreviewOnMessage(), sortConversationsByTimestamp()
 
-### Community 28 - "Community 28"
+### Community 29 - "Community 29"
 Cohesion: 0.29
 Nodes (2): getAdminAccountByUserId(), requireAdmin()
 
-### Community 37 - "Community 37"
+### Community 38 - "Community 38"
 Cohesion: 0.67
 Nodes (6): apiCreateUserAchievement(), apiDeleteUserAchievement(), apiFetchUserAchievements(), apiUpdateUserAchievement(), authHeaders(), parseErrorMessage()
 
-### Community 38 - "Community 38"
+### Community 39 - "Community 39"
 Cohesion: 0.47
 Nodes (4): Assert-Status(), Assert-True(), Get-ResponseContent(), Invoke-JsonRequest()
 
-### Community 39 - "Community 39"
+### Community 40 - "Community 40"
 Cohesion: 0.53
 Nodes (4): FormControl(), FormDescription(), FormMessage(), useFormField()
 
-### Community 41 - "Community 41"
+### Community 42 - "Community 42"
 Cohesion: 0.6
 Nodes (3): handleClose(), handleCreateGroup(), handleStartChat()
 
-### Community 43 - "Community 43"
+### Community 44 - "Community 44"
 Cohesion: 0.5
 Nodes (2): CarouselNext(), useCarousel()
 
-### Community 46 - "Community 46"
+### Community 47 - "Community 47"
 Cohesion: 0.5
 Nodes (5): Chat Scroll Architecture Issues, Fixed Sidebar Header, Infinite Scroll Pagination, Newest Message at Bottom, Pagination Prevents Large Conversation Performance Issues
 
-### Community 47 - "Community 47"
+### Community 48 - "Community 48"
 Cohesion: 0.4
 Nodes (5): Canonical Schema Direction, Clean Normalized Schema Rationale, Full Visible Product Coverage, Normalized Target Schema, Teacher Role Removal
 
-### Community 55 - "Community 55"
+### Community 56 - "Community 56"
 Cohesion: 0.5
 Nodes (4): Legacy Database Bootstrap, Legacy SQL Social Schema, Frontend Copy of Legacy Database Bootstrap, Frontend Copy of Legacy SQL Social Schema
 
-### Community 58 - "Community 58"
+### Community 59 - "Community 59"
 Cohesion: 1.0
 Nodes (2): mutualFollowersCount(), uniqueIntersection()
 
-### Community 70 - "Community 70"
+### Community 71 - "Community 71"
 Cohesion: 0.67
 Nodes (3): shadcn/ui MIT Attribution, Unsplash License Attribution, Figma Design Reference
 
-### Community 98 - "Community 98"
+### Community 99 - "Community 99"
 Cohesion: 1.0
 Nodes (2): Mock Data Architecture, Tab-Based SPA Navigation
 
-### Community 129 - "Community 129"
+### Community 130 - "Community 130"
 Cohesion: 1.0
 Nodes (1): Local Development Setup
 
-### Community 130 - "Community 130"
+### Community 131 - "Community 131"
 Cohesion: 1.0
 Nodes (1): Custom Guidelines Placeholder
 
 ## Knowledge Gaps
 - **14 isolated node(s):** `Fixed Sidebar Header`, `Pagination Prevents Large Conversation Performance Issues`, `Local Development Setup`, `Canonical Schema Direction`, `Teacher Role Removal` (+9 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **Thin community `Community 24`** (10 nodes): `sidebar.tsx`, `cn()`, `handleKeyDown()`, `SidebarFooter()`, `SidebarHeader()`, `SidebarMenu()`, `SidebarMenuButton()`, `SidebarMenuItem()`, `SidebarSeparator()`, `useSidebar()`
+- **Thin community `Community 25`** (10 nodes): `sidebar.tsx`, `cn()`, `handleKeyDown()`, `SidebarFooter()`, `SidebarHeader()`, `SidebarMenu()`, `SidebarMenuButton()`, `SidebarMenuItem()`, `SidebarSeparator()`, `useSidebar()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 25`** (9 nodes): `formatSeenTime()`, `mapRealtimeChatMessage()`, `mergeChatMessageList()`, `mergeConversationPresenceUpdate()`, `mergeConversationPreviewOnMessage()`, `mergeConversationReadUpdate()`, `sortConversationsByTimestamp()`, `summarizeReply()`, `chatUi.ts`
+- **Thin community `Community 26`** (9 nodes): `formatSeenTime()`, `mapRealtimeChatMessage()`, `mergeChatMessageList()`, `mergeConversationPresenceUpdate()`, `mergeConversationPreviewOnMessage()`, `mergeConversationReadUpdate()`, `sortConversationsByTimestamp()`, `summarizeReply()`, `chatUi.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 28`** (7 nodes): `getAdminAccountByUserId()`, `markAdminLogin()`, `recordAdminAuditLog()`, `setAdminMustChangePassword()`, `admin.ts`, `requireAdmin.ts`, `requireAdmin()`
+- **Thin community `Community 29`** (7 nodes): `getAdminAccountByUserId()`, `markAdminLogin()`, `recordAdminAuditLog()`, `setAdminMustChangePassword()`, `admin.ts`, `requireAdmin.ts`, `requireAdmin()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 43`** (5 nodes): `Carousel()`, `CarouselNext()`, `cn()`, `useCarousel()`, `carousel.tsx`
+- **Thin community `Community 44`** (5 nodes): `Carousel()`, `CarouselNext()`, `cn()`, `useCarousel()`, `carousel.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 58`** (3 nodes): `NetworkPage.tsx`, `mutualFollowersCount()`, `uniqueIntersection()`
+- **Thin community `Community 59`** (3 nodes): `NetworkPage.tsx`, `mutualFollowersCount()`, `uniqueIntersection()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 98`** (2 nodes): `Mock Data Architecture`, `Tab-Based SPA Navigation`
+- **Thin community `Community 99`** (2 nodes): `Mock Data Architecture`, `Tab-Based SPA Navigation`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 129`** (1 nodes): `Local Development Setup`
+- **Thin community `Community 130`** (1 nodes): `Local Development Setup`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 130`** (1 nodes): `Custom Guidelines Placeholder`
+- **Thin community `Community 131`** (1 nodes): `Custom Guidelines Placeholder`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `handleAddProject()` connect `Community 1` to `Community 5`, `Community 14`?**
+- **Why does `handleAddProject()` connect `Community 1` to `Community 4`, `Community 15`?**
   _High betweenness centrality (0.052) - this node is a cross-community bridge._
-- **Why does `apiCreateUserPost()` connect `Community 14` to `Community 11`, `Community 1`, `Community 3`?**
-  _High betweenness centrality (0.039) - this node is a cross-community bridge._
-- **Why does `Alert()` connect `Community 5` to `Community 1`?**
-  _High betweenness centrality (0.037) - this node is a cross-community bridge._
+- **Why does `apiCreateUserPost()` connect `Community 15` to `Community 1`, `Community 2`, `Community 11`?**
+  _High betweenness centrality (0.041) - this node is a cross-community bridge._
+- **Why does `handlePasswordChange()` connect `Community 9` to `Community 3`?**
+  _High betweenness centrality (0.040) - this node is a cross-community bridge._
 - **Are the 20 inferred relationships involving `cacheSetJson()` (e.g. with `setCachedRecentMessages()` and `setConversationMeta()`) actually correct?**
   _`cacheSetJson()` has 20 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 16 inferred relationships involving `cacheDelete()` (e.g. with `invalidateConversationLists()` and `reconcileConversationMeta()`) actually correct?**
