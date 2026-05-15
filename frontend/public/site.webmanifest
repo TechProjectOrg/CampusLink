@@ -1,0 +1,25 @@
+{
+  "name": "CampusLynk",
+  "short_name": "CampusLynk",
+  "description": "CampusLynk helps students and alumni connect, discover campus clubs, share updates, and build academic and career opportunities.",
+  "icons": [
+    {
+      "src": "/favicon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#0f172a",
+  "background_color": "#ffffff",
+  "display": "standalone"
+}
