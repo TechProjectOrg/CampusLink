@@ -1,5 +1,4 @@
 import express, { Application, Request, Response } from 'express';
-import prisma from './prisma';
 import authRouter from './routes/auth';
 import usersRouter from './routes/users';
 import postsRouter from './routes/posts';
@@ -11,6 +10,7 @@ import clubsRouter from './routes/clubs';
 import groupChatRouter from './routes/groupChat';
 import adminRouter from './routes/admin';
 import cors from 'cors';
+import { buildHealthReport, type RouteDescriptor, type StaticRouteDescriptor } from './lib/health';
 
 const app: Application = express();
 
@@ -47,13 +47,86 @@ app.use(
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
+const apiRouteDescriptors: RouteDescriptor[] = [
+  {
+    module: 'auth',
+    prefix: '/auth',
+    router: authRouter,
+    requiredDependencies: ['database'],
+  },
+  {
+    module: 'posts',
+    prefix: '/',
+    router: postsRouter,
+    requiredDependencies: ['database'],
+  },
+  {
+    module: 'users',
+    prefix: '/users',
+    router: usersRouter,
+    requiredDependencies: ['database'],
+  },
+  {
+    module: 'search',
+    prefix: '/search',
+    router: searchRouter,
+    requiredDependencies: ['database'],
+  },
+  {
+    module: 'network',
+    prefix: '/network',
+    router: networkRouter,
+    requiredDependencies: ['database'],
+    optionalDependencies: ['redis'],
+  },
+  {
+    module: 'notifications',
+    prefix: '/notifications',
+    router: notificationsRouter,
+    requiredDependencies: ['database'],
+  },
+  {
+    module: 'chat',
+    prefix: '/chat',
+    router: chatRouter,
+    requiredDependencies: ['database'],
+    optionalDependencies: ['redis'],
+  },
+  {
+    module: 'clubs',
+    prefix: '/clubs',
+    router: clubsRouter,
+    requiredDependencies: ['database'],
+  },
+  {
+    module: 'group-chat',
+    prefix: '/group-chat',
+    router: groupChatRouter,
+    requiredDependencies: ['database'],
+    optionalDependencies: ['redis'],
+  },
+  {
+    module: 'admin',
+    prefix: '/admin',
+    router: adminRouter,
+    requiredDependencies: ['database'],
+    optionalDependencies: ['redis'],
+  },
+];
+
+const staticHealthRoutes: StaticRouteDescriptor[] = [
+  {
+    method: 'GET',
+    path: '/health',
+    module: 'system',
+    requiredDependencies: ['database'],
+  },
+];
+
 app.get('/health', async (_req: Request, res: Response) => {
-  try {
-    await prisma.$queryRaw`SELECT 1`;
-    res.status(200).json({ server: 'up', db: 'up' });
-  } catch {
-    res.status(500).json({ server: 'up', db: 'down' });
-  }
+  const report = await buildHealthReport(apiRouteDescriptors, staticHealthRoutes);
+
+  res.status(report.status === 'unavailable' ? 503 : 200).json(report);
 });
 
 app.use('/auth', authRouter);
