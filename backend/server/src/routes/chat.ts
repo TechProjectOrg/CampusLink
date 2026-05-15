@@ -326,7 +326,8 @@ async function buildConversationListEntries(
       return {
         id: row.chat_id,
         participantId: row.other_user_id,
-        participantName: participant.username,
+        participantName: participant.displayName,
+        participantUsername: participant.username,
         participantAvatar: participant.profilePictureUrl,
         lastMessage: latestMessage
           ? formatMessagePreview(latestMessage.type, latestMessage.content)
@@ -422,7 +423,8 @@ async function fetchReplyPreview(
   return {
     id: row.message_id,
     senderId: row.sender_user_id,
-    senderName: sender?.username ?? 'Unknown user',
+    senderName: sender?.displayName ?? sender?.username ?? 'Unknown user',
+    senderUsername: sender?.username ?? null,
     type: row.message_type,
     content: row.content ? decryptMessage(row.content) : null,
     attachmentUrl: row.attachment_url ?? null,
@@ -628,7 +630,8 @@ async function formatMessagesForResponse(
   return messages.map((message) => ({
     id: message.id,
     senderId: message.senderId,
-    senderName: summaries.get(message.senderId)?.username ?? 'Unknown user',
+    senderName: summaries.get(message.senderId)?.displayName ?? summaries.get(message.senderId)?.username ?? 'Unknown user',
+    senderUsername: summaries.get(message.senderId)?.username ?? null,
     senderAvatar: summaries.get(message.senderId)?.profilePictureUrl ?? null,
     type: message.type,
     content: message.content,
@@ -640,11 +643,13 @@ async function formatMessagesForResponse(
       ? {
           ...message.replyTo,
           senderName:
-            summaries.get(message.replyTo.senderId)?.username ?? 'Unknown user',
+            summaries.get(message.replyTo.senderId)?.displayName ?? summaries.get(message.replyTo.senderId)?.username ?? 'Unknown user',
+          senderUsername: summaries.get(message.replyTo.senderId)?.username ?? null,
         }
       : null,
     seenBy: (seenByMessageId.get(message.id) ?? []).map((seenUserId) => ({
       userId: seenUserId,
+      displayName: summaries.get(seenUserId)?.displayName ?? summaries.get(seenUserId)?.username ?? 'Unknown user',
       username: summaries.get(seenUserId)?.username ?? 'Unknown user',
       avatarUrl: summaries.get(seenUserId)?.profilePictureUrl ?? null,
     })),

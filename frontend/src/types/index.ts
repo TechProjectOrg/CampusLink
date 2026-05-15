@@ -36,6 +36,7 @@ export interface Achievement {
 export interface Student {
   id: string;
   name: string;
+  displayName?: string;
   username: string;
   email: string;
   createdAt?: string;
@@ -168,6 +169,7 @@ export interface ChatConversation {
   id: string;
   participantId: string;
   participantName: string;
+  participantUsername?: string;
   participantAvatar: string;
   lastMessage: string;
   timestamp: string;
@@ -203,6 +205,7 @@ export interface Notification {
   entityType?: string | null;
   entityId?: string | null;
   actorId?: string;
+  actorUsername?: string | null;
 }
 
 export interface Group {
@@ -229,6 +232,7 @@ export type ApiAuthProvider = 'google' | 'magic_link';
 
 export interface ApiUserProfile {
   userId: string;
+  displayName: string;
   username: string;
   email: string;
   bio: string | null;

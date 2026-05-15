@@ -140,6 +140,7 @@ enum MessageType {
 
 model User {
   userId                 String              @id @default(dbgenerated("gen_random_uuid()")) @map("user_id") @db.Uuid
+  displayName            String              @map("display_name") @db.VarChar(100)
   username               String              @unique @db.VarChar(50)
   email                  String              @unique @db.VarChar(100)
   passwordHash           String              @map("password_hash") @db.VarChar(255)

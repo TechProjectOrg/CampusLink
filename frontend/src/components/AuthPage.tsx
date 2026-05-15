@@ -18,7 +18,7 @@ import {
 import Lottie from 'lottie-react';
 import loadingAnimation from '../assets/loading_animation.json';
 import { useAuth } from '../context/AuthContext';
-import type { AuthOnboardingResponse } from '../lib/authApi';
+import { apiCheckUsernameAvailability, type AuthOnboardingResponse } from '../lib/authApi';
 import { getPasswordValidationMessage, validatePassword } from '../lib/validation';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader } from './ui/card';
@@ -205,7 +205,8 @@ export function AuthPage() {
   const [onboardingSession, setOnboardingSession] = useState<AuthOnboardingResponse | null>(null);
 
   const [studentForm, setStudentForm] = useState({
-    name: '',
+    displayName: '',
+    username: '',
     email: '',
     branch: '',
     year: '',
@@ -217,7 +218,8 @@ export function AuthPage() {
   const [studentPasswordMessages, setStudentPasswordMessages] = useState<string[]>([]);
 
   const [alumniForm, setAlumniForm] = useState({
-    name: '',
+    displayName: '',
+    username: '',
     email: '',
     graduationYear: '',
     branch: '',
@@ -229,6 +231,16 @@ export function AuthPage() {
   const [showAlumniPassword, setShowAlumniPassword] = useState(false);
   const [showAlumniConfirmPassword, setShowAlumniConfirmPassword] = useState(false);
   const [alumniPasswordMessages, setAlumniPasswordMessages] = useState<string[]>([]);
+  const [studentUsernameStatus, setStudentUsernameStatus] = useState<{ checking: boolean; available: boolean | null; message: string }>({
+    checking: false,
+    available: null,
+    message: '',
+  });
+  const [alumniUsernameStatus, setAlumniUsernameStatus] = useState<{ checking: boolean; available: boolean | null; message: string }>({
+    checking: false,
+    available: null,
+    message: '',
+  });
 
   const resetMessages = () => {
     setLoginError('');
@@ -242,7 +254,8 @@ export function AuthPage() {
     setSignupEmail('');
     setOnboardingSession(null);
     setStudentForm({
-      name: '',
+      displayName: '',
+      username: '',
       email: '',
       branch: '',
       year: '',
@@ -250,7 +263,8 @@ export function AuthPage() {
       confirmPassword: '',
     });
     setAlumniForm({
-      name: '',
+      displayName: '',
+      username: '',
       email: '',
       graduationYear: '',
       branch: '',
@@ -261,6 +275,8 @@ export function AuthPage() {
     });
     setStudentPasswordMessages([]);
     setAlumniPasswordMessages([]);
+    setStudentUsernameStatus({ checking: false, available: null, message: '' });
+    setAlumniUsernameStatus({ checking: false, available: null, message: '' });
     resetMessages();
   };
 
@@ -283,7 +299,8 @@ export function AuthPage() {
     if (session.accountType === 'student') {
       setStudentForm((current) => ({
         ...current,
-        name: session.fullName || current.name,
+        displayName: session.fullName || current.displayName,
+        username: session.suggestedUsername || current.username,
         email: session.email,
       }));
       setSignupStep('student-form');
@@ -292,11 +309,76 @@ export function AuthPage() {
 
     setAlumniForm((current) => ({
       ...current,
-      name: session.fullName || current.name,
+      displayName: session.fullName || current.displayName,
+      username: session.suggestedUsername || current.username,
       email: session.email,
     }));
     setSignupStep('alumni-form');
   };
+
+  useEffect(() => {
+    const username = studentForm.username.trim();
+    if (signupStep !== 'student-form' || !username) {
+      setStudentUsernameStatus({ checking: false, available: null, message: '' });
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setStudentUsernameStatus({ checking: true, available: null, message: 'Checking username...' });
+      void apiCheckUsernameAvailability(username)
+        .then((result) => {
+          setStudentUsernameStatus({
+            checking: false,
+            available: result.available,
+            message: result.message || (result.available ? 'Username is available.' : 'That username is already taken.'),
+          });
+          if (result.normalizedUsername && result.normalizedUsername !== username) {
+            setStudentForm((current) => ({ ...current, username: result.normalizedUsername }));
+          }
+        })
+        .catch((error) => {
+          setStudentUsernameStatus({
+            checking: false,
+            available: null,
+            message: error instanceof Error ? error.message : 'Unable to check username.',
+          });
+        });
+    }, 350);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [signupStep, studentForm.username]);
+
+  useEffect(() => {
+    const username = alumniForm.username.trim();
+    if (signupStep !== 'alumni-form' || !username) {
+      setAlumniUsernameStatus({ checking: false, available: null, message: '' });
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setAlumniUsernameStatus({ checking: true, available: null, message: 'Checking username...' });
+      void apiCheckUsernameAvailability(username)
+        .then((result) => {
+          setAlumniUsernameStatus({
+            checking: false,
+            available: result.available,
+            message: result.message || (result.available ? 'Username is available.' : 'That username is already taken.'),
+          });
+          if (result.normalizedUsername && result.normalizedUsername !== username) {
+            setAlumniForm((current) => ({ ...current, username: result.normalizedUsername }));
+          }
+        })
+        .catch((error) => {
+          setAlumniUsernameStatus({
+            checking: false,
+            available: null,
+            message: error instanceof Error ? error.message : 'Unable to check username.',
+          });
+        });
+    }, 350);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [signupStep, alumniForm.username]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -454,7 +536,8 @@ export function AuthPage() {
     try {
       const payload = {
         sessionId: onboardingSession.sessionId,
-        name: studentForm.name,
+        displayName: studentForm.displayName,
+        username: studentForm.username,
         password: studentForm.password,
         branch: studentForm.branch,
         year: studentForm.year,
@@ -497,7 +580,8 @@ export function AuthPage() {
     try {
       const result = await auth.signupAlumni({
         sessionId: onboardingSession.sessionId,
-        name: alumniForm.name,
+        displayName: alumniForm.displayName,
+        username: alumniForm.username,
         graduationYear: alumniForm.graduationYear,
         branch: alumniForm.branch,
         currentStatus: alumniForm.currentStatus,
@@ -699,18 +783,36 @@ export function AuthPage() {
       {signupMessage ? <FormMessage tone="info">{signupMessage}</FormMessage> : null}
 
       <div className="space-y-2">
-        <Label htmlFor="student-name">Full Name</Label>
+        <Label htmlFor="student-name">Display Name</Label>
         <div className="relative">
           <UserRound className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
           <Input
             id="student-name"
             type="text"
-            value={studentForm.name}
-            onChange={(event) => setStudentForm((current) => ({ ...current, name: event.target.value }))}
+            value={studentForm.displayName}
+            onChange={(event) => setStudentForm((current) => ({ ...current, displayName: event.target.value }))}
             className="pl-10 rounded-xl"
             required
           />
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="student-username">Username</Label>
+        <Input
+          id="student-username"
+          type="text"
+          value={studentForm.username}
+          onChange={(event) => setStudentForm((current) => ({ ...current, username: event.target.value }))}
+          className="rounded-xl"
+          placeholder="your_handle"
+          required
+        />
+        {studentUsernameStatus.message ? (
+          <p className={`text-xs ${studentUsernameStatus.available === false ? 'text-red-500' : 'text-slate-500'}`}>
+            {studentUsernameStatus.message}
+          </p>
+        ) : null}
       </div>
 
       <div className="space-y-2">
@@ -820,7 +922,11 @@ export function AuthPage() {
 
       {signupError ? <FormMessage tone="error">{signupError}</FormMessage> : null}
 
-      <Button type="submit" className="w-full rounded-2xl gradient-success" disabled={isLoading}>
+      <Button
+        type="submit"
+        className="w-full rounded-2xl gradient-success"
+        disabled={isLoading || studentUsernameStatus.available === false || studentUsernameStatus.checking}
+      >
         {isLoading
           ? <Lottie animationData={loadingAnimation} style={{ height: 40, width: 40 }} />
           : 'Create Student Account'}
@@ -840,15 +946,33 @@ export function AuthPage() {
       {signupMessage ? <FormMessage tone="info">{signupMessage}</FormMessage> : null}
 
       <div className="space-y-2">
-        <Label htmlFor="alumni-name">Full Name</Label>
+        <Label htmlFor="alumni-name">Display Name</Label>
         <Input
           id="alumni-name"
           type="text"
-          value={alumniForm.name}
-          onChange={(event) => setAlumniForm((current) => ({ ...current, name: event.target.value }))}
+          value={alumniForm.displayName}
+          onChange={(event) => setAlumniForm((current) => ({ ...current, displayName: event.target.value }))}
           className="rounded-xl"
           required
         />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="alumni-username">Username</Label>
+        <Input
+          id="alumni-username"
+          type="text"
+          value={alumniForm.username}
+          onChange={(event) => setAlumniForm((current) => ({ ...current, username: event.target.value }))}
+          className="rounded-xl"
+          placeholder="your_handle"
+          required
+        />
+        {alumniUsernameStatus.message ? (
+          <p className={`text-xs ${alumniUsernameStatus.available === false ? 'text-red-500' : 'text-slate-500'}`}>
+            {alumniUsernameStatus.message}
+          </p>
+        ) : null}
       </div>
 
       <div className="space-y-2">
@@ -995,7 +1119,11 @@ export function AuthPage() {
 
       {signupError ? <FormMessage tone="error">{signupError}</FormMessage> : null}
 
-      <Button type="submit" className="w-full rounded-2xl gradient-success" disabled={isLoading}>
+      <Button
+        type="submit"
+        className="w-full rounded-2xl gradient-success"
+        disabled={isLoading || alumniUsernameStatus.available === false || alumniUsernameStatus.checking}
+      >
         {isLoading
           ? <Lottie animationData={loadingAnimation} style={{ height: 40, width: 40 }} />
           : 'Submit Alumni Signup'}

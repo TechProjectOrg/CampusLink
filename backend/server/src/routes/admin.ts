@@ -1035,6 +1035,7 @@ router.get('/users', async (req: Request, res: Response) => {
     const listSql = `
       SELECT
         u.user_id,
+        u.display_name,
         u.username,
         u.email,
         COALESCE(sp.branch, ap.branch, 'Unknown') AS branch,
@@ -1051,7 +1052,7 @@ router.get('/users', async (req: Request, res: Response) => {
       LEFT JOIN student_profiles sp ON sp.user_id = u.user_id
       LEFT JOIN alumni_profiles ap ON ap.user_id = u.user_id
       WHERE
-        ($1 = '' OR u.username ILIKE $2 OR u.email ILIKE $2)
+        ($1 = '' OR u.username ILIKE $2 OR u.display_name ILIKE $2 OR u.email ILIKE $2)
         AND ($3 = '' OR ($3 = 'true' AND u.is_banned = TRUE) OR ($3 = 'false' AND u.is_banned = FALSE))
         AND ($4 = '' OR ($4 = 'true' AND u.verified_at IS NOT NULL) OR ($4 = 'false' AND u.verified_at IS NULL))
         AND (
@@ -1071,7 +1072,7 @@ router.get('/users', async (req: Request, res: Response) => {
       LEFT JOIN student_profiles sp ON sp.user_id = u.user_id
       LEFT JOIN alumni_profiles ap ON ap.user_id = u.user_id
       WHERE
-        ($1 = '' OR u.username ILIKE $2 OR u.email ILIKE $2)
+        ($1 = '' OR u.username ILIKE $2 OR u.display_name ILIKE $2 OR u.email ILIKE $2)
         AND ($3 = '' OR ($3 = 'true' AND u.is_banned = TRUE) OR ($3 = 'false' AND u.is_banned = FALSE))
         AND ($4 = '' OR ($4 = 'true' AND u.verified_at IS NOT NULL) OR ($4 = 'false' AND u.verified_at IS NULL))
         AND (
@@ -1086,6 +1087,7 @@ router.get('/users', async (req: Request, res: Response) => {
       prisma.$queryRawUnsafe<
       Array<{
         user_id: string;
+        display_name: string;
         username: string;
         email: string;
         branch: string | null;
@@ -1124,7 +1126,7 @@ router.get('/users', async (req: Request, res: Response) => {
       items: rows.map((row) => ({
         id: row.user_id,
         username: row.username,
-        fullName: row.username,
+        fullName: row.display_name,
         email: row.email,
         college: 'GBPUAT',
         department: row.branch,
@@ -1161,9 +1163,10 @@ router.get('/users/:userId', async (req: Request<{ userId: string }>, res: Respo
 
   try {
     const [users, posts, clubs, reports, sessions, auditLogs] = await Promise.all([
-      prisma.$queryRaw<Array<{ user_id: string; username: string; email: string; bio: string | null; headline: string | null; branch: string | null; is_banned: boolean; suspended_until: Date | null; verified_at: Date | null; created_at: Date; last_seen_at: Date | null; profile_photo_url: string | null }>>`
+      prisma.$queryRaw<Array<{ user_id: string; display_name: string; username: string; email: string; bio: string | null; headline: string | null; branch: string | null; is_banned: boolean; suspended_until: Date | null; verified_at: Date | null; created_at: Date; last_seen_at: Date | null; profile_photo_url: string | null }>>`
         SELECT
           u.user_id,
+          u.display_name,
           u.username,
           u.email,
           u.bio,
@@ -1228,7 +1231,7 @@ router.get('/users/:userId', async (req: Request<{ userId: string }>, res: Respo
     return res.status(200).json({
       id: user.user_id,
       username: user.username,
-      fullName: user.username,
+      fullName: user.display_name,
       email: user.email,
       bio: user.bio,
       headline: user.headline,

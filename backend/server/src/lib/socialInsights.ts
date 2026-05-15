@@ -13,6 +13,7 @@ type TrendingLabel = 'hot' | 'rising' | 'new';
 interface SuggestedUserCacheRow {
   id: string;
   name: string;
+  username?: string;
   mutual_count: number;
   common_club: string | null;
   score: number;
@@ -290,10 +291,11 @@ export async function recomputeSuggestedUsers(userId: string): Promise<void> {
   `;
 
   const candidateMetaRows = await prisma.$queryRaw<
-    Array<{ user_id: string; username: string; last_seen_at: Date | null; followers_count: number; engagement_count: number }>
+    Array<{ user_id: string; display_name: string; username: string; last_seen_at: Date | null; followers_count: number; engagement_count: number }>
   >`
     SELECT
       u.user_id,
+      u.display_name,
       u.username,
       u.last_seen_at,
       (SELECT COUNT(*)::int FROM follows f WHERE f.followed_user_id = u.user_id) AS followers_count,
@@ -332,7 +334,8 @@ export async function recomputeSuggestedUsers(userId: string): Promise<void> {
 
     return {
       id: row.user_id,
-      name: row.username,
+      name: row.display_name ?? row.username,
+      username: row.username,
       mutual_count: mutualCount,
       common_club: commonClub?.top_club_name ?? null,
       score,
@@ -344,7 +347,7 @@ export async function recomputeSuggestedUsers(userId: string): Promise<void> {
   await cacheSetJson(suggestedKey(userId), finalRows, SUGGESTED_TTL_SECONDS);
 }
 
-export async function getSuggestedUsersForApi(userId: string, limit: number): Promise<Array<{ id: string; name: string; mutual_count: number; common_club: string | null }>> {
+export async function getSuggestedUsersForApi(userId: string, limit: number): Promise<Array<{ id: string; name: string; username?: string; mutual_count: number; common_club: string | null }>> {
   let cached = await cacheGetJson<SuggestedUserCacheRow[]>(suggestedKey(userId));
   if (!cached) {
     await recomputeSuggestedUsers(userId);
@@ -353,6 +356,7 @@ export async function getSuggestedUsersForApi(userId: string, limit: number): Pr
   const rows = cached.slice(0, limit).map((row) => ({
     id: row.id,
     name: row.name,
+    username: row.username,
     mutual_count: row.mutual_count,
     common_club: row.common_club ?? null,
   }));

@@ -7,6 +7,7 @@ export interface ChatReplyPreviewApi {
   id: string;
   senderId: string;
   senderName: string;
+  senderUsername?: string;
   type: 'text' | 'image' | 'file' | 'system';
   content: string | null;
   attachmentUrl: string | null;
@@ -16,6 +17,7 @@ export interface ChatMessageApi {
   id: string;
   senderId: string;
   senderName: string;
+  senderUsername?: string;
   senderAvatar: string | null;
   type: 'text' | 'image' | 'file' | 'system';
   content: string | null;
@@ -32,6 +34,7 @@ export interface ConversationApiResponse {
   id: string;
   participantId: string;
   participantName: string;
+  participantUsername?: string;
   participantAvatar: string | null;
   lastMessage: string;
   timestamp: string;
@@ -45,6 +48,7 @@ export interface ConversationApiResponse {
 
 export interface GroupChatMemberSummaryApi {
   userId: string;
+  displayName?: string;
   username: string;
   avatarUrl: string | null;
 }

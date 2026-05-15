@@ -54,7 +54,8 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 function profileToStudent(profile: ApiUserProfile): Student {
   return {
     id: profile.userId,
-    name: profile.username,
+    name: profile.displayName,
+    displayName: profile.displayName,
     username: profile.username,
     email: profile.email,
     branch: profile.details?.branch ?? 'Unknown',

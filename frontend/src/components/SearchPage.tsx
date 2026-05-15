@@ -28,7 +28,8 @@ function searchResultToStudent(r: SearchUserResult): Student {
   const seed = encodeURIComponent(r.username);
   return {
     id: r.userId,
-    name: r.username,
+    name: r.displayName,
+    displayName: r.displayName,
     username: r.username,
     email: r.email,
     branch: r.branch ?? 'Unknown',

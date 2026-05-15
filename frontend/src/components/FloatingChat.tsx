@@ -344,6 +344,9 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
               </Avatar>
               <div className="flex-1">
                 <p className="font-semibold text-gray-900 text-sm">{selectedChat.participantName}</p>
+                {selectedChat.participantUsername ? (
+                  <p className="text-xs text-gray-500">@{selectedChat.participantUsername}</p>
+                ) : null}
                 <div className="flex items-center gap-1">
                   {selectedChat.isOnline ? (
                     <>
@@ -655,6 +658,9 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                       <div className="flex-1 text-left min-w-0">
                         <div className="flex items-center justify-between mb-1">
                           <p className="font-semibold text-gray-900 truncate text-sm">{conv.participantName}</p>
+                          {conv.participantUsername ? (
+                            <p className="text-xs text-gray-500 truncate">@{conv.participantUsername}</p>
+                          ) : null}
                           <span className="text-xs text-gray-500 flex-shrink-0 ml-2">{formatDate(conv.timestamp)}</span>
                         </div>
                         <div className="flex items-center justify-between">

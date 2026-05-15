@@ -26,6 +26,7 @@ export interface AuthOnboardingResponse {
   accountType: 'student' | 'alumni';
   email: string;
   fullName: string;
+  suggestedUsername?: string | null;
   profilePhotoUrl: string | null;
 }
 
@@ -34,7 +35,8 @@ export type SignupExchangeResult = AuthOnboardingResponse;
 
 export interface AlumniSignupPayload {
   sessionId: string;
-  name: string;
+  displayName: string;
+  username: string;
   graduationYear: string | number;
   branch: string;
   currentStatus: string;
@@ -44,7 +46,8 @@ export interface AlumniSignupPayload {
 
 export interface StudentSignupPayload {
   sessionId: string;
-  name: string;
+  displayName: string;
+  username: string;
   password: string;
   branch: string;
   year: string | number;
@@ -165,7 +168,8 @@ export async function apiCompleteStudentSignup(payload: StudentSignupPayload): P
 export async function apiSignupAlumni(payload: AlumniSignupPayload): Promise<AlumniPendingVerificationResult> {
   const formData = new FormData();
   formData.append('sessionId', payload.sessionId);
-  formData.append('name', payload.name);
+  formData.append('displayName', payload.displayName);
+  formData.append('username', payload.username);
   formData.append('graduationYear', String(payload.graduationYear));
   formData.append('branch', payload.branch);
   formData.append('currentStatus', payload.currentStatus);
@@ -332,11 +336,37 @@ export async function apiChangePassword(
 }
 
 export interface UpdateUserProfilePayload {
+  displayName?: string;
   username?: string;
   branch?: string;
   year?: string | number;
   bio?: string | null;
   headline?: string | null;
+}
+
+export interface UsernameAvailabilityResult {
+  available: boolean;
+  normalizedUsername: string;
+  message?: string;
+}
+
+export async function apiCheckUsernameAvailability(
+  username: string,
+  token?: string
+): Promise<UsernameAvailabilityResult> {
+  const params = new URLSearchParams({ username });
+  const response = await safeFetch(`${API_BASE}/users/username-availability?${params.toString()}`, {
+    headers: {
+      ...authHeaders(token),
+    },
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to check username');
+  }
+
+  return (await response.json()) as UsernameAvailabilityResult;
 }
 
 export async function apiUpdateUserProfile(

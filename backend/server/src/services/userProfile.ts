@@ -10,6 +10,7 @@ export type UserVerificationState =
 
 export interface UserProfile {
   userId: string;
+  displayName: string;
   username: string;
   email: string;
   authProvider: 'google' | 'magic_link';
@@ -65,6 +66,7 @@ export async function getUserProfileById(userId: string): Promise<UserProfile | 
 
   return {
     userId: summary.userId,
+    displayName: summary.displayName,
     username: summary.username,
     email: summary.email,
     authProvider: summary.authProvider,

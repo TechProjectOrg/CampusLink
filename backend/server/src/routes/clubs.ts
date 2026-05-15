@@ -62,6 +62,7 @@ interface ClubListRow {
 interface ClubMemberRow {
   club_membership_id: string;
   user_id: string;
+  display_name: string;
   username: string;
   profile_photo_url: string | null;
   role: 'owner' | 'admin' | 'member';
@@ -506,6 +507,7 @@ router.get('/:clubId/members', async (req: Request<{ clubId: string }>, res: Res
       SELECT
         cm.club_membership_id,
         cm.user_id,
+        u.display_name,
         u.username,
         u.profile_photo_url,
         cm.role,
@@ -529,6 +531,7 @@ router.get('/:clubId/members', async (req: Request<{ clubId: string }>, res: Res
     return res.status(200).json(rows.map((row) => ({
       clubMembershipId: row.club_membership_id,
       userId: row.user_id,
+      displayName: row.display_name,
       username: row.username,
       profilePictureUrl: row.profile_photo_url,
       role: row.role,

@@ -80,7 +80,8 @@ export function GroupInfoPage({
 
     return group.members.filter((member) => {
       if (!normalizedQuery) return true;
-      return member.username.toLowerCase().includes(normalizedQuery);
+      return member.username.toLowerCase().includes(normalizedQuery)
+        || (member.displayName ?? '').toLowerCase().includes(normalizedQuery);
     }).sort((left, right) => {
       const rankDiff = (roleRank[left.role] ?? 99) - (roleRank[right.role] ?? 99);
       if (rankDiff !== 0) return rankDiff;
@@ -328,12 +329,13 @@ export function GroupInfoPage({
                     >
                       <Avatar className="w-12 h-12 ring-2 ring-primary/20">
                         <AvatarImage src={member.avatarUrl ?? linkedStudent?.avatar} />
-                        <AvatarFallback>{member.username[0]}</AvatarFallback>
+                        <AvatarFallback>{(member.displayName ?? member.username)[0]}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-sm font-medium text-gray-900 truncate">
-                            {member.username}
+                            <div>{member.displayName ?? member.username}</div>
+                            <div className="text-xs text-gray-500">@{member.username}</div>
                             {isCurrentUser ? ' (You)' : ''}
                           </p>
                           {isOwner ? (

@@ -13,6 +13,7 @@ import {
 
 export interface CachedUserSummary {
   userId: string;
+  displayName: string;
   username: string;
   email: string;
   authProvider: 'google' | 'magic_link';
@@ -44,6 +45,7 @@ export interface CachedUserStats {
 
 export interface CachedUserCard {
   userId: string;
+  displayName: string;
   username: string;
   email: string;
   profilePictureUrl: string | null;
@@ -70,6 +72,7 @@ export interface CachedConversationEntry {
 
 interface UserSummaryRow {
   user_id: string;
+  display_name: string;
   username: string;
   email: string;
   auth_provider: 'google' | 'magic_link';
@@ -127,6 +130,7 @@ function mapSummaryRow(row: UserSummaryRow): CachedUserSummary {
 
   return {
     userId: row.user_id,
+    displayName: row.display_name,
     username: row.username,
     email: row.email,
     authProvider: row.auth_provider,
@@ -162,6 +166,7 @@ async function fetchUserSummariesByIdsFromDb(userIds: string[]): Promise<Map<str
   const rows = await prisma.$queryRaw<UserSummaryRow[]>`
     SELECT
       u.user_id,
+      u.display_name,
       u.username,
       u.email,
       u.auth_provider::text AS auth_provider,
@@ -331,6 +336,7 @@ export async function invalidateUserCache(userId: string): Promise<void> {
 export function toCachedUserCard(summary: CachedUserSummary): CachedUserCard {
   return {
     userId: summary.userId,
+    displayName: summary.displayName,
     username: summary.username,
     email: summary.email,
     profilePictureUrl: summary.profilePictureUrl,

@@ -233,7 +233,7 @@ function mapPostCommentToComment(comment: UserPost['comments'][number]): Opportu
     id: comment.id,
     postId: comment.postId,
     authorId: comment.authorUserId,
-    authorName: comment.authorUsername,
+    authorName: comment.authorDisplayName || comment.authorUsername,
     authorAvatar: comment.authorProfilePictureUrl || undefined,
     content: comment.content,
     timestamp: comment.createdAt,
@@ -264,7 +264,7 @@ function userPostToOpportunity(
   }
 
   const author = usersById[post.authorUserId];
-  const authorName = author?.name ?? post.authorUsername ?? currentUser.name;
+  const authorName = author?.name ?? post.authorDisplayName ?? post.authorUsername ?? currentUser.name;
   const authorAvatar =
     author?.avatar ??
     post.authorProfilePictureUrl ??

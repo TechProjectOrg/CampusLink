@@ -61,6 +61,7 @@ interface UserSessionRow {
 
 interface ExistingUserRow {
   user_id: string;
+  display_name: string;
   username: string;
   email: string;
   password_hash: string;
@@ -93,7 +94,8 @@ interface SignupExchangeBody {
 
 interface StudentSignupBody {
   sessionId: string;
-  name: string;
+  displayName: string;
+  username: string;
   password: string;
   branch: string;
   year: string | number;
@@ -101,7 +103,8 @@ interface StudentSignupBody {
 
 interface AlumniSignupBody {
   sessionId: string;
-  name: string;
+  displayName: string;
+  username: string;
   email?: string;
   graduationYear: string | number;
   branch: string;
@@ -196,11 +199,36 @@ function normalizeEmail(email: string): string {
 }
 
 function normalizeDisplayName(name: string): string {
-  return name.trim().replace(/\s+/g, ' ').slice(0, 50);
+  return name.trim().replace(/\s+/g, ' ').slice(0, 100);
 }
 
 function normalizePersonName(name: string): string {
   return name.trim().replace(/\s+/g, ' ').slice(0, 150);
+}
+
+function normalizeUsername(username: string): string {
+  return username
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9._]/g, '')
+    .slice(0, 50);
+}
+
+function validateUsername(username: string): string | null {
+  if (!username) return 'Username is required';
+  if (username.length < 3) return 'Username must be at least 3 characters long';
+  if (username.length > 50) return 'Username must be 50 characters or fewer';
+  if (!/^[a-z0-9._]+$/.test(username)) {
+    return 'Username can only include lowercase letters, numbers, dots, and underscores';
+  }
+  return null;
+}
+
+function buildUsernameSuggestion(baseValue: string): string {
+  const normalized = normalizeUsername(baseValue);
+  if (normalized.length >= 3) return normalized;
+  return `user_${crypto.randomBytes(3).toString('hex')}`;
 }
 
 function parseRequiredNumericValue(raw: string | number | undefined, label: string): number {
@@ -357,6 +385,7 @@ async function findUserByEmail(email: string): Promise<ExistingUserRow | null> {
   const rows = await prisma.$queryRaw<ExistingUserRow[]>`
     SELECT
       user_id,
+      display_name,
       username,
       email,
       password_hash,
@@ -385,22 +414,26 @@ async function userHasAdminAccount(userId: string): Promise<boolean> {
   return rows[0]?.exists ?? false;
 }
 
+async function usernameExists(username: string): Promise<boolean> {
+  const existing = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+    SELECT EXISTS(SELECT 1 FROM "users" WHERE username = ${username}) AS "exists"
+  `;
+
+  return existing[0]?.exists ?? false;
+}
+
 async function generateUniqueUsername(baseValue: string): Promise<string> {
-  const sanitizedBase = normalizeDisplayName(baseValue) || 'CampusLynk User';
+  const sanitizedBase = buildUsernameSuggestion(baseValue);
   let candidate = sanitizedBase;
   let suffix = 2;
 
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const existing = await prisma.$queryRaw<Array<{ exists: boolean }>>`
-      SELECT EXISTS(SELECT 1 FROM "users" WHERE username = ${candidate}) AS "exists"
-    `;
-
-    if (!existing[0]?.exists) {
+    if (!(await usernameExists(candidate))) {
       return candidate;
     }
 
-    candidate = `${sanitizedBase} ${suffix}`.slice(0, 50);
+    candidate = `${sanitizedBase}_${suffix}`.slice(0, 50);
     suffix += 1;
   }
 }
@@ -516,6 +549,7 @@ async function createDefaultUserSettings(userId: string): Promise<void> {
 }
 
 async function buildAuthenticatedResponse(userId: string, req: Request, fallback?: {
+  displayName: string;
   username: string;
   email: string;
   type: UserType;
@@ -550,6 +584,7 @@ async function buildAuthenticatedResponse(userId: string, req: Request, fallback
 
   return {
     userId,
+    displayName: fallback.displayName,
     username: fallback.username,
     email: fallback.email,
     type: fallback.type,
@@ -582,7 +617,8 @@ async function buildAuthenticatedResponse(userId: string, req: Request, fallback
 }
 
 async function createStudentUser(params: {
-  name: string;
+  displayName: string;
+  username: string;
   email: string;
   password: string;
   branch: string;
@@ -592,11 +628,14 @@ async function createStudentUser(params: {
   profilePhotoUrl?: string | null;
   verificationState?: UserVerificationState | null;
   verifiedAt?: boolean;
-}): Promise<{ userId: string; username: string; createdAt: Date }> {
-  const username = await generateUniqueUsername(params.name);
+}): Promise<{ userId: string; displayName: string; username: string; createdAt: Date }> {
+  const username = normalizeUsername(params.username);
+  const usernameValidationError = validateUsername(username);
+  if (usernameValidationError) throw new Error(usernameValidationError);
 
   const createdUsers = await prisma.$queryRaw<Array<{ user_id: string; created_at: Date }>>`
     INSERT INTO users (
+      display_name,
       username,
       email,
       password_hash,
@@ -611,6 +650,7 @@ async function createStudentUser(params: {
       updated_at
     )
     VALUES (
+      ${params.displayName},
       ${username},
       ${params.email},
       ${hashPassword(params.password)},
@@ -639,13 +679,15 @@ async function createStudentUser(params: {
 
   return {
     userId: user.user_id,
+    displayName: params.displayName,
     username,
     createdAt: user.created_at,
   };
 }
 
 async function createAlumniUser(params: {
-  name: string;
+  displayName: string;
+  username: string;
   email: string;
   password: string;
   branch: string;
@@ -654,11 +696,14 @@ async function createAlumniUser(params: {
   authProvider: AuthProvider;
   googleSubject?: string | null;
   profilePhotoUrl?: string | null;
-}): Promise<{ userId: string; username: string; createdAt: Date }> {
-  const username = await generateUniqueUsername(params.name);
+}): Promise<{ userId: string; displayName: string; username: string; createdAt: Date }> {
+  const username = normalizeUsername(params.username);
+  const usernameValidationError = validateUsername(username);
+  if (usernameValidationError) throw new Error(usernameValidationError);
 
   const createdUsers = await prisma.$queryRaw<Array<{ user_id: string; created_at: Date }>>`
     INSERT INTO users (
+      display_name,
       username,
       email,
       password_hash,
@@ -672,6 +717,7 @@ async function createAlumniUser(params: {
       updated_at
     )
     VALUES (
+      ${params.displayName},
       ${username},
       ${params.email},
       ${hashPassword(params.password)},
@@ -699,6 +745,7 @@ async function createAlumniUser(params: {
 
   return {
     userId: user.user_id,
+    displayName: params.displayName,
     username,
     createdAt: user.created_at,
   };
@@ -724,6 +771,8 @@ async function upsertAlumniProfile(params: {
 
 async function updateAlumniSignupUser(params: {
   userId: string;
+  displayName: string;
+  username: string;
   password: string;
   authProvider: AuthProvider;
   googleSubject?: string | null;
@@ -733,6 +782,8 @@ async function updateAlumniSignupUser(params: {
     UPDATE users
     SET
       password_hash = ${hashPassword(params.password)},
+      display_name = ${params.displayName},
+      username = ${params.username},
       auth_provider = CAST(${params.authProvider} AS "AuthProvider"),
       google_subject = COALESCE(google_subject, ${params.googleSubject ?? null}),
       profile_photo_url = COALESCE(profile_photo_url, ${params.profilePhotoUrl ?? null}),
@@ -771,6 +822,7 @@ async function createOnboardingSession(params: {
   googleSubject?: string | null;
   fullName: string;
   profilePhotoUrl?: string | null;
+  suggestedUsername?: string | null;
 }): Promise<AuthOnboardingSessionRow> {
   const rows = await prisma.$queryRaw<AuthOnboardingSessionRow[]>`
     INSERT INTO auth_onboarding_sessions (
@@ -789,7 +841,7 @@ async function createOnboardingSession(params: {
       ${params.googleSubject ?? null},
       ${params.fullName},
       ${params.profilePhotoUrl ?? null},
-      NULL,
+      ${params.suggestedUsername ?? null},
       ${JSON.stringify({ accountType: params.accountType })}::jsonb,
       NOW() + INTERVAL '1 day'
     )
@@ -799,6 +851,7 @@ async function createOnboardingSession(params: {
       email = EXCLUDED.email,
       full_name = EXCLUDED.full_name,
       profile_photo_url = EXCLUDED.profile_photo_url,
+      suggested_username = EXCLUDED.suggested_username,
       payload = EXCLUDED.payload,
       expires_at = NOW() + INTERVAL '1 day',
       completed_at = NULL,
@@ -859,6 +912,7 @@ function buildOnboardingResponse(session: AuthOnboardingSessionRow) {
     accountType: payload.accountType,
     email: session.email,
     fullName: session.full_name,
+    suggestedUsername: session.suggested_username,
     profilePhotoUrl: session.profile_photo_url,
   };
 }
@@ -967,6 +1021,7 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 
     const responsePayload = await buildAuthenticatedResponse(user.user_id, req, {
+      displayName: user.display_name,
       username: user.username,
       email: user.email,
       type: user.user_type,
@@ -1008,6 +1063,7 @@ router.post('/google', async (req: Request, res: Response) => {
       await invalidateUserCache(existingUser.user_id);
 
       const responsePayload = await buildAuthenticatedResponse(existingUser.user_id, req, {
+        displayName: existingUser.display_name,
         username: existingUser.username,
         email,
         type: existingUser.user_type,
@@ -1034,6 +1090,7 @@ router.post('/google', async (req: Request, res: Response) => {
       googleSubject,
       fullName,
       profilePhotoUrl,
+      suggestedUsername: await generateUniqueUsername(fullName || email.split('@')[0] || 'user'),
     });
 
     return res.status(200).json(buildOnboardingResponse(onboardingSession));
@@ -1086,6 +1143,7 @@ router.post('/signup/verify-email', async (req: Request, res: Response) => {
       email: normalizedEmail,
       fullName: normalizedEmail.split('@')[0],
       profilePhotoUrl: null,
+      suggestedUsername: await generateUniqueUsername(normalizedEmail.split('@')[0]),
     });
 
     await sendMagicLink({
@@ -1188,9 +1246,9 @@ router.post('/signup/exchange', async (req: Request, res: Response) => {
 });
 
 router.post('/signup/student', validatePassword, async (req: Request, res: Response) => {
-  const { sessionId, name, password, branch, year } = req.body as Partial<StudentSignupBody>;
+  const { sessionId, displayName, username, password, branch, year } = req.body as Partial<StudentSignupBody>;
 
-  if (!sessionId || !name || !password || !branch || !year) {
+  if (!sessionId || !displayName || !username || !password || !branch || !year) {
     return res.status(400).json({ message: 'Missing required fields' });
   }
 
@@ -1215,9 +1273,18 @@ router.post('/signup/student', validatePassword, async (req: Request, res: Respo
     }
 
     const numericYear = parseRequiredNumericValue(year, 'Year');
-    const normalizedName = normalizePersonName(name);
+    const normalizedDisplayName = normalizeDisplayName(displayName);
+    const normalizedUsername = normalizeUsername(username);
+    const usernameValidationError = validateUsername(normalizedUsername);
+    if (usernameValidationError) {
+      return res.status(400).json({ message: usernameValidationError });
+    }
+    if (await usernameExists(normalizedUsername)) {
+      return res.status(409).json({ message: 'That username is already taken. Please choose another one.' });
+    }
     const created = await createStudentUser({
-      name: normalizedName,
+      displayName: normalizedDisplayName,
+      username: normalizedUsername,
       email,
       password,
       branch: branch.trim(),
@@ -1232,6 +1299,7 @@ router.post('/signup/student', validatePassword, async (req: Request, res: Respo
     await markOnboardingSessionCompleted(sessionId);
 
     const responsePayload = await buildAuthenticatedResponse(created.userId, req, {
+      displayName: created.displayName,
       username: created.username,
       email,
       type: 'student',
@@ -1246,16 +1314,19 @@ router.post('/signup/student', validatePassword, async (req: Request, res: Respo
 
     return res.status(201).json(responsePayload);
   } catch (err: any) {
+    if (err?.code === '23505') {
+      return res.status(409).json({ message: 'That username is already taken. Please choose another one.' });
+    }
     console.error('Error completing student signup:', err);
     return res.status(500).json({ message: err?.message || 'Unable to complete student signup' });
   }
 });
 
 router.post('/signup/alumni', alumniProofUpload.array('proofFiles', 5), validatePassword, async (req: Request, res: Response) => {
-  const { sessionId, name, graduationYear, branch, currentStatus, password } = req.body as Partial<AlumniSignupBody>;
+  const { sessionId, displayName, username, graduationYear, branch, currentStatus, password } = req.body as Partial<AlumniSignupBody>;
   const uploadedFiles = Array.isArray(req.files) ? req.files : [];
 
-  if (!sessionId || !name || !graduationYear || !branch || !currentStatus || !password) {
+  if (!sessionId || !displayName || !username || !graduationYear || !branch || !currentStatus || !password) {
     return res.status(400).json({ message: 'Missing required fields' });
   }
 
@@ -1274,16 +1345,25 @@ router.post('/signup/alumni', alumniProofUpload.array('proofFiles', 5), validate
 
     const email = normalizeEmail(session.email);
     const numericGradYear = parseRequiredNumericValue(graduationYear, 'Graduation year');
-    const normalizedName = normalizePersonName(name);
+    const normalizedDisplayName = normalizeDisplayName(displayName);
+    const normalizedUsername = normalizeUsername(username);
+    const usernameValidationError = validateUsername(normalizedUsername);
+    if (usernameValidationError) {
+      return res.status(400).json({ message: usernameValidationError });
+    }
     const trimmedBranch = branch.trim();
     const trimmedCurrentStatus = currentStatus.trim();
     const existingUser = await findUserByEmail(email);
 
-    let created: { userId: string; username: string; createdAt: Date };
+    let created: { userId: string; displayName: string; username: string; createdAt: Date };
 
     if (existingUser) {
       if (existingUser.user_type !== 'alumni') {
         return res.status(409).json({ message: 'An account with this email already exists. Please log in instead.' });
+      }
+
+      if (existingUser.username !== normalizedUsername && (await usernameExists(normalizedUsername))) {
+        return res.status(409).json({ message: 'That username is already taken. Please choose another one.' });
       }
 
       const latestRequest = await findLatestAlumniVerificationRequestByUserId(existingUser.user_id);
@@ -1305,6 +1385,8 @@ router.post('/signup/alumni', alumniProofUpload.array('proofFiles', 5), validate
 
       await updateAlumniSignupUser({
         userId: existingUser.user_id,
+        displayName: normalizedDisplayName,
+        username: normalizedUsername,
         password,
         authProvider: session.provider,
         googleSubject: session.google_subject,
@@ -1321,12 +1403,17 @@ router.post('/signup/alumni', alumniProofUpload.array('proofFiles', 5), validate
 
       created = {
         userId: existingUser.user_id,
-        username: existingUser.username,
+        displayName: normalizedDisplayName,
+        username: normalizedUsername,
         createdAt: existingUser.created_at,
       };
     } else {
+      if (await usernameExists(normalizedUsername)) {
+        return res.status(409).json({ message: 'That username is already taken. Please choose another one.' });
+      }
       created = await createAlumniUser({
-        name: normalizedName,
+        displayName: normalizedDisplayName,
+        username: normalizedUsername,
         email,
         password,
         branch: trimmedBranch,
@@ -1349,7 +1436,8 @@ router.post('/signup/alumni', alumniProofUpload.array('proofFiles', 5), validate
     );
 
     const profilePreview = {
-      name: normalizedName,
+      name: normalizedDisplayName,
+      username: normalizedUsername,
       email,
       branch: trimmedBranch,
       passingYear: numericGradYear,
@@ -1375,7 +1463,7 @@ router.post('/signup/alumni', alumniProofUpload.array('proofFiles', 5), validate
         ${created.userId},
         ${JSON.stringify(documentUrls)}::jsonb,
         ${JSON.stringify(profilePreview)}::jsonb,
-        ${`Alumni verification submitted by ${normalizedName}`},
+        ${`Alumni verification submitted by ${normalizedDisplayName}`},
         'pending'::"VerificationRequestStatus"
       )
       RETURNING verification_request_id, status::text, requested_at
@@ -1395,6 +1483,9 @@ router.post('/signup/alumni', alumniProofUpload.array('proofFiles', 5), validate
       },
     });
   } catch (err: any) {
+    if (err?.code === '23505') {
+      return res.status(409).json({ message: 'That username is already taken. Please choose another one.' });
+    }
     console.error('Error during alumni signup:', err);
     return res.status(500).json({
       message: err?.message || 'Internal server error',
