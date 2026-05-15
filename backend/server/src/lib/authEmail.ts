@@ -12,8 +12,9 @@ function getResendClient(): Resend {
 function getMagicLinkFromAddress(): string {
   return (
     process.env.AUTH_MAGIC_LINK_FROM_EMAIL?.trim()
+    || process.env.RESEND_FROM_EMAIL?.trim()
     || process.env.SMTP_FROM?.trim()
-    || 'CampusLynk <no-reply@campuslynk.app>'
+    || 'CampusLynk <onboarding@resend.dev>'
   );
 }
 
@@ -23,7 +24,7 @@ export async function sendMagicLinkEmail(params: {
 }): Promise<void> {
   const resend = getResendClient();
 
-  await resend.emails.send({
+  const result = await resend.emails.send({
     from: getMagicLinkFromAddress(),
     to: [params.email],
     subject: 'Login to CampusLink',
@@ -48,4 +49,8 @@ export async function sendMagicLinkEmail(params: {
       </div>
     `,
   });
+
+  if (result.error) {
+    throw new Error(result.error.message || 'Resend could not deliver the magic link email');
+  }
 }

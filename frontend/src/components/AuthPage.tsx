@@ -103,7 +103,7 @@ function GoogleStudentButton({
           theme: 'outline',
           size: 'large',
           text,
-          width: 320,
+          width: Math.max(container.clientWidth || 0, 280),
         });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Google Sign-In is unavailable');
@@ -209,6 +209,11 @@ export function AuthPage() {
 
     if (authStatus === 'blocked') {
       setLoginError('Too many invalid link attempts were detected. Please wait before trying again.');
+      return;
+    }
+
+    if (authStatus === 'error') {
+      setLoginError('We could not finish that magic link sign in. Please request a new link.');
       return;
     }
 
@@ -426,6 +431,13 @@ export function AuthPage() {
 
               {activeForm === 'login' ? (
                 <div className="space-y-4 animate-fade-slide-in">
+                  <div className="space-y-1">
+                    <h3 className="text-3xl text-slate-900">Welcome back</h3>
+                    <p className="text-sm text-slate-600">
+                      Use your college Google account or continue with your college email.
+                    </p>
+                  </div>
+
                   <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
                     <p className="text-sm font-semibold text-slate-900">Continue with Google</p>
                     <p className="mt-1 text-xs text-slate-600">
@@ -446,9 +458,15 @@ export function AuthPage() {
                     <div className="h-px flex-1 bg-slate-200" />
                   </div>
 
-                  <div className="space-y-4">
+                  <form
+                    className="space-y-4"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void handleSendMagicLink('login');
+                    }}
+                  >
                     <div className="space-y-2">
-                      <Label htmlFor="login-email">Enter your college email</Label>
+                      <Label htmlFor="login-email">College Email</Label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                         <Input
@@ -461,14 +479,16 @@ export function AuthPage() {
                           required
                         />
                       </div>
+                      <p className="text-xs text-gray-500">
+                        We&apos;ll send a secure sign-in link to your inbox.
+                      </p>
                     </div>
 
                     {loginError ? <p className="text-sm text-red-500">{loginError}</p> : null}
                     {loginMessage ? <p className="text-sm text-emerald-600">{loginMessage}</p> : null}
 
                     <Button
-                      type="button"
-                      onClick={() => void handleSendMagicLink('login')}
+                      type="submit"
                       className="w-full gradient-success shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
                       disabled={isLoading}
                     >
@@ -476,7 +496,7 @@ export function AuthPage() {
                         ? <Lottie animationData={loadingAnimation} style={{ height: 50, width: 50 }} />
                         : 'Send Magic Link'}
                     </Button>
-                  </div>
+                  </form>
                 </div>
               ) : googleOnboarding || magicLinkOnboarding ? (
                 <div className="space-y-4 animate-fade-slide-in">
@@ -577,6 +597,13 @@ export function AuthPage() {
                 </div>
               ) : (
                 <div className="space-y-4 animate-fade-slide-in">
+                  <div className="space-y-1">
+                    <h3 className="text-3xl text-slate-900">Create your account</h3>
+                    <p className="text-sm text-slate-600">
+                      Start with Google or your college email, then finish a few profile details.
+                    </p>
+                  </div>
+
                   <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
                     <p className="text-sm font-semibold text-slate-900">Continue with Google</p>
                     <p className="mt-1 text-xs text-slate-600">
@@ -597,9 +624,15 @@ export function AuthPage() {
                     <div className="h-px flex-1 bg-slate-200" />
                   </div>
 
-                  <div className="space-y-4">
+                  <form
+                    className="space-y-4"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void handleSendMagicLink('signup');
+                    }}
+                  >
                     <div className="space-y-2">
-                      <Label htmlFor="signup-email">Enter your college email</Label>
+                      <Label htmlFor="signup-email">College Email</Label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                         <Input
@@ -621,8 +654,7 @@ export function AuthPage() {
                     {signupMessage ? <p className="text-sm text-emerald-600">{signupMessage}</p> : null}
 
                     <Button
-                      type="button"
-                      onClick={() => void handleSendMagicLink('signup')}
+                      type="submit"
                       className="w-full gradient-success shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
                       disabled={isLoading}
                     >
@@ -634,7 +666,7 @@ export function AuthPage() {
                     <p className="text-xs text-gray-500 text-center">
                       By signing up, you agree to our Terms of Service and Privacy Policy
                     </p>
-                  </div>
+                  </form>
                 </div>
               )}
             </div>

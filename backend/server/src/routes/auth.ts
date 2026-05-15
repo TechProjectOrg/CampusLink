@@ -134,7 +134,8 @@ interface MagicLinkExchangePayload {
 function getGoogleClientId(): string {
   const clientId =
     process.env.GOOGLE_CLIENT_ID?.trim()
-    || process.env.GOOGLE_OAUTH_CLIENT_ID?.trim();
+    || process.env.GOOGLE_OAUTH_CLIENT_ID?.trim()
+    || process.env.VITE_GOOGLE_CLIENT_ID?.trim();
 
   if (!clientId) {
     throw new Error('Google sign-in is not configured on the server');
@@ -154,6 +155,23 @@ function getClientBaseUrl(): string {
     || process.env.APP_BASE_URL?.trim()
     || 'http://localhost:5173'
   ).replace(/\/+$/, '');
+}
+
+function getServerBaseUrl(req: Request): string {
+  const configuredBaseUrl = process.env.API_BASE_URL?.trim();
+  if (configuredBaseUrl) {
+    return configuredBaseUrl.replace(/\/+$/, '');
+  }
+
+  const forwardedProto = req.header('x-forwarded-proto')?.split(',')[0]?.trim();
+  const protocol = forwardedProto || req.protocol || 'http';
+  const host = req.get('host');
+
+  if (host) {
+    return `${protocol}://${host}`.replace(/\/+$/, '');
+  }
+
+  return 'http://localhost:4000';
 }
 
 function normalizeEmail(email: string): string {
@@ -682,6 +700,7 @@ async function sendMagicLink(params: {
   email: string;
   existingUserId?: string;
   onboardingSessionId?: string;
+  req: Request;
 }): Promise<void> {
   const token = crypto.randomBytes(32).toString('hex');
   await cacheSetJson(
@@ -694,7 +713,7 @@ async function sendMagicLink(params: {
     MAGIC_LINK_TTL_SECONDS,
   );
 
-  const verifyUrl = `${process.env.API_BASE_URL?.trim().replace(/\/+$/, '') || 'http://localhost:4000'}/auth/verify?token=${encodeURIComponent(token)}`;
+  const verifyUrl = `${getServerBaseUrl(params.req)}/auth/verify?token=${encodeURIComponent(token)}`;
   await sendMagicLinkEmail({
     email: params.email,
     magicLinkUrl: verifyUrl,
@@ -912,6 +931,7 @@ router.post('/magic-link/send', async (req: Request, res: Response) => {
       email: normalizedEmail,
       existingUserId: existingUser?.user_id,
       onboardingSessionId,
+      req,
     });
 
     await Promise.all([
