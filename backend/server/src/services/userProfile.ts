@@ -12,7 +12,7 @@ export interface UserProfile {
   userId: string;
   username: string;
   email: string;
-  authProvider: 'google' | 'local';
+  authProvider: 'google' | 'magic_link';
   bio: string | null;
   profilePictureUrl: string | null;
   coverPhotoUrl: string | null;

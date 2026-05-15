@@ -1,15 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, Eye, EyeOff, GraduationCap, Lock, Mail, ShieldCheck, UserRound } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Users, Mail, GraduationCap, Sparkles, TrendingUp, Award, Zap } from 'lucide-react';
 import Lottie from 'lottie-react';
 import loadingAnimation from '../assets/loading_animation.json';
-import { useAuth } from '../context/AuthContext';
-import { validatePassword, getPasswordValidationMessage } from '../lib/validation';
-import type { GoogleOnboardingResponse } from '../lib/authApi';
 import { Button } from './ui/button';
-import { Card, CardContent } from './ui/card';
 import { Input } from './ui/input';
-import { InputOTP, InputOTPGroup, InputOTPSlot } from './ui/input-otp';
+import { Card, CardContent, CardHeader } from './ui/card';
 import { Label } from './ui/label';
+import { useAuth } from '../context/AuthContext';
+import type { AuthOnboardingResponse } from '../lib/authApi';
 
 const BRANCH_OPTIONS = [
   'Computer Engineering',
@@ -64,15 +62,16 @@ function loadGoogleScript(): Promise<void> {
   });
 }
 
-function GoogleAuthButton({
+function GoogleStudentButton({
+  text,
   disabled,
   onCredential,
 }: {
+  text: string;
   disabled: boolean;
   onCredential: (credential: string) => Promise<void>;
 }) {
   const [error, setError] = useState('');
-  const buttonRef = useRef<HTMLDivElement | null>(null);
   const googleClientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)?.trim();
 
   useEffect(() => {
@@ -84,14 +83,13 @@ function GoogleAuthButton({
         return;
       }
 
-      const container = buttonRef.current;
+      const container = document.getElementById(`google-student-button-${text}`);
       if (!container) return;
 
       try {
         await loadGoogleScript();
-        if (cancelled || !window.google?.accounts?.id || !buttonRef.current) return;
+        if (cancelled || !window.google?.accounts?.id) return;
 
-        const width = Math.max(Math.floor(buttonRef.current.clientWidth || 360), 280);
         container.innerHTML = '';
         window.google.accounts.id.initialize({
           client_id: googleClientId,
@@ -104,9 +102,8 @@ function GoogleAuthButton({
         window.google.accounts.id.renderButton(container, {
           theme: 'outline',
           size: 'large',
-          text: 'continue_with',
-          shape: 'pill',
-          width,
+          text,
+          width: 320,
         });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Google Sign-In is unavailable');
@@ -114,91 +111,38 @@ function GoogleAuthButton({
     }
 
     void renderGoogleButton();
-    const observer = typeof ResizeObserver !== 'undefined'
-      ? new ResizeObserver(() => {
-          void renderGoogleButton();
-        })
-      : null;
-
-    if (observer && buttonRef.current) {
-      observer.observe(buttonRef.current);
-    }
 
     return () => {
       cancelled = true;
-      observer?.disconnect();
     };
-  }, [googleClientId, onCredential]);
+  }, [googleClientId, onCredential, text]);
 
   return (
     <div className={disabled ? 'pointer-events-none opacity-60' : ''}>
-      <div ref={buttonRef} className="w-full min-h-11" />
-      {error ? <p className="mt-2 text-sm text-rose-500">{error}</p> : null}
+      <div id={`google-student-button-${text}`} className="flex justify-center" />
+      {error ? <p className="mt-2 text-center text-xs text-red-500">{error}</p> : null}
     </div>
   );
 }
 
-function Divider() {
-  return (
-    <div className="flex items-center gap-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-slate-400">
-      <div className="h-px flex-1 bg-slate-200" />
-      <span>OR</span>
-      <div className="h-px flex-1 bg-slate-200" />
-    </div>
-  );
-}
-
-function AuthMessage({
-  tone,
-  children,
-}: {
-  tone: 'error' | 'info';
-  children: React.ReactNode;
-}) {
-  return (
-    <div
-      className={`rounded-2xl border px-4 py-3 text-sm ${
-        tone === 'error'
-          ? 'border-rose-200 bg-rose-50 text-rose-700'
-          : 'border-slate-200 bg-slate-50 text-slate-600'
-      }`}
-    >
-      {children}
-    </div>
-  );
+function isOnboardingResult(result: AuthOnboardingResponse | { profile: unknown; token?: string }): result is AuthOnboardingResponse {
+  return 'onboardingRequired' in result;
 }
 
 export function AuthPage() {
   const auth = useAuth();
+
   const [activeForm, setActiveForm] = useState<'login' | 'signup'>('login');
   const [isLoading, setIsLoading] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
-  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [signupEmail, setSignupEmail] = useState('');
   const [loginError, setLoginError] = useState('');
-
-  const [signupData, setSignupData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    confirmPassword: '',
-    branch: '',
-    year: '',
-  });
-  const [showSignupPassword, setShowSignupPassword] = useState(false);
-  const [showSignupConfirmPassword, setShowSignupConfirmPassword] = useState(false);
   const [signupError, setSignupError] = useState('');
+  const [loginMessage, setLoginMessage] = useState('');
   const [signupMessage, setSignupMessage] = useState('');
-  const [passwordValidationMessages, setPasswordValidationMessages] = useState<string[]>([]);
-  const [otpValue, setOtpValue] = useState('');
-  const [otpSession, setOtpSession] = useState<{
-    verificationId: string;
-    expiresAt: string;
-    email: string;
-  } | null>(null);
-  const [googleOnboarding, setGoogleOnboarding] = useState<GoogleOnboardingResponse | null>(null);
-  const [googleProfile, setGoogleProfile] = useState({
-    fullName: '',
+  const [googleOnboarding, setGoogleOnboarding] = useState<AuthOnboardingResponse | null>(null);
+  const [magicLinkOnboarding, setMagicLinkOnboarding] = useState<AuthOnboardingResponse | null>(null);
+  const [onboardingForm, setOnboardingForm] = useState({
     username: '',
     branch: '',
     year: '',
@@ -208,13 +152,14 @@ export function AuthPage() {
   const resetMessages = () => {
     setLoginError('');
     setSignupError('');
+    setLoginMessage('');
     setSignupMessage('');
   };
 
-  const resetGoogleOnboarding = () => {
+  const clearOnboardingState = () => {
     setGoogleOnboarding(null);
-    setGoogleProfile({
-      fullName: '',
+    setMagicLinkOnboarding(null);
+    setOnboardingForm({
       username: '',
       branch: '',
       year: '',
@@ -222,19 +167,72 @@ export function AuthPage() {
     });
   };
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    resetMessages();
-    setIsLoading(true);
-
-    try {
-      await auth.login(loginEmail, loginPassword);
-    } catch (error) {
-      setLoginError(error instanceof Error ? error.message : 'Unable to sign in');
-    } finally {
-      setIsLoading(false);
+  const applyOnboardingState = (result: AuthOnboardingResponse, source: 'google' | 'magic_link') => {
+    setActiveForm('signup');
+    setOnboardingForm({
+      username: result.suggestedUsername ?? result.email.split('@')[0],
+      branch: '',
+      year: '',
+      accountType: 'student',
+    });
+    if (source === 'google') {
+      setGoogleOnboarding(result);
+      setMagicLinkOnboarding(null);
+    } else {
+      setMagicLinkOnboarding(result);
+      setGoogleOnboarding(null);
+      setSignupEmail(result.email);
     }
   };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const exchangeCode = params.get('authExchange');
+    const authStatus = params.get('authStatus');
+
+    if (!exchangeCode && !authStatus) {
+      return;
+    }
+
+    const nextUrl = `${window.location.pathname}${window.location.hash || ''}`;
+    window.history.replaceState({}, '', nextUrl);
+
+    if (authStatus === 'expired') {
+      setLoginError('That magic link has expired. Request a fresh one to continue.');
+      return;
+    }
+
+    if (authStatus === 'invalid') {
+      setLoginError('That magic link is invalid. Request a new one and try again.');
+      return;
+    }
+
+    if (authStatus === 'blocked') {
+      setLoginError('Too many invalid link attempts were detected. Please wait before trying again.');
+      return;
+    }
+
+    if (!exchangeCode) {
+      return;
+    }
+
+    setIsLoading(true);
+    void auth.exchangeMagicLink(exchangeCode)
+      .then((result) => {
+        if (isOnboardingResult(result)) {
+          applyOnboardingState(result, 'magic_link');
+          setSignupMessage('Your email is verified. Finish the last few account details.');
+        } else {
+          setLoginMessage('Magic link verified. Signing you in...');
+        }
+      })
+      .catch((error) => {
+        setLoginError(error instanceof Error ? error.message : 'Unable to finish magic link sign-in.');
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, [auth]);
 
   const handleGoogleAuth = async (credential: string) => {
     resetMessages();
@@ -242,17 +240,9 @@ export function AuthPage() {
 
     try {
       const result = await auth.authenticateWithGoogle(credential);
-      if ('onboardingRequired' in result) {
-        setActiveForm('signup');
-        setOtpSession(null);
-        setGoogleOnboarding(result);
-        setGoogleProfile({
-          fullName: result.fullName,
-          username: result.suggestedUsername ?? result.fullName,
-          branch: '',
-          year: '',
-          accountType: 'student',
-        });
+      if (isOnboardingResult(result)) {
+        applyOnboardingState(result, 'google');
+        setSignupMessage('Your Google account is verified. Finish the last few account details.');
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Google sign-in failed';
@@ -266,54 +256,28 @@ export function AuthPage() {
     }
   };
 
-  const handleRequestOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSendMagicLink = async (mode: 'login' | 'signup') => {
     resetMessages();
-    resetGoogleOnboarding();
-
-    if (signupData.password !== signupData.confirmPassword) {
-      setSignupError('Passwords do not match');
-      return;
+    if (mode === 'signup') {
+      clearOnboardingState();
     }
 
-    if (!validatePassword(signupData.password)) {
-      setSignupError('Password does not meet the requirements.');
-      return;
-    }
-
+    const email = mode === 'login' ? loginEmail : signupEmail;
     setIsLoading(true);
     try {
-      const response = await auth.requestStudentSignupOtp({
-        name: signupData.name,
-        email: signupData.email,
-        password: signupData.password,
-        branch: signupData.branch,
-        year: signupData.year,
-      });
-      setOtpSession({
-        verificationId: response.verificationId,
-        expiresAt: response.expiresAt,
-        email: signupData.email,
-      });
-      setSignupMessage(response.message);
-      setOtpValue('');
+      const result = await auth.sendMagicLink(email);
+      if (mode === 'login') {
+        setLoginMessage(result.message);
+      } else {
+        setSignupMessage(result.message);
+      }
     } catch (error) {
-      setSignupError(error instanceof Error ? error.message : 'Unable to send verification code');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleVerifyOtp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!otpSession) return;
-
-    resetMessages();
-    setIsLoading(true);
-    try {
-      await auth.verifyStudentSignupOtp(otpSession.verificationId, otpValue);
-    } catch (error) {
-      setSignupError(error instanceof Error ? error.message : 'Unable to verify the code');
+      const message = error instanceof Error ? error.message : 'Unable to send magic link';
+      if (mode === 'login') {
+        setLoginError(message);
+      } else {
+        setSignupError(message);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -328,11 +292,10 @@ export function AuthPage() {
     try {
       await auth.completeGoogleOnboarding({
         sessionId: googleOnboarding.sessionId,
-        fullName: googleProfile.fullName,
-        username: googleProfile.username,
-        branch: googleProfile.branch,
-        year: googleProfile.year,
-        accountType: googleProfile.accountType,
+        username: onboardingForm.username,
+        branch: onboardingForm.branch,
+        year: onboardingForm.year,
+        accountType: onboardingForm.accountType,
       });
     } catch (error) {
       setSignupError(error instanceof Error ? error.message : 'Unable to complete Google signup');
@@ -341,434 +304,338 @@ export function AuthPage() {
     }
   };
 
+  const handleMagicLinkOnboarding = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!magicLinkOnboarding) return;
+
+    resetMessages();
+    setIsLoading(true);
+    try {
+      await auth.completeMagicLinkOnboarding({
+        sessionId: magicLinkOnboarding.sessionId,
+        username: onboardingForm.username,
+        branch: onboardingForm.branch,
+        year: onboardingForm.year,
+        accountType: onboardingForm.accountType,
+      });
+    } catch (error) {
+      setSignupError(error instanceof Error ? error.message : 'Unable to complete account setup');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.12),_transparent_32%),linear-gradient(180deg,_#f8fbff_0%,_#ffffff_52%,_#f5f7fb_100%)] px-4 py-10 text-slate-900">
-      <div className="mx-auto grid min-h-[calc(100vh-5rem)] w-full max-w-6xl items-center gap-10 lg:grid-cols-[minmax(0,1fr)_430px]">
-        <section className="mx-auto max-w-xl text-center lg:mx-0 lg:text-left">
-          <div className="inline-flex items-center gap-2 rounded-full border border-sky-100 bg-white/80 px-4 py-2 text-sm font-medium text-sky-700 shadow-sm">
-            <ShieldCheck className="h-4 w-4" />
-            College authentication, simplified
+    <div className="cl-auth-page min-h-screen bg-gradient-to-br from-primary via-secondary to-purple-600 flex items-center justify-center p-4 relative overflow-hidden">
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute top-20 left-10 w-72 h-72 bg-white/10 rounded-full blur-3xl animate-pulse" />
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
+      </div>
+
+      <div className="cl-auth-layout w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 gap-8 items-center relative z-10">
+        <div className="cl-auth-branding space-y-6 text-center md:text-left animate-slide-in-up">
+          <div className="inline-flex items-center gap-3 glass-morphism-solid rounded-2xl p-4 shadow-2xl hover-lift">
+            <div className="gradient-primary text-white rounded-xl p-3 shadow-lg">
+              <Users className="w-8 h-8" />
+            </div>
+            <span className="text-white text-2xl">CampusLynk</span>
           </div>
-          <h1 className="mt-6 text-4xl font-semibold leading-tight text-slate-950 sm:text-5xl">
-            One clean sign-in flow for Google and email.
+
+          <h1 className="text-white text-3xl md:text-4xl animate-slide-in-down">
+            Connect. Collaborate. Succeed.
           </h1>
-          <p className="mt-5 text-base leading-7 text-slate-600 sm:text-lg">
-            Continue with your college Google account or create an account with your college email and a verification code.
-            No extra verification widgets, no duplicate steps.
+
+          <p className="text-white/90 text-lg">
+            Join your college&apos;s professional network. Continue with Google or let a secure magic link bring you back in.
           </p>
-          <div className="mt-8 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-3xl border border-slate-200 bg-white/80 p-4 shadow-sm">
-              <p className="text-sm font-semibold text-slate-900">Google first</p>
-              <p className="mt-1 text-sm text-slate-500">Fast login for existing users and lightweight onboarding for new ones.</p>
+
+          <div className="grid grid-cols-2 gap-4 pt-4">
+            <div className="glass-morphism-solid rounded-2xl p-4 shadow-xl hover-lift animate-slide-in-up" style={{ animationDelay: '100ms' }}>
+              <div className="flex items-center gap-2 mb-2">
+                <Users className="w-5 h-5 text-white" />
+                <p className="text-2xl text-white">500+</p>
+              </div>
+              <p className="text-sm text-white/80">Active Students</p>
             </div>
-            <div className="rounded-3xl border border-slate-200 bg-white/80 p-4 shadow-sm">
-              <p className="text-sm font-semibold text-slate-900">OTP verified</p>
-              <p className="mt-1 text-sm text-slate-500">Email ownership is confirmed on the server before account creation.</p>
+            <div className="glass-morphism-solid rounded-2xl p-4 shadow-xl hover-lift animate-slide-in-up" style={{ animationDelay: '200ms' }}>
+              <div className="flex items-center gap-2 mb-2">
+                <TrendingUp className="w-5 h-5 text-white" />
+                <p className="text-2xl text-white">100+</p>
+              </div>
+              <p className="text-sm text-white/80">Opportunities</p>
             </div>
-            <div className="rounded-3xl border border-slate-200 bg-white/80 p-4 shadow-sm">
-              <p className="text-sm font-semibold text-slate-900">Compact forms</p>
-              <p className="mt-1 text-sm text-slate-500">Only the fields needed for the path you actually choose.</p>
+            <div className="glass-morphism-solid rounded-2xl p-4 shadow-xl hover-lift animate-slide-in-up" style={{ animationDelay: '300ms' }}>
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles className="w-5 h-5 text-white" />
+                <p className="text-2xl text-white">50+</p>
+              </div>
+              <p className="text-sm text-white/80">Active Clubs</p>
+            </div>
+            <div className="glass-morphism-solid rounded-2xl p-4 shadow-xl hover-lift animate-slide-in-up" style={{ animationDelay: '400ms' }}>
+              <div className="flex items-center gap-2 mb-2">
+                <Award className="w-5 h-5 text-white" />
+                <p className="text-2xl text-white">20+</p>
+              </div>
+              <p className="text-sm text-white/80">Events/Month</p>
             </div>
           </div>
-        </section>
+        </div>
 
-        <Card className="border-slate-200 bg-white/90 shadow-[0_20px_80px_-40px_rgba(15,23,42,0.35)] backdrop-blur">
-          <CardContent className="p-6 sm:p-8">
-            <div className="grid grid-cols-2 gap-2 rounded-2xl bg-slate-100 p-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveForm('login');
-                  resetMessages();
-                }}
-                className={`rounded-xl px-4 py-2.5 text-sm font-medium transition ${
-                  activeForm === 'login' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                Log in
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveForm('signup');
-                  resetMessages();
-                }}
-                className={`rounded-xl px-4 py-2.5 text-sm font-medium transition ${
-                  activeForm === 'signup' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500 hover:text-slate-900'
-                }`}
-              >
-                Sign up
-              </button>
+        <Card className="cl-auth-card shadow-2xl border-0 backdrop-blur-lg bg-white/95 animate-slide-in-up">
+          <CardHeader>
+            <div className="flex items-center justify-center gap-2 mb-2">
+              <Zap className="w-6 h-6 text-primary" />
+              <h2 className="text-gray-900 text-center bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
+                Welcome to CampusLynk
+              </h2>
             </div>
-
-            <div className="mt-6 space-y-5">
-              <div>
-                <h2 className="text-2xl font-semibold text-slate-950">
-                  {activeForm === 'login' ? 'Welcome back' : 'Create your account'}
-                </h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  {activeForm === 'login'
-                    ? 'Use Google or your email and password.'
-                    : 'Choose Google or verify your college email with a one-time code.'}
-                </p>
+            <p className="text-gray-600 text-center">Simple, secure authentication for your campus network</p>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="grid w-full grid-cols-2 bg-gray-100 p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveForm('login');
+                    resetMessages();
+                  }}
+                  className={`rounded-lg transition-all duration-300 py-2 ${
+                    activeForm === 'login'
+                      ? 'gradient-primary text-white shadow-lg'
+                      : 'text-gray-700 hover:text-primary'
+                  }`}
+                >
+                  Login
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveForm('signup');
+                    resetMessages();
+                  }}
+                  className={`rounded-lg transition-all duration-300 py-2 ${
+                    activeForm === 'signup'
+                      ? 'gradient-primary text-white shadow-lg'
+                      : 'text-gray-700 hover:text-primary'
+                  }`}
+                >
+                  Sign Up
+                </button>
               </div>
 
-              <GoogleAuthButton disabled={isLoading} onCredential={handleGoogleAuth} />
-
-              <Divider />
-
               {activeForm === 'login' ? (
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="login-email">Email</Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                      <Input
-                        id="login-email"
-                        type="email"
-                        value={loginEmail}
-                        onChange={(e) => setLoginEmail(e.target.value)}
-                        placeholder="you@gbpuat.ac.in"
-                        className="h-11 rounded-2xl border-slate-200 pl-10"
-                        required
+                <div className="space-y-4 animate-fade-slide-in">
+                  <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
+                    <p className="text-sm font-semibold text-slate-900">Continue with Google</p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      Use your official college Google account for the fastest sign in.
+                    </p>
+                    <div className="mt-4">
+                      <GoogleStudentButton
+                        text="continue_with"
+                        disabled={isLoading}
+                        onCredential={handleGoogleAuth}
                       />
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="login-password">Password</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                      <Input
-                        id="login-password"
-                        type={showLoginPassword ? 'text' : 'password'}
-                        value={loginPassword}
-                        onChange={(e) => setLoginPassword(e.target.value)}
-                        placeholder="Password"
-                        className="h-11 rounded-2xl border-slate-200 pl-10 pr-11"
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowLoginPassword((current) => !current)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-700"
-                      >
-                        {showLoginPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
+                  <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-slate-400">
+                    <div className="h-px flex-1 bg-slate-200" />
+                    <span>OR</span>
+                    <div className="h-px flex-1 bg-slate-200" />
                   </div>
 
-                  {loginError ? <AuthMessage tone="error">{loginError}</AuthMessage> : null}
-
-                  <Button type="submit" className="h-11 w-full rounded-2xl" disabled={isLoading}>
-                    {isLoading ? (
-                      <Lottie animationData={loadingAnimation} style={{ height: 40, width: 40 }} />
-                    ) : (
-                      <span className="inline-flex items-center gap-2">
-                        Continue
-                        <ArrowRight className="h-4 w-4" />
-                      </span>
-                    )}
-                  </Button>
-                </form>
-              ) : googleOnboarding ? (
-                <form onSubmit={handleGoogleOnboarding} className="space-y-4">
-                  <AuthMessage tone="info">
-                    Your Google account is verified. Finish the last few details to create your student account.
-                  </AuthMessage>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="google-full-name">Full Name</Label>
-                    <div className="relative">
-                      <UserRound className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                      <Input
-                        id="google-full-name"
-                        type="text"
-                        value={googleProfile.fullName}
-                        onChange={(e) => setGoogleProfile((current) => ({ ...current, fullName: e.target.value }))}
-                        className="h-11 rounded-2xl border-slate-200 pl-10"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="google-email">College Email</Label>
-                    <Input
-                      id="google-email"
-                      type="email"
-                      value={googleOnboarding.email}
-                      className="h-11 rounded-2xl border-slate-200 bg-slate-50"
-                      readOnly
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="google-username">Username</Label>
-                    <Input
-                      id="google-username"
-                      type="text"
-                      value={googleProfile.username}
-                      onChange={(e) => setGoogleProfile((current) => ({ ...current, username: e.target.value }))}
-                      className="h-11 rounded-2xl border-slate-200"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="google-role">Account Type</Label>
-                    <Input
-                      id="google-role"
-                      type="text"
-                      value="Student"
-                      className="h-11 rounded-2xl border-slate-200 bg-slate-50"
-                      readOnly
-                    />
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="google-branch">Branch</Label>
+                      <Label htmlFor="login-email">Enter your college email</Label>
                       <div className="relative">
-                        <GraduationCap className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                        <select
-                          id="google-branch"
-                          value={googleProfile.branch}
-                          onChange={(e) => setGoogleProfile((current) => ({ ...current, branch: e.target.value }))}
-                          className="h-11 w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 text-sm outline-none transition focus:border-slate-300"
+                        <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <Input
+                          id="login-email"
+                          type="email"
+                          placeholder="your.name@gbpuat.ac.in"
+                          value={loginEmail}
+                          onChange={(e) => setLoginEmail(e.target.value)}
+                          className="pl-10 border-primary/20 focus:border-primary rounded-xl"
                           required
-                        >
-                          <option value="">Select branch</option>
-                          {BRANCH_OPTIONS.map((branch) => (
-                            <option key={branch} value={branch}>
-                              {branch}
-                            </option>
-                          ))}
-                        </select>
+                        />
                       </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="google-year">Year</Label>
-                      <select
-                        id="google-year"
-                        value={googleProfile.year}
-                        onChange={(e) => setGoogleProfile((current) => ({ ...current, year: e.target.value }))}
-                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition focus:border-slate-300"
-                        required
-                      >
-                        <option value="">Select year</option>
-                        <option value="1">1st Year</option>
-                        <option value="2">2nd Year</option>
-                        <option value="3">3rd Year</option>
-                        <option value="4">4th Year</option>
-                      </select>
-                    </div>
+                    {loginError ? <p className="text-sm text-red-500">{loginError}</p> : null}
+                    {loginMessage ? <p className="text-sm text-emerald-600">{loginMessage}</p> : null}
+
+                    <Button
+                      type="button"
+                      onClick={() => void handleSendMagicLink('login')}
+                      className="w-full gradient-success shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+                      disabled={isLoading}
+                    >
+                      {isLoading
+                        ? <Lottie animationData={loadingAnimation} style={{ height: 50, width: 50 }} />
+                        : 'Send Magic Link'}
+                    </Button>
                   </div>
-
-                  {signupError ? <AuthMessage tone="error">{signupError}</AuthMessage> : null}
-
-                  <Button type="submit" className="h-11 w-full rounded-2xl" disabled={isLoading}>
-                    {isLoading ? <Lottie animationData={loadingAnimation} style={{ height: 40, width: 40 }} /> : 'Finish Google Signup'}
-                  </Button>
-
-                  <button
-                    type="button"
-                    onClick={resetGoogleOnboarding}
-                    className="w-full text-sm text-slate-500 transition hover:text-slate-900"
-                  >
-                    Use email and password instead
-                  </button>
-                </form>
-              ) : otpSession ? (
-                <form onSubmit={handleVerifyOtp} className="space-y-4">
-                  <AuthMessage tone="info">
-                    {signupMessage || `We sent a verification code to ${otpSession.email}.`}
-                  </AuthMessage>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-otp">Verification Code</Label>
-                    <div className="flex justify-center rounded-2xl border border-slate-200 bg-slate-50 px-3 py-4">
-                      <InputOTP id="signup-otp" maxLength={6} value={otpValue} onChange={setOtpValue}>
-                        <InputOTPGroup>
-                          <InputOTPSlot index={0} />
-                          <InputOTPSlot index={1} />
-                          <InputOTPSlot index={2} />
-                          <InputOTPSlot index={3} />
-                          <InputOTPSlot index={4} />
-                          <InputOTPSlot index={5} />
-                        </InputOTPGroup>
-                      </InputOTP>
-                    </div>
-                    <p className="text-xs text-slate-500">
-                      Code expires at {new Date(otpSession.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}.
+                </div>
+              ) : googleOnboarding || magicLinkOnboarding ? (
+                <div className="space-y-4 animate-fade-slide-in">
+                  <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
+                    <p className="text-sm font-semibold text-slate-900">
+                      {googleOnboarding ? 'Google account verified' : 'Magic link verified'}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      Finish the last few details to complete your student account.
                     </p>
                   </div>
 
-                  {signupError ? <AuthMessage tone="error">{signupError}</AuthMessage> : null}
-
-                  <Button type="submit" className="h-11 w-full rounded-2xl" disabled={isLoading || otpValue.length !== 6}>
-                    {isLoading ? <Lottie animationData={loadingAnimation} style={{ height: 40, width: 40 }} /> : 'Verify and Create Account'}
-                  </Button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOtpSession(null);
-                      setOtpValue('');
-                      setSignupMessage('');
-                      setSignupError('');
-                    }}
-                    className="w-full text-sm text-slate-500 transition hover:text-slate-900"
-                  >
-                    Edit details
-                  </button>
-                </form>
-              ) : (
-                <form onSubmit={handleRequestOtp} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-name">Full Name</Label>
-                    <div className="relative">
-                      <UserRound className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                      <Input
-                        id="signup-name"
-                        type="text"
-                        value={signupData.name}
-                        onChange={(e) => setSignupData((current) => ({ ...current, name: e.target.value }))}
-                        placeholder="Your full name"
-                        className="h-11 rounded-2xl border-slate-200 pl-10"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-email">College Email</Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                      <Input
-                        id="signup-email"
-                        type="email"
-                        value={signupData.email}
-                        onChange={(e) => setSignupData((current) => ({ ...current, email: e.target.value }))}
-                        placeholder="you@gbpuat.ac.in"
-                        className="h-11 rounded-2xl border-slate-200 pl-10"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid gap-4 sm:grid-cols-2">
+                  <form onSubmit={googleOnboarding ? handleGoogleOnboarding : handleMagicLinkOnboarding} className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="signup-branch">Branch</Label>
-                      <div className="relative">
-                        <GraduationCap className="pointer-events-none absolute left-3 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                      <Label htmlFor="onboarding-email">College Email</Label>
+                      <Input
+                        id="onboarding-email"
+                        type="email"
+                        value={(googleOnboarding ?? magicLinkOnboarding)?.email ?? ''}
+                        className="border-primary/20 focus:border-primary rounded-xl bg-slate-50"
+                        readOnly
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="onboarding-username">Username</Label>
+                      <Input
+                        id="onboarding-username"
+                        type="text"
+                        placeholder="Choose a username"
+                        value={onboardingForm.username}
+                        onChange={(e) => setOnboardingForm((current) => ({ ...current, username: e.target.value }))}
+                        className="border-primary/20 focus:border-primary rounded-xl"
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="onboarding-role">Role / Account Type</Label>
+                      <Input
+                        id="onboarding-role"
+                        type="text"
+                        value="Student"
+                        className="border-primary/20 focus:border-primary rounded-xl bg-slate-50"
+                        readOnly
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="onboarding-branch">Branch</Label>
+                        <div className="relative">
+                          <GraduationCap className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 z-10" />
+                          <select
+                            id="onboarding-branch"
+                            value={onboardingForm.branch}
+                            onChange={(e) => setOnboardingForm((current) => ({ ...current, branch: e.target.value }))}
+                            className="w-full pl-10 pr-4 py-2 border border-primary/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50"
+                            required
+                          >
+                            <option value="">Select</option>
+                            {BRANCH_OPTIONS.map((branch) => (
+                              <option key={branch} value={branch}>
+                                {branch}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="onboarding-year">Year</Label>
                         <select
-                          id="signup-branch"
-                          value={signupData.branch}
-                          onChange={(e) => setSignupData((current) => ({ ...current, branch: e.target.value }))}
-                          className="h-11 w-full rounded-2xl border border-slate-200 bg-white pl-10 pr-4 text-sm outline-none transition focus:border-slate-300"
+                          id="onboarding-year"
+                          value={onboardingForm.year}
+                          onChange={(e) => setOnboardingForm((current) => ({ ...current, year: e.target.value }))}
+                          className="w-full px-4 py-2 border border-primary/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50"
                           required
                         >
-                          <option value="">Select branch</option>
-                          {BRANCH_OPTIONS.map((branch) => (
-                            <option key={branch} value={branch}>
-                              {branch}
-                            </option>
-                          ))}
+                          <option value="">Select</option>
+                          <option value="1">1st Year</option>
+                          <option value="2">2nd Year</option>
+                          <option value="3">3rd Year</option>
+                          <option value="4">4th Year</option>
                         </select>
                       </div>
                     </div>
 
+                    {signupError ? <p className="text-sm text-red-500">{signupError}</p> : null}
+                    {signupMessage ? <p className="text-sm text-emerald-600">{signupMessage}</p> : null}
+
+                    <Button type="submit" className="w-full gradient-success shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105" disabled={isLoading}>
+                      {isLoading
+                        ? <Lottie animationData={loadingAnimation} style={{ height: 50, width: 50 }} />
+                        : 'Complete Account'}
+                    </Button>
+                  </form>
+                </div>
+              ) : (
+                <div className="space-y-4 animate-fade-slide-in">
+                  <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
+                    <p className="text-sm font-semibold text-slate-900">Continue with Google</p>
+                    <p className="mt-1 text-xs text-slate-600">
+                      New Google users can finish onboarding after account verification.
+                    </p>
+                    <div className="mt-4">
+                      <GoogleStudentButton
+                        text="continue_with"
+                        disabled={isLoading}
+                        onCredential={handleGoogleAuth}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-slate-400">
+                    <div className="h-px flex-1 bg-slate-200" />
+                    <span>OR</span>
+                    <div className="h-px flex-1 bg-slate-200" />
+                  </div>
+
+                  <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="signup-year">Year</Label>
-                      <select
-                        id="signup-year"
-                        value={signupData.year}
-                        onChange={(e) => setSignupData((current) => ({ ...current, year: e.target.value }))}
-                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-4 text-sm outline-none transition focus:border-slate-300"
-                        required
-                      >
-                        <option value="">Select year</option>
-                        <option value="1">1st Year</option>
-                        <option value="2">2nd Year</option>
-                        <option value="3">3rd Year</option>
-                        <option value="4">4th Year</option>
-                      </select>
+                      <Label htmlFor="signup-email">Enter your college email</Label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <Input
+                          id="signup-email"
+                          type="email"
+                          placeholder="your.name@gbpuat.ac.in"
+                          value={signupEmail}
+                          onChange={(e) => setSignupEmail(e.target.value)}
+                          className="pl-10 border-primary/20 focus:border-primary rounded-xl"
+                          required
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500">
+                        We&apos;ll email a secure magic link. No password or OTP needed.
+                      </p>
                     </div>
+
+                    {signupError ? <p className="text-sm text-red-500">{signupError}</p> : null}
+                    {signupMessage ? <p className="text-sm text-emerald-600">{signupMessage}</p> : null}
+
+                    <Button
+                      type="button"
+                      onClick={() => void handleSendMagicLink('signup')}
+                      className="w-full gradient-success shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
+                      disabled={isLoading}
+                    >
+                      {isLoading
+                        ? <Lottie animationData={loadingAnimation} style={{ height: 50, width: 50 }} />
+                        : 'Send Magic Link'}
+                    </Button>
+
+                    <p className="text-xs text-gray-500 text-center">
+                      By signing up, you agree to our Terms of Service and Privacy Policy
+                    </p>
                   </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-password">Password</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                      <Input
-                        id="signup-password"
-                        type={showSignupPassword ? 'text' : 'password'}
-                        value={signupData.password}
-                        onChange={(e) => {
-                          const nextPassword = e.target.value;
-                          setSignupData((current) => ({ ...current, password: nextPassword }));
-                          setPasswordValidationMessages(getPasswordValidationMessage(nextPassword));
-                          setSignupError('');
-                        }}
-                        placeholder="Create a password"
-                        className="h-11 rounded-2xl border-slate-200 pl-10 pr-11"
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowSignupPassword((current) => !current)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-700"
-                      >
-                        {showSignupPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                    {passwordValidationMessages.length > 0 ? (
-                      <ul className="space-y-1 text-xs text-rose-500">
-                        {passwordValidationMessages.map((message) => (
-                          <li key={message}>{message}</li>
-                        ))}
-                      </ul>
-                    ) : null}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-confirm-password">Confirm Password</Label>
-                    <div className="relative">
-                      <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                      <Input
-                        id="signup-confirm-password"
-                        type={showSignupConfirmPassword ? 'text' : 'password'}
-                        value={signupData.confirmPassword}
-                        onChange={(e) => {
-                          const nextConfirmPassword = e.target.value;
-                          setSignupData((current) => ({ ...current, confirmPassword: nextConfirmPassword }));
-                          setSignupError(
-                            signupData.password === nextConfirmPassword ? '' : 'Passwords do not match'
-                          );
-                        }}
-                        placeholder="Confirm your password"
-                        className="h-11 rounded-2xl border-slate-200 pl-10 pr-11"
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowSignupConfirmPassword((current) => !current)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-700"
-                      >
-                        {showSignupConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {signupError ? <AuthMessage tone="error">{signupError}</AuthMessage> : null}
-                  {signupMessage ? <AuthMessage tone="info">{signupMessage}</AuthMessage> : null}
-
-                  <Button type="submit" className="h-11 w-full rounded-2xl" disabled={isLoading}>
-                    {isLoading ? <Lottie animationData={loadingAnimation} style={{ height: 40, width: 40 }} /> : 'Create Account'}
-                  </Button>
-                </form>
+                </div>
               )}
             </div>
           </CardContent>

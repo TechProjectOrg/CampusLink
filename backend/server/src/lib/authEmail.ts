@@ -1,63 +1,51 @@
-import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 
-function getOtpMailerFromAddress(): string {
+function getResendClient(): Resend {
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+  if (!apiKey) {
+    throw new Error('RESEND_API_KEY is not configured');
+  }
+
+  return new Resend(apiKey);
+}
+
+function getMagicLinkFromAddress(): string {
   return (
-    process.env.AUTH_OTP_FROM_EMAIL?.trim()
+    process.env.AUTH_MAGIC_LINK_FROM_EMAIL?.trim()
     || process.env.SMTP_FROM?.trim()
-    || process.env.SMTP_USER?.trim()
-    || 'no-reply@campuslynk.local'
+    || 'CampusLynk <no-reply@campuslynk.app>'
   );
 }
 
-function createTransport() {
-  const host = process.env.SMTP_HOST?.trim();
-  const portRaw = process.env.SMTP_PORT?.trim();
-  const user = process.env.SMTP_USER?.trim();
-  const pass = process.env.SMTP_PASS?.trim();
-
-  if (!host || !portRaw) {
-    return null;
-  }
-
-  const port = Number(portRaw);
-  if (!Number.isFinite(port) || port <= 0) {
-    throw new Error('SMTP_PORT must be a valid number');
-  }
-
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
-    auth: user && pass ? { user, pass } : undefined,
-  });
-}
-
-export async function sendSignupOtpEmail(params: {
+export async function sendMagicLinkEmail(params: {
   email: string;
-  code: string;
-  fullName: string;
+  magicLinkUrl: string;
 }): Promise<void> {
-  const transport = createTransport();
-  const from = getOtpMailerFromAddress();
-  const subject = 'Your CampusLynk verification code';
-  const text = [
-    `Hi ${params.fullName || 'there'},`,
-    '',
-    `Your CampusLynk verification code is ${params.code}.`,
-    'It expires in 10 minutes.',
-    '',
-    'If you did not request this, you can ignore this email.',
-  ].join('\n');
+  const resend = getResendClient();
 
-  if (!transport) {
-    console.warn(`[auth] OTP email transport is not configured. Verification code for ${params.email}: ${params.code}`);
-    return;
-  }
-
-  await transport.sendMail({
-    from,
-    to: params.email,
-    subject,
-    text,
+  await resend.emails.send({
+    from: getMagicLinkFromAddress(),
+    to: [params.email],
+    subject: 'Login to CampusLink',
+    html: `
+      <div style="font-family: Inter, Arial, sans-serif; background:#f8fafc; padding:32px;">
+        <div style="max-width:560px; margin:0 auto; background:#ffffff; border-radius:24px; padding:40px; border:1px solid #e2e8f0;">
+          <p style="margin:0 0 12px; color:#0f172a; font-size:28px; font-weight:700;">CampusLynk</p>
+          <p style="margin:0 0 12px; color:#0f172a; font-size:20px; font-weight:600;">Continue securely</p>
+          <p style="margin:0 0 28px; color:#475569; font-size:15px; line-height:1.7;">
+            Click the button below to continue securely.
+          </p>
+          <a
+            href="${params.magicLinkUrl}"
+            style="display:inline-block; background:#2563eb; color:#ffffff; text-decoration:none; padding:14px 24px; border-radius:999px; font-weight:600;"
+          >
+            Open CampusLynk
+          </a>
+          <p style="margin:28px 0 0; color:#64748b; font-size:13px; line-height:1.7;">
+            This link expires in 10 minutes and can only be used once.
+          </p>
+        </div>
+      </div>
+    `,
   });
 }

@@ -225,7 +225,7 @@ export type ApiUserVerificationState =
   | 'alumni_pending_review'
   | 'alumni_verified'
   | 'alumni_rejected';
-export type ApiAuthProvider = 'google' | 'local';
+export type ApiAuthProvider = 'google' | 'magic_link';
 
 export interface ApiUserProfile {
   userId: string;

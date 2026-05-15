@@ -15,7 +15,7 @@ export interface CachedUserSummary {
   userId: string;
   username: string;
   email: string;
-  authProvider: 'google' | 'local';
+  authProvider: 'google' | 'magic_link';
   bio: string | null;
   headline: string | null;
   profilePictureUrl: string | null;
@@ -72,7 +72,7 @@ interface UserSummaryRow {
   user_id: string;
   username: string;
   email: string;
-  auth_provider: 'google' | 'local';
+  auth_provider: 'google' | 'magic_link';
   bio: string | null;
   headline: string | null;
   profile_photo_url: string | null;

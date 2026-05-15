@@ -122,7 +122,7 @@ enum UserVerificationState {
 
 enum AuthProvider {
   GOOGLE @map("google")
-  LOCAL  @map("local")
+  MAGIC_LINK  @map("magic_link")
 }
 
 enum AnnouncementStatus {
@@ -144,7 +144,7 @@ model User {
   email                  String              @unique @db.VarChar(100)
   passwordHash           String              @map("password_hash") @db.VarChar(255)
   userType               UserType            @map("user_type")
-  authProvider           AuthProvider        @default(LOCAL) @map("auth_provider")
+  authProvider           AuthProvider        @default(MAGIC_LINK) @map("auth_provider")
   googleSubject          String?             @unique @map("google_subject") @db.VarChar(255)
   bio                    String?             @db.VarChar(500)
   headline               String?             @db.VarChar(255)
@@ -159,6 +159,7 @@ model User {
   verificationState      UserVerificationState? @map("verification_state")
   isOnline               Boolean             @default(false) @map("is_online")
   lastSeenAt             DateTime?           @map("last_seen_at") @db.Timestamp(6)
+  lastLoginAt            DateTime?           @map("last_login_at") @db.Timestamp(6)
   createdAt              DateTime            @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt              DateTime            @updatedAt @map("updated_at") @db.Timestamp(6)
   studentProfile         StudentProfile?
@@ -274,23 +275,6 @@ model UserSkill {
   @@unique([userId, name], map: "uq_user_skills_user_id_name")
   @@index([userId], map: "idx_user_skills_user_id")
   @@map("user_skills")
-}
-
-model AuthOtpChallenge {
-  authOtpChallengeId String    @id @default(dbgenerated("gen_random_uuid()")) @map("auth_otp_challenge_id") @db.Uuid
-  email              String    @db.VarChar(100)
-  purpose            String    @db.VarChar(50)
-  otpHash            String    @map("otp_hash") @db.VarChar(255)
-  payload            Json      @default("{}") @db.JsonB
-  attempts           Int       @default(0)
-  expiresAt          DateTime  @map("expires_at") @db.Timestamp(6)
-  consumedAt         DateTime? @map("consumed_at") @db.Timestamp(6)
-  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
-
-  @@index([email, purpose], map: "idx_auth_otp_challenges_email_purpose")
-  @@index([expiresAt], map: "idx_auth_otp_challenges_expires_at")
-  @@map("auth_otp_challenges")
 }
 
 model AuthOnboardingSession {
