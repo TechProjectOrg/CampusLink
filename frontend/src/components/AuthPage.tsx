@@ -109,7 +109,7 @@ function GoogleAuthButton({
         await loadGoogleScript();
         if (cancelled || !window.google?.accounts?.id || !buttonRef.current) return;
 
-        const width = Math.max(Math.floor(buttonRef.current.clientWidth || 360), 280);
+        const width = Math.min(Math.max(Math.floor(buttonRef.current.clientWidth || 320), 280), 360);
         container.innerHTML = '';
         window.google.accounts.id.initialize({
           client_id: googleClientId,
@@ -132,25 +132,15 @@ function GoogleAuthButton({
     }
 
     void renderGoogleButton();
-    const observer = typeof ResizeObserver !== 'undefined'
-      ? new ResizeObserver(() => {
-          void renderGoogleButton();
-        })
-      : null;
-
-    if (observer && buttonRef.current) {
-      observer.observe(buttonRef.current);
-    }
 
     return () => {
       cancelled = true;
-      observer?.disconnect();
     };
   }, [googleClientId, onCredential]);
 
   return (
     <div className={disabled ? 'pointer-events-none opacity-60' : ''}>
-      <div ref={buttonRef} className="w-full min-h-11" />
+      <div ref={buttonRef} className="min-h-11 w-[320px]" />
       {error ? <p className="mt-2 text-sm text-red-500">{error}</p> : null}
     </div>
   );
@@ -666,7 +656,7 @@ export function AuthPage() {
             ? 'Use your official college Google account if you want the fastest setup.'
             : 'Use Google to prefill your profile details before uploading your alumni proof.'}
         </p>
-        <div className="mt-4">
+        <div className="mt-4 flex justify-center">
           <GoogleAuthButton disabled={isLoading} onCredential={handleSignupGoogle} />
         </div>
       </div>
@@ -1238,14 +1228,18 @@ export function AuthPage() {
             <div className="flex items-center justify-center gap-2 mb-2">
               <Zap className="w-6 h-6 text-primary" />
               <h2 className="text-gray-900 text-center bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                {mode === 'login' ? 'Welcome Back' : 'Create Your Account'}
+                {mode === 'login' ? 'Welcome to CampusLynk' : 'Create Your Account'}
               </h2>
             </div>
             <p className="text-gray-600 text-center">
-              {mode === 'login'
-                ? 'Login is for authentication only. Signup opens the full verified onboarding flow.'
-                : 'Signup begins with role selection, verification, and then the original onboarding form.'}
+              {mode === 'signup'
+                ? 'Signup begins with role selection, verification, and then the original onboarding form.':''}
             </p>
+            {mode === 'login' ? (
+              <p className="text-sm text-gray-500 text-center">
+                Sign in to connect with your campus network.
+              </p>
+            ) : null}
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
@@ -1284,25 +1278,6 @@ export function AuthPage() {
 
               {mode === 'login' ? (
                 <div className="space-y-4 animate-fade-slide-in">
-                  <div className="space-y-1">
-                    <h3 className="text-3xl text-slate-900">Log in</h3>
-                    <p className="text-sm text-slate-600">
-                      Use your email and password, or continue with Google if your account is already linked.
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
-                    <p className="text-sm font-semibold text-slate-900">Continue with Google</p>
-                    <p className="mt-1 text-xs text-slate-600">
-                      Existing Google-linked accounts can sign in instantly.
-                    </p>
-                    <div className="mt-4">
-                      <GoogleAuthButton disabled={isLoading} onCredential={handleLoginGoogle} />
-                    </div>
-                  </div>
-
-                  <Divider />
-
                   <form onSubmit={handleLogin} className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="login-email">Email</Label>
@@ -1345,23 +1320,34 @@ export function AuthPage() {
 
                     {loginError ? <FormMessage tone="error">{loginError}</FormMessage> : null}
 
-                    <Button type="submit" className="w-full rounded-2xl gradient-primary" disabled={isLoading}>
-                      {isLoading
-                        ? <Lottie animationData={loadingAnimation} style={{ height: 40, width: 40 }} />
-                        : (
-                          <span className="inline-flex items-center gap-2">
-                            Continue
-                            <ArrowRight className="h-4 w-4" />
-                          </span>
-                        )}
-                    </Button>
+                    <div className="mx-auto w-full max-w-[320px]">
+                      <Button type="submit" className="w-full rounded-2xl gradient-primary" disabled={isLoading}>
+                        {isLoading
+                          ? <Lottie animationData={loadingAnimation} style={{ height: 40, width: 40 }} />
+                          : (
+                            <span className="inline-flex items-center gap-2">
+                              Login
+                              <ArrowRight className="h-4 w-4" />
+                            </span>
+                          )}
+                      </Button>
+                    </div>
                   </form>
 
-                  <div className="flex items-center justify-between text-sm">
+                  <Divider />
+
+                  <div className="flex justify-center">
+                    <GoogleAuthButton disabled={isLoading} onCredential={handleLoginGoogle} />
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-3 text-xs font-normal text-slate-500">
                     <Dialog open={forgotPasswordOpen} onOpenChange={setForgotPasswordOpen}>
-                      <DialogTrigger className="text-secondary transition hover:text-primary hover:underline">
-                        Forgot password?
-                      </DialogTrigger>
+                      <p>
+                        Forgot your password?{' '}
+                        <DialogTrigger className="font-normal text-blue-600 transition hover:underline">
+                          Forgot password
+                        </DialogTrigger>
+                      </p>
                       <DialogContent className="sm:max-w-md">
                         <DialogHeader>
                           <DialogTitle>Password reset</DialogTitle>
@@ -1372,13 +1358,16 @@ export function AuthPage() {
                       </DialogContent>
                     </Dialog>
 
-                    <button
-                      type="button"
-                      onClick={openSignup}
-                      className="text-secondary transition hover:text-primary hover:underline"
-                    >
-                      Are you new here? Sign up
-                    </button>
+                    <p>
+                      New here?{' '}
+                      <button
+                        type="button"
+                        onClick={openSignup}
+                        className="font-normal text-blue-600 transition hover:underline"
+                      >
+                        Sign up
+                      </button>
+                    </p>
                   </div>
                 </div>
               ) : renderSignupBody()}
