@@ -140,10 +140,12 @@ interface SignupSessionPayload {
 
 interface MagicLinkRedisPayload {
   onboardingSessionId: string;
+  exchangeCode?: string;
 }
 
 interface MagicLinkExchangePayload {
   onboardingSessionId: string;
+  token: string;
 }
 
 function getGoogleClientId(): string {
@@ -369,6 +371,18 @@ async function findUserByEmail(email: string): Promise<ExistingUserRow | null> {
   `;
 
   return rows[0] ?? null;
+}
+
+async function userHasAdminAccount(userId: string): Promise<boolean> {
+  const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+    SELECT EXISTS(
+      SELECT 1
+      FROM admin_accounts
+      WHERE user_id = ${userId}
+    ) AS "exists"
+  `;
+
+  return rows[0]?.exists ?? false;
 }
 
 async function generateUniqueUsername(baseValue: string): Promise<string> {
@@ -616,8 +630,8 @@ async function createStudentUser(params: {
   const user = createdUsers[0];
 
   await prisma.$queryRaw`
-    INSERT INTO student_profiles (user_id, branch, year)
-    VALUES (${user.user_id}, ${params.branch}, ${params.year})
+    INSERT INTO student_profiles (user_id, branch, year, created_at, updated_at)
+    VALUES (${user.user_id}, ${params.branch}, ${params.year}, NOW(), NOW())
   `;
 
   await createDefaultUserSettings(user.user_id);
@@ -676,8 +690,8 @@ async function createAlumniUser(params: {
   const user = createdUsers[0];
 
   await prisma.$queryRaw`
-    INSERT INTO alumni_profiles (user_id, branch, passing_year, current_status)
-    VALUES (${user.user_id}, ${params.branch}, ${params.passingYear}, ${params.currentStatus})
+    INSERT INTO alumni_profiles (user_id, branch, passing_year, current_status, created_at, updated_at)
+    VALUES (${user.user_id}, ${params.branch}, ${params.passingYear}, ${params.currentStatus}, NOW(), NOW())
   `;
 
   await createDefaultUserSettings(user.user_id);
@@ -688,6 +702,66 @@ async function createAlumniUser(params: {
     username,
     createdAt: user.created_at,
   };
+}
+
+async function upsertAlumniProfile(params: {
+  userId: string;
+  branch: string;
+  passingYear: number;
+  currentStatus: string;
+}): Promise<void> {
+  await prisma.$queryRaw`
+    INSERT INTO alumni_profiles (user_id, branch, passing_year, current_status, created_at, updated_at)
+    VALUES (${params.userId}, ${params.branch}, ${params.passingYear}, ${params.currentStatus}, NOW(), NOW())
+    ON CONFLICT (user_id)
+    DO UPDATE SET
+      branch = EXCLUDED.branch,
+      passing_year = EXCLUDED.passing_year,
+      current_status = EXCLUDED.current_status,
+      updated_at = NOW()
+  `;
+}
+
+async function updateAlumniSignupUser(params: {
+  userId: string;
+  password: string;
+  authProvider: AuthProvider;
+  googleSubject?: string | null;
+  profilePhotoUrl?: string | null;
+}): Promise<void> {
+  await prisma.$queryRaw`
+    UPDATE users
+    SET
+      password_hash = ${hashPassword(params.password)},
+      auth_provider = CAST(${params.authProvider} AS "AuthProvider"),
+      google_subject = COALESCE(google_subject, ${params.googleSubject ?? null}),
+      profile_photo_url = COALESCE(profile_photo_url, ${params.profilePhotoUrl ?? null}),
+      verification_state = 'alumni_pending_review'::"UserVerificationState",
+      onboarding_completed_at = NOW(),
+      updated_at = NOW()
+    WHERE user_id = ${params.userId}
+  `;
+}
+
+async function findLatestAlumniVerificationRequestByUserId(userId: string): Promise<{
+  verification_request_id: string;
+  status: string;
+  requested_at: Date;
+} | null> {
+  const rows = await prisma.$queryRaw<Array<{
+    verification_request_id: string;
+    status: string;
+    requested_at: Date;
+  }>>`
+    SELECT verification_request_id, status::text AS status, requested_at
+    FROM admin_verification_requests
+    WHERE target_user_id = ${userId}
+      AND request_type = 'alumni'::"VerificationRequestType"
+    ORDER BY requested_at DESC
+    LIMIT 1
+  `;
+
+  return rows[0] ?? null;
 }
 
 async function createOnboardingSession(params: {
@@ -869,7 +943,9 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    if (user.verification_state === 'alumni_pending_review') {
+    const isAdminAccount = await userHasAdminAccount(user.user_id);
+
+    if (!isAdminAccount && user.verification_state === 'alumni_pending_review') {
       const requestRows = await prisma.$queryRaw<Array<{ status: string }>>`
         SELECT status::text
         FROM admin_verification_requests
@@ -886,7 +962,7 @@ router.post('/login', async (req: Request, res: Response) => {
       return res.status(403).json({ message: 'Your alumni verification is still under review. Access will unlock after approval.' });
     }
 
-    if (user.verification_state === 'alumni_rejected') {
+    if (!isAdminAccount && user.verification_state === 'alumni_rejected') {
       return res.status(403).json({ message: 'Your alumni verification was rejected. Please contact support or resubmit proof.' });
     }
 
@@ -1053,14 +1129,28 @@ router.get('/verify', async (req: Request, res: Response) => {
       return res.redirect(buildMagicLinkRedirect({ authStatus: 'expired' }));
     }
 
-    await cacheDelete(magicLinkTokenKey(token));
+    let exchangeCode = payload.exchangeCode;
 
-    const exchangeCode = crypto.randomBytes(24).toString('hex');
-    await cacheSetJson(
-      magicLinkExchangeKey(exchangeCode),
-      { onboardingSessionId: payload.onboardingSessionId } satisfies MagicLinkExchangePayload,
-      MAGIC_LINK_EXCHANGE_TTL_SECONDS,
-    );
+    if (!exchangeCode) {
+      exchangeCode = crypto.randomBytes(24).toString('hex');
+      await cacheSetJson(
+        magicLinkExchangeKey(exchangeCode),
+        {
+          onboardingSessionId: payload.onboardingSessionId,
+          token,
+        } satisfies MagicLinkExchangePayload,
+        MAGIC_LINK_EXCHANGE_TTL_SECONDS,
+      );
+
+      await cacheSetJson(
+        magicLinkTokenKey(token),
+        {
+          onboardingSessionId: payload.onboardingSessionId,
+          exchangeCode,
+        } satisfies MagicLinkRedisPayload,
+        MAGIC_LINK_TTL_SECONDS,
+      );
+    }
 
     return res.redirect(buildMagicLinkRedirect({ authExchange: exchangeCode, authStatus: 'verified' }));
   } catch (err) {
@@ -1083,6 +1173,7 @@ router.post('/signup/exchange', async (req: Request, res: Response) => {
     }
 
     await cacheDelete(magicLinkExchangeKey(exchangeCode));
+    await cacheDelete(magicLinkTokenKey(payload.token));
 
     const session = await loadOnboardingSession(payload.onboardingSessionId);
     if (!session || session.completed_at || session.expires_at <= new Date()) {
@@ -1182,23 +1273,70 @@ router.post('/signup/alumni', alumniProofUpload.array('proofFiles', 5), validate
     }
 
     const email = normalizeEmail(session.email);
-    if (await emailExists(email)) {
-      return res.status(409).json({ message: 'An account with this email already exists. Please log in instead.' });
-    }
-
     const numericGradYear = parseRequiredNumericValue(graduationYear, 'Graduation year');
     const normalizedName = normalizePersonName(name);
-    const created = await createAlumniUser({
-      name: normalizedName,
-      email,
-      password,
-      branch: branch.trim(),
-      passingYear: numericGradYear,
-      currentStatus: currentStatus.trim(),
-      authProvider: session.provider,
-      googleSubject: session.google_subject,
-      profilePhotoUrl: session.profile_photo_url,
-    });
+    const trimmedBranch = branch.trim();
+    const trimmedCurrentStatus = currentStatus.trim();
+    const existingUser = await findUserByEmail(email);
+
+    let created: { userId: string; username: string; createdAt: Date };
+
+    if (existingUser) {
+      if (existingUser.user_type !== 'alumni') {
+        return res.status(409).json({ message: 'An account with this email already exists. Please log in instead.' });
+      }
+
+      const latestRequest = await findLatestAlumniVerificationRequestByUserId(existingUser.user_id);
+      if (latestRequest && ['pending', 'approved', 'more_info', 'reviewing'].includes(latestRequest.status)) {
+        await markOnboardingSessionCompleted(sessionId);
+        return res.status(200).json({
+          pendingVerification: true,
+          message: latestRequest.status === 'approved'
+            ? 'Your alumni account has already been verified. Please log in.'
+            : 'Your alumni verification request is already on file and pending review.',
+          request: {
+            id: latestRequest.verification_request_id,
+            status: latestRequest.status,
+            requestedAt: latestRequest.requested_at.toISOString(),
+            verificationState: existingUser.verification_state ?? 'alumni_pending_review',
+          },
+        });
+      }
+
+      await updateAlumniSignupUser({
+        userId: existingUser.user_id,
+        password,
+        authProvider: session.provider,
+        googleSubject: session.google_subject,
+        profilePhotoUrl: session.profile_photo_url,
+      });
+      await upsertAlumniProfile({
+        userId: existingUser.user_id,
+        branch: trimmedBranch,
+        passingYear: numericGradYear,
+        currentStatus: trimmedCurrentStatus,
+      });
+      await createDefaultUserSettings(existingUser.user_id);
+      await invalidateUserCache(existingUser.user_id);
+
+      created = {
+        userId: existingUser.user_id,
+        username: existingUser.username,
+        createdAt: existingUser.created_at,
+      };
+    } else {
+      created = await createAlumniUser({
+        name: normalizedName,
+        email,
+        password,
+        branch: trimmedBranch,
+        passingYear: numericGradYear,
+        currentStatus: trimmedCurrentStatus,
+        authProvider: session.provider,
+        googleSubject: session.google_subject,
+        profilePhotoUrl: session.profile_photo_url,
+      });
+    }
 
     const documentUrls = await Promise.all(
       uploadedFiles.map((file) =>
@@ -1213,9 +1351,9 @@ router.post('/signup/alumni', alumniProofUpload.array('proofFiles', 5), validate
     const profilePreview = {
       name: normalizedName,
       email,
-      branch: branch.trim(),
+      branch: trimmedBranch,
       passingYear: numericGradYear,
-      currentStatus: currentStatus.trim(),
+      currentStatus: trimmedCurrentStatus,
       submittedProofLabels: uploadedFiles.map((file) => file.originalname),
     };
 
