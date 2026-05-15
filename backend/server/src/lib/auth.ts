@@ -17,6 +17,13 @@ export interface PasswordChangeTokenPayload {
   purpose: 'password-change';
 }
 
+export interface PasswordResetTokenPayload {
+  userId: string;
+  email: string;
+  token: string;
+  purpose: 'password-reset';
+}
+
 export interface VerificationActionTokenPayload {
   userId: string;
   email: string;
@@ -28,6 +35,7 @@ export interface VerificationActionTokenPayload {
 const BCRYPT_SALT_ROUNDS = 12;
 const DEFAULT_TOKEN_TTL = '12h';
 const PASSWORD_CHANGE_TOKEN_TTL = '10m';
+const PASSWORD_RESET_TOKEN_TTL = '10m';
 const VERIFICATION_ACTION_TOKEN_TTL = '14d';
 
 function getJwtSecret(): string {
@@ -117,6 +125,43 @@ export function verifyPasswordChangeToken(token: string): PasswordChangeTokenPay
   return {
     userId: decoded.userId,
     purpose: 'password-change',
+  };
+}
+
+export function signPasswordResetToken(userId: string, email: string, token: string): string {
+  return jwt.sign(
+    {
+      userId,
+      email,
+      token,
+      purpose: 'password-reset',
+    },
+    getJwtSecret(),
+    {
+      expiresIn: PASSWORD_RESET_TOKEN_TTL,
+    }
+  );
+}
+
+export function verifyPasswordResetToken(token: string): PasswordResetTokenPayload {
+  const decoded = jwt.verify(token, getJwtSecret());
+
+  if (
+    !decoded ||
+    typeof decoded !== 'object' ||
+    typeof decoded.userId !== 'string' ||
+    typeof decoded.email !== 'string' ||
+    typeof decoded.token !== 'string' ||
+    decoded.purpose !== 'password-reset'
+  ) {
+    throw new Error('Invalid password reset token');
+  }
+
+  return {
+    userId: decoded.userId,
+    email: decoded.email,
+    token: decoded.token,
+    purpose: 'password-reset',
   };
 }
 

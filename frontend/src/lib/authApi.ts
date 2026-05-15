@@ -348,6 +348,19 @@ export interface PasswordChangeVerifyResult {
   changeToken: string;
 }
 
+export interface PasswordResetRequestResult {
+  message: string;
+  lookupType: 'email' | 'username';
+  deliveryEmail: string;
+  maskedDeliveryEmail: string;
+}
+
+export interface PasswordResetExchangeResult {
+  resetToken: string;
+  email: string;
+  maskedEmail: string;
+}
+
 export async function apiVerifyPasswordChange(
   userId: string,
   currentPassword: string,
@@ -368,6 +381,60 @@ export async function apiVerifyPasswordChange(
   }
 
   return (await response.json()) as PasswordChangeVerifyResult;
+}
+
+export async function apiRequestPasswordReset(identifier: string): Promise<PasswordResetRequestResult> {
+  const response = await safeFetch(`${API_BASE}/auth/password-reset/request`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ identifier }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to request password reset');
+  }
+
+  return (await response.json()) as PasswordResetRequestResult;
+}
+
+export async function apiExchangePasswordReset(exchangeCode: string): Promise<PasswordResetExchangeResult> {
+  const response = await safeFetch(`${API_BASE}/auth/password-reset/exchange`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ exchangeCode }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to verify password reset link');
+  }
+
+  return (await response.json()) as PasswordResetExchangeResult;
+}
+
+export async function apiCompletePasswordReset(payload: {
+  resetToken: string;
+  newPassword: string;
+  confirmPassword: string;
+}): Promise<void> {
+  const response = await safeFetch(`${API_BASE}/auth/password-reset/complete`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    const detail = err?.details ? ` ${err.details}` : '';
+    throw new Error(err?.message ? `${err.message}${detail}` : 'Unable to reset password');
+  }
 }
 
 export async function apiChangePassword(

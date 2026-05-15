@@ -11,6 +11,7 @@ import { toast } from 'sonner@2.0.3';
 import type { ApiUserSession, Student } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { apiChangePassword, apiCheckUsernameAvailability, apiFetchUserSessions, apiFetchUserSettings, apiRevokeUserSession, apiUpdateUserProfile, apiUpdateUserSettings, apiVerifyPasswordChange } from '../lib/authApi';
+import { ForgotPasswordDialog } from './ForgotPasswordDialog';
 import { LoadingIndicator } from './ui/LoadingIndicator';
 
 const PASSWORD_REQUIREMENTS = [
@@ -82,6 +83,7 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
   const [passwordChangeStatus, setPasswordChangeStatus] = useState<'idle' | 'verifying' | 'changing'>('idle');
   const [securityView, setSecurityView] = useState<'menu' | 'password' | 'sessions'>('menu');
   const [openMobileSection, setOpenMobileSection] = useState<'account' | 'security' | 'notifications' | 'privacy' | null>(null);
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
     newPassword: '',
@@ -374,6 +376,15 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
             {passwordMismatch && (
               <p className="text-sm text-red-600">New password and confirmation do not match.</p>
             )}
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setForgotPasswordOpen(true)}
+              className="text-sm font-medium text-blue-600 transition hover:underline"
+            >
+              Forgot password?
+            </button>
           </div>
           <Button type="submit" className="w-full gradient-primary" disabled={isPasswordActionInProgress}>
             {passwordChangeStatus === 'verifying'
@@ -1407,6 +1418,11 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
           </TabsContent>
         </Tabs>
       </div>
+      <ForgotPasswordDialog
+        open={forgotPasswordOpen}
+        onOpenChange={setForgotPasswordOpen}
+        defaultIdentifier={auth.profile?.email ?? accountStudent.email}
+      />
     </div>
   );
 }

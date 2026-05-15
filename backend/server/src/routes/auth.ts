@@ -8,12 +8,15 @@ import authenticateToken, { type AuthedRequest } from '../middleware/authenticat
 import {
   hashPassword,
   signAuthToken,
+  signPasswordResetToken,
   verifyPassword,
+  verifyPasswordResetToken,
   verifyVerificationActionToken,
 } from '../lib/auth';
 import { uploadVerificationProofToStorage } from '../lib/objectStorage';
 import { invalidateUserCache } from '../lib/userCache';
-import { sendMagicLinkEmail } from '../lib/authEmail';
+import { sendMagicLinkEmail, sendPasswordResetEmail } from '../lib/authEmail';
+import { setAdminMustChangePassword } from '../lib/admin';
 import {
   cacheDelete,
   cacheGetJson,
@@ -49,6 +52,14 @@ const MAGIC_LINK_EMAIL_LIMIT = 3;
 const MAGIC_LINK_IP_LIMIT = 10;
 const MAGIC_LINK_RESEND_COOLDOWN_SECONDS = 60;
 const MAGIC_LINK_INVALID_ATTEMPT_LIMIT = 8;
+const PASSWORD_RESET_TTL_SECONDS = 10 * 60;
+const PASSWORD_RESET_EXCHANGE_TTL_SECONDS = 2 * 60;
+const PASSWORD_RESET_EMAIL_WINDOW_SECONDS = 15 * 60;
+const PASSWORD_RESET_IP_WINDOW_SECONDS = 15 * 60;
+const PASSWORD_RESET_EMAIL_LIMIT = 3;
+const PASSWORD_RESET_IP_LIMIT = 10;
+const PASSWORD_RESET_RESEND_COOLDOWN_SECONDS = 60;
+const PASSWORD_RESET_INVALID_ATTEMPT_LIMIT = 8;
 
 interface UserSessionRow {
   session_id: string;
@@ -95,6 +106,20 @@ interface SignupVerifyEmailBody {
 
 interface SignupExchangeBody {
   exchangeCode: string;
+}
+
+interface PasswordResetRequestBody {
+  identifier: string;
+}
+
+interface PasswordResetExchangeBody {
+  exchangeCode: string;
+}
+
+interface PasswordResetCompleteBody {
+  resetToken: string;
+  newPassword: string;
+  confirmPassword: string;
 }
 
 interface StudentSignupBody {
@@ -154,6 +179,24 @@ interface MagicLinkRedisPayload {
 interface MagicLinkExchangePayload {
   onboardingSessionId: string;
   token: string;
+}
+
+interface PasswordResetRequestRow {
+  user_id: string;
+  email: string;
+  username: string;
+}
+
+interface PasswordResetRedisPayload {
+  userId: string;
+  email: string;
+  exchangeCode?: string;
+}
+
+interface PasswordResetExchangePayload {
+  token: string;
+  userId: string;
+  email: string;
 }
 
 interface AlumniResubmissionContextRow {
@@ -327,9 +370,17 @@ function describeDevice(platform: string): string {
   return 'Unknown device';
 }
 
-function buildMagicLinkRedirect(params: Record<string, string>): string {
+function buildClientRedirect(path: string, params: Record<string, string>): string {
   const query = new URLSearchParams(params);
-  return `${getClientBaseUrl()}/?${query.toString()}`;
+  return `${getClientBaseUrl()}${path}?${query.toString()}`;
+}
+
+function buildMagicLinkRedirect(params: Record<string, string>): string {
+  return buildClientRedirect('/', params);
+}
+
+function buildPasswordResetRedirect(params: Record<string, string>): string {
+  return buildClientRedirect('/reset-password', params);
 }
 
 function magicLinkTokenKey(token: string): string {
@@ -354,6 +405,34 @@ function magicLinkCooldownKey(email: string): string {
 
 function magicLinkInvalidAttemptKey(ipAddress: string): string {
   return `auth:magiclink:invalid:${ipAddress}`;
+}
+
+function passwordResetTokenKey(token: string): string {
+  return `password-reset:${token}`;
+}
+
+function passwordResetExchangeKey(code: string): string {
+  return `password-reset:exchange:${code}`;
+}
+
+function passwordResetEmailWindowKey(email: string): string {
+  return `auth:password-reset:email-window:${email}`;
+}
+
+function passwordResetIpWindowKey(ipAddress: string): string {
+  return `auth:password-reset:ip-window:${ipAddress}`;
+}
+
+function passwordResetCooldownKey(email: string): string {
+  return `auth:password-reset:cooldown:${email}`;
+}
+
+function passwordResetInvalidAttemptKey(ipAddress: string): string {
+  return `auth:password-reset:invalid:${ipAddress}`;
+}
+
+function passwordResetActiveTokenKey(userId: string): string {
+  return `auth:password-reset:active-token:${userId}`;
 }
 
 async function getCounterValue(key: string): Promise<number> {
@@ -417,6 +496,30 @@ async function findUserByEmail(email: string): Promise<ExistingUserRow | null> {
   return rows[0] ?? null;
 }
 
+async function findUserForPasswordResetByIdentifier(identifier: string): Promise<PasswordResetRequestRow | null> {
+  const normalizedIdentifier = identifier.trim();
+  if (!normalizedIdentifier) {
+    return null;
+  }
+
+  const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedIdentifier);
+  const rows = isEmail
+    ? await prisma.$queryRaw<PasswordResetRequestRow[]>`
+        SELECT user_id, email, username
+        FROM users
+        WHERE email = ${normalizeEmail(normalizedIdentifier)}
+        LIMIT 1
+      `
+    : await prisma.$queryRaw<PasswordResetRequestRow[]>`
+        SELECT user_id, email, username
+        FROM users
+        WHERE username = ${normalizeUsername(normalizedIdentifier)}
+        LIMIT 1
+      `;
+
+  return rows[0] ?? null;
+}
+
 async function userHasAdminAccount(userId: string): Promise<boolean> {
   const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
     SELECT EXISTS(
@@ -451,6 +554,33 @@ async function generateUniqueUsername(baseValue: string): Promise<string> {
     candidate = `${sanitizedBase}_${suffix}`.slice(0, 50);
     suffix += 1;
   }
+}
+
+function maskEmailAddress(email: string): string {
+  const [localPart, domainPart] = email.split('@');
+  if (!localPart || !domainPart) {
+    return email;
+  }
+
+  const [domainName, ...domainRest] = domainPart.split('.');
+  const maskedLocal =
+    localPart.length <= 2
+      ? `${localPart[0] ?? '*'}*`
+      : `${localPart[0]}${'*'.repeat(Math.max(1, localPart.length - 2))}${localPart[localPart.length - 1]}`;
+  const maskedDomainName =
+    !domainName
+      ? '***'
+      : domainName.length <= 2
+        ? `${domainName[0] ?? '*'}*`
+        : `${domainName[0]}${'*'.repeat(Math.max(1, domainName.length - 2))}${domainName[domainName.length - 1]}`;
+
+  return `${maskedLocal}@${[maskedDomainName, ...domainRest].join('.')}`;
+}
+
+const passwordRequirements = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*]).{8,}$/;
+
+function passwordRequirementMessage(): string {
+  return 'Password must be at least 8 characters long and contain at least one lowercase letter, one uppercase letter, one number, and one special character (!@#$%^&*).';
 }
 
 async function createAuthSession(userId: string, req: Request): Promise<UserSessionRow> {
@@ -1083,6 +1213,59 @@ async function sendMagicLink(params: {
   });
 }
 
+async function sendPasswordResetMagicLink(params: {
+  email: string;
+  userId: string;
+  req: Request;
+}): Promise<void> {
+  const activeTokenPayload = await cacheGetJson<{ token: string }>(passwordResetActiveTokenKey(params.userId));
+  let token = activeTokenPayload?.token;
+
+  if (token) {
+    const existingPayload = await cacheGetJson<PasswordResetRedisPayload>(passwordResetTokenKey(token));
+    if (!existingPayload || existingPayload.userId !== params.userId || normalizeEmail(existingPayload.email) !== normalizeEmail(params.email)) {
+      token = undefined;
+    }
+  }
+
+  if (!token) {
+    token = crypto.randomBytes(32).toString('hex');
+    await cacheSetJson(
+      passwordResetTokenKey(token),
+      {
+        userId: params.userId,
+        email: params.email,
+      } satisfies PasswordResetRedisPayload,
+      PASSWORD_RESET_TTL_SECONDS,
+    );
+    await cacheSetJson(
+      passwordResetActiveTokenKey(params.userId),
+      { token },
+      PASSWORD_RESET_TTL_SECONDS,
+    );
+  }
+
+  const verifyUrl = `${getServerBaseUrl(params.req)}/auth/password-reset/verify?token=${encodeURIComponent(token)}`;
+  await sendPasswordResetEmail({
+    email: params.email,
+    magicLinkUrl: verifyUrl,
+  });
+}
+
+async function hasActivePasswordResetLink(userId: string, email: string): Promise<boolean> {
+  const activeTokenPayload = await cacheGetJson<{ token: string }>(passwordResetActiveTokenKey(userId));
+  if (!activeTokenPayload?.token) {
+    return false;
+  }
+
+  const cachedResetPayload = await cacheGetJson<PasswordResetRedisPayload>(passwordResetTokenKey(activeTokenPayload.token));
+  if (!cachedResetPayload) {
+    return false;
+  }
+
+  return cachedResetPayload.userId === userId && normalizeEmail(cachedResetPayload.email) === normalizeEmail(email);
+}
+
 async function markOnboardingSessionCompleted(sessionId: string): Promise<void> {
   await prisma.$queryRaw`
     UPDATE auth_onboarding_sessions
@@ -1339,6 +1522,65 @@ router.post('/signup/verify-email', async (req: Request, res: Response) => {
   }
 });
 
+router.post('/password-reset/request', async (req: Request, res: Response) => {
+  const { identifier } = req.body as Partial<PasswordResetRequestBody>;
+  const trimmedIdentifier = identifier?.trim() || '';
+  const ipAddress = getClientIp(req) || 'unknown';
+
+  if (!trimmedIdentifier) {
+    return res.status(400).json({ message: 'Enter your email address or username.' });
+  }
+
+  try {
+    const user = await findUserForPasswordResetByIdentifier(trimmedIdentifier);
+    if (!user) {
+      return res.status(404).json({ message: 'No account was found for that email or username.' });
+    }
+
+    const hasActiveLink = await hasActivePasswordResetLink(user.user_id, user.email);
+
+    if (!hasActiveLink) {
+      const emailCount = await getCounterValue(passwordResetEmailWindowKey(user.email));
+      if (emailCount >= PASSWORD_RESET_EMAIL_LIMIT) {
+        return res.status(429).json({ message: 'Too many reset links sent to this email. Try again in a little while.' });
+      }
+
+      const ipCount = await getCounterValue(passwordResetIpWindowKey(ipAddress));
+      if (ipCount >= PASSWORD_RESET_IP_LIMIT) {
+        return res.status(429).json({ message: 'Too many reset requests from this network. Please wait and try again.' });
+      }
+    }
+
+    await sendPasswordResetMagicLink({
+      email: user.email,
+      userId: user.user_id,
+      req,
+    });
+
+    if (!hasActiveLink) {
+      await Promise.all([
+        incrementCounter(passwordResetEmailWindowKey(user.email), PASSWORD_RESET_EMAIL_WINDOW_SECONDS),
+        incrementCounter(passwordResetIpWindowKey(ipAddress), PASSWORD_RESET_IP_WINDOW_SECONDS),
+      ]);
+    }
+
+    const lookupType = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedIdentifier) ? 'email' : 'username';
+    const message = lookupType === 'email'
+      ? `The password reset link is sent to your email address ${user.email}.`
+      : `The password reset link is sent to your email address ${maskEmailAddress(user.email)}.`;
+
+    return res.status(200).json({
+      message,
+      lookupType,
+      deliveryEmail: user.email,
+      maskedDeliveryEmail: maskEmailAddress(user.email),
+    });
+  } catch (err: any) {
+    console.error('Error sending password reset link:', err);
+    return res.status(500).json({ message: err?.message || 'Unable to send password reset link' });
+  }
+});
+
 router.get('/verify', async (req: Request, res: Response) => {
   const token = typeof req.query.token === 'string' ? req.query.token.trim() : '';
   const ipAddress = getClientIp(req) || 'unknown';
@@ -1389,6 +1631,58 @@ router.get('/verify', async (req: Request, res: Response) => {
   }
 });
 
+router.get('/password-reset/verify', async (req: Request, res: Response) => {
+  const token = typeof req.query.token === 'string' ? req.query.token.trim() : '';
+  const ipAddress = getClientIp(req) || 'unknown';
+
+  if (!token) {
+    return res.redirect(buildPasswordResetRedirect({ authFlow: 'password-reset', authStatus: 'invalid' }));
+  }
+
+  try {
+    const invalidAttempts = await getCounterValue(passwordResetInvalidAttemptKey(ipAddress));
+    if (invalidAttempts >= PASSWORD_RESET_INVALID_ATTEMPT_LIMIT) {
+      return res.redirect(buildPasswordResetRedirect({ authFlow: 'password-reset', authStatus: 'blocked' }));
+    }
+
+    const payload = await cacheGetJson<PasswordResetRedisPayload>(passwordResetTokenKey(token));
+    if (!payload) {
+      await incrementCounter(passwordResetInvalidAttemptKey(ipAddress), PASSWORD_RESET_IP_WINDOW_SECONDS);
+      return res.redirect(buildPasswordResetRedirect({ authFlow: 'password-reset', authStatus: 'expired' }));
+    }
+
+    let exchangeCode = payload.exchangeCode;
+
+    if (!exchangeCode) {
+      exchangeCode = crypto.randomBytes(24).toString('hex');
+      await cacheSetJson(
+        passwordResetExchangeKey(exchangeCode),
+        {
+          token,
+          userId: payload.userId,
+          email: payload.email,
+        } satisfies PasswordResetExchangePayload,
+        PASSWORD_RESET_EXCHANGE_TTL_SECONDS,
+      );
+
+      await cacheSetJson(
+        passwordResetTokenKey(token),
+        {
+          userId: payload.userId,
+          email: payload.email,
+          exchangeCode,
+        } satisfies PasswordResetRedisPayload,
+        PASSWORD_RESET_TTL_SECONDS,
+      );
+    }
+
+    return res.redirect(buildPasswordResetRedirect({ authFlow: 'password-reset', resetExchange: exchangeCode, authStatus: 'verified' }));
+  } catch (err) {
+    console.error('Error verifying password reset link:', err);
+    return res.redirect(buildPasswordResetRedirect({ authFlow: 'password-reset', authStatus: 'error' }));
+  }
+});
+
 router.post('/signup/exchange', async (req: Request, res: Response) => {
   const { exchangeCode } = req.body as Partial<SignupExchangeBody>;
 
@@ -1414,6 +1708,118 @@ router.post('/signup/exchange', async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('Error exchanging signup verification session:', err);
     return res.status(500).json({ message: err?.message || 'Unable to finish verification' });
+  }
+});
+
+router.post('/password-reset/exchange', async (req: Request, res: Response) => {
+  const { exchangeCode } = req.body as Partial<PasswordResetExchangeBody>;
+
+  if (!exchangeCode) {
+    return res.status(400).json({ message: 'Exchange code is required.' });
+  }
+
+  try {
+    const payload = await cacheGetJson<PasswordResetExchangePayload>(passwordResetExchangeKey(exchangeCode));
+    if (!payload) {
+      return res.status(400).json({ message: 'This password reset link is invalid or expired.' });
+    }
+
+    const rows = await prisma.$queryRaw<Array<{ user_id: string; email: string }>>`
+      SELECT user_id, email
+      FROM users
+      WHERE user_id = ${payload.userId}
+      LIMIT 1
+    `;
+
+    const user = rows[0];
+    if (!user || normalizeEmail(user.email) !== normalizeEmail(payload.email)) {
+      return res.status(400).json({ message: 'This password reset link is no longer valid.' });
+    }
+
+    return res.status(200).json({
+      resetToken: signPasswordResetToken(user.user_id, user.email, payload.token),
+      email: user.email,
+      maskedEmail: maskEmailAddress(user.email),
+    });
+  } catch (err: any) {
+    console.error('Error exchanging password reset session:', err);
+    return res.status(500).json({ message: err?.message || 'Unable to finish password reset verification' });
+  }
+});
+
+router.patch('/password-reset/complete', async (req: Request, res: Response) => {
+  const { resetToken, newPassword, confirmPassword } = req.body as Partial<PasswordResetCompleteBody>;
+
+  if (!resetToken) {
+    return res.status(400).json({ message: 'Password reset token is required.' });
+  }
+
+  if (!newPassword || !confirmPassword) {
+    return res.status(400).json({ message: 'New password and confirmation are required.' });
+  }
+
+  if (newPassword !== confirmPassword) {
+    return res.status(400).json({ message: 'New password and confirmation do not match.' });
+  }
+
+  if (!passwordRequirements.test(newPassword)) {
+    return res.status(400).json({
+      success: false,
+      message: 'Password does not meet the requirements.',
+      details: passwordRequirementMessage(),
+    });
+  }
+
+  try {
+    const tokenPayload = verifyPasswordResetToken(resetToken);
+    const activeTokenPayload = await cacheGetJson<{ token: string }>(passwordResetActiveTokenKey(tokenPayload.userId));
+    const cachedResetPayload = await cacheGetJson<PasswordResetRedisPayload>(passwordResetTokenKey(tokenPayload.token));
+
+    if (!activeTokenPayload || activeTokenPayload.token !== tokenPayload.token || !cachedResetPayload) {
+      return res.status(401).json({ message: 'Invalid or expired password reset token' });
+    }
+
+    const rows = await prisma.$queryRaw<Array<{ user_id: string; email: string }>>`
+      SELECT user_id, email
+      FROM users
+      WHERE user_id = ${tokenPayload.userId}
+      LIMIT 1
+    `;
+
+    const user = rows[0];
+    if (
+      !user ||
+      normalizeEmail(user.email) !== normalizeEmail(tokenPayload.email) ||
+      cachedResetPayload.userId !== tokenPayload.userId ||
+      normalizeEmail(cachedResetPayload.email) !== normalizeEmail(tokenPayload.email)
+    ) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    await prisma.$queryRaw`
+      UPDATE users
+      SET password_hash = ${hashPassword(newPassword)}, updated_at = NOW()
+      WHERE user_id = ${tokenPayload.userId}
+    `;
+
+    await setAdminMustChangePassword(tokenPayload.userId, false).catch(() => {
+      // Not all users are admins; ignore when no admin account exists.
+    });
+
+    await cacheDelete(passwordResetActiveTokenKey(tokenPayload.userId));
+    await cacheDelete(passwordResetTokenKey(tokenPayload.token));
+    if (cachedResetPayload.exchangeCode) {
+      await cacheDelete(passwordResetExchangeKey(cachedResetPayload.exchangeCode));
+    }
+
+    return res.status(200).json({ message: 'Password updated successfully' });
+  } catch (err) {
+    if (err instanceof Error && err.message === 'Invalid password reset token') {
+      return res.status(401).json({ message: 'Invalid or expired password reset token' });
+    }
+
+    console.error('Error completing password reset:', err);
+    return res.status(500).json({ message: 'Internal server error' });
   }
 });
 

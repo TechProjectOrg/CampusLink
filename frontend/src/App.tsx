@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Navbar } from './components/Navbar';
 import { AuthPage } from './components/AuthPage';
+import { ResetPasswordPage } from './components/ResetPasswordPage';
 import { FeedPage } from './components/FeedPage';
 import { ProfilePage } from './components/ProfilePage';
 import { ProfilePostsPage } from './components/ProfilePostsPage';
@@ -91,6 +92,14 @@ import { cacheKeys } from './cache/keys';
 const POST_COMMENTS_PAGE_SIZE = 20;
 const COMMENT_REPLIES_PAGE_SIZE = 10;
 const FEED_PAGE_SIZE = 3;
+
+function shouldShowResetPasswordPage(): boolean {
+  if (typeof window === 'undefined') {
+    return false;
+  }
+
+  return window.location.pathname === '/reset-password';
+}
 
 // ============================================================
 // FollowGraph adapter: backend shape → frontend FollowGraph shape
@@ -676,6 +685,7 @@ export default function App() {
   const [clubPageSlug, setClubPageSlug] = useState<string | null>(null);
 
   const prevAuthenticatedRef = useRef<boolean>(auth.isAuthenticated);
+  const [showResetPasswordPage, setShowResetPasswordPage] = useState(() => shouldShowResetPasswordPage());
   const openedPostCommentsRef = useRef<DiscussionPageState<Comment>>(createInitialDiscussionPageState<Comment>());
   const openedPostRepliesRef = useRef<Record<string, ReplyThreadState>>({});
 
@@ -723,6 +733,21 @@ export default function App() {
 
     prevAuthenticatedRef.current = isAuthenticated;
   }, [auth.isAuthenticated, clearSessionScopedState]);
+
+  useEffect(() => {
+    const syncResetPasswordPage = () => {
+      setShowResetPasswordPage(shouldShowResetPasswordPage());
+    };
+
+    syncResetPasswordPage();
+    window.addEventListener('popstate', syncResetPasswordPage);
+    window.addEventListener('campuslynk:clear-auth-override', syncResetPasswordPage);
+
+    return () => {
+      window.removeEventListener('popstate', syncResetPasswordPage);
+      window.removeEventListener('campuslynk:clear-auth-override', syncResetPasswordPage);
+    };
+  }, []);
   
   useEffect(() => {
     const setTabFromPath = () => {
@@ -2536,6 +2561,10 @@ export default function App() {
 
   if (auth.isLoading) {
     return <LoadingState type="page" />;
+  }
+
+  if (showResetPasswordPage) {
+    return <ResetPasswordPage />;
   }
 
   if (!auth.isAuthenticated) {

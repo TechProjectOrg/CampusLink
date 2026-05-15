@@ -20,9 +20,9 @@ import loadingAnimation from '../assets/loading_animation.json';
 import { useAuth } from '../context/AuthContext';
 import { apiCheckUsernameAvailability, type AuthOnboardingResponse } from '../lib/authApi';
 import { getPasswordValidationMessage, validatePassword } from '../lib/validation';
+import { ForgotPasswordDialog } from './ForgotPasswordDialog';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader } from './ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 
@@ -278,11 +278,13 @@ export function AuthPage() {
 
   const openSignup = () => {
     setMode('signup');
+    setForgotPasswordOpen(false);
     resetSignupFlow();
   };
 
   const openLogin = () => {
     setMode('login');
+    setForgotPasswordOpen(false);
     setSignupError('');
     setSignupMessage('');
   };
@@ -1336,7 +1338,8 @@ export function AuthPage() {
             </div>
             <p className="text-gray-600 text-center">
               {mode === 'signup'
-                ? 'Signup begins with role selection, verification, and then the original onboarding form.':''}
+                ? 'Signup begins with role selection, verification, and then the original onboarding form.'
+                  : ''}
             </p>
             {mode === 'login' ? (
               <p className="text-sm text-gray-500 text-center">
@@ -1451,22 +1454,16 @@ export function AuthPage() {
                   </div>
 
                   <div className="flex flex-wrap items-center justify-between gap-3 text-xs font-normal text-slate-500">
-                    <Dialog open={forgotPasswordOpen} onOpenChange={setForgotPasswordOpen}>
-                      <p>
-                        Forgot your password?{' '}
-                        <DialogTrigger className="font-normal text-blue-600 transition hover:underline">
-                          Forgot password
-                        </DialogTrigger>
-                      </p>
-                      <DialogContent className="sm:max-w-md">
-                        <DialogHeader>
-                          <DialogTitle>Password reset</DialogTitle>
-                          <DialogDescription>
-                            Password reset is not wired into this refactor yet. The login flow is restored, but reset still needs its own backend path.
-                          </DialogDescription>
-                        </DialogHeader>
-                      </DialogContent>
-                    </Dialog>
+                    <p>
+                      Forgot your password?{' '}
+                      <button
+                        type="button"
+                        onClick={() => setForgotPasswordOpen(true)}
+                        className="font-normal text-blue-600 transition hover:underline"
+                      >
+                        Forgot password
+                      </button>
+                    </p>
 
                     <p>
                       New here?{' '}
@@ -1485,6 +1482,7 @@ export function AuthPage() {
           </CardContent>
         </Card>
       </div>
+      <ForgotPasswordDialog open={forgotPasswordOpen} onOpenChange={setForgotPasswordOpen} defaultIdentifier={loginEmail} />
     </div>
   );
 }
