@@ -186,6 +186,7 @@ export function AuthPage() {
   const [loginPassword, setLoginPassword] = useState('');
   const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [loginMessage, setLoginMessage] = useState('');
 
   const [signupError, setSignupError] = useState('');
   const [signupMessage, setSignupMessage] = useState('');
@@ -231,9 +232,12 @@ export function AuthPage() {
     available: null,
     message: '',
   });
+  const [alumniResubmissionToken, setAlumniResubmissionToken] = useState<string | null>(null);
+  const [alumniResubmissionNote, setAlumniResubmissionNote] = useState<string | null>(null);
 
   const resetMessages = () => {
     setLoginError('');
+    setLoginMessage('');
     setSignupError('');
     setSignupMessage('');
   };
@@ -243,6 +247,8 @@ export function AuthPage() {
     setSignupStep('role');
     setSignupEmail('');
     setOnboardingSession(null);
+    setAlumniResubmissionToken(null);
+    setAlumniResubmissionNote(null);
     setStudentForm({
       displayName: '',
       username: '',
@@ -277,11 +283,14 @@ export function AuthPage() {
 
   const openLogin = () => {
     setMode('login');
-    resetMessages();
+    setSignupError('');
+    setSignupMessage('');
   };
 
   const moveToOnboarding = (session: AuthOnboardingResponse) => {
     setMode('signup');
+    setAlumniResubmissionToken(null);
+    setAlumniResubmissionNote(null);
     setSelectedRole(session.accountType);
     setOnboardingSession(session);
     setSignupEmail(session.email);
@@ -302,6 +311,37 @@ export function AuthPage() {
       displayName: session.fullName || current.displayName,
       username: session.suggestedUsername || current.username,
       email: session.email,
+    }));
+    setSignupStep('alumni-form');
+  };
+
+  const moveToAlumniResubmission = (params: {
+    token: string;
+    email: string;
+    displayName: string;
+    username: string;
+    graduationYear: number | null;
+    branch: string | null;
+    currentStatus: string | null;
+    decisionNote: string | null;
+  }) => {
+    setMode('signup');
+    setSelectedRole('alumni');
+    setOnboardingSession(null);
+    setAlumniResubmissionToken(params.token);
+    setAlumniResubmissionNote(params.decisionNote);
+    setSignupEmail(params.email);
+    setAlumniForm((current) => ({
+      ...current,
+      displayName: params.displayName,
+      username: params.username,
+      email: params.email,
+      graduationYear: params.graduationYear ? String(params.graduationYear) : '',
+      branch: params.branch ?? '',
+      currentStatus: params.currentStatus ?? '',
+      password: '',
+      confirmPassword: '',
+      proofFiles: [],
     }));
     setSignupStep('alumni-form');
   };
@@ -374,8 +414,12 @@ export function AuthPage() {
     const params = new URLSearchParams(window.location.search);
     const exchangeCode = params.get('authExchange');
     const authStatus = params.get('authStatus');
+    const authFlow = params.get('authFlow');
+    const verificationToken = params.get('verificationToken');
+    const approvedEmail = params.get('email');
+    const verificationStatus = params.get('verificationStatus');
 
-    if (!exchangeCode && !authStatus) {
+    if (!exchangeCode && !authStatus && !authFlow) {
       return;
     }
 
@@ -405,6 +449,38 @@ export function AuthPage() {
     if (authStatus === 'error') {
       setSignupStep('verify-email');
       setSignupError('We could not finish verifying that email. Please request a new link.');
+      return;
+    }
+
+    if (authFlow === 'login') {
+      openLogin();
+      if (approvedEmail) {
+        setLoginEmail(approvedEmail);
+      }
+      if (verificationStatus === 'approved') {
+        setLoginMessage('Your alumni verification has been approved. You can log in now.');
+      }
+      return;
+    }
+
+    if (authFlow === 'resubmit' && verificationToken) {
+      setIsLoading(true);
+      void auth.fetchAlumniVerificationResubmission(verificationToken)
+        .then((context) => {
+          resetMessages();
+          setSignupMessage('Upload the additional proof requested by the reviewer, then resubmit your alumni verification.');
+          moveToAlumniResubmission({
+            token: verificationToken,
+            ...context,
+          });
+        })
+        .catch((error) => {
+          openLogin();
+          setLoginError(error instanceof Error ? error.message : 'Unable to open the alumni proof resubmission flow.');
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
       return;
     }
 
@@ -547,18 +623,20 @@ export function AuthPage() {
 
   const handleAlumniSignup = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!onboardingSession) return;
+    if (!onboardingSession && !alumniResubmissionToken) return;
 
     resetMessages();
 
-    if (alumniForm.password !== alumniForm.confirmPassword) {
-      setSignupError('Passwords do not match.');
-      return;
-    }
+    if (!alumniResubmissionToken) {
+      if (alumniForm.password !== alumniForm.confirmPassword) {
+        setSignupError('Passwords do not match.');
+        return;
+      }
 
-    if (!validatePassword(alumniForm.password)) {
-      setSignupError('Password does not meet the requirements.');
-      return;
+      if (!validatePassword(alumniForm.password)) {
+        setSignupError('Password does not meet the requirements.');
+        return;
+      }
     }
 
     if (alumniForm.proofFiles.length === 0) {
@@ -568,16 +646,26 @@ export function AuthPage() {
 
     setIsLoading(true);
     try {
-      const result = await auth.signupAlumni({
-        sessionId: onboardingSession.sessionId,
-        displayName: alumniForm.displayName,
-        username: alumniForm.username,
-        graduationYear: alumniForm.graduationYear,
-        branch: alumniForm.branch,
-        currentStatus: alumniForm.currentStatus,
-        password: alumniForm.password,
-        proofFiles: alumniForm.proofFiles,
-      });
+      const result = alumniResubmissionToken
+        ? await auth.resubmitAlumniVerification({
+          token: alumniResubmissionToken,
+          displayName: alumniForm.displayName,
+          username: alumniForm.username,
+          graduationYear: alumniForm.graduationYear,
+          branch: alumniForm.branch,
+          currentStatus: alumniForm.currentStatus,
+          proofFiles: alumniForm.proofFiles,
+        })
+        : await auth.signupAlumni({
+          sessionId: onboardingSession!.sessionId,
+          displayName: alumniForm.displayName,
+          username: alumniForm.username,
+          graduationYear: alumniForm.graduationYear,
+          branch: alumniForm.branch,
+          currentStatus: alumniForm.currentStatus,
+          password: alumniForm.password,
+          proofFiles: alumniForm.proofFiles,
+        });
       setSignupStep('alumni-pending');
       setSignupMessage(result.message);
     } catch (error) {
@@ -927,13 +1015,24 @@ export function AuthPage() {
   const renderAlumniForm = () => (
     <form onSubmit={handleAlumniSignup} className="space-y-4 animate-fade-slide-in">
       <div className="space-y-1">
-        <h3 className="text-3xl text-slate-900">Create your alumni account</h3>
+        <h3 className="text-3xl text-slate-900">
+          {alumniResubmissionToken ? 'Upload more alumni proof' : 'Create your alumni account'}
+        </h3>
         <p className="text-sm text-slate-600">
-          Complete the original alumni signup form and upload your verification proof.
+          {alumniResubmissionToken
+            ? 'Update your details if needed and upload the additional proof requested by the reviewer.'
+            : 'Complete the original alumni signup form and upload your verification proof.'}
         </p>
       </div>
 
       {signupMessage ? <FormMessage tone="info">{signupMessage}</FormMessage> : null}
+      {alumniResubmissionToken ? (
+        <FormMessage tone="info">
+          {alumniResubmissionNote?.trim()
+            ? `Reviewer note: ${alumniResubmissionNote}`
+            : 'A reviewer requested more proof before your alumni account can be approved.'}
+        </FormMessage>
+      ) : null}
 
       <div className="space-y-2">
         <Label htmlFor="alumni-name">Display Name</Label>
@@ -1047,76 +1146,80 @@ export function AuthPage() {
         </label>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="alumni-password">Password</Label>
-        <div className="relative">
-          <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input
-            id="alumni-password"
-            type={showAlumniPassword ? 'text' : 'password'}
-            value={alumniForm.password}
-            onChange={(event) => {
-              const nextPassword = event.target.value;
-              setAlumniForm((current) => ({ ...current, password: nextPassword }));
-              setAlumniPasswordMessages(getPasswordValidationMessage(nextPassword));
-              setSignupError('');
-            }}
-            className="pl-10 pr-11 rounded-xl"
-            required
-          />
-          <button
-            type="button"
-            onClick={() => setShowAlumniPassword((current) => !current)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-700"
-          >
-            {showAlumniPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </button>
-        </div>
-        {alumniPasswordMessages.length > 0 ? (
-          <ul className="space-y-1 text-xs text-red-500">
-            {alumniPasswordMessages.map((message) => (
-              <li key={message}>{message}</li>
-            ))}
-          </ul>
-        ) : null}
-      </div>
+      {!alumniResubmissionToken ? (
+        <>
+          <div className="space-y-2">
+            <Label htmlFor="alumni-password">Password</Label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                id="alumni-password"
+                type={showAlumniPassword ? 'text' : 'password'}
+                value={alumniForm.password}
+                onChange={(event) => {
+                  const nextPassword = event.target.value;
+                  setAlumniForm((current) => ({ ...current, password: nextPassword }));
+                  setAlumniPasswordMessages(getPasswordValidationMessage(nextPassword));
+                  setSignupError('');
+                }}
+                className="pl-10 pr-11 rounded-xl"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowAlumniPassword((current) => !current)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-700"
+              >
+                {showAlumniPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+            {alumniPasswordMessages.length > 0 ? (
+              <ul className="space-y-1 text-xs text-red-500">
+                {alumniPasswordMessages.map((message) => (
+                  <li key={message}>{message}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="alumni-confirm-password">Confirm Password</Label>
-        <div className="relative">
-          <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-          <Input
-            id="alumni-confirm-password"
-            type={showAlumniConfirmPassword ? 'text' : 'password'}
-            value={alumniForm.confirmPassword}
-            onChange={(event) => {
-              const confirmPassword = event.target.value;
-              setAlumniForm((current) => ({ ...current, confirmPassword }));
-              setSignupError(alumniForm.password === confirmPassword ? '' : 'Passwords do not match.');
-            }}
-            className="pl-10 pr-11 rounded-xl"
-            required
-          />
-          <button
-            type="button"
-            onClick={() => setShowAlumniConfirmPassword((current) => !current)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-700"
-          >
-            {showAlumniConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-          </button>
-        </div>
-      </div>
+          <div className="space-y-2">
+            <Label htmlFor="alumni-confirm-password">Confirm Password</Label>
+            <div className="relative">
+              <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                id="alumni-confirm-password"
+                type={showAlumniConfirmPassword ? 'text' : 'password'}
+                value={alumniForm.confirmPassword}
+                onChange={(event) => {
+                  const confirmPassword = event.target.value;
+                  setAlumniForm((current) => ({ ...current, confirmPassword }));
+                  setSignupError(alumniForm.password === confirmPassword ? '' : 'Passwords do not match.');
+                }}
+                className="pl-10 pr-11 rounded-xl"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowAlumniConfirmPassword((current) => !current)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-700"
+              >
+                {showAlumniConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+        </>
+      ) : null}
 
       {signupError ? <FormMessage tone="error">{signupError}</FormMessage> : null}
 
       <Button
         type="submit"
-        className="w-full rounded-2xl gradient-success"
-        disabled={isLoading || alumniUsernameStatus.available === false || alumniUsernameStatus.checking}
-      >
+          className="w-full rounded-2xl gradient-success"
+          disabled={isLoading || alumniUsernameStatus.available === false || alumniUsernameStatus.checking}
+        >
         {isLoading
           ? <Lottie animationData={loadingAnimation} style={{ height: 40, width: 40 }} />
-          : 'Submit Alumni Signup'}
+          : alumniResubmissionToken ? 'Resubmit Alumni Proof' : 'Submit Alumni Signup'}
       </Button>
     </form>
   );
@@ -1265,6 +1368,12 @@ export function AuthPage() {
                     }
 
                     if (signupStep === 'student-form' || signupStep === 'alumni-form') {
+                      if (alumniResubmissionToken) {
+                        openLogin();
+                        resetSignupFlow();
+                        return;
+                      }
+
                       setSignupStep(onboardingSession?.provider === 'google' ? 'method' : 'verify-email');
                       resetMessages();
                     }
@@ -1318,6 +1427,7 @@ export function AuthPage() {
                       </div>
                     </div>
 
+                    {loginMessage ? <FormMessage tone="info">{loginMessage}</FormMessage> : null}
                     {loginError ? <FormMessage tone="error">{loginError}</FormMessage> : null}
 
                     <div className="mx-auto w-full max-w-[320px]">

@@ -5,7 +5,12 @@ import prisma from '../prisma';
 import validatePassword from '../middleware/validatePassword';
 import { getUserProfileById } from '../services/userProfile';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
-import { hashPassword, signAuthToken, verifyPassword } from '../lib/auth';
+import {
+  hashPassword,
+  signAuthToken,
+  verifyPassword,
+  verifyVerificationActionToken,
+} from '../lib/auth';
 import { uploadVerificationProofToStorage } from '../lib/objectStorage';
 import { invalidateUserCache } from '../lib/userCache';
 import { sendMagicLinkEmail } from '../lib/authEmail';
@@ -149,6 +154,16 @@ interface MagicLinkRedisPayload {
 interface MagicLinkExchangePayload {
   onboardingSessionId: string;
   token: string;
+}
+
+interface AlumniResubmissionContextRow {
+  user_id: string;
+  display_name: string;
+  username: string;
+  email: string;
+  branch: string | null;
+  passing_year: number | null;
+  current_status: string | null;
 }
 
 function getGoogleClientId(): string {
@@ -815,6 +830,120 @@ async function findLatestAlumniVerificationRequestByUserId(userId: string): Prom
   return rows[0] ?? null;
 }
 
+async function loadAlumniResubmissionContext(userId: string): Promise<AlumniResubmissionContextRow | null> {
+  const rows = await prisma.$queryRaw<AlumniResubmissionContextRow[]>`
+    SELECT
+      u.user_id,
+      u.display_name,
+      u.username,
+      u.email,
+      ap.branch,
+      ap.passing_year,
+      ap.current_status
+    FROM users u
+    LEFT JOIN alumni_profiles ap ON ap.user_id = u.user_id
+    WHERE u.user_id = ${userId}
+      AND u.user_type = 'alumni'::"UserType"
+    LIMIT 1
+  `;
+
+  return rows[0] ?? null;
+}
+
+async function updateAlumniVerificationProfile(params: {
+  userId: string;
+  displayName: string;
+  username: string;
+  branch: string;
+  passingYear: number;
+  currentStatus: string;
+}): Promise<void> {
+  await prisma.$transaction(async (tx) => {
+    await tx.$queryRaw`
+      UPDATE users
+      SET
+        display_name = ${params.displayName},
+        username = ${params.username},
+        verification_state = 'alumni_pending_review'::"UserVerificationState",
+        verified_at = NULL,
+        updated_at = NOW()
+      WHERE user_id = ${params.userId}
+    `;
+
+    await tx.$queryRaw`
+      INSERT INTO alumni_profiles (user_id, branch, passing_year, current_status, created_at, updated_at)
+      VALUES (${params.userId}, ${params.branch}, ${params.passingYear}, ${params.currentStatus}, NOW(), NOW())
+      ON CONFLICT (user_id)
+      DO UPDATE SET
+        branch = EXCLUDED.branch,
+        passing_year = EXCLUDED.passing_year,
+        current_status = EXCLUDED.current_status,
+        updated_at = NOW()
+    `;
+  });
+}
+
+async function createAlumniVerificationRequest(params: {
+  userId: string;
+  displayName: string;
+  username: string;
+  email: string;
+  branch: string;
+  passingYear: number;
+  currentStatus: string;
+  uploadedFiles: Express.Multer.File[];
+}): Promise<{
+  verification_request_id: string;
+  status: string;
+  requested_at: Date;
+}> {
+  const documentUrls = await Promise.all(
+    params.uploadedFiles.map((file) =>
+      uploadVerificationProofToStorage({
+        userId: params.userId,
+        fileBuffer: file.buffer,
+        mimeType: file.mimetype,
+      })
+    )
+  );
+
+  const profilePreview = {
+    name: params.displayName,
+    username: params.username,
+    email: params.email,
+    branch: params.branch,
+    passingYear: params.passingYear,
+    currentStatus: params.currentStatus,
+    submittedProofLabels: params.uploadedFiles.map((file) => file.originalname),
+  };
+
+  const verificationRequests = await prisma.$queryRaw<Array<{
+    verification_request_id: string;
+    status: string;
+    requested_at: Date;
+  }>>`
+    INSERT INTO admin_verification_requests (
+      request_type,
+      target_user_id,
+      document_urls,
+      profile_preview,
+      notes,
+      status
+    )
+    VALUES (
+      'alumni'::"VerificationRequestType",
+      ${params.userId},
+      ${JSON.stringify(documentUrls)}::jsonb,
+      ${JSON.stringify(profilePreview)}::jsonb,
+      ${`Alumni verification submitted by ${params.displayName}`},
+      'pending'::"VerificationRequestStatus"
+    )
+    RETURNING verification_request_id, status::text, requested_at
+  `;
+
+  return verificationRequests[0];
+}
+
 async function createOnboardingSession(params: {
   provider: AuthProvider;
   accountType: SignupAccountType;
@@ -1034,6 +1163,49 @@ router.post('/login', async (req: Request, res: Response) => {
   } catch (err) {
     console.error('Error during login:', err);
     return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.get('/alumni/resubmission', async (req: Request, res: Response) => {
+  const token = typeof req.query.token === 'string' ? req.query.token : '';
+  if (!token) {
+    return res.status(400).json({ message: 'Resubmission token is required.' });
+  }
+
+  try {
+    const payload = verifyVerificationActionToken(token);
+    if (payload.status !== 'more_info') {
+      return res.status(400).json({ message: 'This verification link cannot be used to upload more proof.' });
+    }
+
+    const latestRequest = await findLatestAlumniVerificationRequestByUserId(payload.userId);
+    if (!latestRequest || latestRequest.verification_request_id !== payload.requestId || latestRequest.status !== 'more_info') {
+      return res.status(409).json({ message: 'This verification link is no longer active. Please use the latest email from CampusLynk.' });
+    }
+
+    const user = await loadAlumniResubmissionContext(payload.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'Unable to load your alumni profile for resubmission.' });
+    }
+
+    const requestRows = await prisma.$queryRaw<Array<{ decision_note: string | null }>>`
+      SELECT decision_note
+      FROM admin_verification_requests
+      WHERE verification_request_id = ${payload.requestId}
+      LIMIT 1
+    `;
+
+    return res.status(200).json({
+      email: user.email,
+      displayName: user.display_name,
+      username: user.username,
+      graduationYear: user.passing_year,
+      branch: user.branch,
+      currentStatus: user.current_status,
+      decisionNote: requestRows[0]?.decision_note ?? null,
+    });
+  } catch {
+    return res.status(400).json({ message: 'This verification link is invalid or has expired.' });
   }
 });
 
@@ -1425,53 +1597,18 @@ router.post('/signup/alumni', alumniProofUpload.array('proofFiles', 5), validate
       });
     }
 
-    const documentUrls = await Promise.all(
-      uploadedFiles.map((file) =>
-        uploadVerificationProofToStorage({
-          userId: created.userId,
-          fileBuffer: file.buffer,
-          mimeType: file.mimetype,
-        })
-      )
-    );
-
-    const profilePreview = {
-      name: normalizedDisplayName,
+    const verificationRequest = await createAlumniVerificationRequest({
+      userId: created.userId,
+      displayName: normalizedDisplayName,
       username: normalizedUsername,
       email,
       branch: trimmedBranch,
       passingYear: numericGradYear,
       currentStatus: trimmedCurrentStatus,
-      submittedProofLabels: uploadedFiles.map((file) => file.originalname),
-    };
-
-    const verificationRequests = await prisma.$queryRaw<Array<{
-      verification_request_id: string;
-      status: string;
-      requested_at: Date;
-    }>>`
-      INSERT INTO admin_verification_requests (
-        request_type,
-        target_user_id,
-        document_urls,
-        profile_preview,
-        notes,
-        status
-      )
-      VALUES (
-        'alumni'::"VerificationRequestType",
-        ${created.userId},
-        ${JSON.stringify(documentUrls)}::jsonb,
-        ${JSON.stringify(profilePreview)}::jsonb,
-        ${`Alumni verification submitted by ${normalizedDisplayName}`},
-        'pending'::"VerificationRequestStatus"
-      )
-      RETURNING verification_request_id, status::text, requested_at
-    `;
+      uploadedFiles,
+    });
 
     await markOnboardingSessionCompleted(sessionId);
-
-    const verificationRequest = verificationRequests[0];
     return res.status(201).json({
       pendingVerification: true,
       message: 'Your alumni verification request has been submitted and is pending admin approval.',
@@ -1497,6 +1634,94 @@ router.post('/signup/alumni', alumniProofUpload.array('proofFiles', 5), validate
         stack: err?.stack,
       },
     });
+  }
+});
+
+router.post('/alumni/resubmit', alumniProofUpload.array('proofFiles', 5), async (req: Request, res: Response) => {
+  const token = typeof req.body?.token === 'string' ? req.body.token : '';
+  const displayName = normalizeDisplayName(String(req.body?.displayName ?? ''));
+  const username = normalizeUsername(String(req.body?.username ?? ''));
+  const branch = String(req.body?.branch ?? '').trim();
+  const currentStatus = String(req.body?.currentStatus ?? '').trim();
+  const graduationYear = req.body?.graduationYear;
+  const uploadedFiles = (req.files as Express.Multer.File[] | undefined) ?? [];
+
+  if (!token) {
+    return res.status(400).json({ message: 'Resubmission token is required.' });
+  }
+
+  if (!displayName || !username || !branch || !currentStatus || !graduationYear) {
+    return res.status(400).json({ message: 'Complete all alumni profile fields before resubmitting.' });
+  }
+
+  if (uploadedFiles.length === 0) {
+    return res.status(400).json({ message: 'Upload at least one new verification proof file.' });
+  }
+
+  try {
+    assertAllowedAlumniProofFiles(uploadedFiles);
+    const payload = verifyVerificationActionToken(token);
+    if (payload.status !== 'more_info') {
+      return res.status(400).json({ message: 'This verification link cannot be used to upload more proof.' });
+    }
+
+    const latestRequest = await findLatestAlumniVerificationRequestByUserId(payload.userId);
+    if (!latestRequest || latestRequest.verification_request_id !== payload.requestId || latestRequest.status !== 'more_info') {
+      return res.status(409).json({ message: 'This verification request is no longer waiting for more proof.' });
+    }
+
+    const usernameValidationError = validateUsername(username);
+    if (usernameValidationError) {
+      return res.status(400).json({ message: usernameValidationError });
+    }
+
+    const conflictingUsers = await prisma.$queryRaw<Array<{ user_id: string }>>`
+      SELECT user_id
+      FROM users
+      WHERE username = ${username}
+        AND user_id <> ${payload.userId}
+      LIMIT 1
+    `;
+    if (conflictingUsers.length > 0) {
+      return res.status(409).json({ message: 'That username is already taken. Please choose another one.' });
+    }
+
+    const numericGradYear = parseRequiredNumericValue(graduationYear, 'Graduation year');
+
+    await updateAlumniVerificationProfile({
+      userId: payload.userId,
+      displayName,
+      username,
+      branch,
+      passingYear: numericGradYear,
+      currentStatus,
+    });
+
+    const verificationRequest = await createAlumniVerificationRequest({
+      userId: payload.userId,
+      displayName,
+      username,
+      email: payload.email,
+      branch,
+      passingYear: numericGradYear,
+      currentStatus,
+      uploadedFiles,
+    });
+
+    await invalidateUserCache(payload.userId);
+
+    return res.status(201).json({
+      pendingVerification: true,
+      message: 'Your updated alumni proof has been submitted and is pending admin review.',
+      request: {
+        id: verificationRequest.verification_request_id,
+        status: verificationRequest.status,
+        requestedAt: verificationRequest.requested_at.toISOString(),
+        verificationState: 'alumni_pending_review' as const,
+      },
+    });
+  } catch (err: any) {
+    return res.status(400).json({ message: err?.message || 'Unable to resubmit alumni verification proof.' });
   }
 });
 

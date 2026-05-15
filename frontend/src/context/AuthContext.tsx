@@ -6,10 +6,14 @@ import {
   apiCompleteMagicLinkOnboarding,
   apiDeleteAccount,
   apiExchangeSignupVerification,
+  apiFetchAlumniVerificationResubmission,
   apiFetchUserProfile,
   apiLogin,
+  apiResubmitAlumniVerification,
   apiSendSignupVerificationLink,
   apiSignupAlumni,
+  type AlumniVerificationResubmissionContext,
+  type AlumniVerificationResubmissionPayload,
   type AlumniPendingVerificationResult,
   type AlumniSignupPayload,
   type AuthOnboardingResponse,
@@ -44,6 +48,8 @@ interface AuthContextValue {
   completeGoogleOnboarding: (payload: StudentSignupPayload) => Promise<void>;
   completeMagicLinkOnboarding: (payload: StudentSignupPayload) => Promise<void>;
   signupAlumni: (payload: AlumniSignupPayload) => Promise<AlumniPendingVerificationResult>;
+  fetchAlumniVerificationResubmission: (token: string) => Promise<AlumniVerificationResubmissionContext>;
+  resubmitAlumniVerification: (payload: AlumniVerificationResubmissionPayload) => Promise<AlumniPendingVerificationResult>;
   refreshProfile: () => Promise<void>;
   deleteAccount: (password: string) => Promise<void>;
   logout: () => void;
@@ -179,6 +185,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return await apiSignupAlumni(payload);
   };
 
+  const fetchAlumniVerificationResubmission = async (token: string) => {
+    return await apiFetchAlumniVerificationResubmission(token);
+  };
+
+  const resubmitAlumniVerification = async (payload: AlumniVerificationResubmissionPayload) => {
+    return await apiResubmitAlumniVerification(payload);
+  };
+
   useEffect(() => {
     const init = async () => {
       const stored = readStoredSession();
@@ -226,6 +240,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     completeGoogleOnboarding,
     completeMagicLinkOnboarding,
     signupAlumni,
+    fetchAlumniVerificationResubmission,
+    resubmitAlumniVerification,
     refreshProfile,
     deleteAccount,
     logout,

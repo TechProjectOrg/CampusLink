@@ -17,9 +17,18 @@ export interface PasswordChangeTokenPayload {
   purpose: 'password-change';
 }
 
+export interface VerificationActionTokenPayload {
+  userId: string;
+  email: string;
+  requestId: string;
+  status: 'approved' | 'more_info';
+  purpose: 'verification-action';
+}
+
 const BCRYPT_SALT_ROUNDS = 12;
 const DEFAULT_TOKEN_TTL = '12h';
 const PASSWORD_CHANGE_TOKEN_TTL = '10m';
+const VERIFICATION_ACTION_TOKEN_TTL = '14d';
 
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
@@ -108,5 +117,42 @@ export function verifyPasswordChangeToken(token: string): PasswordChangeTokenPay
   return {
     userId: decoded.userId,
     purpose: 'password-change',
+  };
+}
+
+export function signVerificationActionToken(payload: Omit<VerificationActionTokenPayload, 'purpose'>): string {
+  return jwt.sign(
+    {
+      ...payload,
+      purpose: 'verification-action',
+    },
+    getJwtSecret(),
+    {
+      expiresIn: VERIFICATION_ACTION_TOKEN_TTL,
+    }
+  );
+}
+
+export function verifyVerificationActionToken(token: string): VerificationActionTokenPayload {
+  const decoded = jwt.verify(token, getJwtSecret());
+
+  if (
+    !decoded ||
+    typeof decoded !== 'object' ||
+    typeof decoded.userId !== 'string' ||
+    typeof decoded.email !== 'string' ||
+    typeof decoded.requestId !== 'string' ||
+    (decoded.status !== 'approved' && decoded.status !== 'more_info') ||
+    decoded.purpose !== 'verification-action'
+  ) {
+    throw new Error('Invalid verification action token');
+  }
+
+  return {
+    userId: decoded.userId,
+    email: decoded.email,
+    requestId: decoded.requestId,
+    status: decoded.status,
+    purpose: 'verification-action',
   };
 }

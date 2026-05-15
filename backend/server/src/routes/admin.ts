@@ -4,7 +4,7 @@ import { Prisma } from '@prisma/client';
 import prisma from '../prisma';
 import authenticateToken from '../middleware/authenticateToken';
 import requireAdmin, { type AdminAuthedRequest } from '../middleware/requireAdmin';
-import { hashPassword, signAuthToken, verifyPassword } from '../lib/auth';
+import { hashPassword, signAuthToken, signVerificationActionToken, verifyPassword } from '../lib/auth';
 import { probeRedisHealth } from '../lib/cache';
 import {
   invalidateRecentComments,
@@ -26,8 +26,18 @@ import {
   invalidateClubStatsCache,
 } from '../lib/clubCache';
 import { getTrendingHashtagsForApi } from '../lib/socialInsights';
+import { sendVerificationDecisionEmail } from '../lib/authEmail';
 
 const router = express.Router();
+
+function getClientBaseUrl(): string {
+  return (
+    process.env.AUTH_CLIENT_URL?.trim()
+    || process.env.FRONTEND_URL?.trim()
+    || process.env.APP_BASE_URL?.trim()
+    || 'http://localhost:5173'
+  ).replace(/\/+$/, '');
+}
 
 function getClientIp(req: Request): string | null {
   const forwarded = req.headers['x-forwarded-for'];
@@ -3003,7 +3013,14 @@ router.patch('/verification-requests/:requestId', async (req: Request<{ requestI
   }
 
   try {
-    await prisma.$transaction(async (tx) => {
+    const verificationEmailTarget = await prisma.$transaction(async (tx) => {
+      let emailTarget: null | {
+      userId: string;
+      email: string;
+      displayName: string | null;
+      requestType: 'student' | 'alumni' | 'club';
+      } = null;
+
       await tx.$queryRaw`
         UPDATE admin_verification_requests
         SET
@@ -3063,6 +3080,35 @@ router.patch('/verification-requests/:requestId', async (req: Request<{ requestI
           await invalidateUserCache(target.target_user_id);
         }
       }
+
+      if (target?.target_user_id && (status === 'approved' || status === 'rejected' || status === 'more_info')) {
+        const rows = await tx.$queryRaw<Array<{
+          user_id: string;
+          email: string;
+          display_name: string | null;
+          request_type: 'student' | 'alumni' | 'club';
+        }>>`
+          SELECT
+            u.user_id,
+            u.email,
+            u.display_name,
+            avr.request_type::text AS request_type
+          FROM admin_verification_requests avr
+          JOIN users u ON u.user_id = avr.target_user_id
+          WHERE avr.verification_request_id = ${requestId}
+          LIMIT 1
+        `;
+        emailTarget = rows[0]
+          ? {
+            userId: rows[0].user_id,
+            email: rows[0].email,
+            displayName: rows[0].display_name,
+            requestType: rows[0].request_type,
+          }
+          : null;
+      }
+
+      return emailTarget;
     });
 
     await recordAdminAuditLog({
@@ -3073,6 +3119,32 @@ router.patch('/verification-requests/:requestId', async (req: Request<{ requestI
       severity: status === 'rejected' ? 'warning' : 'info',
       summary: `Verification request marked ${status}`,
     });
+
+    if (verificationEmailTarget && (status === 'approved' || status === 'rejected' || status === 'more_info')) {
+      const clientBaseUrl = getClientBaseUrl();
+      const approvedUrl =
+        `${clientBaseUrl}/?authFlow=login&verificationStatus=approved&email=${encodeURIComponent(verificationEmailTarget.email)}`;
+      const moreInfoToken = signVerificationActionToken({
+        userId: verificationEmailTarget.userId,
+        email: verificationEmailTarget.email,
+        requestId,
+        status: 'more_info',
+      });
+      const moreInfoUrl =
+        `${clientBaseUrl}/?authFlow=resubmit&verificationToken=${encodeURIComponent(moreInfoToken)}`;
+
+      try {
+        await sendVerificationDecisionEmail({
+          email: verificationEmailTarget.email,
+          displayName: verificationEmailTarget.displayName,
+          status,
+          decisionNote: (decisionNote ?? notes)?.trim() || null,
+          actionUrl: status === 'approved' ? approvedUrl : status === 'more_info' ? moreInfoUrl : null,
+        });
+      } catch (emailError) {
+        console.error('Error sending verification decision email:', emailError);
+      }
+    }
 
     return res.status(200).json({ success: true });
   } catch (err) {

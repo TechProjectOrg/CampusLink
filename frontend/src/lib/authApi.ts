@@ -19,6 +19,16 @@ export interface AlumniPendingVerificationResult {
   };
 }
 
+export interface AlumniVerificationResubmissionContext {
+  email: string;
+  displayName: string;
+  username: string;
+  graduationYear: number | null;
+  branch: string | null;
+  currentStatus: string | null;
+  decisionNote: string | null;
+}
+
 export interface AuthOnboardingResponse {
   onboardingRequired: true;
   sessionId: string;
@@ -41,6 +51,16 @@ export interface AlumniSignupPayload {
   branch: string;
   currentStatus: string;
   password: string;
+  proofFiles: File[];
+}
+
+export interface AlumniVerificationResubmissionPayload {
+  token: string;
+  displayName: string;
+  username: string;
+  graduationYear: string | number;
+  branch: string;
+  currentStatus: string;
   proofFiles: File[];
 }
 
@@ -186,6 +206,42 @@ export async function apiSignupAlumni(payload: AlumniSignupPayload): Promise<Alu
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
     throw new Error(err?.message || 'Signup failed');
+  }
+
+  return (await response.json()) as AlumniPendingVerificationResult;
+}
+
+export async function apiFetchAlumniVerificationResubmission(token: string): Promise<AlumniVerificationResubmissionContext> {
+  const response = await safeFetch(`${API_BASE}/auth/alumni/resubmission?token=${encodeURIComponent(token)}`);
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to open the alumni verification resubmission link');
+  }
+
+  return (await response.json()) as AlumniVerificationResubmissionContext;
+}
+
+export async function apiResubmitAlumniVerification(payload: AlumniVerificationResubmissionPayload): Promise<AlumniPendingVerificationResult> {
+  const formData = new FormData();
+  formData.append('token', payload.token);
+  formData.append('displayName', payload.displayName);
+  formData.append('username', payload.username);
+  formData.append('graduationYear', String(payload.graduationYear));
+  formData.append('branch', payload.branch);
+  formData.append('currentStatus', payload.currentStatus);
+  payload.proofFiles.forEach((file) => {
+    formData.append('proofFiles', file);
+  });
+
+  const response = await safeFetch(`${API_BASE}/auth/alumni/resubmit`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to resubmit alumni verification proof');
   }
 
   return (await response.json()) as AlumniPendingVerificationResult;
