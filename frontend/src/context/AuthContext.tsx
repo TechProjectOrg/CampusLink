@@ -5,15 +5,17 @@ import {
   apiCompleteGoogleOnboarding,
   apiCompleteMagicLinkOnboarding,
   apiDeleteAccount,
-  apiExchangeMagicLink,
+  apiExchangeSignupVerification,
   apiFetchUserProfile,
-  apiSendMagicLink,
+  apiLogin,
+  apiSendSignupVerificationLink,
   apiSignupAlumni,
   type AlumniPendingVerificationResult,
   type AlumniSignupPayload,
   type AuthOnboardingResponse,
   type GoogleAuthResult,
-  type MagicLinkExchangeResult,
+  type StudentSignupPayload,
+  type SignupExchangeResult,
 } from '../lib/authApi';
 import {
   clearStoredSession,
@@ -30,23 +32,17 @@ interface AuthContextValue {
   profile: ApiUserProfile | null;
   currentUser: Student | null;
 
-  authenticateWithGoogle: (idToken: string) => Promise<GoogleAuthResult>;
-  sendMagicLink: (email: string) => Promise<{ message: string }>;
-  exchangeMagicLink: (exchangeCode: string) => Promise<MagicLinkExchangeResult>;
-  completeGoogleOnboarding: (payload: {
-    sessionId: string;
-    username?: string;
-    branch: string;
-    year: string | number;
-    accountType?: 'student';
-  }) => Promise<void>;
-  completeMagicLinkOnboarding: (payload: {
-    sessionId: string;
-    username?: string;
-    branch: string;
-    year: string | number;
-    accountType?: 'student';
-  }) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  authenticateWithGoogle: (payload: {
+    idToken: string;
+    intent?: 'login' | 'signup';
+    accountType?: 'student' | 'alumni';
+  }) => Promise<GoogleAuthResult>;
+  sendSignupVerificationLink: (email: string, accountType: 'student' | 'alumni') => Promise<{ message: string }>;
+  exchangeSignupVerification: (exchangeCode: string) => Promise<SignupExchangeResult>;
+  completeStudentSignup: (payload: StudentSignupPayload) => Promise<void>;
+  completeGoogleOnboarding: (payload: StudentSignupPayload) => Promise<void>;
+  completeMagicLinkOnboarding: (payload: StudentSignupPayload) => Promise<void>;
   signupAlumni: (payload: AlumniSignupPayload) => Promise<AlumniPendingVerificationResult>;
   refreshProfile: () => Promise<void>;
   deleteAccount: (password: string) => Promise<void>;
@@ -83,7 +79,7 @@ function handOffAdminSession(profile: ApiUserProfile, token?: string): boolean {
   return true;
 }
 
-function isOnboardingResult(result: GoogleAuthResult | MagicLinkExchangeResult): result is AuthOnboardingResponse {
+function isOnboardingResult(result: GoogleAuthResult | SignupExchangeResult): result is AuthOnboardingResponse {
   return 'onboardingRequired' in result;
 }
 
@@ -136,8 +132,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     logout();
   };
 
-  const authenticateWithGoogle = async (idToken: string) => {
-    const result = await apiAuthenticateWithGoogle(idToken);
+  const login = async (email: string, password: string) => {
+    const { profile: nextProfile, token } = await apiLogin(email, password);
+    persistAndSet(nextProfile, token);
+  };
+
+  const authenticateWithGoogle = async (payload: {
+    idToken: string;
+    intent?: 'login' | 'signup';
+    accountType?: 'student' | 'alumni';
+  }) => {
+    const result = await apiAuthenticateWithGoogle(payload);
     if (isOnboardingResult(result)) {
       return result;
     }
@@ -146,40 +151,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return result;
   };
 
-  const sendMagicLink = async (email: string) => {
-    return await apiSendMagicLink(email);
+  const sendSignupVerificationLink = async (email: string, accountType: 'student' | 'alumni') => {
+    return await apiSendSignupVerificationLink(email, accountType);
   };
 
-  const exchangeMagicLink = async (exchangeCode: string) => {
-    const result = await apiExchangeMagicLink(exchangeCode);
-    if (isOnboardingResult(result)) {
-      return result;
-    }
-
-    persistAndSet(result.profile, result.token);
-    return result;
+  const exchangeSignupVerification = async (exchangeCode: string) => {
+    return await apiExchangeSignupVerification(exchangeCode);
   };
 
-  const completeGoogleOnboarding = async (payload: {
-    sessionId: string;
-    username?: string;
-    branch: string;
-    year: string | number;
-    accountType?: 'student';
-  }) => {
-    const { profile: p, token } = await apiCompleteGoogleOnboarding(payload);
-    persistAndSet(p, token);
+  const completeStudentSignup = async (payload: StudentSignupPayload) => {
+    const { profile: nextProfile, token } = await apiCompleteMagicLinkOnboarding(payload);
+    persistAndSet(nextProfile, token);
   };
 
-  const completeMagicLinkOnboarding = async (payload: {
-    sessionId: string;
-    username?: string;
-    branch: string;
-    year: string | number;
-    accountType?: 'student';
-  }) => {
-    const { profile: p, token } = await apiCompleteMagicLinkOnboarding(payload);
-    persistAndSet(p, token);
+  const completeGoogleOnboarding = async (payload: StudentSignupPayload) => {
+    const { profile: nextProfile, token } = await apiCompleteGoogleOnboarding(payload);
+    persistAndSet(nextProfile, token);
+  };
+
+  const completeMagicLinkOnboarding = async (payload: StudentSignupPayload) => {
+    const { profile: nextProfile, token } = await apiCompleteMagicLinkOnboarding(payload);
+    persistAndSet(nextProfile, token);
   };
 
   const signupAlumni = async (payload: AlumniSignupPayload) => {
@@ -202,11 +194,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(stored);
 
       try {
-        const p = await apiFetchUserProfile(stored.userId, stored.token);
-        if (handOffAdminSession(p, stored.token)) {
+        const nextProfile = await apiFetchUserProfile(stored.userId, stored.token);
+        if (handOffAdminSession(nextProfile, stored.token)) {
           return;
         }
-        setProfile(p);
+        setProfile(nextProfile);
       } catch {
         clearStoredSession();
         setSession(null);
@@ -216,7 +208,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    init();
+    void init();
   }, []);
 
   const value: AuthContextValue = {
@@ -225,9 +217,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     session,
     profile,
     currentUser,
+    login,
     authenticateWithGoogle,
-    sendMagicLink,
-    exchangeMagicLink,
+    sendSignupVerificationLink,
+    exchangeSignupVerification,
+    completeStudentSignup,
     completeGoogleOnboarding,
     completeMagicLinkOnboarding,
     signupAlumni,

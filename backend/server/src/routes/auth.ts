@@ -5,7 +5,7 @@ import prisma from '../prisma';
 import validatePassword from '../middleware/validatePassword';
 import { getUserProfileById } from '../services/userProfile';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
-import { hashPassword, signAuthToken } from '../lib/auth';
+import { hashPassword, signAuthToken, verifyPassword } from '../lib/auth';
 import { uploadVerificationProofToStorage } from '../lib/objectStorage';
 import { invalidateUserCache } from '../lib/userCache';
 import { sendMagicLinkEmail } from '../lib/authEmail';
@@ -27,12 +27,14 @@ const alumniProofUpload = multer({
 });
 
 type UserType = 'student' | 'alumni';
+type SignupAccountType = UserType;
 type UserVerificationState =
   | 'student_google_verified'
   | 'alumni_pending_review'
   | 'alumni_verified'
   | 'alumni_rejected';
 type AuthProvider = 'google' | 'magic_link';
+type GoogleIntent = 'login' | 'signup';
 
 const MAGIC_LINK_TTL_SECONDS = 10 * 60;
 const MAGIC_LINK_EXCHANGE_TTL_SECONDS = 2 * 60;
@@ -57,17 +59,54 @@ interface UserSessionRow {
   revoked_at: Date | null;
 }
 
-interface AlumniSignupBody {
-  name: string;
+interface ExistingUserRow {
+  user_id: string;
+  username: string;
   email: string;
+  password_hash: string;
+  user_type: UserType;
+  auth_provider: AuthProvider;
+  google_subject: string | null;
+  verification_state: UserVerificationState | null;
+  created_at: Date;
+}
+
+interface StudentLoginBody {
+  email: string;
+  password: string;
+}
+
+interface GoogleAuthBody {
+  idToken: string;
+  intent?: GoogleIntent;
+  accountType?: SignupAccountType;
+}
+
+interface SignupVerifyEmailBody {
+  email: string;
+  accountType?: SignupAccountType;
+}
+
+interface SignupExchangeBody {
+  exchangeCode: string;
+}
+
+interface StudentSignupBody {
+  sessionId: string;
+  name: string;
+  password: string;
+  branch: string;
+  year: string | number;
+}
+
+interface AlumniSignupBody {
+  sessionId: string;
+  name: string;
+  email?: string;
   graduationYear: string | number;
   branch: string;
   currentStatus: string;
   password: string;
-}
-
-interface StudentGoogleAuthBody {
-  idToken: string;
 }
 
 interface GoogleTokenInfo {
@@ -95,40 +134,16 @@ interface AuthOnboardingSessionRow {
   completed_at: Date | null;
 }
 
-interface MagicLinkSendBody {
-  email: string;
-}
-
-interface MagicLinkExchangeBody {
-  exchangeCode: string;
-}
-
-interface MagicLinkOnboardingBody {
-  sessionId: string;
-  username?: string;
-  branch?: string;
-  year?: string | number;
-  accountType?: 'student';
-}
-
-interface GoogleOnboardingBody {
-  sessionId: string;
-  username?: string;
-  branch?: string;
-  year?: string | number;
-  accountType?: 'student';
+interface SignupSessionPayload {
+  accountType: SignupAccountType;
 }
 
 interface MagicLinkRedisPayload {
-  email: string;
-  existingUserId?: string;
-  onboardingSessionId?: string;
+  onboardingSessionId: string;
 }
 
 interface MagicLinkExchangePayload {
-  type: 'login' | 'onboarding';
-  userId?: string;
-  onboardingSessionId?: string;
+  onboardingSessionId: string;
 }
 
 function getGoogleClientId(): string {
@@ -196,7 +211,7 @@ function parseRequiredNumericValue(raw: string | number | undefined, label: stri
 
 function isAllowedStudentEmail(email: string, hostedDomain?: string): boolean {
   const allowedDomain = getAllowedStudentDomain();
-  return email.endsWith(`@${allowedDomain}`) && (!hostedDomain || hostedDomain === allowedDomain);
+  return email.endsWith(`@${allowedDomain}`) && (!hostedDomain || hostedDomain.toLowerCase() === allowedDomain);
 }
 
 function getClientIp(req: Request): string | null {
@@ -267,20 +282,6 @@ function describeDevice(platform: string): string {
   return 'Unknown device';
 }
 
-function buildOnboardingResponse(session: AuthOnboardingSessionRow) {
-  return {
-    onboardingRequired: true as const,
-    sessionId: session.auth_onboarding_session_id,
-    provider: session.provider,
-    email: session.email,
-    fullName: session.full_name,
-    profilePhotoUrl: session.profile_photo_url,
-    suggestedUsername: session.suggested_username,
-    accountType: 'student' as const,
-    missingFields: ['branch', 'year', 'accountType', 'username'],
-  };
-}
-
 function buildMagicLinkRedirect(params: Record<string, string>): string {
   const query = new URLSearchParams(params);
   return `${getClientBaseUrl()}/?${query.toString()}`;
@@ -348,6 +349,26 @@ async function emailExists(email: string): Promise<boolean> {
   `;
 
   return result[0]?.exists ?? false;
+}
+
+async function findUserByEmail(email: string): Promise<ExistingUserRow | null> {
+  const rows = await prisma.$queryRaw<ExistingUserRow[]>`
+    SELECT
+      user_id,
+      username,
+      email,
+      password_hash,
+      user_type::text AS user_type,
+      auth_provider::text AS auth_provider,
+      google_subject,
+      verification_state::text AS verification_state,
+      created_at
+    FROM users
+    WHERE email = ${email}
+    LIMIT 1
+  `;
+
+  return rows[0] ?? null;
 }
 
 async function generateUniqueUsername(baseValue: string): Promise<string> {
@@ -547,15 +568,19 @@ async function buildAuthenticatedResponse(userId: string, req: Request, fallback
 }
 
 async function createStudentUser(params: {
-  username: string;
+  name: string;
   email: string;
+  password: string;
   branch: string;
   year: number;
   authProvider: AuthProvider;
   googleSubject?: string | null;
   profilePhotoUrl?: string | null;
   verificationState?: UserVerificationState | null;
-}): Promise<{ userId: string; createdAt: Date }> {
+  verifiedAt?: boolean;
+}): Promise<{ userId: string; username: string; createdAt: Date }> {
+  const username = await generateUniqueUsername(params.name);
+
   const createdUsers = await prisma.$queryRaw<Array<{ user_id: string; created_at: Date }>>`
     INSERT INTO users (
       username,
@@ -572,16 +597,16 @@ async function createStudentUser(params: {
       updated_at
     )
     VALUES (
-      ${params.username},
+      ${username},
       ${params.email},
-      ${hashPassword(crypto.randomUUID())},
+      ${hashPassword(params.password)},
       'student'::"UserType",
       CAST(${params.authProvider} AS "AuthProvider"),
       ${params.googleSubject ?? null},
       ${params.profilePhotoUrl ?? null},
       FALSE,
       NOW(),
-      NOW(),
+      ${params.verifiedAt ? new Date() : null},
       CAST(${params.verificationState ?? null} AS "UserVerificationState"),
       NOW()
     )
@@ -600,17 +625,78 @@ async function createStudentUser(params: {
 
   return {
     userId: user.user_id,
+    username,
+    createdAt: user.created_at,
+  };
+}
+
+async function createAlumniUser(params: {
+  name: string;
+  email: string;
+  password: string;
+  branch: string;
+  passingYear: number;
+  currentStatus: string;
+  authProvider: AuthProvider;
+  googleSubject?: string | null;
+  profilePhotoUrl?: string | null;
+}): Promise<{ userId: string; username: string; createdAt: Date }> {
+  const username = await generateUniqueUsername(params.name);
+
+  const createdUsers = await prisma.$queryRaw<Array<{ user_id: string; created_at: Date }>>`
+    INSERT INTO users (
+      username,
+      email,
+      password_hash,
+      user_type,
+      auth_provider,
+      google_subject,
+      profile_photo_url,
+      is_private,
+      verification_state,
+      onboarding_completed_at,
+      updated_at
+    )
+    VALUES (
+      ${username},
+      ${params.email},
+      ${hashPassword(params.password)},
+      'alumni'::"UserType",
+      CAST(${params.authProvider} AS "AuthProvider"),
+      ${params.googleSubject ?? null},
+      ${params.profilePhotoUrl ?? null},
+      FALSE,
+      'alumni_pending_review'::"UserVerificationState",
+      NOW(),
+      NOW()
+    )
+    RETURNING user_id, created_at
+  `;
+
+  const user = createdUsers[0];
+
+  await prisma.$queryRaw`
+    INSERT INTO alumni_profiles (user_id, branch, passing_year, current_status)
+    VALUES (${user.user_id}, ${params.branch}, ${params.passingYear}, ${params.currentStatus})
+  `;
+
+  await createDefaultUserSettings(user.user_id);
+  await invalidateUserCache(user.user_id);
+
+  return {
+    userId: user.user_id,
+    username,
     createdAt: user.created_at,
   };
 }
 
 async function createOnboardingSession(params: {
   provider: AuthProvider;
+  accountType: SignupAccountType;
   email: string;
   googleSubject?: string | null;
   fullName: string;
   profilePhotoUrl?: string | null;
-  suggestedUsername?: string | null;
 }): Promise<AuthOnboardingSessionRow> {
   const rows = await prisma.$queryRaw<AuthOnboardingSessionRow[]>`
     INSERT INTO auth_onboarding_sessions (
@@ -629,16 +715,16 @@ async function createOnboardingSession(params: {
       ${params.googleSubject ?? null},
       ${params.fullName},
       ${params.profilePhotoUrl ?? null},
-      ${params.suggestedUsername ?? null},
-      '{}'::jsonb,
+      NULL,
+      ${JSON.stringify({ accountType: params.accountType })}::jsonb,
       NOW() + INTERVAL '1 day'
     )
     ON CONFLICT (google_subject)
     DO UPDATE SET
+      provider = EXCLUDED.provider,
       email = EXCLUDED.email,
       full_name = EXCLUDED.full_name,
       profile_photo_url = EXCLUDED.profile_photo_url,
-      suggested_username = EXCLUDED.suggested_username,
       payload = EXCLUDED.payload,
       expires_at = NOW() + INTERVAL '1 day',
       completed_at = NULL,
@@ -680,7 +766,30 @@ async function loadOnboardingSession(sessionId: string): Promise<AuthOnboardingS
   return rows[0] ?? null;
 }
 
-async function assertAllowedAlumniProofFiles(files: Express.Multer.File[]): Promise<void> {
+function getSignupSessionPayload(session: AuthOnboardingSessionRow): SignupSessionPayload {
+  const accountType = session.payload?.accountType;
+  if (accountType === 'student' || accountType === 'alumni') {
+    return { accountType };
+  }
+
+  throw new Error('Invalid onboarding session payload');
+}
+
+function buildOnboardingResponse(session: AuthOnboardingSessionRow) {
+  const payload = getSignupSessionPayload(session);
+
+  return {
+    onboardingRequired: true as const,
+    sessionId: session.auth_onboarding_session_id,
+    provider: session.provider,
+    accountType: payload.accountType,
+    email: session.email,
+    fullName: session.full_name,
+    profilePhotoUrl: session.profile_photo_url,
+  };
+}
+
+function assertAllowedAlumniProofFiles(files: Express.Multer.File[]): void {
   const allowedMimeTypes = new Set([
     'application/pdf',
     'image/jpeg',
@@ -698,16 +807,13 @@ async function assertAllowedAlumniProofFiles(files: Express.Multer.File[]): Prom
 
 async function sendMagicLink(params: {
   email: string;
-  existingUserId?: string;
-  onboardingSessionId?: string;
+  onboardingSessionId: string;
   req: Request;
 }): Promise<void> {
   const token = crypto.randomBytes(32).toString('hex');
   await cacheSetJson(
     magicLinkTokenKey(token),
     {
-      email: params.email,
-      existingUserId: params.existingUserId,
       onboardingSessionId: params.onboardingSessionId,
     } satisfies MagicLinkRedisPayload,
     MAGIC_LINK_TTL_SECONDS,
@@ -720,8 +826,88 @@ async function sendMagicLink(params: {
   });
 }
 
+async function markOnboardingSessionCompleted(sessionId: string): Promise<void> {
+  await prisma.$queryRaw`
+    UPDATE auth_onboarding_sessions
+    SET completed_at = NOW(), updated_at = NOW()
+    WHERE auth_onboarding_session_id = ${sessionId}
+  `;
+}
+
+async function linkGoogleIdentityToUser(userId: string, googleSubject: string | null, profilePhotoUrl: string | null): Promise<void> {
+  await prisma.$queryRaw`
+    UPDATE users
+    SET
+      google_subject = COALESCE(google_subject, ${googleSubject}),
+      profile_photo_url = COALESCE(profile_photo_url, ${profilePhotoUrl}),
+      updated_at = NOW()
+    WHERE user_id = ${userId}
+  `;
+}
+
+function isGoogleProvider(session: AuthOnboardingSessionRow): boolean {
+  return session.provider === 'google' && Boolean(session.google_subject);
+}
+
+router.post('/login', async (req: Request, res: Response) => {
+  const { email, password } = req.body as Partial<StudentLoginBody>;
+  const normalizedEmail = normalizeEmail(email ?? '');
+
+  if (!normalizedEmail || !password) {
+    return res.status(400).json({ message: 'Missing email or password' });
+  }
+
+  try {
+    const user = await findUserByEmail(normalizedEmail);
+
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    const passwordMatches = await verifyPassword(password, user.password_hash as never);
+    if (!passwordMatches) {
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    if (user.verification_state === 'alumni_pending_review') {
+      const requestRows = await prisma.$queryRaw<Array<{ status: string }>>`
+        SELECT status::text
+        FROM admin_verification_requests
+        WHERE target_user_id = ${user.user_id}
+          AND request_type = 'alumni'::"VerificationRequestType"
+        ORDER BY requested_at DESC
+        LIMIT 1
+      `;
+
+      const latestStatus = requestRows[0]?.status ?? 'pending';
+      if (latestStatus === 'more_info') {
+        return res.status(403).json({ message: 'More verification information is required before your alumni account can be approved.' });
+      }
+      return res.status(403).json({ message: 'Your alumni verification is still under review. Access will unlock after approval.' });
+    }
+
+    if (user.verification_state === 'alumni_rejected') {
+      return res.status(403).json({ message: 'Your alumni verification was rejected. Please contact support or resubmit proof.' });
+    }
+
+    const responsePayload = await buildAuthenticatedResponse(user.user_id, req, {
+      username: user.username,
+      email: user.email,
+      type: user.user_type,
+      createdAt: user.created_at,
+      verificationState: user.verification_state,
+      authProvider: user.auth_provider,
+    });
+
+    return res.status(200).json(responsePayload);
+  } catch (err) {
+    console.error('Error during login:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 router.post('/google', async (req: Request, res: Response) => {
-  const { idToken } = req.body as Partial<StudentGoogleAuthBody>;
+  const { idToken, intent, accountType } = req.body as Partial<GoogleAuthBody>;
 
   if (!idToken) {
     return res.status(400).json({ message: 'Google ID token is required' });
@@ -734,69 +920,44 @@ router.post('/google', async (req: Request, res: Response) => {
       tokenInfo.name || `${tokenInfo.given_name ?? ''} ${tokenInfo.family_name ?? ''}`.trim() || email.split('@')[0]
     );
     const profilePhotoUrl = tokenInfo.picture?.trim() || null;
-    const googleSubject = tokenInfo.sub?.trim();
+    const googleSubject = tokenInfo.sub?.trim() || null;
 
-    if (!email || !googleSubject || !isAllowedStudentEmail(email, tokenInfo.hd)) {
-      return res.status(403).json({ message: `Students must sign in with an allowed ${getAllowedStudentDomain()} Google account` });
+    if (!email || !googleSubject) {
+      return res.status(400).json({ message: 'Google account details are incomplete. Please try again.' });
     }
 
-    const existingUsers = await prisma.$queryRaw<Array<{
-      user_id: string;
-      username: string;
-      email: string;
-      user_type: UserType;
-      auth_provider: AuthProvider;
-      created_at: Date;
-    }>>`
-      SELECT
-        user_id,
-        username,
-        email,
-        user_type::text AS user_type,
-        auth_provider::text AS auth_provider,
-        created_at
-      FROM users
-      WHERE email = ${email}
-      LIMIT 1
-    `;
-
-    const existingUser = existingUsers[0];
-
+    const existingUser = await findUserByEmail(email);
     if (existingUser) {
-      if (existingUser.user_type !== 'student') {
-        return res.status(409).json({ message: 'This email is already linked to a non-student account' });
-      }
-
-      await prisma.$queryRaw`
-        UPDATE users
-        SET
-          google_subject = COALESCE(google_subject, ${googleSubject}),
-          profile_photo_url = COALESCE(profile_photo_url, ${profilePhotoUrl}),
-          verified_at = NOW(),
-          updated_at = NOW()
-        WHERE user_id = ${existingUser.user_id}
-      `;
-
+      await linkGoogleIdentityToUser(existingUser.user_id, googleSubject, profilePhotoUrl);
       await invalidateUserCache(existingUser.user_id);
+
       const responsePayload = await buildAuthenticatedResponse(existingUser.user_id, req, {
         username: existingUser.username,
         email,
-        type: 'student',
+        type: existingUser.user_type,
         createdAt: existingUser.created_at,
+        verificationState: existingUser.verification_state,
         authProvider: existingUser.auth_provider,
       });
 
       return res.status(200).json(responsePayload);
     }
 
-    const suggestedUsername = await generateUniqueUsername(fullName || email.split('@')[0]);
+    if (intent !== 'signup' || !accountType) {
+      return res.status(404).json({ message: 'No account was found for this Google email. Sign up first to continue.' });
+    }
+
+    if (accountType === 'student' && !isAllowedStudentEmail(email, tokenInfo.hd)) {
+      return res.status(403).json({ message: `Students must sign up with an allowed ${getAllowedStudentDomain()} Google account.` });
+    }
+
     const onboardingSession = await createOnboardingSession({
       provider: 'google',
+      accountType,
       email,
       googleSubject,
       fullName,
       profilePhotoUrl,
-      suggestedUsername,
     });
 
     return res.status(200).json(buildOnboardingResponse(onboardingSession));
@@ -806,79 +967,20 @@ router.post('/google', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/google/onboarding', async (req: Request, res: Response) => {
-  const { sessionId, username, branch, year, accountType } = req.body as Partial<GoogleOnboardingBody>;
-
-  if (!sessionId || !branch || !year) {
-    return res.status(400).json({ message: 'Session, branch, and year are required to finish Google signup' });
-  }
-
-  if (accountType && accountType !== 'student') {
-    return res.status(400).json({ message: 'Google onboarding currently supports student accounts only' });
-  }
-
-  try {
-    const session = await loadOnboardingSession(sessionId);
-
-    if (!session || session.completed_at || session.expires_at <= new Date()) {
-      return res.status(400).json({ message: 'This Google signup session has expired. Please continue with Google again.' });
-    }
-
-    const email = normalizeEmail(session.email);
-    if (await emailExists(email)) {
-      return res.status(409).json({ message: 'An account with this email already exists. Continue with Google to sign in.' });
-    }
-
-    const numericYear = parseRequiredNumericValue(year, 'Year');
-    const finalUsername = await generateUniqueUsername(username?.trim() || session.suggested_username || email.split('@')[0]);
-
-    const created = await createStudentUser({
-      username: finalUsername,
-      email,
-      branch: branch.trim(),
-      year: numericYear,
-      authProvider: 'google',
-      googleSubject: session.google_subject,
-      profilePhotoUrl: session.profile_photo_url,
-      verificationState: 'student_google_verified',
-    });
-
-    await prisma.$queryRaw`
-      UPDATE auth_onboarding_sessions
-      SET completed_at = NOW(), updated_at = NOW()
-      WHERE auth_onboarding_session_id = ${sessionId}
-    `;
-
-    const responsePayload = await buildAuthenticatedResponse(created.userId, req, {
-      username: finalUsername,
-      email,
-      type: 'student',
-      createdAt: created.createdAt,
-      verificationState: 'student_google_verified',
-      authProvider: 'google',
-      details: {
-        branch: branch.trim(),
-        year: numericYear,
-      },
-    });
-
-    return res.status(201).json(responsePayload);
-  } catch (err: any) {
-    console.error('Error completing Google onboarding:', err);
-    return res.status(500).json({ message: err?.message || 'Unable to complete Google signup' });
-  }
-});
-
-router.post('/magic-link/send', async (req: Request, res: Response) => {
-  const { email } = req.body as Partial<MagicLinkSendBody>;
+router.post('/signup/verify-email', async (req: Request, res: Response) => {
+  const { email, accountType } = req.body as Partial<SignupVerifyEmailBody>;
   const normalizedEmail = normalizeEmail(email ?? '');
   const ipAddress = getClientIp(req) || 'unknown';
 
-  if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-    return res.status(400).json({ message: 'Enter a valid college email address.' });
+  if (!accountType || (accountType !== 'student' && accountType !== 'alumni')) {
+    return res.status(400).json({ message: 'Choose whether you are signing up as a student or alumni.' });
   }
 
-  if (!normalizedEmail.endsWith(`@${getAllowedStudentDomain()}`)) {
+  if (!normalizedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    return res.status(400).json({ message: 'Enter a valid email address.' });
+  }
+
+  if (accountType === 'student' && !normalizedEmail.endsWith(`@${getAllowedStudentDomain()}`)) {
     return res.status(400).json({ message: `Use your college email (@${getAllowedStudentDomain()}).` });
   }
 
@@ -895,42 +997,24 @@ router.post('/magic-link/send', async (req: Request, res: Response) => {
 
     const cooldown = await cacheGetJson<{ sentAt: string }>(magicLinkCooldownKey(normalizedEmail));
     if (cooldown) {
-      return res.status(429).json({ message: 'A fresh magic link was just sent. Please wait a moment before requesting another.' });
+      return res.status(429).json({ message: 'A fresh verification link was just sent. Please wait a moment before requesting another.' });
     }
 
-    const existingUsers = await prisma.$queryRaw<Array<{
-      user_id: string;
-      user_type: UserType;
-      created_at: Date;
-    }>>`
-      SELECT user_id, user_type::text AS user_type, created_at
-      FROM users
-      WHERE email = ${normalizedEmail}
-      LIMIT 1
-    `;
-
-    const existingUser = existingUsers[0];
-    if (existingUser && existingUser.user_type !== 'student') {
-      return res.status(409).json({ message: 'This email is already linked to a non-student account.' });
+    if (await emailExists(normalizedEmail)) {
+      return res.status(409).json({ message: 'An account with this email already exists. Please log in instead.' });
     }
 
-    let onboardingSessionId: string | undefined;
-    if (!existingUser) {
-      const suggestedUsername = await generateUniqueUsername(normalizedEmail.split('@')[0]);
-      const session = await createOnboardingSession({
-        provider: 'magic_link',
-        email: normalizedEmail,
-        fullName: normalizedEmail.split('@')[0],
-        profilePhotoUrl: null,
-        suggestedUsername,
-      });
-      onboardingSessionId = session.auth_onboarding_session_id;
-    }
+    const onboardingSession = await createOnboardingSession({
+      provider: 'magic_link',
+      accountType,
+      email: normalizedEmail,
+      fullName: normalizedEmail.split('@')[0],
+      profilePhotoUrl: null,
+    });
 
     await sendMagicLink({
       email: normalizedEmail,
-      existingUserId: existingUser?.user_id,
-      onboardingSessionId,
+      onboardingSessionId: onboardingSession.auth_onboarding_session_id,
       req,
     });
 
@@ -941,11 +1025,11 @@ router.post('/magic-link/send', async (req: Request, res: Response) => {
     ]);
 
     return res.status(200).json({
-      message: 'Check your inbox for a secure magic link.',
+      message: 'Check your inbox for a secure verification link.',
     });
   } catch (err: any) {
-    console.error('Error sending magic link:', err);
-    return res.status(500).json({ message: err?.message || 'Unable to send magic link' });
+    console.error('Error sending verification magic link:', err);
+    return res.status(500).json({ message: err?.message || 'Unable to send verification link' });
   }
 });
 
@@ -972,11 +1056,12 @@ router.get('/verify', async (req: Request, res: Response) => {
     await cacheDelete(magicLinkTokenKey(token));
 
     const exchangeCode = crypto.randomBytes(24).toString('hex');
-    const exchangePayload: MagicLinkExchangePayload = payload.existingUserId
-      ? { type: 'login', userId: payload.existingUserId }
-      : { type: 'onboarding', onboardingSessionId: payload.onboardingSessionId };
+    await cacheSetJson(
+      magicLinkExchangeKey(exchangeCode),
+      { onboardingSessionId: payload.onboardingSessionId } satisfies MagicLinkExchangePayload,
+      MAGIC_LINK_EXCHANGE_TTL_SECONDS,
+    );
 
-    await cacheSetJson(magicLinkExchangeKey(exchangeCode), exchangePayload, MAGIC_LINK_EXCHANGE_TTL_SECONDS);
     return res.redirect(buildMagicLinkRedirect({ authExchange: exchangeCode, authStatus: 'verified' }));
   } catch (err) {
     console.error('Error verifying magic link:', err);
@@ -984,8 +1069,8 @@ router.get('/verify', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/magic-link/exchange', async (req: Request, res: Response) => {
-  const { exchangeCode } = req.body as Partial<MagicLinkExchangeBody>;
+router.post('/signup/exchange', async (req: Request, res: Response) => {
+  const { exchangeCode } = req.body as Partial<SignupExchangeBody>;
 
   if (!exchangeCode) {
     return res.status(400).json({ message: 'Exchange code is required.' });
@@ -994,78 +1079,74 @@ router.post('/magic-link/exchange', async (req: Request, res: Response) => {
   try {
     const payload = await cacheGetJson<MagicLinkExchangePayload>(magicLinkExchangeKey(exchangeCode));
     if (!payload) {
-      return res.status(400).json({ message: 'This login link has already been used or expired.' });
+      return res.status(400).json({ message: 'This verification link has already been used or expired.' });
     }
 
     await cacheDelete(magicLinkExchangeKey(exchangeCode));
 
-    if (payload.type === 'onboarding' && payload.onboardingSessionId) {
-      const session = await loadOnboardingSession(payload.onboardingSessionId);
-      if (!session || session.completed_at || session.expires_at <= new Date()) {
-        return res.status(400).json({ message: 'This onboarding session has expired. Request a new magic link.' });
-      }
-
-      return res.status(200).json(buildOnboardingResponse(session));
+    const session = await loadOnboardingSession(payload.onboardingSessionId);
+    if (!session || session.completed_at || session.expires_at <= new Date()) {
+      return res.status(400).json({ message: 'This signup session has expired. Request a new verification link.' });
     }
 
-    if (!payload.userId) {
-      return res.status(400).json({ message: 'This login link is no longer valid.' });
-    }
-
-    const responsePayload = await buildAuthenticatedResponse(payload.userId, req);
-    return res.status(200).json(responsePayload);
+    return res.status(200).json(buildOnboardingResponse(session));
   } catch (err: any) {
-    console.error('Error exchanging magic link session:', err);
-    return res.status(500).json({ message: err?.message || 'Unable to finish authentication' });
+    console.error('Error exchanging signup verification session:', err);
+    return res.status(500).json({ message: err?.message || 'Unable to finish verification' });
   }
 });
 
-router.post('/magic-link/onboarding', async (req: Request, res: Response) => {
-  const { sessionId, username, branch, year, accountType } = req.body as Partial<MagicLinkOnboardingBody>;
+router.post('/signup/student', validatePassword, async (req: Request, res: Response) => {
+  const { sessionId, name, password, branch, year } = req.body as Partial<StudentSignupBody>;
 
-  if (!sessionId || !branch || !year) {
-    return res.status(400).json({ message: 'Branch and year are required to complete your account.' });
-  }
-
-  if (accountType && accountType !== 'student') {
-    return res.status(400).json({ message: 'Magic link onboarding currently supports student accounts only.' });
+  if (!sessionId || !name || !password || !branch || !year) {
+    return res.status(400).json({ message: 'Missing required fields' });
   }
 
   try {
     const session = await loadOnboardingSession(sessionId);
     if (!session || session.completed_at || session.expires_at <= new Date()) {
-      return res.status(400).json({ message: 'This onboarding session has expired. Request a new magic link.' });
+      return res.status(400).json({ message: 'This signup session has expired. Start again to continue.' });
+    }
+
+    const payload = getSignupSessionPayload(session);
+    if (payload.accountType !== 'student') {
+      return res.status(400).json({ message: 'This signup session is not for a student account.' });
     }
 
     const email = normalizeEmail(session.email);
+    if (!isAllowedStudentEmail(email)) {
+      return res.status(403).json({ message: `Students must use your official college email (@${getAllowedStudentDomain()}).` });
+    }
+
     if (await emailExists(email)) {
-      return res.status(409).json({ message: 'An account with this email already exists. Use a fresh magic link to sign in.' });
+      return res.status(409).json({ message: 'An account with this email already exists. Please log in instead.' });
     }
 
     const numericYear = parseRequiredNumericValue(year, 'Year');
-    const finalUsername = await generateUniqueUsername(username?.trim() || session.suggested_username || email.split('@')[0]);
-
+    const normalizedName = normalizePersonName(name);
     const created = await createStudentUser({
-      username: finalUsername,
+      name: normalizedName,
       email,
+      password,
       branch: branch.trim(),
       year: numericYear,
-      authProvider: 'magic_link',
-      verificationState: null,
+      authProvider: session.provider,
+      googleSubject: session.google_subject,
+      profilePhotoUrl: session.profile_photo_url,
+      verificationState: isGoogleProvider(session) ? 'student_google_verified' : null,
+      verifiedAt: true,
     });
 
-    await prisma.$queryRaw`
-      UPDATE auth_onboarding_sessions
-      SET completed_at = NOW(), updated_at = NOW()
-      WHERE auth_onboarding_session_id = ${sessionId}
-    `;
+    await markOnboardingSessionCompleted(sessionId);
 
     const responsePayload = await buildAuthenticatedResponse(created.userId, req, {
-      username: finalUsername,
+      username: created.username,
       email,
       type: 'student',
       createdAt: created.createdAt,
-      authProvider: 'magic_link',
+      verificationState: isGoogleProvider(session) ? 'student_google_verified' : null,
+      authProvider: session.provider,
       details: {
         branch: branch.trim(),
         year: numericYear,
@@ -1074,76 +1155,55 @@ router.post('/magic-link/onboarding', async (req: Request, res: Response) => {
 
     return res.status(201).json(responsePayload);
   } catch (err: any) {
-    console.error('Error completing magic link onboarding:', err);
-    return res.status(500).json({ message: err?.message || 'Unable to complete your account' });
+    console.error('Error completing student signup:', err);
+    return res.status(500).json({ message: err?.message || 'Unable to complete student signup' });
   }
 });
 
 router.post('/signup/alumni', alumniProofUpload.array('proofFiles', 5), validatePassword, async (req: Request, res: Response) => {
-  const { name, email, graduationYear, branch, currentStatus, password } =
-    req.body as Partial<AlumniSignupBody>;
+  const { sessionId, name, graduationYear, branch, currentStatus, password } = req.body as Partial<AlumniSignupBody>;
   const uploadedFiles = Array.isArray(req.files) ? req.files : [];
 
-  if (!name || !email || !graduationYear || !branch || !currentStatus || !password) {
+  if (!sessionId || !name || !graduationYear || !branch || !currentStatus || !password) {
     return res.status(400).json({ message: 'Missing required fields' });
   }
 
   try {
-    await assertAllowedAlumniProofFiles(uploadedFiles);
+    assertAllowedAlumniProofFiles(uploadedFiles);
 
-    const exists = await emailExists(normalizeEmail(email));
-    if (exists) {
-      return res.status(409).json({ message: 'User already exists. Please sign in instead.' });
+    const session = await loadOnboardingSession(sessionId);
+    if (!session || session.completed_at || session.expires_at <= new Date()) {
+      return res.status(400).json({ message: 'This signup session has expired. Start again to continue.' });
     }
 
-    const username = await generateUniqueUsername(name);
-    const passwordHash = hashPassword(password);
+    const payload = getSignupSessionPayload(session);
+    if (payload.accountType !== 'alumni') {
+      return res.status(400).json({ message: 'This signup session is not for an alumni account.' });
+    }
+
+    const email = normalizeEmail(session.email);
+    if (await emailExists(email)) {
+      return res.status(409).json({ message: 'An account with this email already exists. Please log in instead.' });
+    }
+
     const numericGradYear = parseRequiredNumericValue(graduationYear, 'Graduation year');
-
-    const createdUsers = await prisma.$queryRaw<
-      { user_id: string; username: string; email: string; created_at: Date }[]
-    >`
-      INSERT INTO users (
-        username,
-        email,
-        password_hash,
-        user_type,
-        auth_provider,
-        profile_photo_url,
-        is_private,
-        verification_state,
-        onboarding_completed_at,
-        updated_at
-      )
-      VALUES (
-        ${username},
-        ${normalizeEmail(email)},
-        ${passwordHash},
-        'alumni'::"UserType",
-        'magic_link'::"AuthProvider",
-        NULL,
-        FALSE,
-        'alumni_pending_review'::"UserVerificationState",
-        NOW(),
-        NOW()
-      )
-      RETURNING user_id, username, email, created_at
-    `;
-
-    const user = createdUsers[0];
-
-    await prisma.$queryRaw`
-      INSERT INTO alumni_profiles (user_id, branch, passing_year, current_status)
-      VALUES (${user.user_id}, ${branch.trim()}, ${numericGradYear}, ${currentStatus.trim()})
-    `;
-
-    await createDefaultUserSettings(user.user_id);
-    await invalidateUserCache(user.user_id);
+    const normalizedName = normalizePersonName(name);
+    const created = await createAlumniUser({
+      name: normalizedName,
+      email,
+      password,
+      branch: branch.trim(),
+      passingYear: numericGradYear,
+      currentStatus: currentStatus.trim(),
+      authProvider: session.provider,
+      googleSubject: session.google_subject,
+      profilePhotoUrl: session.profile_photo_url,
+    });
 
     const documentUrls = await Promise.all(
       uploadedFiles.map((file) =>
         uploadVerificationProofToStorage({
-          userId: user.user_id,
+          userId: created.userId,
           fileBuffer: file.buffer,
           mimeType: file.mimetype,
         })
@@ -1151,17 +1211,19 @@ router.post('/signup/alumni', alumniProofUpload.array('proofFiles', 5), validate
     );
 
     const profilePreview = {
-      name: name.trim(),
-      email: normalizeEmail(email),
+      name: normalizedName,
+      email,
       branch: branch.trim(),
       passingYear: numericGradYear,
       currentStatus: currentStatus.trim(),
       submittedProofLabels: uploadedFiles.map((file) => file.originalname),
     };
 
-    const verificationRequests = await prisma.$queryRaw<
-      Array<{ verification_request_id: string; status: string; requested_at: Date }>
-    >`
+    const verificationRequests = await prisma.$queryRaw<Array<{
+      verification_request_id: string;
+      status: string;
+      requested_at: Date;
+    }>>`
       INSERT INTO admin_verification_requests (
         request_type,
         target_user_id,
@@ -1172,17 +1234,18 @@ router.post('/signup/alumni', alumniProofUpload.array('proofFiles', 5), validate
       )
       VALUES (
         'alumni'::"VerificationRequestType",
-        ${user.user_id},
+        ${created.userId},
         ${JSON.stringify(documentUrls)}::jsonb,
         ${JSON.stringify(profilePreview)}::jsonb,
-        ${`Alumni verification submitted by ${name.trim()}`},
+        ${`Alumni verification submitted by ${normalizedName}`},
         'pending'::"VerificationRequestStatus"
       )
       RETURNING verification_request_id, status::text, requested_at
     `;
 
-    const verificationRequest = verificationRequests[0];
+    await markOnboardingSessionCompleted(sessionId);
 
+    const verificationRequest = verificationRequests[0];
     return res.status(201).json({
       pendingVerification: true,
       message: 'Your alumni verification request has been submitted and is pending admin approval.',

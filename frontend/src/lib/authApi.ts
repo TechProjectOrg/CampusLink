@@ -23,25 +23,31 @@ export interface AuthOnboardingResponse {
   onboardingRequired: true;
   sessionId: string;
   provider: 'google' | 'magic_link';
+  accountType: 'student' | 'alumni';
   email: string;
   fullName: string;
   profilePhotoUrl: string | null;
-  suggestedUsername: string | null;
-  accountType: 'student';
-  missingFields: string[];
 }
 
 export type GoogleAuthResult = LoginResult | AuthOnboardingResponse;
-export type MagicLinkExchangeResult = LoginResult | AuthOnboardingResponse;
+export type SignupExchangeResult = AuthOnboardingResponse;
 
 export interface AlumniSignupPayload {
+  sessionId: string;
   name: string;
-  email: string;
   graduationYear: string | number;
   branch: string;
   currentStatus: string;
   password: string;
   proofFiles: File[];
+}
+
+export interface StudentSignupPayload {
+  sessionId: string;
+  name: string;
+  password: string;
+  branch: string;
+  year: string | number;
 }
 
 function authHeaders(token?: string): HeadersInit {
@@ -57,13 +63,35 @@ async function safeFetch(input: string, init?: RequestInit): Promise<Response> {
   }
 }
 
-export async function apiAuthenticateWithGoogle(idToken: string): Promise<GoogleAuthResult> {
+export async function apiLogin(email: string, password: string): Promise<LoginResult> {
+  const response = await safeFetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, password }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to sign in');
+  }
+
+  const data = (await response.json()) as ApiUserProfile & { token?: string };
+  return { profile: data, token: data.token };
+}
+
+export async function apiAuthenticateWithGoogle(payload: {
+  idToken: string;
+  intent?: 'login' | 'signup';
+  accountType?: 'student' | 'alumni';
+}): Promise<GoogleAuthResult> {
   const response = await safeFetch(`${API_BASE}/auth/google`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ idToken }),
+    body: JSON.stringify(payload),
   });
 
   if (!response.ok) {
@@ -79,49 +107,28 @@ export async function apiAuthenticateWithGoogle(idToken: string): Promise<Google
   return { profile: data, token: data.token };
 }
 
-export async function apiCompleteGoogleOnboarding(payload: {
-  sessionId: string;
-  username?: string;
-  branch: string;
-  year: string | number;
-  accountType?: 'student';
-}): Promise<LoginResult> {
-  const response = await safeFetch(`${API_BASE}/auth/google/onboarding`, {
+export async function apiSendSignupVerificationLink(
+  email: string,
+  accountType: 'student' | 'alumni'
+): Promise<{ message: string }> {
+  const response = await safeFetch(`${API_BASE}/auth/signup/verify-email`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ email, accountType }),
   });
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error(err?.message || 'Unable to complete Google signup');
-  }
-
-  const data = (await response.json()) as ApiUserProfile & { token?: string };
-  return { profile: data, token: data.token };
-}
-
-export async function apiSendMagicLink(email: string): Promise<{ message: string }> {
-  const response = await safeFetch(`${API_BASE}/auth/magic-link/send`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ email }),
-  });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err?.message || 'Unable to send magic link');
+    throw new Error(err?.message || 'Unable to send verification link');
   }
 
   return (await response.json()) as { message: string };
 }
 
-export async function apiExchangeMagicLink(exchangeCode: string): Promise<MagicLinkExchangeResult> {
-  const response = await safeFetch(`${API_BASE}/auth/magic-link/exchange`, {
+export async function apiExchangeSignupVerification(exchangeCode: string): Promise<SignupExchangeResult> {
+  const response = await safeFetch(`${API_BASE}/auth/signup/exchange`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -131,25 +138,14 @@ export async function apiExchangeMagicLink(exchangeCode: string): Promise<MagicL
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error(err?.message || 'Unable to finish magic link sign-in');
+    throw new Error(err?.message || 'Unable to finish verification');
   }
 
-  const data = (await response.json()) as (ApiUserProfile & { token?: string }) | AuthOnboardingResponse;
-  if ('onboardingRequired' in data) {
-    return data;
-  }
-
-  return { profile: data, token: data.token };
+  return (await response.json()) as AuthOnboardingResponse;
 }
 
-export async function apiCompleteMagicLinkOnboarding(payload: {
-  sessionId: string;
-  username?: string;
-  branch: string;
-  year: string | number;
-  accountType?: 'student';
-}): Promise<LoginResult> {
-  const response = await safeFetch(`${API_BASE}/auth/magic-link/onboarding`, {
+export async function apiCompleteStudentSignup(payload: StudentSignupPayload): Promise<LoginResult> {
+  const response = await safeFetch(`${API_BASE}/auth/signup/student`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -159,7 +155,7 @@ export async function apiCompleteMagicLinkOnboarding(payload: {
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error(err?.message || 'Unable to complete your account');
+    throw new Error(err?.message || 'Unable to complete student signup');
   }
 
   const data = (await response.json()) as ApiUserProfile & { token?: string };
@@ -168,8 +164,8 @@ export async function apiCompleteMagicLinkOnboarding(payload: {
 
 export async function apiSignupAlumni(payload: AlumniSignupPayload): Promise<AlumniPendingVerificationResult> {
   const formData = new FormData();
+  formData.append('sessionId', payload.sessionId);
   formData.append('name', payload.name);
-  formData.append('email', payload.email);
   formData.append('graduationYear', String(payload.graduationYear));
   formData.append('branch', payload.branch);
   formData.append('currentStatus', payload.currentStatus);
@@ -189,6 +185,22 @@ export async function apiSignupAlumni(payload: AlumniSignupPayload): Promise<Alu
   }
 
   return (await response.json()) as AlumniPendingVerificationResult;
+}
+
+export async function apiCompleteGoogleOnboarding(payload: StudentSignupPayload): Promise<LoginResult> {
+  return await apiCompleteStudentSignup(payload);
+}
+
+export async function apiSendMagicLink(email: string): Promise<{ message: string }> {
+  return await apiSendSignupVerificationLink(email, 'student');
+}
+
+export async function apiExchangeMagicLink(exchangeCode: string): Promise<SignupExchangeResult> {
+  return await apiExchangeSignupVerification(exchangeCode);
+}
+
+export async function apiCompleteMagicLinkOnboarding(payload: StudentSignupPayload): Promise<LoginResult> {
+  return await apiCompleteStudentSignup(payload);
 }
 
 export async function apiFetchUserProfile(userId: string, token?: string): Promise<ApiUserProfile> {

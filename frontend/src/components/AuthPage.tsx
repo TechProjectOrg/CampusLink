@@ -1,13 +1,30 @@
-import { useEffect, useState } from 'react';
-import { Users, Mail, GraduationCap, Sparkles, TrendingUp, Award, Zap } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import {
+  ArrowLeft,
+  ArrowRight,
+  Award,
+  Eye,
+  EyeOff,
+  GraduationCap,
+  Lock,
+  Mail,
+  Sparkles,
+  TrendingUp,
+  Upload,
+  Users,
+  UserRound,
+  Zap,
+} from 'lucide-react';
 import Lottie from 'lottie-react';
 import loadingAnimation from '../assets/loading_animation.json';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Card, CardContent, CardHeader } from './ui/card';
-import { Label } from './ui/label';
 import { useAuth } from '../context/AuthContext';
 import type { AuthOnboardingResponse } from '../lib/authApi';
+import { getPasswordValidationMessage, validatePassword } from '../lib/validation';
+import { Button } from './ui/button';
+import { Card, CardContent, CardHeader } from './ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
 
 const BRANCH_OPTIONS = [
   'Computer Engineering',
@@ -19,6 +36,9 @@ const BRANCH_OPTIONS = [
   'Civil Engineering',
   'Agriculture Engineering',
 ];
+
+const CURRENT_YEAR = new Date().getFullYear();
+const PASSING_YEAR_OPTIONS = Array.from({ length: 41 }, (_, index) => CURRENT_YEAR - 20 + index);
 
 declare global {
   interface Window {
@@ -62,16 +82,15 @@ function loadGoogleScript(): Promise<void> {
   });
 }
 
-function GoogleStudentButton({
-  text,
+function GoogleAuthButton({
   disabled,
   onCredential,
 }: {
-  text: string;
   disabled: boolean;
   onCredential: (credential: string) => Promise<void>;
 }) {
   const [error, setError] = useState('');
+  const buttonRef = useRef<HTMLDivElement | null>(null);
   const googleClientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)?.trim();
 
   useEffect(() => {
@@ -83,13 +102,14 @@ function GoogleStudentButton({
         return;
       }
 
-      const container = document.getElementById(`google-student-button-${text}`);
+      const container = buttonRef.current;
       if (!container) return;
 
       try {
         await loadGoogleScript();
-        if (cancelled || !window.google?.accounts?.id) return;
+        if (cancelled || !window.google?.accounts?.id || !buttonRef.current) return;
 
+        const width = Math.max(Math.floor(buttonRef.current.clientWidth || 360), 280);
         container.innerHTML = '';
         window.google.accounts.id.initialize({
           client_id: googleClientId,
@@ -102,8 +122,9 @@ function GoogleStudentButton({
         window.google.accounts.id.renderButton(container, {
           theme: 'outline',
           size: 'large',
-          text,
-          width: Math.max(container.clientWidth || 0, 280),
+          text: 'continue_with',
+          shape: 'pill',
+          width,
         });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Google Sign-In is unavailable');
@@ -111,78 +132,170 @@ function GoogleStudentButton({
     }
 
     void renderGoogleButton();
+    const observer = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(() => {
+          void renderGoogleButton();
+        })
+      : null;
+
+    if (observer && buttonRef.current) {
+      observer.observe(buttonRef.current);
+    }
 
     return () => {
       cancelled = true;
+      observer?.disconnect();
     };
-  }, [googleClientId, onCredential, text]);
+  }, [googleClientId, onCredential]);
 
   return (
     <div className={disabled ? 'pointer-events-none opacity-60' : ''}>
-      <div id={`google-student-button-${text}`} className="flex justify-center" />
-      {error ? <p className="mt-2 text-center text-xs text-red-500">{error}</p> : null}
+      <div ref={buttonRef} className="w-full min-h-11" />
+      {error ? <p className="mt-2 text-sm text-red-500">{error}</p> : null}
     </div>
   );
 }
 
-function isOnboardingResult(result: AuthOnboardingResponse | { profile: unknown; token?: string }): result is AuthOnboardingResponse {
-  return 'onboardingRequired' in result;
+function Divider() {
+  return (
+    <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-slate-400">
+      <div className="h-px flex-1 bg-slate-200" />
+      <span>OR</span>
+      <div className="h-px flex-1 bg-slate-200" />
+    </div>
+  );
 }
+
+function FormMessage({ tone, children }: { tone: 'error' | 'info'; children: React.ReactNode }) {
+  return (
+    <div
+      className={`rounded-2xl border px-4 py-3 text-sm ${
+        tone === 'error'
+          ? 'border-red-200 bg-red-50 text-red-700'
+          : 'border-primary/15 bg-primary/5 text-slate-700'
+      }`}
+    >
+      {children}
+    </div>
+  );
+}
+
+type ScreenMode = 'login' | 'signup';
+type SignupStep = 'role' | 'method' | 'verify-email' | 'await-verification' | 'student-form' | 'alumni-form' | 'alumni-pending';
+type AccountType = 'student' | 'alumni';
 
 export function AuthPage() {
   const auth = useAuth();
 
-  const [activeForm, setActiveForm] = useState<'login' | 'signup'>('login');
+  const [mode, setMode] = useState<ScreenMode>('login');
+  const [signupStep, setSignupStep] = useState<SignupStep>('role');
   const [isLoading, setIsLoading] = useState(false);
+  const [selectedRole, setSelectedRole] = useState<AccountType | null>(null);
+
   const [loginEmail, setLoginEmail] = useState('');
-  const [signupEmail, setSignupEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
+
   const [signupError, setSignupError] = useState('');
-  const [loginMessage, setLoginMessage] = useState('');
   const [signupMessage, setSignupMessage] = useState('');
-  const [googleOnboarding, setGoogleOnboarding] = useState<AuthOnboardingResponse | null>(null);
-  const [magicLinkOnboarding, setMagicLinkOnboarding] = useState<AuthOnboardingResponse | null>(null);
-  const [onboardingForm, setOnboardingForm] = useState({
-    username: '',
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
+
+  const [signupEmail, setSignupEmail] = useState('');
+  const [onboardingSession, setOnboardingSession] = useState<AuthOnboardingResponse | null>(null);
+
+  const [studentForm, setStudentForm] = useState({
+    name: '',
+    email: '',
     branch: '',
     year: '',
-    accountType: 'student' as const,
+    password: '',
+    confirmPassword: '',
   });
+  const [showStudentPassword, setShowStudentPassword] = useState(false);
+  const [showStudentConfirmPassword, setShowStudentConfirmPassword] = useState(false);
+  const [studentPasswordMessages, setStudentPasswordMessages] = useState<string[]>([]);
+
+  const [alumniForm, setAlumniForm] = useState({
+    name: '',
+    email: '',
+    graduationYear: '',
+    branch: '',
+    currentStatus: '',
+    password: '',
+    confirmPassword: '',
+    proofFiles: [] as File[],
+  });
+  const [showAlumniPassword, setShowAlumniPassword] = useState(false);
+  const [showAlumniConfirmPassword, setShowAlumniConfirmPassword] = useState(false);
+  const [alumniPasswordMessages, setAlumniPasswordMessages] = useState<string[]>([]);
 
   const resetMessages = () => {
     setLoginError('');
     setSignupError('');
-    setLoginMessage('');
     setSignupMessage('');
   };
 
-  const clearOnboardingState = () => {
-    setGoogleOnboarding(null);
-    setMagicLinkOnboarding(null);
-    setOnboardingForm({
-      username: '',
+  const resetSignupFlow = () => {
+    setSelectedRole(null);
+    setSignupStep('role');
+    setSignupEmail('');
+    setOnboardingSession(null);
+    setStudentForm({
+      name: '',
+      email: '',
       branch: '',
       year: '',
-      accountType: 'student',
+      password: '',
+      confirmPassword: '',
     });
+    setAlumniForm({
+      name: '',
+      email: '',
+      graduationYear: '',
+      branch: '',
+      currentStatus: '',
+      password: '',
+      confirmPassword: '',
+      proofFiles: [],
+    });
+    setStudentPasswordMessages([]);
+    setAlumniPasswordMessages([]);
+    resetMessages();
   };
 
-  const applyOnboardingState = (result: AuthOnboardingResponse, source: 'google' | 'magic_link') => {
-    setActiveForm('signup');
-    setOnboardingForm({
-      username: result.suggestedUsername ?? result.email.split('@')[0],
-      branch: '',
-      year: '',
-      accountType: 'student',
-    });
-    if (source === 'google') {
-      setGoogleOnboarding(result);
-      setMagicLinkOnboarding(null);
-    } else {
-      setMagicLinkOnboarding(result);
-      setGoogleOnboarding(null);
-      setSignupEmail(result.email);
+  const openSignup = () => {
+    setMode('signup');
+    resetSignupFlow();
+  };
+
+  const openLogin = () => {
+    setMode('login');
+    resetMessages();
+  };
+
+  const moveToOnboarding = (session: AuthOnboardingResponse) => {
+    setMode('signup');
+    setSelectedRole(session.accountType);
+    setOnboardingSession(session);
+    setSignupEmail(session.email);
+
+    if (session.accountType === 'student') {
+      setStudentForm((current) => ({
+        ...current,
+        name: session.fullName || current.name,
+        email: session.email,
+      }));
+      setSignupStep('student-form');
+      return;
     }
+
+    setAlumniForm((current) => ({
+      ...current,
+      name: session.fullName || current.name,
+      email: session.email,
+    }));
+    setSignupStep('alumni-form');
   };
 
   useEffect(() => {
@@ -197,23 +310,29 @@ export function AuthPage() {
     const nextUrl = `${window.location.pathname}${window.location.hash || ''}`;
     window.history.replaceState({}, '', nextUrl);
 
+    setMode('signup');
+
     if (authStatus === 'expired') {
-      setLoginError('That magic link has expired. Request a fresh one to continue.');
+      setSignupStep('verify-email');
+      setSignupError('That verification link has expired. Request a fresh one to continue.');
       return;
     }
 
     if (authStatus === 'invalid') {
-      setLoginError('That magic link is invalid. Request a new one and try again.');
+      setSignupStep('verify-email');
+      setSignupError('That verification link is invalid. Request a new one and try again.');
       return;
     }
 
     if (authStatus === 'blocked') {
-      setLoginError('Too many invalid link attempts were detected. Please wait before trying again.');
+      setSignupStep('verify-email');
+      setSignupError('Too many invalid verification attempts were detected. Please wait before trying again.');
       return;
     }
 
     if (authStatus === 'error') {
-      setLoginError('We could not finish that magic link sign in. Please request a new link.');
+      setSignupStep('verify-email');
+      setSignupError('We could not finish verifying that email. Please request a new link.');
       return;
     }
 
@@ -222,111 +341,711 @@ export function AuthPage() {
     }
 
     setIsLoading(true);
-    void auth.exchangeMagicLink(exchangeCode)
-      .then((result) => {
-        if (isOnboardingResult(result)) {
-          applyOnboardingState(result, 'magic_link');
-          setSignupMessage('Your email is verified. Finish the last few account details.');
-        } else {
-          setLoginMessage('Magic link verified. Signing you in...');
-        }
+    void auth.exchangeSignupVerification(exchangeCode)
+      .then((session) => {
+        resetMessages();
+        setSignupMessage('Email verified. Complete your profile to finish creating your account.');
+        moveToOnboarding(session);
       })
       .catch((error) => {
-        setLoginError(error instanceof Error ? error.message : 'Unable to finish magic link sign-in.');
+        setSignupStep('verify-email');
+        setSignupError(error instanceof Error ? error.message : 'Unable to finish email verification.');
       })
       .finally(() => {
         setIsLoading(false);
       });
   }, [auth]);
 
-  const handleGoogleAuth = async (credential: string) => {
+  const handleLogin = async (event: React.FormEvent) => {
+    event.preventDefault();
     resetMessages();
     setIsLoading(true);
 
     try {
-      const result = await auth.authenticateWithGoogle(credential);
-      if (isOnboardingResult(result)) {
-        applyOnboardingState(result, 'google');
-        setSignupMessage('Your Google account is verified. Finish the last few account details.');
-      }
+      await auth.login(loginEmail, loginPassword);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Google sign-in failed';
-      if (activeForm === 'login') {
-        setLoginError(message);
-      } else {
-        setSignupError(message);
-      }
+      setLoginError(error instanceof Error ? error.message : 'Unable to sign in');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSendMagicLink = async (mode: 'login' | 'signup') => {
-    resetMessages();
-    if (mode === 'signup') {
-      clearOnboardingState();
-    }
-
-    const email = mode === 'login' ? loginEmail : signupEmail;
-    setIsLoading(true);
-    try {
-      const result = await auth.sendMagicLink(email);
-      if (mode === 'login') {
-        setLoginMessage(result.message);
-      } else {
-        setSignupMessage(result.message);
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unable to send magic link';
-      if (mode === 'login') {
-        setLoginError(message);
-      } else {
-        setSignupError(message);
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleGoogleOnboarding = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!googleOnboarding) return;
-
+  const handleLoginGoogle = async (credential: string) => {
     resetMessages();
     setIsLoading(true);
+
     try {
-      await auth.completeGoogleOnboarding({
-        sessionId: googleOnboarding.sessionId,
-        username: onboardingForm.username,
-        branch: onboardingForm.branch,
-        year: onboardingForm.year,
-        accountType: onboardingForm.accountType,
+      await auth.authenticateWithGoogle({
+        idToken: credential,
+        intent: 'login',
       });
     } catch (error) {
-      setSignupError(error instanceof Error ? error.message : 'Unable to complete Google signup');
+      setLoginError(error instanceof Error ? error.message : 'Google sign-in failed');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleMagicLinkOnboarding = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!magicLinkOnboarding) return;
+  const handleSignupGoogle = async (credential: string) => {
+    if (!selectedRole) {
+      setSignupError('Choose whether you are signing up as a student or alumni first.');
+      return;
+    }
 
     resetMessages();
     setIsLoading(true);
+
     try {
-      await auth.completeMagicLinkOnboarding({
-        sessionId: magicLinkOnboarding.sessionId,
-        username: onboardingForm.username,
-        branch: onboardingForm.branch,
-        year: onboardingForm.year,
-        accountType: onboardingForm.accountType,
+      const result = await auth.authenticateWithGoogle({
+        idToken: credential,
+        intent: 'signup',
+        accountType: selectedRole,
       });
+
+      if ('onboardingRequired' in result) {
+        moveToOnboarding(result);
+        setSignupMessage('Google account verified. Complete the original signup form to finish your account.');
+      }
     } catch (error) {
-      setSignupError(error instanceof Error ? error.message : 'Unable to complete account setup');
+      setSignupError(error instanceof Error ? error.message : 'Google signup failed');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleSendVerificationLink = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!selectedRole) {
+      setSignupError('Choose whether you are signing up as a student or alumni first.');
+      return;
+    }
+
+    resetMessages();
+    setIsLoading(true);
+
+    try {
+      const response = await auth.sendSignupVerificationLink(signupEmail, selectedRole);
+      setSignupMessage(response.message);
+      setSignupStep('await-verification');
+    } catch (error) {
+      setSignupError(error instanceof Error ? error.message : 'Unable to send verification link');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleStudentSignup = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!onboardingSession) return;
+
+    resetMessages();
+
+    if (studentForm.password !== studentForm.confirmPassword) {
+      setSignupError('Passwords do not match.');
+      return;
+    }
+
+    if (!validatePassword(studentForm.password)) {
+      setSignupError('Password does not meet the requirements.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const payload = {
+        sessionId: onboardingSession.sessionId,
+        name: studentForm.name,
+        password: studentForm.password,
+        branch: studentForm.branch,
+        year: studentForm.year,
+      };
+
+      if (onboardingSession.provider === 'google') {
+        await auth.completeGoogleOnboarding(payload);
+      } else {
+        await auth.completeStudentSignup(payload);
+      }
+    } catch (error) {
+      setSignupError(error instanceof Error ? error.message : 'Unable to complete student signup');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAlumniSignup = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!onboardingSession) return;
+
+    resetMessages();
+
+    if (alumniForm.password !== alumniForm.confirmPassword) {
+      setSignupError('Passwords do not match.');
+      return;
+    }
+
+    if (!validatePassword(alumniForm.password)) {
+      setSignupError('Password does not meet the requirements.');
+      return;
+    }
+
+    if (alumniForm.proofFiles.length === 0) {
+      setSignupError('Upload at least one verification proof file.');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const result = await auth.signupAlumni({
+        sessionId: onboardingSession.sessionId,
+        name: alumniForm.name,
+        graduationYear: alumniForm.graduationYear,
+        branch: alumniForm.branch,
+        currentStatus: alumniForm.currentStatus,
+        password: alumniForm.password,
+        proofFiles: alumniForm.proofFiles,
+      });
+      setSignupStep('alumni-pending');
+      setSignupMessage(result.message);
+    } catch (error) {
+      setSignupError(error instanceof Error ? error.message : 'Unable to complete alumni signup');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const renderSignupRoleStep = () => (
+    <div className="space-y-4 animate-fade-slide-in">
+      <div className="space-y-1">
+        <h3 className="text-3xl text-slate-900">Choose your account type</h3>
+        <p className="text-sm text-slate-600">
+          Start by selecting the profile you want to create.
+        </p>
+      </div>
+
+      <div className="grid gap-3">
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedRole('student');
+            setSignupStep('method');
+            resetMessages();
+          }}
+          className="rounded-2xl border border-primary/20 bg-primary/5 p-5 text-left transition hover:border-primary/40 hover:bg-primary/10"
+        >
+          <p className="text-base font-semibold text-slate-900">Student</p>
+          <p className="mt-1 text-sm text-slate-600">Official college email required.</p>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setSelectedRole('alumni');
+            setSignupStep('method');
+            resetMessages();
+          }}
+          className="rounded-2xl border border-primary/20 bg-primary/5 p-5 text-left transition hover:border-primary/40 hover:bg-primary/10"
+        >
+          <p className="text-base font-semibold text-slate-900">Alumni</p>
+          <p className="mt-1 text-sm text-slate-600">Signup includes the existing proof verification process.</p>
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderSignupMethodStep = () => (
+    <div className="space-y-4 animate-fade-slide-in">
+      <div className="flex items-center justify-between">
+        <div className="space-y-1">
+          <h3 className="text-3xl text-slate-900">
+            Sign up as {selectedRole === 'student' ? 'Student' : 'Alumni'}
+          </h3>
+          <p className="text-sm text-slate-600">
+            Verify your identity with Google or your email, then complete the original signup form.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            setSignupStep('role');
+            resetMessages();
+          }}
+          className="text-sm text-slate-500 transition hover:text-slate-900"
+        >
+          Change
+        </button>
+      </div>
+
+      <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
+        <p className="text-sm font-semibold text-slate-900">Continue with Google</p>
+        <p className="mt-1 text-xs text-slate-600">
+          {selectedRole === 'student'
+            ? 'Use your official college Google account if you want the fastest setup.'
+            : 'Use Google to prefill your profile details before uploading your alumni proof.'}
+        </p>
+        <div className="mt-4">
+          <GoogleAuthButton disabled={isLoading} onCredential={handleSignupGoogle} />
+        </div>
+      </div>
+
+      <Divider />
+
+      <div className="rounded-2xl border border-slate-200 p-4">
+        <p className="text-sm font-semibold text-slate-900">Verify with email</p>
+        <p className="mt-1 text-xs text-slate-600">
+          Magic links are used only to verify email ownership during signup.
+        </p>
+        <div className="mt-4">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full rounded-2xl"
+            onClick={() => {
+              setSignupStep('verify-email');
+              resetMessages();
+            }}
+          >
+            Continue with Email
+          </Button>
+        </div>
+      </div>
+
+      {signupError ? <FormMessage tone="error">{signupError}</FormMessage> : null}
+      {signupMessage ? <FormMessage tone="info">{signupMessage}</FormMessage> : null}
+    </div>
+  );
+
+  const renderVerifyEmailStep = () => (
+    <div className="space-y-4 animate-fade-slide-in">
+      <div className="space-y-1">
+        <h3 className="text-3xl text-slate-900">Verify your email</h3>
+        <p className="text-sm text-slate-600">
+          We&apos;ll send a secure verification link before you fill the signup form.
+        </p>
+      </div>
+
+      <form onSubmit={handleSendVerificationLink} className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="signup-email">
+            {selectedRole === 'student' ? 'College Email' : 'Email'}
+          </Label>
+          <div className="relative">
+            <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Input
+              id="signup-email"
+              type="email"
+              placeholder={selectedRole === 'student' ? 'you@gbpuat.ac.in' : 'you@example.com'}
+              value={signupEmail}
+              onChange={(event) => setSignupEmail(event.target.value)}
+              className="pl-10 border-primary/20 focus:border-primary rounded-xl"
+              required
+            />
+          </div>
+          {selectedRole === 'student' ? (
+            <p className="text-xs text-slate-500">Use your official college email.</p>
+          ) : null}
+        </div>
+
+        {signupError ? <FormMessage tone="error">{signupError}</FormMessage> : null}
+        {signupMessage ? <FormMessage tone="info">{signupMessage}</FormMessage> : null}
+
+        <Button type="submit" className="w-full rounded-2xl gradient-success" disabled={isLoading}>
+          {isLoading
+            ? <Lottie animationData={loadingAnimation} style={{ height: 40, width: 40 }} />
+            : 'Send Verification Link'}
+        </Button>
+      </form>
+    </div>
+  );
+
+  const renderAwaitVerificationStep = () => (
+    <div className="space-y-4 animate-fade-slide-in">
+      <div className="space-y-1">
+        <h3 className="text-3xl text-slate-900">Check your inbox</h3>
+        <p className="text-sm text-slate-600">
+          Open the verification link from your email to continue to the signup form.
+        </p>
+      </div>
+
+      {signupMessage ? <FormMessage tone="info">{signupMessage}</FormMessage> : null}
+      {signupError ? <FormMessage tone="error">{signupError}</FormMessage> : null}
+
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+        The email will take you back here and unlock the onboarding form automatically.
+      </div>
+
+      <Button
+        type="button"
+        variant="outline"
+        className="w-full rounded-2xl"
+        onClick={() => {
+          setSignupStep('verify-email');
+          resetMessages();
+        }}
+      >
+        Use a different email
+      </Button>
+    </div>
+  );
+
+  const renderStudentForm = () => (
+    <form onSubmit={handleStudentSignup} className="space-y-4 animate-fade-slide-in">
+      <div className="space-y-1">
+        <h3 className="text-3xl text-slate-900">Create your student account</h3>
+        <p className="text-sm text-slate-600">
+          Complete the original student signup form and create your password.
+        </p>
+      </div>
+
+      {signupMessage ? <FormMessage tone="info">{signupMessage}</FormMessage> : null}
+
+      <div className="space-y-2">
+        <Label htmlFor="student-name">Full Name</Label>
+        <div className="relative">
+          <UserRound className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Input
+            id="student-name"
+            type="text"
+            value={studentForm.name}
+            onChange={(event) => setStudentForm((current) => ({ ...current, name: event.target.value }))}
+            className="pl-10 rounded-xl"
+            required
+          />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="student-email">College Email</Label>
+        <Input id="student-email" type="email" value={studentForm.email} className="rounded-xl bg-slate-50" readOnly />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="student-branch">Branch</Label>
+          <div className="relative">
+            <GraduationCap className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 z-10" />
+            <select
+              id="student-branch"
+              value={studentForm.branch}
+              onChange={(event) => setStudentForm((current) => ({ ...current, branch: event.target.value }))}
+              className="w-full rounded-xl border border-primary/20 bg-white py-2 pl-10 pr-4 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+              required
+            >
+              <option value="">Select</option>
+              {BRANCH_OPTIONS.map((branch) => (
+                <option key={branch} value={branch}>
+                  {branch}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="student-year">Year</Label>
+          <select
+            id="student-year"
+            value={studentForm.year}
+            onChange={(event) => setStudentForm((current) => ({ ...current, year: event.target.value }))}
+            className="w-full rounded-xl border border-primary/20 bg-white px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+            required
+          >
+            <option value="">Select</option>
+            <option value="1">1st Year</option>
+            <option value="2">2nd Year</option>
+            <option value="3">3rd Year</option>
+            <option value="4">4th Year</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="student-password">Password</Label>
+        <div className="relative">
+          <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Input
+            id="student-password"
+            type={showStudentPassword ? 'text' : 'password'}
+            value={studentForm.password}
+            onChange={(event) => {
+              const nextPassword = event.target.value;
+              setStudentForm((current) => ({ ...current, password: nextPassword }));
+              setStudentPasswordMessages(getPasswordValidationMessage(nextPassword));
+              setSignupError('');
+            }}
+            className="pl-10 pr-11 rounded-xl"
+            required
+          />
+          <button
+            type="button"
+            onClick={() => setShowStudentPassword((current) => !current)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-700"
+          >
+            {showStudentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
+        {studentPasswordMessages.length > 0 ? (
+          <ul className="space-y-1 text-xs text-red-500">
+            {studentPasswordMessages.map((message) => (
+              <li key={message}>{message}</li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="student-confirm-password">Confirm Password</Label>
+        <div className="relative">
+          <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Input
+            id="student-confirm-password"
+            type={showStudentConfirmPassword ? 'text' : 'password'}
+            value={studentForm.confirmPassword}
+            onChange={(event) => {
+              const confirmPassword = event.target.value;
+              setStudentForm((current) => ({ ...current, confirmPassword }));
+              setSignupError(studentForm.password === confirmPassword ? '' : 'Passwords do not match.');
+            }}
+            className="pl-10 pr-11 rounded-xl"
+            required
+          />
+          <button
+            type="button"
+            onClick={() => setShowStudentConfirmPassword((current) => !current)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-700"
+          >
+            {showStudentConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
+      </div>
+
+      {signupError ? <FormMessage tone="error">{signupError}</FormMessage> : null}
+
+      <Button type="submit" className="w-full rounded-2xl gradient-success" disabled={isLoading}>
+        {isLoading
+          ? <Lottie animationData={loadingAnimation} style={{ height: 40, width: 40 }} />
+          : 'Create Student Account'}
+      </Button>
+    </form>
+  );
+
+  const renderAlumniForm = () => (
+    <form onSubmit={handleAlumniSignup} className="space-y-4 animate-fade-slide-in">
+      <div className="space-y-1">
+        <h3 className="text-3xl text-slate-900">Create your alumni account</h3>
+        <p className="text-sm text-slate-600">
+          Complete the original alumni signup form and upload your verification proof.
+        </p>
+      </div>
+
+      {signupMessage ? <FormMessage tone="info">{signupMessage}</FormMessage> : null}
+
+      <div className="space-y-2">
+        <Label htmlFor="alumni-name">Full Name</Label>
+        <Input
+          id="alumni-name"
+          type="text"
+          value={alumniForm.name}
+          onChange={(event) => setAlumniForm((current) => ({ ...current, name: event.target.value }))}
+          className="rounded-xl"
+          required
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="alumni-email">Email</Label>
+        <Input id="alumni-email" type="email" value={alumniForm.email} className="rounded-xl bg-slate-50" readOnly />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className="space-y-2">
+          <Label htmlFor="alumni-graduation-year">Graduation Year</Label>
+          <select
+            id="alumni-graduation-year"
+            value={alumniForm.graduationYear}
+            onChange={(event) => setAlumniForm((current) => ({ ...current, graduationYear: event.target.value }))}
+            className="w-full rounded-xl border border-primary/20 bg-white px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+            required
+          >
+            <option value="">Select</option>
+            {PASSING_YEAR_OPTIONS.map((year) => (
+              <option key={year} value={year}>
+                {year}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="alumni-branch">Branch</Label>
+          <div className="relative">
+            <GraduationCap className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 z-10" />
+            <select
+              id="alumni-branch"
+              value={alumniForm.branch}
+              onChange={(event) => setAlumniForm((current) => ({ ...current, branch: event.target.value }))}
+              className="w-full rounded-xl border border-primary/20 bg-white py-2 pl-10 pr-4 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+              required
+            >
+              <option value="">Select</option>
+              {BRANCH_OPTIONS.map((branch) => (
+                <option key={branch} value={branch}>
+                  {branch}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="alumni-status">Current working status</Label>
+        <Input
+          id="alumni-status"
+          type="text"
+          value={alumniForm.currentStatus}
+          onChange={(event) => setAlumniForm((current) => ({ ...current, currentStatus: event.target.value }))}
+          className="rounded-xl"
+          placeholder="Software Engineer at XYZ"
+          required
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="alumni-proof">Verification Proof</Label>
+        <label className="flex cursor-pointer items-center gap-3 rounded-2xl border border-dashed border-primary/30 bg-primary/5 px-4 py-4 text-sm text-slate-700 transition hover:border-primary/50 hover:bg-primary/10">
+          <Upload className="h-4 w-4" />
+          <span>
+            {alumniForm.proofFiles.length > 0
+              ? `${alumniForm.proofFiles.length} file(s) selected`
+              : 'Upload PDF, JPG, PNG, or WEBP proof files'}
+          </span>
+          <input
+            id="alumni-proof"
+            type="file"
+            multiple
+            accept=".pdf,.jpg,.jpeg,.png,.webp"
+            className="hidden"
+            onChange={(event) => {
+              const files = Array.from(event.target.files ?? []);
+              setAlumniForm((current) => ({ ...current, proofFiles: files }));
+            }}
+          />
+        </label>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="alumni-password">Password</Label>
+        <div className="relative">
+          <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Input
+            id="alumni-password"
+            type={showAlumniPassword ? 'text' : 'password'}
+            value={alumniForm.password}
+            onChange={(event) => {
+              const nextPassword = event.target.value;
+              setAlumniForm((current) => ({ ...current, password: nextPassword }));
+              setAlumniPasswordMessages(getPasswordValidationMessage(nextPassword));
+              setSignupError('');
+            }}
+            className="pl-10 pr-11 rounded-xl"
+            required
+          />
+          <button
+            type="button"
+            onClick={() => setShowAlumniPassword((current) => !current)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-700"
+          >
+            {showAlumniPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
+        {alumniPasswordMessages.length > 0 ? (
+          <ul className="space-y-1 text-xs text-red-500">
+            {alumniPasswordMessages.map((message) => (
+              <li key={message}>{message}</li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="alumni-confirm-password">Confirm Password</Label>
+        <div className="relative">
+          <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <Input
+            id="alumni-confirm-password"
+            type={showAlumniConfirmPassword ? 'text' : 'password'}
+            value={alumniForm.confirmPassword}
+            onChange={(event) => {
+              const confirmPassword = event.target.value;
+              setAlumniForm((current) => ({ ...current, confirmPassword }));
+              setSignupError(alumniForm.password === confirmPassword ? '' : 'Passwords do not match.');
+            }}
+            className="pl-10 pr-11 rounded-xl"
+            required
+          />
+          <button
+            type="button"
+            onClick={() => setShowAlumniConfirmPassword((current) => !current)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-700"
+          >
+            {showAlumniConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
+      </div>
+
+      {signupError ? <FormMessage tone="error">{signupError}</FormMessage> : null}
+
+      <Button type="submit" className="w-full rounded-2xl gradient-success" disabled={isLoading}>
+        {isLoading
+          ? <Lottie animationData={loadingAnimation} style={{ height: 40, width: 40 }} />
+          : 'Submit Alumni Signup'}
+      </Button>
+    </form>
+  );
+
+  const renderAlumniPending = () => (
+    <div className="space-y-4 animate-fade-slide-in">
+      <div className="space-y-1">
+        <h3 className="text-3xl text-slate-900">Verification submitted</h3>
+        <p className="text-sm text-slate-600">
+          Your alumni proof has been sent for review. We&apos;ll unlock your account after approval.
+        </p>
+      </div>
+
+      {signupMessage ? <FormMessage tone="info">{signupMessage}</FormMessage> : null}
+      {signupError ? <FormMessage tone="error">{signupError}</FormMessage> : null}
+
+      <Button
+        type="button"
+        className="w-full rounded-2xl"
+        onClick={() => {
+          openLogin();
+          resetSignupFlow();
+        }}
+      >
+        Return to Login
+      </Button>
+    </div>
+  );
+
+  const renderSignupBody = () => {
+    switch (signupStep) {
+      case 'role':
+        return renderSignupRoleStep();
+      case 'method':
+        return renderSignupMethodStep();
+      case 'verify-email':
+        return renderVerifyEmailStep();
+      case 'await-verification':
+        return renderAwaitVerificationStep();
+      case 'student-form':
+        return renderStudentForm();
+      case 'alumni-form':
+        return renderAlumniForm();
+      case 'alumni-pending':
+        return renderAlumniPending();
+      default:
+        return renderSignupRoleStep();
     }
   };
 
@@ -351,7 +1070,7 @@ export function AuthPage() {
           </h1>
 
           <p className="text-white/90 text-lg">
-            Join your college&apos;s professional network. Continue with Google or let a secure magic link bring you back in.
+            Log in with your email and password, or sign up through a verified onboarding flow for students and alumni.
           </p>
 
           <div className="grid grid-cols-2 gap-4 pt-4">
@@ -391,284 +1110,150 @@ export function AuthPage() {
             <div className="flex items-center justify-center gap-2 mb-2">
               <Zap className="w-6 h-6 text-primary" />
               <h2 className="text-gray-900 text-center bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                Welcome to CampusLynk
+                {mode === 'login' ? 'Welcome Back' : 'Create Your Account'}
               </h2>
             </div>
-            <p className="text-gray-600 text-center">Simple, secure authentication for your campus network</p>
+            <p className="text-gray-600 text-center">
+              {mode === 'login'
+                ? 'Login is for authentication only. Signup opens the full verified onboarding flow.'
+                : 'Signup begins with role selection, verification, and then the original onboarding form.'}
+            </p>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="grid w-full grid-cols-2 bg-gray-100 p-1 rounded-xl">
+              {mode === 'signup' ? (
                 <button
                   type="button"
                   onClick={() => {
-                    setActiveForm('login');
-                    resetMessages();
-                  }}
-                  className={`rounded-lg transition-all duration-300 py-2 ${
-                    activeForm === 'login'
-                      ? 'gradient-primary text-white shadow-lg'
-                      : 'text-gray-700 hover:text-primary'
-                  }`}
-                >
-                  Login
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setActiveForm('signup');
-                    resetMessages();
-                  }}
-                  className={`rounded-lg transition-all duration-300 py-2 ${
-                    activeForm === 'signup'
-                      ? 'gradient-primary text-white shadow-lg'
-                      : 'text-gray-700 hover:text-primary'
-                  }`}
-                >
-                  Sign Up
-                </button>
-              </div>
+                    if (signupStep === 'role') {
+                      openLogin();
+                      return;
+                    }
 
-              {activeForm === 'login' ? (
+                    if (signupStep === 'method') {
+                      setSignupStep('role');
+                      resetMessages();
+                      return;
+                    }
+
+                    if (signupStep === 'verify-email' || signupStep === 'await-verification') {
+                      setSignupStep('method');
+                      resetMessages();
+                      return;
+                    }
+
+                    if (signupStep === 'student-form' || signupStep === 'alumni-form') {
+                      setSignupStep(onboardingSession?.provider === 'google' ? 'method' : 'verify-email');
+                      resetMessages();
+                    }
+                  }}
+                  className="inline-flex items-center gap-2 text-sm text-slate-500 transition hover:text-slate-900"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                  Back
+                </button>
+              ) : null}
+
+              {mode === 'login' ? (
                 <div className="space-y-4 animate-fade-slide-in">
                   <div className="space-y-1">
-                    <h3 className="text-3xl text-slate-900">Welcome back</h3>
+                    <h3 className="text-3xl text-slate-900">Log in</h3>
                     <p className="text-sm text-slate-600">
-                      Use your college Google account or continue with your college email.
+                      Use your email and password, or continue with Google if your account is already linked.
                     </p>
                   </div>
 
                   <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
                     <p className="text-sm font-semibold text-slate-900">Continue with Google</p>
                     <p className="mt-1 text-xs text-slate-600">
-                      Use your official college Google account for the fastest sign in.
+                      Existing Google-linked accounts can sign in instantly.
                     </p>
                     <div className="mt-4">
-                      <GoogleStudentButton
-                        text="continue_with"
-                        disabled={isLoading}
-                        onCredential={handleGoogleAuth}
-                      />
+                      <GoogleAuthButton disabled={isLoading} onCredential={handleLoginGoogle} />
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-slate-400">
-                    <div className="h-px flex-1 bg-slate-200" />
-                    <span>OR</span>
-                    <div className="h-px flex-1 bg-slate-200" />
-                  </div>
+                  <Divider />
 
-                  <form
-                    className="space-y-4"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void handleSendMagicLink('login');
-                    }}
-                  >
+                  <form onSubmit={handleLogin} className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="login-email">College Email</Label>
+                      <Label htmlFor="login-email">Email</Label>
                       <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                         <Input
                           id="login-email"
                           type="email"
-                          placeholder="your.name@gbpuat.ac.in"
                           value={loginEmail}
-                          onChange={(e) => setLoginEmail(e.target.value)}
-                          className="pl-10 border-primary/20 focus:border-primary rounded-xl"
+                          onChange={(event) => setLoginEmail(event.target.value)}
+                          className="pl-10 rounded-xl"
+                          placeholder="you@example.com"
                           required
                         />
                       </div>
-                      <p className="text-xs text-gray-500">
-                        We&apos;ll send a secure sign-in link to your inbox.
-                      </p>
-                    </div>
-
-                    {loginError ? <p className="text-sm text-red-500">{loginError}</p> : null}
-                    {loginMessage ? <p className="text-sm text-emerald-600">{loginMessage}</p> : null}
-
-                    <Button
-                      type="submit"
-                      className="w-full gradient-success shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
-                      disabled={isLoading}
-                    >
-                      {isLoading
-                        ? <Lottie animationData={loadingAnimation} style={{ height: 50, width: 50 }} />
-                        : 'Send Magic Link'}
-                    </Button>
-                  </form>
-                </div>
-              ) : googleOnboarding || magicLinkOnboarding ? (
-                <div className="space-y-4 animate-fade-slide-in">
-                  <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
-                    <p className="text-sm font-semibold text-slate-900">
-                      {googleOnboarding ? 'Google account verified' : 'Magic link verified'}
-                    </p>
-                    <p className="mt-1 text-xs text-slate-600">
-                      Finish the last few details to complete your student account.
-                    </p>
-                  </div>
-
-                  <form onSubmit={googleOnboarding ? handleGoogleOnboarding : handleMagicLinkOnboarding} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="onboarding-email">College Email</Label>
-                      <Input
-                        id="onboarding-email"
-                        type="email"
-                        value={(googleOnboarding ?? magicLinkOnboarding)?.email ?? ''}
-                        className="border-primary/20 focus:border-primary rounded-xl bg-slate-50"
-                        readOnly
-                      />
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="onboarding-username">Username</Label>
-                      <Input
-                        id="onboarding-username"
-                        type="text"
-                        placeholder="Choose a username"
-                        value={onboardingForm.username}
-                        onChange={(e) => setOnboardingForm((current) => ({ ...current, username: e.target.value }))}
-                        className="border-primary/20 focus:border-primary rounded-xl"
-                        required
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="onboarding-role">Role / Account Type</Label>
-                      <Input
-                        id="onboarding-role"
-                        type="text"
-                        value="Student"
-                        className="border-primary/20 focus:border-primary rounded-xl bg-slate-50"
-                        readOnly
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="onboarding-branch">Branch</Label>
-                        <div className="relative">
-                          <GraduationCap className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 z-10" />
-                          <select
-                            id="onboarding-branch"
-                            value={onboardingForm.branch}
-                            onChange={(e) => setOnboardingForm((current) => ({ ...current, branch: e.target.value }))}
-                            className="w-full pl-10 pr-4 py-2 border border-primary/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50"
-                            required
-                          >
-                            <option value="">Select</option>
-                            {BRANCH_OPTIONS.map((branch) => (
-                              <option key={branch} value={branch}>
-                                {branch}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="onboarding-year">Year</Label>
-                        <select
-                          id="onboarding-year"
-                          value={onboardingForm.year}
-                          onChange={(e) => setOnboardingForm((current) => ({ ...current, year: e.target.value }))}
-                          className="w-full px-4 py-2 border border-primary/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50"
-                          required
-                        >
-                          <option value="">Select</option>
-                          <option value="1">1st Year</option>
-                          <option value="2">2nd Year</option>
-                          <option value="3">3rd Year</option>
-                          <option value="4">4th Year</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    {signupError ? <p className="text-sm text-red-500">{signupError}</p> : null}
-                    {signupMessage ? <p className="text-sm text-emerald-600">{signupMessage}</p> : null}
-
-                    <Button type="submit" className="w-full gradient-success shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105" disabled={isLoading}>
-                      {isLoading
-                        ? <Lottie animationData={loadingAnimation} style={{ height: 50, width: 50 }} />
-                        : 'Complete Account'}
-                    </Button>
-                  </form>
-                </div>
-              ) : (
-                <div className="space-y-4 animate-fade-slide-in">
-                  <div className="space-y-1">
-                    <h3 className="text-3xl text-slate-900">Create your account</h3>
-                    <p className="text-sm text-slate-600">
-                      Start with Google or your college email, then finish a few profile details.
-                    </p>
-                  </div>
-
-                  <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
-                    <p className="text-sm font-semibold text-slate-900">Continue with Google</p>
-                    <p className="mt-1 text-xs text-slate-600">
-                      New Google users can finish onboarding after account verification.
-                    </p>
-                    <div className="mt-4">
-                      <GoogleStudentButton
-                        text="continue_with"
-                        disabled={isLoading}
-                        onCredential={handleGoogleAuth}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-slate-400">
-                    <div className="h-px flex-1 bg-slate-200" />
-                    <span>OR</span>
-                    <div className="h-px flex-1 bg-slate-200" />
-                  </div>
-
-                  <form
-                    className="space-y-4"
-                    onSubmit={(event) => {
-                      event.preventDefault();
-                      void handleSendMagicLink('signup');
-                    }}
-                  >
-                    <div className="space-y-2">
-                      <Label htmlFor="signup-email">College Email</Label>
+                      <Label htmlFor="login-password">Password</Label>
                       <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                        <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                         <Input
-                          id="signup-email"
-                          type="email"
-                          placeholder="your.name@gbpuat.ac.in"
-                          value={signupEmail}
-                          onChange={(e) => setSignupEmail(e.target.value)}
-                          className="pl-10 border-primary/20 focus:border-primary rounded-xl"
+                          id="login-password"
+                          type={showLoginPassword ? 'text' : 'password'}
+                          value={loginPassword}
+                          onChange={(event) => setLoginPassword(event.target.value)}
+                          className="pl-10 pr-11 rounded-xl"
+                          placeholder="Enter your password"
                           required
                         />
+                        <button
+                          type="button"
+                          onClick={() => setShowLoginPassword((current) => !current)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-700"
+                        >
+                          {showLoginPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </button>
                       </div>
-                      <p className="text-xs text-gray-500">
-                        We&apos;ll email a secure magic link. No password or OTP needed.
-                      </p>
                     </div>
 
-                    {signupError ? <p className="text-sm text-red-500">{signupError}</p> : null}
-                    {signupMessage ? <p className="text-sm text-emerald-600">{signupMessage}</p> : null}
+                    {loginError ? <FormMessage tone="error">{loginError}</FormMessage> : null}
 
-                    <Button
-                      type="submit"
-                      className="w-full gradient-success shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
-                      disabled={isLoading}
-                    >
+                    <Button type="submit" className="w-full rounded-2xl gradient-primary" disabled={isLoading}>
                       {isLoading
-                        ? <Lottie animationData={loadingAnimation} style={{ height: 50, width: 50 }} />
-                        : 'Send Magic Link'}
+                        ? <Lottie animationData={loadingAnimation} style={{ height: 40, width: 40 }} />
+                        : (
+                          <span className="inline-flex items-center gap-2">
+                            Continue
+                            <ArrowRight className="h-4 w-4" />
+                          </span>
+                        )}
                     </Button>
-
-                    <p className="text-xs text-gray-500 text-center">
-                      By signing up, you agree to our Terms of Service and Privacy Policy
-                    </p>
                   </form>
+
+                  <div className="flex items-center justify-between text-sm">
+                    <Dialog open={forgotPasswordOpen} onOpenChange={setForgotPasswordOpen}>
+                      <DialogTrigger className="text-secondary transition hover:text-primary hover:underline">
+                        Forgot password?
+                      </DialogTrigger>
+                      <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                          <DialogTitle>Password reset</DialogTitle>
+                          <DialogDescription>
+                            Password reset is not wired into this refactor yet. The login flow is restored, but reset still needs its own backend path.
+                          </DialogDescription>
+                        </DialogHeader>
+                      </DialogContent>
+                    </Dialog>
+
+                    <button
+                      type="button"
+                      onClick={openSignup}
+                      className="text-secondary transition hover:text-primary hover:underline"
+                    >
+                      Are you new here? Sign up
+                    </button>
+                  </div>
                 </div>
-              )}
+              ) : renderSignupBody()}
             </div>
           </CardContent>
         </Card>
