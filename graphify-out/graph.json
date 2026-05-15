@@ -459,7 +459,7 @@
       "source_file": "backend\\server\\src\\lib\\cache.ts",
       "source_location": "L161",
       "id": "cache_cachesetjsonifnotexists",
-      "community": 10,
+      "community": 1,
       "norm_label": "cachesetjsonifnotexists()"
     },
     {
@@ -477,7 +477,7 @@
       "source_file": "backend\\server\\src\\lib\\cache.ts",
       "source_location": "L177",
       "id": "cache_cachedelete",
-      "community": 12,
+      "community": 1,
       "norm_label": "cachedelete()"
     },
     {
@@ -549,7 +549,7 @@
       "source_file": "backend\\server\\src\\lib\\cache.ts",
       "source_location": "L227",
       "id": "cache_cachehgetall",
-      "community": 0,
+      "community": 1,
       "norm_label": "cachehgetall()"
     },
     {
@@ -585,7 +585,7 @@
       "source_file": "backend\\server\\src\\lib\\cache.ts",
       "source_location": "L269",
       "id": "cache_cachesetadd",
-      "community": 1,
+      "community": 13,
       "norm_label": "cachesetadd()"
     },
     {
@@ -594,7 +594,7 @@
       "source_file": "backend\\server\\src\\lib\\cache.ts",
       "source_location": "L274",
       "id": "cache_cachesetmembers",
-      "community": 1,
+      "community": 13,
       "norm_label": "cachesetmembers()"
     },
     {
@@ -603,7 +603,7 @@
       "source_file": "backend\\server\\src\\lib\\cache.ts",
       "source_location": "L280",
       "id": "cache_cachesetcardinality",
-      "community": 1,
+      "community": 13,
       "norm_label": "cachesetcardinality()"
     },
     {
@@ -693,7 +693,7 @@
       "source_file": "backend\\server\\src\\lib\\chat.ts",
       "source_location": "L1",
       "id": "backend_server_src_lib_chat_ts",
-      "community": 12,
+      "community": 8,
       "norm_label": "chat.ts"
     },
     {
@@ -702,7 +702,7 @@
       "source_file": "backend\\server\\src\\lib\\chat.ts",
       "source_location": "L42",
       "id": "chat_areusersmutuallyfollowing",
-      "community": 12,
+      "community": 8,
       "norm_label": "areusersmutuallyfollowing()"
     },
     {
@@ -711,7 +711,7 @@
       "source_file": "backend\\server\\src\\lib\\chat.ts",
       "source_location": "L77",
       "id": "chat_resolvemessagingpermission",
-      "community": 12,
+      "community": 8,
       "norm_label": "resolvemessagingpermission()"
     },
     {
@@ -720,7 +720,7 @@
       "source_file": "backend\\server\\src\\lib\\chat.ts",
       "source_location": "L112",
       "id": "chat_getorcreatedirectchat",
-      "community": 12,
+      "community": 8,
       "norm_label": "getorcreatedirectchat()"
     },
     {
@@ -729,7 +729,7 @@
       "source_file": "backend\\server\\src\\lib\\chat.ts",
       "source_location": "L164",
       "id": "chat_markchataccepted",
-      "community": 7,
+      "community": 11,
       "norm_label": "markchataccepted()"
     },
     {
@@ -738,7 +738,7 @@
       "source_file": "backend\\server\\src\\lib\\chat.ts",
       "source_location": "L175",
       "id": "chat_ischatparticipant",
-      "community": 12,
+      "community": 8,
       "norm_label": "ischatparticipant()"
     },
     {
@@ -747,7 +747,7 @@
       "source_file": "backend\\server\\src\\lib\\chat.ts",
       "source_location": "L190",
       "id": "chat_getchatparticipantids",
-      "community": 7,
+      "community": 11,
       "norm_label": "getchatparticipantids()"
     },
     {
@@ -756,7 +756,7 @@
       "source_file": "backend\\server\\src\\lib\\chat.ts",
       "source_location": "L202",
       "id": "chat_emitchatmessage",
-      "community": 12,
+      "community": 8,
       "norm_label": "emitchatmessage()"
     },
     {
@@ -765,7 +765,7 @@
       "source_file": "backend\\server\\src\\lib\\chat.ts",
       "source_location": "L206",
       "id": "chat_emitchatreaction",
-      "community": 12,
+      "community": 8,
       "norm_label": "emitchatreaction()"
     },
     {
@@ -774,7 +774,7 @@
       "source_file": "backend\\server\\src\\lib\\chat.ts",
       "source_location": "L218",
       "id": "chat_emitchatread",
-      "community": 12,
+      "community": 8,
       "norm_label": "emitchatread()"
     },
     {
@@ -783,7 +783,7 @@
       "source_file": "backend\\server\\src\\lib\\chat.ts",
       "source_location": "L234",
       "id": "chat_emitchatrequestaccepted",
-      "community": 12,
+      "community": 8,
       "norm_label": "emitchatrequestaccepted()"
     },
     {
@@ -792,7 +792,7 @@
       "source_file": "backend\\server\\src\\lib\\chat.ts",
       "source_location": "L241",
       "id": "chat_emittypingindicator",
-      "community": 12,
+      "community": 8,
       "norm_label": "emittypingindicator()"
     },
     {
@@ -801,7 +801,7 @@
       "source_file": "backend\\server\\src\\lib\\chat.ts",
       "source_location": "L256",
       "id": "chat_emitchatdelete",
-      "community": 12,
+      "community": 8,
       "norm_label": "emitchatdelete()"
     },
     {
@@ -1242,7 +1242,7 @@
       "source_file": "backend\\server\\src\\lib\\chatPermissions.ts",
       "source_location": "L1",
       "id": "backend_server_src_lib_chatpermissions_ts",
-      "community": 7,
+      "community": 11,
       "norm_label": "chatpermissions.ts"
     },
     {
@@ -1251,7 +1251,7 @@
       "source_file": "backend\\server\\src\\lib\\chatPermissions.ts",
       "source_location": "L68",
       "id": "chatpermissions_getuserchatrole",
-      "community": 7,
+      "community": 11,
       "norm_label": "getuserchatrole()"
     },
     {
@@ -1260,7 +1260,7 @@
       "source_file": "backend\\server\\src\\lib\\chatPermissions.ts",
       "source_location": "L93",
       "id": "chatpermissions_checkchatpermission",
-      "community": 7,
+      "community": 11,
       "norm_label": "checkchatpermission()"
     },
     {
@@ -1269,7 +1269,7 @@
       "source_file": "backend\\server\\src\\lib\\chatPermissions.ts",
       "source_location": "L135",
       "id": "chatpermissions_getuserclubrole",
-      "community": 7,
+      "community": 11,
       "norm_label": "getuserclubrole()"
     },
     {
@@ -1278,7 +1278,7 @@
       "source_file": "backend\\server\\src\\lib\\chatPermissions.ts",
       "source_location": "L155",
       "id": "chatpermissions_checkcanaddusertochat",
-      "community": 7,
+      "community": 11,
       "norm_label": "checkcanaddusertochat()"
     },
     {
@@ -1287,7 +1287,7 @@
       "source_file": "backend\\server\\src\\lib\\chatPermissions.ts",
       "source_location": "L191",
       "id": "chatpermissions_validaterolechange",
-      "community": 7,
+      "community": 11,
       "norm_label": "validaterolechange()"
     },
     {
@@ -1296,7 +1296,7 @@
       "source_file": "backend\\server\\src\\lib\\chatPermissions.ts",
       "source_location": "L222",
       "id": "chatpermissions_isgroupchatowner",
-      "community": 7,
+      "community": 11,
       "norm_label": "isgroupchatowner()"
     },
     {
@@ -1305,7 +1305,7 @@
       "source_file": "backend\\server\\src\\lib\\chatSystemEvents.ts",
       "source_location": "L1",
       "id": "backend_server_src_lib_chatsystemevents_ts",
-      "community": 7,
+      "community": 11,
       "norm_label": "chatsystemevents.ts"
     },
     {
@@ -1314,7 +1314,7 @@
       "source_file": "backend\\server\\src\\lib\\chatSystemEvents.ts",
       "source_location": "L31",
       "id": "chatsystemevents_getusernamebyid",
-      "community": 7,
+      "community": 11,
       "norm_label": "getusernamebyid()"
     },
     {
@@ -1323,7 +1323,7 @@
       "source_file": "backend\\server\\src\\lib\\chatSystemEvents.ts",
       "source_location": "L44",
       "id": "chatsystemevents_findexistinguserid",
-      "community": 7,
+      "community": 11,
       "norm_label": "findexistinguserid()"
     },
     {
@@ -1332,7 +1332,7 @@
       "source_file": "backend\\server\\src\\lib\\chatSystemEvents.ts",
       "source_location": "L57",
       "id": "chatsystemevents_resolvesystemeventsenderuserid",
-      "community": 7,
+      "community": 11,
       "norm_label": "resolvesystemeventsenderuserid()"
     },
     {
@@ -1341,7 +1341,7 @@
       "source_file": "backend\\server\\src\\lib\\chatSystemEvents.ts",
       "source_location": "L109",
       "id": "chatsystemevents_createsystemevent",
-      "community": 7,
+      "community": 11,
       "norm_label": "createsystemevent()"
     },
     {
@@ -1350,7 +1350,7 @@
       "source_file": "backend\\server\\src\\lib\\chatSystemEvents.ts",
       "source_location": "L205",
       "id": "chatsystemevents_emituserjoined",
-      "community": 7,
+      "community": 11,
       "norm_label": "emituserjoined()"
     },
     {
@@ -1359,7 +1359,7 @@
       "source_file": "backend\\server\\src\\lib\\chatSystemEvents.ts",
       "source_location": "L220",
       "id": "chatsystemevents_emituserleft",
-      "community": 7,
+      "community": 11,
       "norm_label": "emituserleft()"
     },
     {
@@ -1368,7 +1368,7 @@
       "source_file": "backend\\server\\src\\lib\\chatSystemEvents.ts",
       "source_location": "L230",
       "id": "chatsystemevents_emituserremoved",
-      "community": 7,
+      "community": 11,
       "norm_label": "emituserremoved()"
     },
     {
@@ -1377,7 +1377,7 @@
       "source_file": "backend\\server\\src\\lib\\chatSystemEvents.ts",
       "source_location": "L247",
       "id": "chatsystemevents_emituserrolechanged",
-      "community": 7,
+      "community": 11,
       "norm_label": "emituserrolechanged()"
     },
     {
@@ -1386,7 +1386,7 @@
       "source_file": "backend\\server\\src\\lib\\chatSystemEvents.ts",
       "source_location": "L267",
       "id": "chatsystemevents_extractsystemeventpayload",
-      "community": 7,
+      "community": 11,
       "norm_label": "extractsystemeventpayload()"
     },
     {
@@ -1395,7 +1395,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L1",
       "id": "backend_server_src_lib_clubcache_ts",
-      "community": 10,
+      "community": 1,
       "norm_label": "clubcache.ts"
     },
     {
@@ -1404,7 +1404,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L102",
       "id": "clubcache_clubmetakey",
-      "community": 10,
+      "community": 1,
       "norm_label": "clubmetakey()"
     },
     {
@@ -1413,7 +1413,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L106",
       "id": "clubcache_clubstatskey",
-      "community": 10,
+      "community": 1,
       "norm_label": "clubstatskey()"
     },
     {
@@ -1422,7 +1422,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L110",
       "id": "clubcache_clubmembershipkey",
-      "community": 10,
+      "community": 1,
       "norm_label": "clubmembershipkey()"
     },
     {
@@ -1431,7 +1431,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L114",
       "id": "clubcache_clubfeedkey",
-      "community": 10,
+      "community": 1,
       "norm_label": "clubfeedkey()"
     },
     {
@@ -1440,7 +1440,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L118",
       "id": "clubcache_cachelockkey",
-      "community": 10,
+      "community": 1,
       "norm_label": "cachelockkey()"
     },
     {
@@ -1449,7 +1449,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L122",
       "id": "clubcache_sleep",
-      "community": 10,
+      "community": 1,
       "norm_label": "sleep()"
     },
     {
@@ -1458,7 +1458,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L126",
       "id": "clubcache_iscacheablevalue",
-      "community": 10,
+      "community": 1,
       "norm_label": "iscacheablevalue()"
     },
     {
@@ -1467,7 +1467,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L134",
       "id": "clubcache_acquirecachelock",
-      "community": 10,
+      "community": 1,
       "norm_label": "acquirecachelock()"
     },
     {
@@ -1476,7 +1476,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L142",
       "id": "clubcache_buildenvelope",
-      "community": 10,
+      "community": 1,
       "norm_label": "buildenvelope()"
     },
     {
@@ -1485,7 +1485,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L151",
       "id": "clubcache_refreshsoftcachedvalue",
-      "community": 10,
+      "community": 1,
       "norm_label": "refreshsoftcachedvalue()"
     },
     {
@@ -1494,7 +1494,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L181",
       "id": "clubcache_getsoftcachedvalue",
-      "community": 10,
+      "community": 1,
       "norm_label": "getsoftcachedvalue()"
     },
     {
@@ -1503,7 +1503,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L241",
       "id": "clubcache_parserestrictions",
-      "community": 10,
+      "community": 1,
       "norm_label": "parserestrictions()"
     },
     {
@@ -1512,7 +1512,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L274",
       "id": "clubcache_loadclubmetafromdb",
-      "community": 10,
+      "community": 1,
       "norm_label": "loadclubmetafromdb()"
     },
     {
@@ -1521,7 +1521,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L337",
       "id": "clubcache_loadclubstatsfromdb",
-      "community": 10,
+      "community": 1,
       "norm_label": "loadclubstatsfromdb()"
     },
     {
@@ -1530,7 +1530,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L362",
       "id": "clubcache_loadclubmembershipfromdb",
-      "community": 10,
+      "community": 1,
       "norm_label": "loadclubmembershipfromdb()"
     },
     {
@@ -1539,7 +1539,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L394",
       "id": "clubcache_loadclubfeedpostidsfromdb",
-      "community": 10,
+      "community": 1,
       "norm_label": "loadclubfeedpostidsfromdb()"
     },
     {
@@ -1548,7 +1548,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L432",
       "id": "clubcache_buildpermissionsnapshot",
-      "community": 10,
+      "community": 1,
       "norm_label": "buildpermissionsnapshot()"
     },
     {
@@ -1557,7 +1557,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L460",
       "id": "clubcache_getcachedclubmeta",
-      "community": 10,
+      "community": 1,
       "norm_label": "getcachedclubmeta()"
     },
     {
@@ -1566,7 +1566,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L469",
       "id": "clubcache_getcachedclubstats",
-      "community": 10,
+      "community": 1,
       "norm_label": "getcachedclubstats()"
     },
     {
@@ -1575,7 +1575,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L492",
       "id": "clubcache_getcachedclubmembership",
-      "community": 10,
+      "community": 1,
       "norm_label": "getcachedclubmembership()"
     },
     {
@@ -1584,7 +1584,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L501",
       "id": "clubcache_getcachedclubpermissionsnapshot",
-      "community": 10,
+      "community": 1,
       "norm_label": "getcachedclubpermissionsnapshot()"
     },
     {
@@ -1593,7 +1593,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L514",
       "id": "clubcache_getcachedclubfeedpostids",
-      "community": 10,
+      "community": 1,
       "norm_label": "getcachedclubfeedpostids()"
     },
     {
@@ -1602,7 +1602,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L542",
       "id": "clubcache_invalidateclubmetacache",
-      "community": 10,
+      "community": 1,
       "norm_label": "invalidateclubmetacache()"
     },
     {
@@ -1611,7 +1611,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L546",
       "id": "clubcache_invalidateclubstatscache",
-      "community": 10,
+      "community": 1,
       "norm_label": "invalidateclubstatscache()"
     },
     {
@@ -1620,7 +1620,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L550",
       "id": "clubcache_invalidateclubmembershipcache",
-      "community": 10,
+      "community": 1,
       "norm_label": "invalidateclubmembershipcache()"
     },
     {
@@ -1629,7 +1629,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L554",
       "id": "clubcache_invalidateclubfeedcaches",
-      "community": 10,
+      "community": 1,
       "norm_label": "invalidateclubfeedcaches()"
     },
     {
@@ -1638,7 +1638,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L561",
       "id": "clubcache_incrementclubstat",
-      "community": 10,
+      "community": 1,
       "norm_label": "incrementclubstat()"
     },
     {
@@ -1647,7 +1647,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L569",
       "id": "clubcache_purgeclubcaches",
-      "community": 10,
+      "community": 1,
       "norm_label": "purgeclubcaches()"
     },
     {
@@ -1656,7 +1656,7 @@
       "source_file": "backend\\server\\src\\lib\\clubCache.ts",
       "source_location": "L579",
       "id": "clubcache_getcachedclubview",
-      "community": 10,
+      "community": 1,
       "norm_label": "getcachedclubview()"
     },
     {
@@ -1665,7 +1665,7 @@
       "source_file": "backend\\server\\src\\lib\\clubChatSync.ts",
       "source_location": "L1",
       "id": "backend_server_src_lib_clubchatsync_ts",
-      "community": 7,
+      "community": 11,
       "norm_label": "clubchatsync.ts"
     },
     {
@@ -1674,7 +1674,7 @@
       "source_file": "backend\\server\\src\\lib\\clubChatSync.ts",
       "source_location": "L19",
       "id": "clubchatsync_getorcreateclubchat",
-      "community": 7,
+      "community": 11,
       "norm_label": "getorcreateclubchat()"
     },
     {
@@ -1683,7 +1683,7 @@
       "source_file": "backend\\server\\src\\lib\\clubChatSync.ts",
       "source_location": "L75",
       "id": "clubchatsync_onuserjoinedclub",
-      "community": 7,
+      "community": 11,
       "norm_label": "onuserjoinedclub()"
     },
     {
@@ -1692,7 +1692,7 @@
       "source_file": "backend\\server\\src\\lib\\clubChatSync.ts",
       "source_location": "L150",
       "id": "clubchatsync_onuserleftclub",
-      "community": 7,
+      "community": 11,
       "norm_label": "onuserleftclub()"
     },
     {
@@ -1701,7 +1701,7 @@
       "source_file": "backend\\server\\src\\lib\\clubChatSync.ts",
       "source_location": "L182",
       "id": "clubchatsync_onuserclubrolechanged",
-      "community": 7,
+      "community": 11,
       "norm_label": "onuserclubrolechanged()"
     },
     {
@@ -1710,7 +1710,7 @@
       "source_file": "backend\\server\\src\\lib\\clubChatSync.ts",
       "source_location": "L216",
       "id": "clubchatsync_onclubdeleted",
-      "community": 7,
+      "community": 11,
       "norm_label": "onclubdeleted()"
     },
     {
@@ -1719,7 +1719,7 @@
       "source_file": "backend\\server\\src\\lib\\clubChatSync.ts",
       "source_location": "L249",
       "id": "clubchatsync_mapclubroletochatrole",
-      "community": 7,
+      "community": 11,
       "norm_label": "mapclubroletochatrole()"
     },
     {
@@ -1728,7 +1728,7 @@
       "source_file": "backend\\server\\src\\lib\\clubChatSync.ts",
       "source_location": "L264",
       "id": "clubchatsync_onclubmembershipapproved",
-      "community": 7,
+      "community": 11,
       "norm_label": "onclubmembershipapproved()"
     },
     {
@@ -2142,7 +2142,7 @@
       "source_file": "backend\\server\\src\\lib\\groupChat.ts",
       "source_location": "L1",
       "id": "backend_server_src_lib_groupchat_ts",
-      "community": 7,
+      "community": 11,
       "norm_label": "groupchat.ts"
     },
     {
@@ -2151,7 +2151,7 @@
       "source_file": "backend\\server\\src\\lib\\groupChat.ts",
       "source_location": "L29",
       "id": "groupchat_creategroupchat",
-      "community": 7,
+      "community": 11,
       "norm_label": "creategroupchat()"
     },
     {
@@ -2160,7 +2160,7 @@
       "source_file": "backend\\server\\src\\lib\\groupChat.ts",
       "source_location": "L106",
       "id": "groupchat_addusertochat",
-      "community": 7,
+      "community": 11,
       "norm_label": "addusertochat()"
     },
     {
@@ -2169,7 +2169,7 @@
       "source_file": "backend\\server\\src\\lib\\groupChat.ts",
       "source_location": "L159",
       "id": "groupchat_removeuserfromchat",
-      "community": 7,
+      "community": 11,
       "norm_label": "removeuserfromchat()"
     },
     {
@@ -2178,7 +2178,7 @@
       "source_file": "backend\\server\\src\\lib\\groupChat.ts",
       "source_location": "L193",
       "id": "groupchat_leavegroupchat",
-      "community": 7,
+      "community": 11,
       "norm_label": "leavegroupchat()"
     },
     {
@@ -2187,7 +2187,7 @@
       "source_file": "backend\\server\\src\\lib\\groupChat.ts",
       "source_location": "L205",
       "id": "groupchat_changeuserrole",
-      "community": 7,
+      "community": 11,
       "norm_label": "changeuserrole()"
     },
     {
@@ -2196,7 +2196,7 @@
       "source_file": "backend\\server\\src\\lib\\groupChat.ts",
       "source_location": "L251",
       "id": "groupchat_updategroupchat",
-      "community": 7,
+      "community": 11,
       "norm_label": "updategroupchat()"
     },
     {
@@ -2205,7 +2205,7 @@
       "source_file": "backend\\server\\src\\lib\\groupChat.ts",
       "source_location": "L312",
       "id": "groupchat_deletegroupchat",
-      "community": 7,
+      "community": 11,
       "norm_label": "deletegroupchat()"
     },
     {
@@ -2214,7 +2214,7 @@
       "source_file": "backend\\server\\src\\lib\\groupChat.ts",
       "source_location": "L329",
       "id": "groupchat_getchatmembers",
-      "community": 7,
+      "community": 11,
       "norm_label": "getchatmembers()"
     },
     {
@@ -2223,7 +2223,7 @@
       "source_file": "backend\\server\\src\\lib\\groupChat.ts",
       "source_location": "L355",
       "id": "groupchat_getgroupchatdetails",
-      "community": 7,
+      "community": 11,
       "norm_label": "getgroupchatdetails()"
     },
     {
@@ -2232,7 +2232,7 @@
       "source_file": "backend\\server\\src\\lib\\notifications.ts",
       "source_location": "L1",
       "id": "backend_server_src_lib_notifications_ts",
-      "community": 7,
+      "community": 8,
       "norm_label": "notifications.ts"
     },
     {
@@ -2241,7 +2241,7 @@
       "source_file": "backend\\server\\src\\lib\\notifications.ts",
       "source_location": "L58",
       "id": "notifications_loadrecipientnotificationpreferences",
-      "community": 7,
+      "community": 8,
       "norm_label": "loadrecipientnotificationpreferences()"
     },
     {
@@ -2250,7 +2250,7 @@
       "source_file": "backend\\server\\src\\lib\\notifications.ts",
       "source_location": "L81",
       "id": "notifications_isnotificationenabled",
-      "community": 7,
+      "community": 8,
       "norm_label": "isnotificationenabled()"
     },
     {
@@ -2259,7 +2259,7 @@
       "source_file": "backend\\server\\src\\lib\\notifications.ts",
       "source_location": "L103",
       "id": "notifications_buildgroupedlikemessage",
-      "community": 7,
+      "community": 8,
       "norm_label": "buildgroupedlikemessage()"
     },
     {
@@ -2268,7 +2268,7 @@
       "source_file": "backend\\server\\src\\lib\\notifications.ts",
       "source_location": "L114",
       "id": "notifications_loadnotificationrealtimerow",
-      "community": 7,
+      "community": 8,
       "norm_label": "loadnotificationrealtimerow()"
     },
     {
@@ -2277,7 +2277,7 @@
       "source_file": "backend\\server\\src\\lib\\notifications.ts",
       "source_location": "L138",
       "id": "notifications_fanoutnotification",
-      "community": 7,
+      "community": 8,
       "norm_label": "fanoutnotification()"
     },
     {
@@ -2286,7 +2286,7 @@
       "source_file": "backend\\server\\src\\lib\\notifications.ts",
       "source_location": "L180",
       "id": "notifications_upsertgroupedlikenotification",
-      "community": 7,
+      "community": 8,
       "norm_label": "upsertgroupedlikenotification()"
     },
     {
@@ -2295,7 +2295,7 @@
       "source_file": "backend\\server\\src\\lib\\notifications.ts",
       "source_location": "L255",
       "id": "notifications_createnotification",
-      "community": 7,
+      "community": 8,
       "norm_label": "createnotification()"
     },
     {
@@ -2304,7 +2304,7 @@
       "source_file": "backend\\server\\src\\lib\\notifications.ts",
       "source_location": "L291",
       "id": "notifications_createpostpublishednotifications",
-      "community": 7,
+      "community": 8,
       "norm_label": "createpostpublishednotifications()"
     },
     {
@@ -2313,7 +2313,7 @@
       "source_file": "backend\\server\\src\\lib\\notifications.ts",
       "source_location": "L348",
       "id": "notifications_syncpostlikenotification",
-      "community": 7,
+      "community": 8,
       "norm_label": "syncpostlikenotification()"
     },
     {
@@ -2322,7 +2322,7 @@
       "source_file": "backend\\server\\src\\lib\\notifications.ts",
       "source_location": "L404",
       "id": "notifications_synccommentlikenotification",
-      "community": 7,
+      "community": 8,
       "norm_label": "synccommentlikenotification()"
     },
     {
@@ -2331,7 +2331,7 @@
       "source_file": "backend\\server\\src\\lib\\notifications.ts",
       "source_location": "L460",
       "id": "notifications_notifypostcomment",
-      "community": 7,
+      "community": 8,
       "norm_label": "notifypostcomment()"
     },
     {
@@ -2340,7 +2340,7 @@
       "source_file": "backend\\server\\src\\lib\\notifications.ts",
       "source_location": "L493",
       "id": "notifications_notifycommentreply",
-      "community": 7,
+      "community": 8,
       "norm_label": "notifycommentreply()"
     },
     {
@@ -2349,7 +2349,7 @@
       "source_file": "backend\\server\\src\\lib\\notifications.ts",
       "source_location": "L526",
       "id": "notifications_notifyclubpostpublished",
-      "community": 7,
+      "community": 8,
       "norm_label": "notifyclubpostpublished()"
     },
     {
@@ -2484,7 +2484,7 @@
       "source_file": "backend\\server\\src\\lib\\objectStorage.ts",
       "source_location": "L262",
       "id": "objectstorage_uploadverificationprooftostorage",
-      "community": 18,
+      "community": 17,
       "norm_label": "uploadverificationprooftostorage()"
     },
     {
@@ -2511,7 +2511,7 @@
       "source_file": "backend\\server\\src\\lib\\push.ts",
       "source_location": "L1",
       "id": "backend_server_src_lib_push_ts",
-      "community": 7,
+      "community": 8,
       "norm_label": "push.ts"
     },
     {
@@ -2520,7 +2520,7 @@
       "source_file": "backend\\server\\src\\lib\\push.ts",
       "source_location": "L17",
       "id": "push_configurewebpushifavailable",
-      "community": 7,
+      "community": 8,
       "norm_label": "configurewebpushifavailable()"
     },
     {
@@ -2529,7 +2529,7 @@
       "source_file": "backend\\server\\src\\lib\\push.ts",
       "source_location": "L41",
       "id": "push_getwebpushpublickey",
-      "community": 7,
+      "community": 8,
       "norm_label": "getwebpushpublickey()"
     },
     {
@@ -2538,7 +2538,7 @@
       "source_file": "backend\\server\\src\\lib\\push.ts",
       "source_location": "L45",
       "id": "push_sendpushnotificationtouser",
-      "community": 7,
+      "community": 8,
       "norm_label": "sendpushnotificationtouser()"
     },
     {
@@ -2547,7 +2547,7 @@
       "source_file": "backend\\server\\src\\lib\\realtime.ts",
       "source_location": "L1",
       "id": "backend_server_src_lib_realtime_ts",
-      "community": 12,
+      "community": 8,
       "norm_label": "realtime.ts"
     },
     {
@@ -2556,7 +2556,7 @@
       "source_file": "backend\\server\\src\\lib\\realtime.ts",
       "source_location": "L67",
       "id": "realtime_registersocket",
-      "community": 12,
+      "community": 8,
       "norm_label": "registersocket()"
     },
     {
@@ -2565,7 +2565,7 @@
       "source_file": "backend\\server\\src\\lib\\realtime.ts",
       "source_location": "L73",
       "id": "realtime_unregistersocket",
-      "community": 12,
+      "community": 8,
       "norm_label": "unregistersocket()"
     },
     {
@@ -2574,7 +2574,7 @@
       "source_file": "backend\\server\\src\\lib\\realtime.ts",
       "source_location": "L86",
       "id": "realtime_authenticatesocket",
-      "community": 12,
+      "community": 8,
       "norm_label": "authenticatesocket()"
     },
     {
@@ -2583,7 +2583,7 @@
       "source_file": "backend\\server\\src\\lib\\realtime.ts",
       "source_location": "L109",
       "id": "realtime_setuseronline",
-      "community": 12,
+      "community": 8,
       "norm_label": "setuseronline()"
     },
     {
@@ -2592,7 +2592,7 @@
       "source_file": "backend\\server\\src\\lib\\realtime.ts",
       "source_location": "L124",
       "id": "realtime_marksockettyping",
-      "community": 12,
+      "community": 8,
       "norm_label": "marksockettyping()"
     },
     {
@@ -2601,7 +2601,7 @@
       "source_file": "backend\\server\\src\\lib\\realtime.ts",
       "source_location": "L138",
       "id": "realtime_unmarksockettyping",
-      "community": 12,
+      "community": 8,
       "norm_label": "unmarksockettyping()"
     },
     {
@@ -2610,7 +2610,7 @@
       "source_file": "backend\\server\\src\\lib\\realtime.ts",
       "source_location": "L170",
       "id": "realtime_setuseroffline",
-      "community": 12,
+      "community": 8,
       "norm_label": "setuseroffline()"
     },
     {
@@ -2619,7 +2619,7 @@
       "source_file": "backend\\server\\src\\lib\\realtime.ts",
       "source_location": "L194",
       "id": "realtime_notifychatpartnersofstatus",
-      "community": 12,
+      "community": 8,
       "norm_label": "notifychatpartnersofstatus()"
     },
     {
@@ -2628,7 +2628,7 @@
       "source_file": "backend\\server\\src\\lib\\realtime.ts",
       "source_location": "L230",
       "id": "realtime_handleclientmessage",
-      "community": 12,
+      "community": 8,
       "norm_label": "handleclientmessage()"
     },
     {
@@ -2637,7 +2637,7 @@
       "source_file": "backend\\server\\src\\lib\\realtime.ts",
       "source_location": "L270",
       "id": "realtime_clearsockettypingstate",
-      "community": 12,
+      "community": 8,
       "norm_label": "clearsockettypingstate()"
     },
     {
@@ -2646,7 +2646,7 @@
       "source_file": "backend\\server\\src\\lib\\realtime.ts",
       "source_location": "L294",
       "id": "realtime_emittouser",
-      "community": 12,
+      "community": 8,
       "norm_label": "emittouser()"
     },
     {
@@ -2655,7 +2655,7 @@
       "source_file": "backend\\server\\src\\lib\\realtime.ts",
       "source_location": "L306",
       "id": "realtime_emiteventtousers",
-      "community": 12,
+      "community": 8,
       "norm_label": "emiteventtousers()"
     },
     {
@@ -2664,7 +2664,7 @@
       "source_file": "backend\\server\\src\\lib\\realtime.ts",
       "source_location": "L330",
       "id": "realtime_emitfeedevent",
-      "community": 12,
+      "community": 8,
       "norm_label": "emitfeedevent()"
     },
     {
@@ -2673,7 +2673,7 @@
       "source_file": "backend\\server\\src\\lib\\realtime.ts",
       "source_location": "L334",
       "id": "realtime_emitchatevent",
-      "community": 12,
+      "community": 8,
       "norm_label": "emitchatevent()"
     },
     {
@@ -2682,7 +2682,7 @@
       "source_file": "backend\\server\\src\\lib\\realtime.ts",
       "source_location": "L341",
       "id": "realtime_emitnotificationevent",
-      "community": 12,
+      "community": 8,
       "norm_label": "emitnotificationevent()"
     },
     {
@@ -2691,7 +2691,7 @@
       "source_file": "backend\\server\\src\\lib\\realtime.ts",
       "source_location": "L351",
       "id": "realtime_isuseronline",
-      "community": 12,
+      "community": 8,
       "norm_label": "isuseronline()"
     },
     {
@@ -2709,7 +2709,7 @@
       "source_file": "backend\\server\\src\\lib\\socialInsights.ts",
       "source_location": "L1",
       "id": "backend_server_src_lib_socialinsights_ts",
-      "community": 1,
+      "community": 13,
       "norm_label": "socialinsights.ts"
     },
     {
@@ -2718,7 +2718,7 @@
       "source_file": "backend\\server\\src\\lib\\socialInsights.ts",
       "source_location": "L48",
       "id": "socialinsights_nowhourbucket",
-      "community": 1,
+      "community": 13,
       "norm_label": "nowhourbucket()"
     },
     {
@@ -2727,7 +2727,7 @@
       "source_file": "backend\\server\\src\\lib\\socialInsights.ts",
       "source_location": "L56",
       "id": "socialinsights_houroffsetbucket",
-      "community": 1,
+      "community": 13,
       "norm_label": "houroffsetbucket()"
     },
     {
@@ -2736,7 +2736,7 @@
       "source_file": "backend\\server\\src\\lib\\socialInsights.ts",
       "source_location": "L61",
       "id": "socialinsights_suggestedkey",
-      "community": 1,
+      "community": 13,
       "norm_label": "suggestedkey()"
     },
     {
@@ -2745,7 +2745,7 @@
       "source_file": "backend\\server\\src\\lib\\socialInsights.ts",
       "source_location": "L65",
       "id": "socialinsights_dismissedkey",
-      "community": 1,
+      "community": 13,
       "norm_label": "dismissedkey()"
     },
     {
@@ -2754,7 +2754,7 @@
       "source_file": "backend\\server\\src\\lib\\socialInsights.ts",
       "source_location": "L69",
       "id": "socialinsights_hashtagpostbucketkey",
-      "community": 1,
+      "community": 13,
       "norm_label": "hashtagpostbucketkey()"
     },
     {
@@ -2763,7 +2763,7 @@
       "source_file": "backend\\server\\src\\lib\\socialInsights.ts",
       "source_location": "L73",
       "id": "socialinsights_hashtagengagementbucketkey",
-      "community": 1,
+      "community": 13,
       "norm_label": "hashtagengagementbucketkey()"
     },
     {
@@ -2772,7 +2772,7 @@
       "source_file": "backend\\server\\src\\lib\\socialInsights.ts",
       "source_location": "L77",
       "id": "socialinsights_hashtagusersbucketkey",
-      "community": 1,
+      "community": 13,
       "norm_label": "hashtagusersbucketkey()"
     },
     {
@@ -2781,7 +2781,7 @@
       "source_file": "backend\\server\\src\\lib\\socialInsights.ts",
       "source_location": "L81",
       "id": "socialinsights_hashtaguserspamkey",
-      "community": 1,
+      "community": 13,
       "norm_label": "hashtaguserspamkey()"
     },
     {
@@ -2790,7 +2790,7 @@
       "source_file": "backend\\server\\src\\lib\\socialInsights.ts",
       "source_location": "L85",
       "id": "socialinsights_tonumber",
-      "community": 1,
+      "community": 13,
       "norm_label": "tonumber()"
     },
     {
@@ -2799,7 +2799,7 @@
       "source_file": "backend\\server\\src\\lib\\socialInsights.ts",
       "source_location": "L90",
       "id": "socialinsights_cosinesimilarity",
-      "community": 1,
+      "community": 13,
       "norm_label": "cosinesimilarity()"
     },
     {
@@ -2808,7 +2808,7 @@
       "source_file": "backend\\server\\src\\lib\\socialInsights.ts",
       "source_location": "L108",
       "id": "socialinsights_recencyweight",
-      "community": 1,
+      "community": 13,
       "norm_label": "recencyweight()"
     },
     {
@@ -2817,7 +2817,7 @@
       "source_file": "backend\\server\\src\\lib\\socialInsights.ts",
       "source_location": "L118",
       "id": "socialinsights_randomexplorationfactor",
-      "community": 1,
+      "community": 13,
       "norm_label": "randomexplorationfactor()"
     },
     {
@@ -2826,7 +2826,7 @@
       "source_file": "backend\\server\\src\\lib\\socialInsights.ts",
       "source_location": "L122",
       "id": "socialinsights_applydiversity",
-      "community": 1,
+      "community": 13,
       "norm_label": "applydiversity()"
     },
     {
@@ -2835,7 +2835,7 @@
       "source_file": "backend\\server\\src\\lib\\socialInsights.ts",
       "source_location": "L137",
       "id": "socialinsights_getvectormap",
-      "community": 1,
+      "community": 13,
       "norm_label": "getvectormap()"
     },
     {
@@ -2844,7 +2844,7 @@
       "source_file": "backend\\server\\src\\lib\\socialInsights.ts",
       "source_location": "L177",
       "id": "socialinsights_dismisssuggesteduser",
-      "community": 1,
+      "community": 13,
       "norm_label": "dismisssuggesteduser()"
     },
     {
@@ -2853,7 +2853,7 @@
       "source_file": "backend\\server\\src\\lib\\socialInsights.ts",
       "source_location": "L185",
       "id": "socialinsights_queuesuggestedusersrecompute",
-      "community": 1,
+      "community": 13,
       "norm_label": "queuesuggestedusersrecompute()"
     },
     {
@@ -2862,7 +2862,7 @@
       "source_file": "backend\\server\\src\\lib\\socialInsights.ts",
       "source_location": "L190",
       "id": "socialinsights_recomputesuggestedusers",
-      "community": 1,
+      "community": 13,
       "norm_label": "recomputesuggestedusers()"
     },
     {
@@ -2871,7 +2871,7 @@
       "source_file": "backend\\server\\src\\lib\\socialInsights.ts",
       "source_location": "L350",
       "id": "socialinsights_getsuggestedusersforapi",
-      "community": 1,
+      "community": 13,
       "norm_label": "getsuggestedusersforapi()"
     },
     {
@@ -2880,7 +2880,7 @@
       "source_file": "backend\\server\\src\\lib\\socialInsights.ts",
       "source_location": "L366",
       "id": "socialinsights_trackpostcreatedhashtags",
-      "community": 1,
+      "community": 13,
       "norm_label": "trackpostcreatedhashtags()"
     },
     {
@@ -2889,7 +2889,7 @@
       "source_file": "backend\\server\\src\\lib\\socialInsights.ts",
       "source_location": "L387",
       "id": "socialinsights_trackpostengagementforpost",
-      "community": 1,
+      "community": 13,
       "norm_label": "trackpostengagementforpost()"
     },
     {
@@ -2898,7 +2898,7 @@
       "source_file": "backend\\server\\src\\lib\\socialInsights.ts",
       "source_location": "L408",
       "id": "socialinsights_sumtagbuckets",
-      "community": 1,
+      "community": 13,
       "norm_label": "sumtagbuckets()"
     },
     {
@@ -2907,7 +2907,7 @@
       "source_file": "backend\\server\\src\\lib\\socialInsights.ts",
       "source_location": "L416",
       "id": "socialinsights_recomputetrendinghashtags",
-      "community": 1,
+      "community": 13,
       "norm_label": "recomputetrendinghashtags()"
     },
     {
@@ -2925,7 +2925,7 @@
       "source_file": "backend\\server\\src\\lib\\socialInsights.ts",
       "source_location": "L515",
       "id": "socialinsights_maybestartsocialinsightsschedulers",
-      "community": 1,
+      "community": 13,
       "norm_label": "maybestartsocialinsightsschedulers()"
     },
     {
@@ -3033,7 +3033,7 @@
       "source_file": "backend\\server\\src\\lib\\userCache.ts",
       "source_location": "L288",
       "id": "usercache_patchusersummary",
-      "community": 12,
+      "community": 8,
       "norm_label": "patchusersummary()"
     },
     {
@@ -3114,7 +3114,7 @@
       "source_file": "backend\\server\\src\\lib\\userCache.ts",
       "source_location": "L382",
       "id": "usercache_invalidateconversationlists",
-      "community": 7,
+      "community": 11,
       "norm_label": "invalidateconversationlists()"
     },
     {
@@ -3159,7 +3159,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L1",
       "id": "backend_server_src_routes_admin_ts",
-      "community": 9,
+      "community": 10,
       "norm_label": "admin.ts"
     },
     {
@@ -3168,7 +3168,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L33",
       "id": "admin_getclientbaseurl",
-      "community": 9,
+      "community": 10,
       "norm_label": "getclientbaseurl()"
     },
     {
@@ -3177,7 +3177,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L42",
       "id": "admin_getclientip",
-      "community": 9,
+      "community": 10,
       "norm_label": "getclientip()"
     },
     {
@@ -3186,7 +3186,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L53",
       "id": "admin_detectbrowser",
-      "community": 9,
+      "community": 10,
       "norm_label": "detectbrowser()"
     },
     {
@@ -3195,7 +3195,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L63",
       "id": "admin_detectplatform",
-      "community": 9,
+      "community": 10,
       "norm_label": "detectplatform()"
     },
     {
@@ -3204,7 +3204,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L73",
       "id": "admin_createauthsession",
-      "community": 9,
+      "community": 10,
       "norm_label": "createauthsession()"
     },
     {
@@ -3213,7 +3213,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L119",
       "id": "admin_parsedashboardrange",
-      "community": 9,
+      "community": 10,
       "norm_label": "parsedashboardrange()"
     },
     {
@@ -3222,7 +3222,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L125",
       "id": "admin_parseadminanalyticssegment",
-      "community": 9,
+      "community": 10,
       "norm_label": "parseadminanalyticssegment()"
     },
     {
@@ -3231,7 +3231,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L135",
       "id": "admin_parseannouncementaudiencetype",
-      "community": 9,
+      "community": 10,
       "norm_label": "parseannouncementaudiencetype()"
     },
     {
@@ -3240,7 +3240,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L143",
       "id": "admin_parseannouncementlifecycleaction",
-      "community": 9,
+      "community": 10,
       "norm_label": "parseannouncementlifecycleaction()"
     },
     {
@@ -3249,7 +3249,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L151",
       "id": "admin_normalizeannouncementaudienceids",
-      "community": 9,
+      "community": 10,
       "norm_label": "normalizeannouncementaudienceids()"
     },
     {
@@ -3258,7 +3258,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L156",
       "id": "admin_getannouncementrecipientcount",
-      "community": 9,
+      "community": 10,
       "norm_label": "getannouncementrecipientcount()"
     },
     {
@@ -3267,7 +3267,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L184",
       "id": "admin_getsqlwindowexpressions",
-      "community": 9,
+      "community": 10,
       "norm_label": "getsqlwindowexpressions()"
     },
     {
@@ -3276,7 +3276,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L192",
       "id": "admin_buildtrend",
-      "community": 9,
+      "community": 10,
       "norm_label": "buildtrend()"
     },
     {
@@ -3285,7 +3285,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L218",
       "id": "admin_getopenwebsocketcount",
-      "community": 9,
+      "community": 10,
       "norm_label": "getopenwebsocketcount()"
     },
     {
@@ -3294,7 +3294,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L270",
       "id": "admin_parseadminbooleanfilter",
-      "community": 9,
+      "community": 10,
       "norm_label": "parseadminbooleanfilter()"
     },
     {
@@ -3303,7 +3303,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L275",
       "id": "admin_parseadminuserstatusfilter",
-      "community": 9,
+      "community": 10,
       "norm_label": "parseadminuserstatusfilter()"
     },
     {
@@ -3312,7 +3312,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L280",
       "id": "admin_parseadminusersortkey",
-      "community": 9,
+      "community": 10,
       "norm_label": "parseadminusersortkey()"
     },
     {
@@ -3321,7 +3321,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L285",
       "id": "admin_parseadminsortorder",
-      "community": 9,
+      "community": 10,
       "norm_label": "parseadminsortorder()"
     },
     {
@@ -3330,7 +3330,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L289",
       "id": "admin_parsepositiveint",
-      "community": 9,
+      "community": 10,
       "norm_label": "parsepositiveint()"
     },
     {
@@ -3339,7 +3339,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L295",
       "id": "admin_parseadminseverityfilter",
-      "community": 9,
+      "community": 10,
       "norm_label": "parseadminseverityfilter()"
     },
     {
@@ -3348,7 +3348,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L300",
       "id": "admin_parseadminauditlogseverityfilter",
-      "community": 9,
+      "community": 10,
       "norm_label": "parseadminauditlogseverityfilter()"
     },
     {
@@ -3357,7 +3357,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L307",
       "id": "admin_parseadminreportstatusfilter",
-      "community": 9,
+      "community": 10,
       "norm_label": "parseadminreportstatusfilter()"
     },
     {
@@ -3366,7 +3366,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L314",
       "id": "admin_parseadminreporttargettypefilter",
-      "community": 9,
+      "community": 10,
       "norm_label": "parseadminreporttargettypefilter()"
     },
     {
@@ -3375,7 +3375,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L319",
       "id": "admin_parseadminreportassigneefilter",
-      "community": 9,
+      "community": 10,
       "norm_label": "parseadminreportassigneefilter()"
     },
     {
@@ -3384,7 +3384,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L324",
       "id": "admin_parseadmindatefilter",
-      "community": 9,
+      "community": 10,
       "norm_label": "parseadmindatefilter()"
     },
     {
@@ -3393,7 +3393,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L334",
       "id": "admin_getdefaultadminsettings",
-      "community": 9,
+      "community": 10,
       "norm_label": "getdefaultadminsettings()"
     },
     {
@@ -3402,7 +3402,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L362",
       "id": "admin_isrecord",
-      "community": 9,
+      "community": 10,
       "norm_label": "isrecord()"
     },
     {
@@ -3411,7 +3411,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L366",
       "id": "admin_getbooleansetting",
-      "community": 9,
+      "community": 10,
       "norm_label": "getbooleansetting()"
     },
     {
@@ -3420,7 +3420,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L374",
       "id": "admin_getpositivenumbersetting",
-      "community": 9,
+      "community": 10,
       "norm_label": "getpositivenumbersetting()"
     },
     {
@@ -3429,7 +3429,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L382",
       "id": "admin_validateadminsettingspayload",
-      "community": 9,
+      "community": 10,
       "norm_label": "validateadminsettingspayload()"
     },
     {
@@ -3438,7 +3438,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L469",
       "id": "admin_flattenadminsettingschanges",
-      "community": 9,
+      "community": 10,
       "norm_label": "flattenadminsettingschanges()"
     },
     {
@@ -3447,7 +3447,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L482",
       "id": "admin_ensureadminsettingsrecord",
-      "community": 9,
+      "community": 10,
       "norm_label": "ensureadminsettingsrecord()"
     },
     {
@@ -3456,7 +3456,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L519",
       "id": "admin_invalidateadminclubcaches",
-      "community": 10,
+      "community": 1,
       "norm_label": "invalidateadminclubcaches()"
     },
     {
@@ -3474,7 +3474,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L550",
       "id": "admin_mapadmincommentrows",
-      "community": 9,
+      "community": 10,
       "norm_label": "mapadmincommentrows()"
     },
     {
@@ -3483,7 +3483,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L594",
       "id": "admin_mapadminflatcommentrows",
-      "community": 9,
+      "community": 10,
       "norm_label": "mapadminflatcommentrows()"
     },
     {
@@ -3492,7 +3492,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L623",
       "id": "admin_parseadmincommentcursor",
-      "community": 9,
+      "community": 10,
       "norm_label": "parseadmincommentcursor()"
     },
     {
@@ -3501,7 +3501,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L1464",
       "id": "admin_deriveclubstatus",
-      "community": 9,
+      "community": 10,
       "norm_label": "deriveclubstatus()"
     },
     {
@@ -3510,7 +3510,7 @@
       "source_file": "backend\\server\\src\\routes\\admin.ts",
       "source_location": "L1563",
       "id": "admin_derivestatus",
-      "community": 9,
+      "community": 10,
       "norm_label": "derivestatus()"
     },
     {
@@ -4275,7 +4275,7 @@
       "source_file": "backend\\server\\src\\routes\\chat.ts",
       "source_location": "L783",
       "id": "chat_autoacceptrequestonreply",
-      "community": 7,
+      "community": 11,
       "norm_label": "autoacceptrequestonreply()"
     },
     {
@@ -4554,7 +4554,7 @@
       "source_file": "backend\\server\\src\\routes\\users.ts",
       "source_location": "L1",
       "id": "backend_server_src_routes_users_ts",
-      "community": 23,
+      "community": 20,
       "norm_label": "users.ts"
     },
     {
@@ -4563,7 +4563,7 @@
       "source_file": "backend\\server\\src\\routes\\users.ts",
       "source_location": "L39",
       "id": "users_requireownuser",
-      "community": 23,
+      "community": 20,
       "norm_label": "requireownuser()"
     },
     {
@@ -4572,7 +4572,7 @@
       "source_file": "backend\\server\\src\\routes\\users.ts",
       "source_location": "L62",
       "id": "users_normalizedisplayname",
-      "community": 21,
+      "community": 20,
       "norm_label": "normalizedisplayname()"
     },
     {
@@ -4581,7 +4581,7 @@
       "source_file": "backend\\server\\src\\routes\\users.ts",
       "source_location": "L66",
       "id": "users_normalizeusername",
-      "community": 21,
+      "community": 20,
       "norm_label": "normalizeusername()"
     },
     {
@@ -4590,7 +4590,7 @@
       "source_file": "backend\\server\\src\\routes\\users.ts",
       "source_location": "L75",
       "id": "users_validateusername",
-      "community": 21,
+      "community": 20,
       "norm_label": "validateusername()"
     },
     {
@@ -4599,7 +4599,7 @@
       "source_file": "backend\\server\\src\\routes\\users.ts",
       "source_location": "L264",
       "id": "users_normalizehashtag",
-      "community": 23,
+      "community": 20,
       "norm_label": "normalizehashtag()"
     },
     {
@@ -4608,7 +4608,7 @@
       "source_file": "backend\\server\\src\\routes\\users.ts",
       "source_location": "L272",
       "id": "users_normalizehashtags",
-      "community": 23,
+      "community": 20,
       "norm_label": "normalizehashtags()"
     },
     {
@@ -4617,7 +4617,7 @@
       "source_file": "backend\\server\\src\\routes\\users.ts",
       "source_location": "L286",
       "id": "users_parsemediavalue",
-      "community": 23,
+      "community": 20,
       "norm_label": "parsemediavalue()"
     },
     {
@@ -4626,7 +4626,7 @@
       "source_file": "backend\\server\\src\\routes\\users.ts",
       "source_location": "L329",
       "id": "users_mapuserpostrow",
-      "community": 23,
+      "community": 20,
       "norm_label": "mapuserpostrow()"
     },
     {
@@ -4635,7 +4635,7 @@
       "source_file": "backend\\server\\src\\routes\\users.ts",
       "source_location": "L356",
       "id": "users_settingsfromrow",
-      "community": 23,
+      "community": 20,
       "norm_label": "settingsfromrow()"
     },
     {
@@ -4644,7 +4644,7 @@
       "source_file": "backend\\server\\src\\routes\\users.ts",
       "source_location": "L377",
       "id": "users_passwordrequirementmessage",
-      "community": 23,
+      "community": 20,
       "norm_label": "passwordrequirementmessage()"
     },
     {
@@ -4653,7 +4653,7 @@
       "source_file": "backend\\server\\src\\routes\\users.ts",
       "source_location": "L381",
       "id": "users_getfolloweruserids",
-      "community": 23,
+      "community": 20,
       "norm_label": "getfolloweruserids()"
     },
     {
@@ -4662,7 +4662,7 @@
       "source_file": "backend\\server\\src\\routes\\users.ts",
       "source_location": "L391",
       "id": "users_getconversationvieweruserids",
-      "community": 23,
+      "community": 20,
       "norm_label": "getconversationvieweruserids()"
     },
     {
@@ -5850,7 +5850,7 @@
       "source_file": "frontend\\src\\admin\\AdminRoot.tsx",
       "source_location": "L1749",
       "id": "adminroot_handlepasswordchange",
-      "community": 11,
+      "community": 9,
       "norm_label": "handlepasswordchange()"
     },
     {
@@ -6984,7 +6984,7 @@
       "source_file": "frontend\\src\\components\\ClubActivityPage.tsx",
       "source_location": "L1",
       "id": "frontend_src_components_clubactivitypage_tsx",
-      "community": 9,
+      "community": 12,
       "norm_label": "clubactivitypage.tsx"
     },
     {
@@ -6993,7 +6993,7 @@
       "source_file": "frontend\\src\\components\\ClubActivityPage.tsx",
       "source_location": "L99",
       "id": "clubactivitypage_loadclubdata",
-      "community": 9,
+      "community": 12,
       "norm_label": "loadclubdata()"
     },
     {
@@ -7002,7 +7002,7 @@
       "source_file": "frontend\\src\\components\\ClubActivityPage.tsx",
       "source_location": "L303",
       "id": "clubactivitypage_handleinvitemember",
-      "community": 9,
+      "community": 12,
       "norm_label": "handleinvitemember()"
     },
     {
@@ -7011,7 +7011,7 @@
       "source_file": "frontend\\src\\components\\ClubActivityPage.tsx",
       "source_location": "L317",
       "id": "clubactivitypage_handlecreateclubpostfrommodal",
-      "community": 9,
+      "community": 14,
       "norm_label": "handlecreateclubpostfrommodal()"
     },
     {
@@ -7020,7 +7020,7 @@
       "source_file": "frontend\\src\\components\\ClubActivityPage.tsx",
       "source_location": "L349",
       "id": "clubactivitypage_handleapproverequest",
-      "community": 9,
+      "community": 12,
       "norm_label": "handleapproverequest()"
     },
     {
@@ -7029,7 +7029,7 @@
       "source_file": "frontend\\src\\components\\ClubActivityPage.tsx",
       "source_location": "L363",
       "id": "clubactivitypage_handlerejectrequest",
-      "community": 9,
+      "community": 12,
       "norm_label": "handlerejectrequest()"
     },
     {
@@ -7038,7 +7038,7 @@
       "source_file": "frontend\\src\\components\\ClubActivityPage.tsx",
       "source_location": "L377",
       "id": "clubactivitypage_handletoggleadminrole",
-      "community": 9,
+      "community": 12,
       "norm_label": "handletoggleadminrole()"
     },
     {
@@ -7047,7 +7047,7 @@
       "source_file": "frontend\\src\\components\\ClubActivityPage.tsx",
       "source_location": "L392",
       "id": "clubactivitypage_handlesavesettings",
-      "community": 9,
+      "community": 12,
       "norm_label": "handlesavesettings()"
     },
     {
@@ -7056,7 +7056,7 @@
       "source_file": "frontend\\src\\components\\ClubActivityPage.tsx",
       "source_location": "L430",
       "id": "clubactivitypage_handledeleteclub",
-      "community": 9,
+      "community": 12,
       "norm_label": "handledeleteclub()"
     },
     {
@@ -7065,7 +7065,7 @@
       "source_file": "frontend\\src\\components\\ClubActivityPage.tsx",
       "source_location": "L469",
       "id": "clubactivitypage_handlejoincurrentclub",
-      "community": 9,
+      "community": 12,
       "norm_label": "handlejoincurrentclub()"
     },
     {
@@ -7074,7 +7074,7 @@
       "source_file": "frontend\\src\\components\\ClubsPage.tsx",
       "source_location": "L1",
       "id": "frontend_src_components_clubspage_tsx",
-      "community": 9,
+      "community": 12,
       "norm_label": "clubspage.tsx"
     },
     {
@@ -7083,7 +7083,7 @@
       "source_file": "frontend\\src\\components\\ClubsPage.tsx",
       "source_location": "L75",
       "id": "clubspage_handleclubcreate",
-      "community": 9,
+      "community": 12,
       "norm_label": "handleclubcreate()"
     },
     {
@@ -7092,7 +7092,7 @@
       "source_file": "frontend\\src\\components\\ClubsPage.tsx",
       "source_location": "L84",
       "id": "clubspage_handlejoinclub",
-      "community": 9,
+      "community": 12,
       "norm_label": "handlejoinclub()"
     },
     {
@@ -7101,7 +7101,7 @@
       "source_file": "frontend\\src\\components\\CreateClubModal.tsx",
       "source_location": "L1",
       "id": "frontend_src_components_createclubmodal_tsx",
-      "community": 9,
+      "community": 12,
       "norm_label": "createclubmodal.tsx"
     },
     {
@@ -7110,7 +7110,7 @@
       "source_file": "frontend\\src\\components\\CreateClubModal.tsx",
       "source_location": "L69",
       "id": "createclubmodal_resetform",
-      "community": 9,
+      "community": 12,
       "norm_label": "resetform()"
     },
     {
@@ -7119,7 +7119,7 @@
       "source_file": "frontend\\src\\components\\CreateClubModal.tsx",
       "source_location": "L83",
       "id": "createclubmodal_handlesubmit",
-      "community": 9,
+      "community": 12,
       "norm_label": "handlesubmit()"
     },
     {
@@ -7704,7 +7704,7 @@
       "source_file": "frontend\\src\\components\\ProfilePage.tsx",
       "source_location": "L652",
       "id": "profilepage_handleprofilephotochange",
-      "community": 11,
+      "community": 9,
       "norm_label": "handleprofilephotochange()"
     },
     {
@@ -7713,7 +7713,7 @@
       "source_file": "frontend\\src\\components\\ProfilePage.tsx",
       "source_location": "L671",
       "id": "profilepage_handlebannerchange",
-      "community": 11,
+      "community": 9,
       "norm_label": "handlebannerchange()"
     },
     {
@@ -8082,7 +8082,7 @@
       "source_file": "frontend\\src\\components\\SettingsPage.tsx",
       "source_location": "L1",
       "id": "frontend_src_components_settingspage_tsx",
-      "community": 11,
+      "community": 9,
       "norm_label": "settingspage.tsx"
     },
     {
@@ -8091,7 +8091,7 @@
       "source_file": "frontend\\src\\components\\SettingsPage.tsx",
       "source_location": "L36",
       "id": "settingspage_meetspasswordrequirements",
-      "community": 11,
+      "community": 9,
       "norm_label": "meetspasswordrequirements()"
     },
     {
@@ -8100,7 +8100,7 @@
       "source_file": "frontend\\src\\components\\SettingsPage.tsx",
       "source_location": "L40",
       "id": "settingspage_formatsessionip",
-      "community": 11,
+      "community": 9,
       "norm_label": "formatsessionip()"
     },
     {
@@ -8109,7 +8109,7 @@
       "source_file": "frontend\\src\\components\\SettingsPage.tsx",
       "source_location": "L49",
       "id": "settingspage_formatsessionlastactive",
-      "community": 11,
+      "community": 9,
       "norm_label": "formatsessionlastactive()"
     },
     {
@@ -8118,7 +8118,7 @@
       "source_file": "frontend\\src\\components\\SettingsPage.tsx",
       "source_location": "L124",
       "id": "settingspage_loadsettings",
-      "community": 11,
+      "community": 9,
       "norm_label": "loadsettings()"
     },
     {
@@ -8127,7 +8127,7 @@
       "source_file": "frontend\\src\\components\\SettingsPage.tsx",
       "source_location": "L167",
       "id": "settingspage_loadsessions",
-      "community": 11,
+      "community": 9,
       "norm_label": "loadsessions()"
     },
     {
@@ -8136,7 +8136,7 @@
       "source_file": "frontend\\src\\components\\SettingsPage.tsx",
       "source_location": "L195",
       "id": "settingspage_handlepasswordchange",
-      "community": 11,
+      "community": 9,
       "norm_label": "handlepasswordchange()"
     },
     {
@@ -8145,7 +8145,7 @@
       "source_file": "frontend\\src\\components\\SettingsPage.tsx",
       "source_location": "L284",
       "id": "settingspage_handlebacktosecuritymenu",
-      "community": 11,
+      "community": 9,
       "norm_label": "handlebacktosecuritymenu()"
     },
     {
@@ -8154,7 +8154,7 @@
       "source_file": "frontend\\src\\components\\SettingsPage.tsx",
       "source_location": "L288",
       "id": "settingspage_handlerevokesession",
-      "community": 11,
+      "community": 9,
       "norm_label": "handlerevokesession()"
     },
     {
@@ -10080,7 +10080,7 @@
       "source_file": "frontend\\src\\context\\AppDataContext.tsx",
       "source_location": "L1",
       "id": "frontend_src_context_appdatacontext_tsx",
-      "community": 19,
+      "community": 18,
       "norm_label": "appdatacontext.tsx"
     },
     {
@@ -10089,7 +10089,7 @@
       "source_file": "frontend\\src\\context\\AppDataContext.tsx",
       "source_location": "L158",
       "id": "appdatacontext_createemptymessagesstate",
-      "community": 19,
+      "community": 18,
       "norm_label": "createemptymessagesstate()"
     },
     {
@@ -10098,7 +10098,7 @@
       "source_file": "frontend\\src\\context\\AppDataContext.tsx",
       "source_location": "L172",
       "id": "appdatacontext_createinitialstate",
-      "community": 19,
+      "community": 18,
       "norm_label": "createinitialstate()"
     },
     {
@@ -10107,7 +10107,7 @@
       "source_file": "frontend\\src\\context\\AppDataContext.tsx",
       "source_location": "L204",
       "id": "appdatacontext_isfresh",
-      "community": 19,
+      "community": 18,
       "norm_label": "isfresh()"
     },
     {
@@ -10116,7 +10116,7 @@
       "source_file": "frontend\\src\\context\\AppDataContext.tsx",
       "source_location": "L208",
       "id": "appdatacontext_hashtagtimelinekey",
-      "community": 19,
+      "community": 18,
       "norm_label": "hashtagtimelinekey()"
     },
     {
@@ -10125,7 +10125,7 @@
       "source_file": "frontend\\src\\context\\AppDataContext.tsx",
       "source_location": "L212",
       "id": "appdatacontext_timelinepagecachekey",
-      "community": 19,
+      "community": 18,
       "norm_label": "timelinepagecachekey()"
     },
     {
@@ -10134,7 +10134,7 @@
       "source_file": "frontend\\src\\context\\AppDataContext.tsx",
       "source_location": "L222",
       "id": "appdatacontext_apiprofiletostudent",
-      "community": 19,
+      "community": 18,
       "norm_label": "apiprofiletostudent()"
     },
     {
@@ -10143,7 +10143,7 @@
       "source_file": "frontend\\src\\context\\AppDataContext.tsx",
       "source_location": "L247",
       "id": "appdatacontext_usersummaryfrompost",
-      "community": 19,
+      "community": 18,
       "norm_label": "usersummaryfrompost()"
     },
     {
@@ -10152,7 +10152,7 @@
       "source_file": "frontend\\src\\context\\AppDataContext.tsx",
       "source_location": "L272",
       "id": "appdatacontext_mergestudents",
-      "community": 19,
+      "community": 18,
       "norm_label": "mergestudents()"
     },
     {
@@ -10161,7 +10161,7 @@
       "source_file": "frontend\\src\\context\\AppDataContext.tsx",
       "source_location": "L305",
       "id": "appdatacontext_upsertuniquepostids",
-      "community": 19,
+      "community": 18,
       "norm_label": "upsertuniquepostids()"
     },
     {
@@ -10170,7 +10170,7 @@
       "source_file": "frontend\\src\\context\\AppDataContext.tsx",
       "source_location": "L317",
       "id": "appdatacontext_upserttimelinepost",
-      "community": 19,
+      "community": 18,
       "norm_label": "upserttimelinepost()"
     },
     {
@@ -10179,7 +10179,7 @@
       "source_file": "frontend\\src\\context\\AppDataContext.tsx",
       "source_location": "L340",
       "id": "appdatacontext_mappostcommenttocomment",
-      "community": 19,
+      "community": 18,
       "norm_label": "mappostcommenttocomment()"
     },
     {
@@ -10188,7 +10188,7 @@
       "source_file": "frontend\\src\\context\\AppDataContext.tsx",
       "source_location": "L358",
       "id": "appdatacontext_userposttoopportunity",
-      "community": 19,
+      "community": 18,
       "norm_label": "userposttoopportunity()"
     },
     {
@@ -10197,7 +10197,7 @@
       "source_file": "frontend\\src\\context\\AppDataContext.tsx",
       "source_location": "L416",
       "id": "appdatacontext_createstore",
-      "community": 19,
+      "community": 18,
       "norm_label": "createstore()"
     },
     {
@@ -10206,7 +10206,7 @@
       "source_file": "frontend\\src\\context\\AppDataContext.tsx",
       "source_location": "L1562",
       "id": "appdatacontext_appdataprovider",
-      "community": 19,
+      "community": 18,
       "norm_label": "appdataprovider()"
     },
     {
@@ -10386,7 +10386,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L1",
       "id": "frontend_src_lib_authapi_ts",
-      "community": 11,
+      "community": 9,
       "norm_label": "authapi.ts"
     },
     {
@@ -10395,7 +10395,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L76",
       "id": "authapi_authheaders",
-      "community": 11,
+      "community": 9,
       "norm_label": "authheaders()"
     },
     {
@@ -10404,7 +10404,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L80",
       "id": "authapi_safefetch",
-      "community": 11,
+      "community": 9,
       "norm_label": "safefetch()"
     },
     {
@@ -10413,17 +10413,44 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L89",
       "id": "authapi_apilogin",
-      "community": 11,
+      "community": 9,
       "norm_label": "apilogin()"
     },
     {
       "label": "apiAuthenticateWithGoogle()",
       "file_type": "code",
       "source_file": "frontend\\src\\lib\\authApi.ts",
-      "source_location": "L59",
-      "id": "authapi_apisignupstudent",
-      "community": 11,
-      "norm_label": "apisignupstudent()"
+      "source_location": "L107",
+      "id": "authapi_apiauthenticatewithgoogle",
+      "community": 9,
+      "norm_label": "apiauthenticatewithgoogle()"
+    },
+    {
+      "label": "apiSendSignupVerificationLink()",
+      "file_type": "code",
+      "source_file": "frontend\\src\\lib\\authApi.ts",
+      "source_location": "L133",
+      "id": "authapi_apisendsignupverificationlink",
+      "community": 9,
+      "norm_label": "apisendsignupverificationlink()"
+    },
+    {
+      "label": "apiExchangeSignupVerification()",
+      "file_type": "code",
+      "source_file": "frontend\\src\\lib\\authApi.ts",
+      "source_location": "L153",
+      "id": "authapi_apiexchangesignupverification",
+      "community": 9,
+      "norm_label": "apiexchangesignupverification()"
+    },
+    {
+      "label": "apiCompleteStudentSignup()",
+      "file_type": "code",
+      "source_file": "frontend\\src\\lib\\authApi.ts",
+      "source_location": "L170",
+      "id": "authapi_apicompletestudentsignup",
+      "community": 9,
+      "norm_label": "apicompletestudentsignup()"
     },
     {
       "label": "apiSignupAlumni()",
@@ -10431,7 +10458,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L188",
       "id": "authapi_apisignupalumni",
-      "community": 11,
+      "community": 9,
       "norm_label": "apisignupalumni()"
     },
     {
@@ -10440,7 +10467,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L214",
       "id": "authapi_apifetchalumniverificationresubmission",
-      "community": 8,
+      "community": 9,
       "norm_label": "apifetchalumniverificationresubmission()"
     },
     {
@@ -10449,7 +10476,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L225",
       "id": "authapi_apiresubmitalumniverification",
-      "community": 8,
+      "community": 9,
       "norm_label": "apiresubmitalumniverification()"
     },
     {
@@ -10458,7 +10485,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L250",
       "id": "authapi_apicompletegoogleonboarding",
-      "community": 8,
+      "community": 9,
       "norm_label": "apicompletegoogleonboarding()"
     },
     {
@@ -10467,7 +10494,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L254",
       "id": "authapi_apisendmagiclink",
-      "community": 8,
+      "community": 9,
       "norm_label": "apisendmagiclink()"
     },
     {
@@ -10476,7 +10503,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L258",
       "id": "authapi_apiexchangemagiclink",
-      "community": 8,
+      "community": 9,
       "norm_label": "apiexchangemagiclink()"
     },
     {
@@ -10485,7 +10512,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L262",
       "id": "authapi_apicompletemagiclinkonboarding",
-      "community": 8,
+      "community": 9,
       "norm_label": "apicompletemagiclinkonboarding()"
     },
     {
@@ -10494,7 +10521,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L266",
       "id": "authapi_apifetchuserprofile",
-      "community": 11,
+      "community": 9,
       "norm_label": "apifetchuserprofile()"
     },
     {
@@ -10503,7 +10530,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L281",
       "id": "authapi_apifetchusersettings",
-      "community": 11,
+      "community": 9,
       "norm_label": "apifetchusersettings()"
     },
     {
@@ -10512,7 +10539,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L296",
       "id": "authapi_apiupdateusersettings",
-      "community": 11,
+      "community": 9,
       "norm_label": "apiupdateusersettings()"
     },
     {
@@ -10521,7 +10548,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L318",
       "id": "authapi_apifetchusersessions",
-      "community": 11,
+      "community": 9,
       "norm_label": "apifetchusersessions()"
     },
     {
@@ -10530,7 +10557,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L333",
       "id": "authapi_apirevokeusersession",
-      "community": 11,
+      "community": 9,
       "norm_label": "apirevokeusersession()"
     },
     {
@@ -10539,7 +10566,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L364",
       "id": "authapi_apiverifypasswordchange",
-      "community": 11,
+      "community": 9,
       "norm_label": "apiverifypasswordchange()"
     },
     {
@@ -10548,7 +10575,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L386",
       "id": "authapi_apirequestpasswordreset",
-      "community": 8,
+      "community": 9,
       "norm_label": "apirequestpasswordreset()"
     },
     {
@@ -10557,7 +10584,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L403",
       "id": "authapi_apiexchangepasswordreset",
-      "community": 8,
+      "community": 9,
       "norm_label": "apiexchangepasswordreset()"
     },
     {
@@ -10566,7 +10593,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L420",
       "id": "authapi_apicompletepasswordreset",
-      "community": 8,
+      "community": 9,
       "norm_label": "apicompletepasswordreset()"
     },
     {
@@ -10575,7 +10602,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L440",
       "id": "authapi_apichangepassword",
-      "community": 11,
+      "community": 9,
       "norm_label": "apichangepassword()"
     },
     {
@@ -10584,7 +10611,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L476",
       "id": "authapi_apicheckusernameavailability",
-      "community": 8,
+      "community": 9,
       "norm_label": "apicheckusernameavailability()"
     },
     {
@@ -10593,7 +10620,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L495",
       "id": "authapi_apiupdateuserprofile",
-      "community": 11,
+      "community": 9,
       "norm_label": "apiupdateuserprofile()"
     },
     {
@@ -10602,7 +10629,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L517",
       "id": "authapi_apiupdateuserprofilepicture",
-      "community": 11,
+      "community": 9,
       "norm_label": "apiupdateuserprofilepicture()"
     },
     {
@@ -10611,7 +10638,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L539",
       "id": "authapi_apiuploaduserprofilepicture",
-      "community": 11,
+      "community": 9,
       "norm_label": "apiuploaduserprofilepicture()"
     },
     {
@@ -10620,7 +10647,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L563",
       "id": "authapi_apiupdateusercoverphoto",
-      "community": 11,
+      "community": 9,
       "norm_label": "apiupdateusercoverphoto()"
     },
     {
@@ -10629,7 +10656,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L585",
       "id": "authapi_apiuploadusercoverphoto",
-      "community": 11,
+      "community": 9,
       "norm_label": "apiuploadusercoverphoto()"
     },
     {
@@ -10638,7 +10665,7 @@
       "source_file": "frontend\\src\\lib\\authApi.ts",
       "source_location": "L609",
       "id": "authapi_apideleteaccount",
-      "community": 11,
+      "community": 9,
       "norm_label": "apideleteaccount()"
     },
     {
@@ -11034,7 +11061,7 @@
       "source_file": "frontend\\src\\lib\\clubsApi.ts",
       "source_location": "L1",
       "id": "frontend_src_lib_clubsapi_ts",
-      "community": 9,
+      "community": 12,
       "norm_label": "clubsapi.ts"
     },
     {
@@ -11043,7 +11070,7 @@
       "source_file": "frontend\\src\\lib\\clubsApi.ts",
       "source_location": "L7",
       "id": "clubsapi_authheaders",
-      "community": 9,
+      "community": 12,
       "norm_label": "authheaders()"
     },
     {
@@ -11052,7 +11079,7 @@
       "source_file": "frontend\\src\\lib\\clubsApi.ts",
       "source_location": "L11",
       "id": "clubsapi_safefetch",
-      "community": 9,
+      "community": 12,
       "norm_label": "safefetch()"
     },
     {
@@ -11061,7 +11088,7 @@
       "source_file": "frontend\\src\\lib\\clubsApi.ts",
       "source_location": "L20",
       "id": "clubsapi_parseerrormessage",
-      "community": 9,
+      "community": 12,
       "norm_label": "parseerrormessage()"
     },
     {
@@ -11070,7 +11097,7 @@
       "source_file": "frontend\\src\\lib\\clubsApi.ts",
       "source_location": "L63",
       "id": "clubsapi_normalizeclub",
-      "community": 9,
+      "community": 12,
       "norm_label": "normalizeclub()"
     },
     {
@@ -11079,7 +11106,7 @@
       "source_file": "frontend\\src\\lib\\clubsApi.ts",
       "source_location": "L108",
       "id": "clubsapi_apifetchclubs",
-      "community": 9,
+      "community": 12,
       "norm_label": "apifetchclubs()"
     },
     {
@@ -11088,7 +11115,7 @@
       "source_file": "frontend\\src\\lib\\clubsApi.ts",
       "source_location": "L128",
       "id": "clubsapi_apifetchclubcategories",
-      "community": 9,
+      "community": 12,
       "norm_label": "apifetchclubcategories()"
     },
     {
@@ -11097,7 +11124,7 @@
       "source_file": "frontend\\src\\lib\\clubsApi.ts",
       "source_location": "L150",
       "id": "clubsapi_apicreateclub",
-      "community": 9,
+      "community": 12,
       "norm_label": "apicreateclub()"
     },
     {
@@ -11106,7 +11133,7 @@
       "source_file": "frontend\\src\\lib\\clubsApi.ts",
       "source_location": "L167",
       "id": "clubsapi_apifetchclub",
-      "community": 9,
+      "community": 12,
       "norm_label": "apifetchclub()"
     },
     {
@@ -11115,7 +11142,7 @@
       "source_file": "frontend\\src\\lib\\clubsApi.ts",
       "source_location": "L175",
       "id": "clubsapi_apijoinclub",
-      "community": 9,
+      "community": 12,
       "norm_label": "apijoinclub()"
     },
     {
@@ -11124,7 +11151,7 @@
       "source_file": "frontend\\src\\lib\\clubsApi.ts",
       "source_location": "L184",
       "id": "clubsapi_apileaveclub",
-      "community": 9,
+      "community": 12,
       "norm_label": "apileaveclub()"
     },
     {
@@ -11133,7 +11160,7 @@
       "source_file": "frontend\\src\\lib\\clubsApi.ts",
       "source_location": "L192",
       "id": "clubsapi_apifetchclubmembers",
-      "community": 9,
+      "community": 12,
       "norm_label": "apifetchclubmembers()"
     },
     {
@@ -11142,7 +11169,7 @@
       "source_file": "frontend\\src\\lib\\clubsApi.ts",
       "source_location": "L211",
       "id": "clubsapi_apifetchclubposts",
-      "community": 9,
+      "community": 12,
       "norm_label": "apifetchclubposts()"
     },
     {
@@ -11151,7 +11178,7 @@
       "source_file": "frontend\\src\\lib\\clubsApi.ts",
       "source_location": "L220",
       "id": "clubsapi_apiapproveclubmember",
-      "community": 9,
+      "community": 12,
       "norm_label": "apiapproveclubmember()"
     },
     {
@@ -11160,7 +11187,7 @@
       "source_file": "frontend\\src\\lib\\clubsApi.ts",
       "source_location": "L232",
       "id": "clubsapi_apiinviteclubmember",
-      "community": 9,
+      "community": 12,
       "norm_label": "apiinviteclubmember()"
     },
     {
@@ -11169,7 +11196,7 @@
       "source_file": "frontend\\src\\lib\\clubsApi.ts",
       "source_location": "L244",
       "id": "clubsapi_apiremoveclubmember",
-      "community": 9,
+      "community": 12,
       "norm_label": "apiremoveclubmember()"
     },
     {
@@ -11178,7 +11205,7 @@
       "source_file": "frontend\\src\\lib\\clubsApi.ts",
       "source_location": "L266",
       "id": "clubsapi_apiupdateclubmemberrole",
-      "community": 9,
+      "community": 12,
       "norm_label": "apiupdateclubmemberrole()"
     },
     {
@@ -11187,7 +11214,7 @@
       "source_file": "frontend\\src\\lib\\clubsApi.ts",
       "source_location": "L278",
       "id": "clubsapi_apiupdateclub",
-      "community": 9,
+      "community": 12,
       "norm_label": "apiupdateclub()"
     },
     {
@@ -11196,7 +11223,7 @@
       "source_file": "frontend\\src\\lib\\clubsApi.ts",
       "source_location": "L299",
       "id": "clubsapi_apideleteclub",
-      "community": 9,
+      "community": 12,
       "norm_label": "apideleteclub()"
     },
     {
