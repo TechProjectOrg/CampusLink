@@ -40,6 +40,7 @@ type DbPostVisibility = 'public' | 'followers' | 'club_members';
 interface FeedPostRow {
   post_id: string;
   author_user_id: string;
+  author_display_name: string;
   author_username: string;
   author_profile_photo_url: string | null;
   club_id: string | null;
@@ -70,6 +71,7 @@ interface CommentRow {
   comment_id: string;
   post_id: string;
   author_user_id: string;
+  author_display_name: string;
   author_username: string;
   author_profile_photo_url: string | null;
   post_author_user_id: string;
@@ -93,6 +95,7 @@ interface PostCommentResponse {
   id: string;
   postId: string;
   authorUserId: string;
+  authorDisplayName: string;
   authorUsername: string;
   authorProfilePictureUrl: string | null;
   parentCommentId: string | null;
@@ -109,6 +112,7 @@ interface PostCommentResponse {
 interface FeedPostResponse {
   id: string;
   authorUserId: string;
+  authorDisplayName: string;
   authorUsername: string;
   authorProfilePictureUrl: string | null;
   clubId: string | null;
@@ -211,6 +215,7 @@ function mapCommentRows(rows: CommentRow[], viewerUserId: string): PostCommentRe
       id: row.comment_id,
       postId: row.post_id,
       authorUserId: row.author_user_id,
+      authorDisplayName: row.author_display_name,
       authorUsername: row.author_username,
       authorProfilePictureUrl: row.author_profile_photo_url,
       parentCommentId: row.parent_comment_id,
@@ -271,6 +276,7 @@ async function fetchCommentsForPost(postId: string, viewerUserId: string): Promi
       c.comment_id,
       c.post_id,
       c.author_user_id,
+      u.display_name AS author_display_name,
       u.username AS author_username,
       u.profile_photo_url AS author_profile_photo_url,
       p.author_user_id AS post_author_user_id,
@@ -301,6 +307,7 @@ async function mapFeedRows(rows: FeedPostRow[], viewerUserId: string): Promise<F
     mapped.push({
       id: row.post_id,
       authorUserId: row.author_user_id,
+      authorDisplayName: row.author_display_name,
       authorUsername: row.author_username,
       authorProfilePictureUrl: row.author_profile_photo_url,
       clubId: row.club_id,
@@ -344,6 +351,7 @@ async function fetchPostRowsByQuery(
       SELECT
         p.post_id,
         p.author_user_id,
+        au.display_name AS author_display_name,
         au.username AS author_username,
         au.profile_photo_url AS author_profile_photo_url,
         p.club_id,
@@ -425,6 +433,7 @@ async function fetchPostRowsByQuery(
     SELECT
       p.post_id,
       p.author_user_id,
+      au.display_name AS author_display_name,
       au.username AS author_username,
       au.profile_photo_url AS author_profile_photo_url,
       p.club_id,
@@ -602,6 +611,7 @@ router.get('/posts/comments/:commentId/replies', async (req: Request<{ commentId
         c.comment_id,
         c.post_id,
         c.author_user_id,
+        u.display_name AS author_display_name,
         u.username AS author_username,
         u.profile_photo_url AS author_profile_photo_url,
         p.author_user_id AS post_author_user_id,
@@ -655,6 +665,7 @@ router.get('/posts/:postId/comments', async (req: Request<{ postId: string }>, r
           c.comment_id,
           c.post_id,
           c.author_user_id,
+          u.display_name AS author_display_name,
           u.username AS author_username,
           u.profile_photo_url AS author_profile_photo_url,
           p.author_user_id AS post_author_user_id,
@@ -687,6 +698,7 @@ router.get('/posts/:postId/comments', async (req: Request<{ postId: string }>, r
         c.comment_id,
         c.post_id,
         c.author_user_id,
+        u.display_name AS author_display_name,
         u.username AS author_username,
         u.profile_photo_url AS author_profile_photo_url,
         p.author_user_id AS post_author_user_id,
@@ -742,6 +754,7 @@ router.get('/posts/:postId', async (req: Request<{ postId: string }>, res: Respo
       SELECT
         p.post_id,
         p.author_user_id,
+        au.display_name AS author_display_name,
         au.username AS author_username,
         au.profile_photo_url AS author_profile_photo_url,
         p.club_id,

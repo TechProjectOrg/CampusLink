@@ -10,7 +10,8 @@ import { Separator } from './ui/separator';
 import { toast } from 'sonner@2.0.3';
 import type { ApiUserSession, Student } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { apiChangePassword, apiFetchUserSessions, apiFetchUserSettings, apiRevokeUserSession, apiUpdateUserProfile, apiUpdateUserSettings, apiVerifyPasswordChange } from '../lib/authApi';
+import { apiChangePassword, apiCheckUsernameAvailability, apiFetchUserSessions, apiFetchUserSettings, apiRevokeUserSession, apiUpdateUserProfile, apiUpdateUserSettings, apiVerifyPasswordChange } from '../lib/authApi';
+import { ForgotPasswordDialog } from './ForgotPasswordDialog';
 import { LoadingIndicator } from './ui/LoadingIndicator';
 
 const PASSWORD_REQUIREMENTS = [
@@ -68,14 +69,21 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
   const [isEditingAccount, setIsEditingAccount] = useState(false);
   const [isSavingAccount, setIsSavingAccount] = useState(false);
   const [accountData, setAccountData] = useState({
+    displayName: accountStudent.name,
     username: accountStudent.username,
     branch: accountStudent.branch,
     year: String(yearValue ?? accountStudent.year),
+  });
+  const [usernameStatus, setUsernameStatus] = useState<{ checking: boolean; available: boolean | null; message: string }>({
+    checking: false,
+    available: null,
+    message: '',
   });
 
   const [passwordChangeStatus, setPasswordChangeStatus] = useState<'idle' | 'verifying' | 'changing'>('idle');
   const [securityView, setSecurityView] = useState<'menu' | 'password' | 'sessions'>('menu');
   const [openMobileSection, setOpenMobileSection] = useState<'account' | 'security' | 'notifications' | 'privacy' | null>(null);
+  const [forgotPasswordOpen, setForgotPasswordOpen] = useState(false);
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
     newPassword: '',
@@ -143,6 +151,7 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
     if (isEditingAccount) return;
 
     setAccountData({
+      displayName: accountStudent.name,
       username: accountStudent.username,
       branch: accountStudent.branch,
       year: String(yearValue ?? accountStudent.year),
@@ -239,6 +248,39 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
     void performPasswordChange();
   };
 
+  useEffect(() => {
+    if (!isEditingAccount) return;
+    const username = accountData.username.trim();
+    if (!username || username === accountStudent.username) {
+      setUsernameStatus({ checking: false, available: null, message: '' });
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setUsernameStatus({ checking: true, available: null, message: 'Checking username...' });
+      void apiCheckUsernameAvailability(username, auth.session?.token)
+        .then((result) => {
+          setUsernameStatus({
+            checking: false,
+            available: result.available,
+            message: result.message || '',
+          });
+          if (result.normalizedUsername && result.normalizedUsername !== username) {
+            setAccountData((current) => ({ ...current, username: result.normalizedUsername }));
+          }
+        })
+        .catch((error) => {
+          setUsernameStatus({
+            checking: false,
+            available: null,
+            message: error instanceof Error ? error.message : 'Unable to check username.',
+          });
+        });
+    }, 350);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isEditingAccount, accountData.username, accountStudent.username, auth.session?.token]);
+
   const handleBackToSecurityMenu = () => {
     setSecurityView('menu');
   };
@@ -334,6 +376,15 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
             {passwordMismatch && (
               <p className="text-sm text-red-600">New password and confirmation do not match.</p>
             )}
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={() => setForgotPasswordOpen(true)}
+              className="text-sm font-medium text-blue-600 transition hover:underline"
+            >
+              Forgot password?
+            </button>
           </div>
           <Button type="submit" className="w-full gradient-primary" disabled={isPasswordActionInProgress}>
             {passwordChangeStatus === 'verifying'
@@ -531,22 +582,30 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
 
   const handleCancelAccountEdit = () => {
     setAccountData({
+      displayName: accountStudent.name,
       username: accountStudent.username,
       branch: accountStudent.branch,
       year: String(yearValue ?? accountStudent.year),
     });
+    setUsernameStatus({ checking: false, available: null, message: '' });
     setIsEditingAccount(false);
   };
 
   const handleSaveAccount = async (event: React.FormEvent) => {
     event.preventDefault();
 
+    const trimmedDisplayName = accountData.displayName.trim();
     const trimmedUsername = accountData.username.trim();
     const trimmedBranch = accountData.branch.trim();
     const parsedYear = Number.parseInt(accountData.year, 10);
 
-    if (!trimmedUsername || !trimmedBranch || Number.isNaN(parsedYear)) {
+    if (!trimmedDisplayName || !trimmedUsername || !trimmedBranch || Number.isNaN(parsedYear)) {
       toast.error('Please complete all account fields');
+      return;
+    }
+
+    if (usernameStatus.available === false || usernameStatus.checking) {
+      toast.error(usernameStatus.message || 'Please choose an available username');
       return;
     }
 
@@ -561,6 +620,7 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
       await apiUpdateUserProfile(
         auth.session.userId,
         {
+          displayName: trimmedDisplayName,
           username: trimmedUsername,
           branch: trimmedBranch,
           year: parsedYear,
@@ -569,7 +629,8 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
       );
 
       onEdit({
-        name: trimmedUsername,
+        name: trimmedDisplayName,
+        displayName: trimmedDisplayName,
         username: trimmedUsername,
         branch: trimmedBranch,
         year: parsedYear,
@@ -634,6 +695,19 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
       <CardContent>
         <form onSubmit={handleSaveAccount} className="space-y-4">
           <div className="space-y-2">
+            <Label htmlFor="mobile-display-name">Display Name</Label>
+            {isEditingAccount ? (
+              <Input
+                id="mobile-display-name"
+                value={accountData.displayName}
+                onChange={(e) => setAccountData({ ...accountData, displayName: e.target.value })}
+              />
+            ) : (
+              <div className="rounded-xl border bg-white px-4 py-2 text-gray-900">{accountStudent.name}</div>
+            )}
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="mobile-username">Username</Label>
             {isEditingAccount ? (
               <Input
@@ -644,6 +718,9 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
             ) : (
               <div className="rounded-xl border bg-white px-4 py-2 text-gray-900">{accountStudent.username}</div>
             )}
+            {isEditingAccount && usernameStatus.message ? (
+              <p className={`text-xs ${usernameStatus.available === false ? 'text-red-500' : 'text-gray-500'}`}>{usernameStatus.message}</p>
+            ) : null}
           </div>
 
           <div className="space-y-2">
@@ -972,6 +1049,19 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
               <CardContent>
                 <form onSubmit={handleSaveAccount} className="space-y-4">
                   <div className="space-y-2">
+                    <Label htmlFor="display-name">Display Name</Label>
+                    {isEditingAccount ? (
+                      <Input
+                        id="display-name"
+                        value={accountData.displayName}
+                        onChange={(e) => setAccountData({ ...accountData, displayName: e.target.value })}
+                      />
+                    ) : (
+                      <div className="rounded-xl border bg-white px-4 py-2 text-gray-900">{accountStudent.name}</div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
                     <Label htmlFor="username">Username</Label>
                     {isEditingAccount ? (
                       <Input
@@ -982,6 +1072,9 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                     ) : (
                       <div className="rounded-xl border bg-white px-4 py-2 text-gray-900">{accountStudent.username}</div>
                     )}
+                    {isEditingAccount && usernameStatus.message ? (
+                      <p className={`text-xs ${usernameStatus.available === false ? 'text-red-500' : 'text-gray-500'}`}>{usernameStatus.message}</p>
+                    ) : null}
                   </div>
 
                   <div className="space-y-2">
@@ -1325,6 +1418,11 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
           </TabsContent>
         </Tabs>
       </div>
+      <ForgotPasswordDialog
+        open={forgotPasswordOpen}
+        onOpenChange={setForgotPasswordOpen}
+        defaultIdentifier={auth.profile?.email ?? accountStudent.email}
+      />
     </div>
   );
 }

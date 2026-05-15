@@ -25,6 +25,7 @@ export interface ChatReplyPreview {
   id: string;
   senderId: string;
   senderName: string;
+  senderUsername?: string | null;
   type: string;
   content: string | null;
   attachmentUrl: string | null;

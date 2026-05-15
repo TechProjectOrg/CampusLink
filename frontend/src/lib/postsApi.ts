@@ -21,6 +21,7 @@ export interface PostComment {
   id: string;
   postId: string;
   authorUserId: string;
+  authorDisplayName?: string;
   authorUsername: string;
   authorProfilePictureUrl: string | null;
   parentCommentId: string | null;
@@ -42,6 +43,7 @@ export interface CommentsPage {
 export interface UserPost {
   id: string;
   authorUserId: string;
+  authorDisplayName?: string;
   authorUsername?: string;
   authorProfilePictureUrl?: string | null;
   clubId: string | null;
@@ -125,6 +127,7 @@ function normalizeComment(raw: any): PostComment {
     id: String(raw?.id ?? ''),
     postId: String(raw?.postId ?? ''),
     authorUserId: String(raw?.authorUserId ?? ''),
+    authorDisplayName: raw?.authorDisplayName ? String(raw.authorDisplayName) : undefined,
     authorUsername: String(raw?.authorUsername ?? 'Unknown User'),
     authorProfilePictureUrl: raw?.authorProfilePictureUrl ? String(raw.authorProfilePictureUrl) : null,
     parentCommentId: raw?.parentCommentId ? String(raw.parentCommentId) : null,
@@ -143,6 +146,7 @@ export function normalizeUserPost(raw: any): UserPost {
   return {
     id: String(raw?.id ?? ''),
     authorUserId: String(raw?.authorUserId ?? ''),
+    authorDisplayName: raw?.authorDisplayName ? String(raw.authorDisplayName) : undefined,
     authorUsername: raw?.authorUsername ? String(raw.authorUsername) : undefined,
     authorProfilePictureUrl: raw?.authorProfilePictureUrl ? String(raw.authorProfilePictureUrl) : null,
     clubId: raw?.clubId ? String(raw.clubId) : null,

@@ -17,9 +17,26 @@ export interface PasswordChangeTokenPayload {
   purpose: 'password-change';
 }
 
+export interface PasswordResetTokenPayload {
+  userId: string;
+  email: string;
+  token: string;
+  purpose: 'password-reset';
+}
+
+export interface VerificationActionTokenPayload {
+  userId: string;
+  email: string;
+  requestId: string;
+  status: 'approved' | 'more_info';
+  purpose: 'verification-action';
+}
+
 const BCRYPT_SALT_ROUNDS = 12;
 const DEFAULT_TOKEN_TTL = '12h';
 const PASSWORD_CHANGE_TOKEN_TTL = '10m';
+const PASSWORD_RESET_TOKEN_TTL = '10m';
+const VERIFICATION_ACTION_TOKEN_TTL = '14d';
 
 function getJwtSecret(): string {
   const secret = process.env.JWT_SECRET;
@@ -108,5 +125,79 @@ export function verifyPasswordChangeToken(token: string): PasswordChangeTokenPay
   return {
     userId: decoded.userId,
     purpose: 'password-change',
+  };
+}
+
+export function signPasswordResetToken(userId: string, email: string, token: string): string {
+  return jwt.sign(
+    {
+      userId,
+      email,
+      token,
+      purpose: 'password-reset',
+    },
+    getJwtSecret(),
+    {
+      expiresIn: PASSWORD_RESET_TOKEN_TTL,
+    }
+  );
+}
+
+export function verifyPasswordResetToken(token: string): PasswordResetTokenPayload {
+  const decoded = jwt.verify(token, getJwtSecret());
+
+  if (
+    !decoded ||
+    typeof decoded !== 'object' ||
+    typeof decoded.userId !== 'string' ||
+    typeof decoded.email !== 'string' ||
+    typeof decoded.token !== 'string' ||
+    decoded.purpose !== 'password-reset'
+  ) {
+    throw new Error('Invalid password reset token');
+  }
+
+  return {
+    userId: decoded.userId,
+    email: decoded.email,
+    token: decoded.token,
+    purpose: 'password-reset',
+  };
+}
+
+export function signVerificationActionToken(payload: Omit<VerificationActionTokenPayload, 'purpose'>): string {
+  return jwt.sign(
+    {
+      ...payload,
+      purpose: 'verification-action',
+    },
+    getJwtSecret(),
+    {
+      expiresIn: VERIFICATION_ACTION_TOKEN_TTL,
+    }
+  );
+}
+
+export function verifyVerificationActionToken(token: string): VerificationActionTokenPayload {
+  const decoded = jwt.verify(token, getJwtSecret());
+
+  if (
+    !decoded ||
+    typeof decoded !== 'object' ||
+    typeof decoded.userId !== 'string' ||
+    typeof decoded.email !== 'string' ||
+    typeof decoded.requestId !== 'string' ||
+    (decoded.status !== 'approved' && decoded.status !== 'more_info') ||
+    decoded.purpose !== 'verification-action'
+  ) {
+    throw new Error('Invalid verification action token');
+  }
+
+  return {
+    userId: decoded.userId,
+    email: decoded.email,
+    requestId: decoded.requestId,
+    status: decoded.status,
+    purpose: 'verification-action',
   };
 }

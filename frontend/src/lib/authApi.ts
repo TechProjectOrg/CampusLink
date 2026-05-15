@@ -8,21 +8,69 @@ export interface LoginResult {
   token?: string;
 }
 
-export interface StudentSignupPayload {
-  name: string;
-  email: string;
-  password: string;
-  branch: string;
-  year: string | number;
+export interface AlumniPendingVerificationResult {
+  pendingVerification: true;
+  message: string;
+  request: {
+    id: string;
+    status: string;
+    requestedAt: string;
+    verificationState: 'alumni_pending_review';
+  };
 }
 
-export interface AlumniSignupPayload {
-  name: string;
+export interface AlumniVerificationResubmissionContext {
   email: string;
+  displayName: string;
+  username: string;
+  graduationYear: number | null;
+  branch: string | null;
+  currentStatus: string | null;
+  decisionNote: string | null;
+}
+
+export interface AuthOnboardingResponse {
+  onboardingRequired: true;
+  sessionId: string;
+  provider: 'google' | 'magic_link';
+  accountType: 'student' | 'alumni';
+  email: string;
+  fullName: string;
+  suggestedUsername?: string | null;
+  profilePhotoUrl: string | null;
+}
+
+export type GoogleAuthResult = LoginResult | AuthOnboardingResponse;
+export type SignupExchangeResult = AuthOnboardingResponse;
+
+export interface AlumniSignupPayload {
+  sessionId: string;
+  displayName: string;
+  username: string;
   graduationYear: string | number;
   branch: string;
   currentStatus: string;
   password: string;
+  proofFiles: File[];
+}
+
+export interface AlumniVerificationResubmissionPayload {
+  token: string;
+  displayName: string;
+  username: string;
+  graduationYear: string | number;
+  branch: string;
+  currentStatus: string;
+  proofFiles: File[];
+}
+
+export interface StudentSignupPayload {
+  sessionId: string;
+  displayName: string;
+  username: string;
+  password: string;
+  branch: string;
+  year: string | number;
 }
 
 function authHeaders(token?: string): HeadersInit {
@@ -49,14 +97,77 @@ export async function apiLogin(email: string, password: string): Promise<LoginRe
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error(err?.message || 'Login failed');
+    throw new Error(err?.message || 'Unable to sign in');
   }
 
   const data = (await response.json()) as ApiUserProfile & { token?: string };
   return { profile: data, token: data.token };
 }
 
-export async function apiSignupStudent(payload: StudentSignupPayload): Promise<LoginResult> {
+export async function apiAuthenticateWithGoogle(payload: {
+  idToken: string;
+  intent?: 'login' | 'signup';
+  accountType?: 'student' | 'alumni';
+}): Promise<GoogleAuthResult> {
+  const response = await safeFetch(`${API_BASE}/auth/google`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Google sign-in failed');
+  }
+
+  const data = (await response.json()) as (ApiUserProfile & { token?: string }) | AuthOnboardingResponse;
+  if ('onboardingRequired' in data) {
+    return data;
+  }
+
+  return { profile: data, token: data.token };
+}
+
+export async function apiSendSignupVerificationLink(
+  email: string,
+  accountType: 'student' | 'alumni'
+): Promise<{ message: string }> {
+  const response = await safeFetch(`${API_BASE}/auth/signup/verify-email`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ email, accountType }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to send verification link');
+  }
+
+  return (await response.json()) as { message: string };
+}
+
+export async function apiExchangeSignupVerification(exchangeCode: string): Promise<SignupExchangeResult> {
+  const response = await safeFetch(`${API_BASE}/auth/signup/exchange`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ exchangeCode }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to finish verification');
+  }
+
+  return (await response.json()) as AuthOnboardingResponse;
+}
+
+export async function apiCompleteStudentSignup(payload: StudentSignupPayload): Promise<LoginResult> {
   const response = await safeFetch(`${API_BASE}/auth/signup/student`, {
     method: 'POST',
     headers: {
@@ -67,20 +178,29 @@ export async function apiSignupStudent(payload: StudentSignupPayload): Promise<L
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error(err?.message || 'Signup failed');
+    throw new Error(err?.message || 'Unable to complete student signup');
   }
 
   const data = (await response.json()) as ApiUserProfile & { token?: string };
   return { profile: data, token: data.token };
 }
 
-export async function apiSignupAlumni(payload: AlumniSignupPayload): Promise<LoginResult> {
+export async function apiSignupAlumni(payload: AlumniSignupPayload): Promise<AlumniPendingVerificationResult> {
+  const formData = new FormData();
+  formData.append('sessionId', payload.sessionId);
+  formData.append('displayName', payload.displayName);
+  formData.append('username', payload.username);
+  formData.append('graduationYear', String(payload.graduationYear));
+  formData.append('branch', payload.branch);
+  formData.append('currentStatus', payload.currentStatus);
+  formData.append('password', payload.password);
+  payload.proofFiles.forEach((file) => {
+    formData.append('proofFiles', file);
+  });
+
   const response = await safeFetch(`${API_BASE}/auth/signup/alumni`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
+    body: formData,
   });
 
   if (!response.ok) {
@@ -88,8 +208,59 @@ export async function apiSignupAlumni(payload: AlumniSignupPayload): Promise<Log
     throw new Error(err?.message || 'Signup failed');
   }
 
-  const data = (await response.json()) as ApiUserProfile & { token?: string };
-  return { profile: data, token: data.token };
+  return (await response.json()) as AlumniPendingVerificationResult;
+}
+
+export async function apiFetchAlumniVerificationResubmission(token: string): Promise<AlumniVerificationResubmissionContext> {
+  const response = await safeFetch(`${API_BASE}/auth/alumni/resubmission?token=${encodeURIComponent(token)}`);
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to open the alumni verification resubmission link');
+  }
+
+  return (await response.json()) as AlumniVerificationResubmissionContext;
+}
+
+export async function apiResubmitAlumniVerification(payload: AlumniVerificationResubmissionPayload): Promise<AlumniPendingVerificationResult> {
+  const formData = new FormData();
+  formData.append('token', payload.token);
+  formData.append('displayName', payload.displayName);
+  formData.append('username', payload.username);
+  formData.append('graduationYear', String(payload.graduationYear));
+  formData.append('branch', payload.branch);
+  formData.append('currentStatus', payload.currentStatus);
+  payload.proofFiles.forEach((file) => {
+    formData.append('proofFiles', file);
+  });
+
+  const response = await safeFetch(`${API_BASE}/auth/alumni/resubmit`, {
+    method: 'POST',
+    body: formData,
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to resubmit alumni verification proof');
+  }
+
+  return (await response.json()) as AlumniPendingVerificationResult;
+}
+
+export async function apiCompleteGoogleOnboarding(payload: StudentSignupPayload): Promise<LoginResult> {
+  return await apiCompleteStudentSignup(payload);
+}
+
+export async function apiSendMagicLink(email: string): Promise<{ message: string }> {
+  return await apiSendSignupVerificationLink(email, 'student');
+}
+
+export async function apiExchangeMagicLink(exchangeCode: string): Promise<SignupExchangeResult> {
+  return await apiExchangeSignupVerification(exchangeCode);
+}
+
+export async function apiCompleteMagicLinkOnboarding(payload: StudentSignupPayload): Promise<LoginResult> {
+  return await apiCompleteStudentSignup(payload);
 }
 
 export async function apiFetchUserProfile(userId: string, token?: string): Promise<ApiUserProfile> {
@@ -177,6 +348,19 @@ export interface PasswordChangeVerifyResult {
   changeToken: string;
 }
 
+export interface PasswordResetRequestResult {
+  message: string;
+  lookupType: 'email' | 'username';
+  deliveryEmail: string;
+  maskedDeliveryEmail: string;
+}
+
+export interface PasswordResetExchangeResult {
+  resetToken: string;
+  email: string;
+  maskedEmail: string;
+}
+
 export async function apiVerifyPasswordChange(
   userId: string,
   currentPassword: string,
@@ -197,6 +381,60 @@ export async function apiVerifyPasswordChange(
   }
 
   return (await response.json()) as PasswordChangeVerifyResult;
+}
+
+export async function apiRequestPasswordReset(identifier: string): Promise<PasswordResetRequestResult> {
+  const response = await safeFetch(`${API_BASE}/auth/password-reset/request`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ identifier }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to request password reset');
+  }
+
+  return (await response.json()) as PasswordResetRequestResult;
+}
+
+export async function apiExchangePasswordReset(exchangeCode: string): Promise<PasswordResetExchangeResult> {
+  const response = await safeFetch(`${API_BASE}/auth/password-reset/exchange`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ exchangeCode }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to verify password reset link');
+  }
+
+  return (await response.json()) as PasswordResetExchangeResult;
+}
+
+export async function apiCompletePasswordReset(payload: {
+  resetToken: string;
+  newPassword: string;
+  confirmPassword: string;
+}): Promise<void> {
+  const response = await safeFetch(`${API_BASE}/auth/password-reset/complete`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    const detail = err?.details ? ` ${err.details}` : '';
+    throw new Error(err?.message ? `${err.message}${detail}` : 'Unable to reset password');
+  }
 }
 
 export async function apiChangePassword(
@@ -221,11 +459,37 @@ export async function apiChangePassword(
 }
 
 export interface UpdateUserProfilePayload {
+  displayName?: string;
   username?: string;
   branch?: string;
   year?: string | number;
   bio?: string | null;
   headline?: string | null;
+}
+
+export interface UsernameAvailabilityResult {
+  available: boolean;
+  normalizedUsername: string;
+  message?: string;
+}
+
+export async function apiCheckUsernameAvailability(
+  username: string,
+  token?: string
+): Promise<UsernameAvailabilityResult> {
+  const params = new URLSearchParams({ username });
+  const response = await safeFetch(`${API_BASE}/users/username-availability?${params.toString()}`, {
+    headers: {
+      ...authHeaders(token),
+    },
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to check username');
+  }
+
+  return (await response.json()) as UsernameAvailabilityResult;
 }
 
 export async function apiUpdateUserProfile(

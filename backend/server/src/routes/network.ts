@@ -16,6 +16,7 @@ function mapMinimalUserFromSummary(summary: Awaited<ReturnType<typeof getUserSum
   const card = toCachedUserCard(summary);
   return {
     userId: card.userId,
+    displayName: card.displayName,
     username: card.username,
     profilePictureUrl: card.profilePictureUrl,
     isPrivate: card.isPrivate,

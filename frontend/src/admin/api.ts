@@ -282,6 +282,57 @@ export interface AdminAnalyticsResponse {
   deviceBreakdown: AdminAnalyticsDeviceRow[];
 }
 
+export type AdminVerificationRequestStatus = 'pending' | 'approved' | 'rejected' | 'more_info';
+export type AdminVerificationState =
+  | 'student_google_verified'
+  | 'alumni_pending_review'
+  | 'alumni_verified'
+  | 'alumni_rejected'
+  | null;
+
+export interface AdminVerificationReviewerSummary {
+  id: string;
+  username: string;
+  email: string;
+}
+
+export interface AdminVerificationTargetSummary {
+  kind: 'user' | 'club';
+  id: string;
+  label: string;
+  email?: string | null;
+  avatarUrl?: string | null;
+  slug?: string | null;
+  verificationState?: AdminVerificationState;
+  verified?: boolean;
+}
+
+export interface AdminVerificationProfilePreview {
+  name?: string;
+  email?: string;
+  branch?: string;
+  passingYear?: number;
+  currentStatus?: string;
+  submittedProofLabels?: string[];
+}
+
+export interface AdminVerificationRequestItem {
+  id: string;
+  type: string;
+  targetUserId: string | null;
+  targetClubId: string | null;
+  documentUrls: string[];
+  profilePreview: AdminVerificationProfilePreview | null;
+  notes: string | null;
+  decisionNote: string | null;
+  status: AdminVerificationRequestStatus;
+  requestedAt: string;
+  reviewedAt: string | null;
+  reviewedBy: AdminVerificationReviewerSummary | null;
+  verificationState: AdminVerificationState;
+  targetSummary: AdminVerificationTargetSummary | null;
+}
+
 export type AdminAnnouncementAudienceType = 'all_users' | 'specific_clubs' | 'specific_branches';
 export type AdminAnnouncementStatus = 'draft' | 'scheduled' | 'published';
 

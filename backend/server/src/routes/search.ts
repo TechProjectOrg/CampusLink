@@ -37,8 +37,12 @@ async function searchUsers(currentUserId: string, q: string, limit: number, offs
       u.user_id
     FROM users u
     WHERE u.user_id <> ${currentUserId}
-      AND (u.username ILIKE ${pattern} OR SPLIT_PART(u.email, '@', 1) ILIKE ${pattern})
-    ORDER BY u.username
+      AND (
+        u.username ILIKE ${pattern}
+        OR u.display_name ILIKE ${pattern}
+        OR SPLIT_PART(u.email, '@', 1) ILIKE ${pattern}
+      )
+    ORDER BY u.display_name, u.username
     LIMIT ${limit}
     OFFSET ${offset}
   `;
@@ -52,6 +56,7 @@ async function searchUsers(currentUserId: string, q: string, limit: number, offs
       const card = toCachedUserCard(summary);
       return {
         userId: card.userId,
+        displayName: card.displayName,
         username: card.username,
         email: card.email,
         profilePictureUrl: card.profilePictureUrl,

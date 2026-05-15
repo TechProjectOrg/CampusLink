@@ -22,6 +22,7 @@ export type DbPostVisibility = 'public' | 'followers' | 'club_members';
 export interface FeedPostRow {
   post_id: string;
   author_user_id: string;
+  author_display_name: string;
   author_username: string;
   author_profile_photo_url: string | null;
   club_id: string | null;
@@ -55,6 +56,7 @@ export interface CommentRow {
   comment_id: string;
   post_id: string;
   author_user_id: string;
+  author_display_name: string;
   author_username: string;
   author_profile_photo_url: string | null;
   post_author_user_id: string;
@@ -78,6 +80,7 @@ export interface PostCommentResponse {
   id: string;
   postId: string;
   authorUserId: string;
+  authorDisplayName: string;
   authorUsername: string;
   authorProfilePictureUrl: string | null;
   parentCommentId: string | null;
@@ -94,6 +97,7 @@ export interface PostCommentResponse {
 export interface FeedPostResponse {
   id: string;
   authorUserId: string;
+  authorDisplayName: string;
   authorUsername: string;
   authorProfilePictureUrl: string | null;
   clubId: string | null;
@@ -260,13 +264,14 @@ function snapshotFromRow(row: FeedPostRow): PostSnapshot {
 
 function rowFromSnapshot(
   snapshot: PostSnapshot,
-  author: { username: string; profilePictureUrl: string | null },
+  author: { displayName: string; username: string; profilePictureUrl: string | null },
   engagement: EngagementSnapshot,
   viewerState: { isLiked: boolean; isSaved: boolean },
 ): FeedPostRow {
   return {
     post_id: snapshot.postId,
     author_user_id: snapshot.authorUserId,
+    author_display_name: author.displayName,
     author_username: author.username,
     author_profile_photo_url: author.profilePictureUrl,
     club_id: snapshot.clubId,
@@ -306,6 +311,7 @@ export function mapCommentRows(rows: CommentRow[], viewerUserId: string, threade
       id: row.comment_id,
       postId: row.post_id,
       authorUserId: row.author_user_id,
+      authorDisplayName: row.author_display_name,
       authorUsername: row.author_username,
       authorProfilePictureUrl: row.author_profile_photo_url,
       parentCommentId: row.parent_comment_id,
@@ -336,6 +342,7 @@ function postSelectSql(viewerUserId: string): Prisma.Sql {
     SELECT
       p.post_id,
       p.author_user_id,
+      au.display_name AS author_display_name,
       au.username AS author_username,
       au.profile_photo_url AS author_profile_photo_url,
       p.club_id,
@@ -743,6 +750,7 @@ export async function fetchRecentCommentsForPosts(postIds: string[], viewerUserI
         c.comment_id,
         c.post_id,
         c.author_user_id,
+        u.display_name AS author_display_name,
         u.username AS author_username,
         u.profile_photo_url AS author_profile_photo_url,
         p.author_user_id AS post_author_user_id,
@@ -827,6 +835,7 @@ export async function hydratePosts(viewerUserId: string, postIds: string[]): Pro
     const row = rowFromSnapshot(
       snapshot,
       {
+        displayName: authorSummary.displayName,
         username: authorSummary.username,
         profilePictureUrl: authorSummary.profilePictureUrl,
       },
@@ -834,10 +843,11 @@ export async function hydratePosts(viewerUserId: string, postIds: string[]): Pro
       viewerState.get(postId) ?? { isLiked: false, isSaved: false },
     );
 
-    return {
-      id: row.post_id,
-      authorUserId: row.author_user_id,
-      authorUsername: row.author_username,
+      return {
+        id: row.post_id,
+        authorUserId: row.author_user_id,
+        authorDisplayName: row.author_display_name,
+        authorUsername: row.author_username,
       authorProfilePictureUrl: row.author_profile_photo_url,
       clubId: row.club_id,
       clubName: row.club_name,

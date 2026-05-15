@@ -36,6 +36,7 @@ export interface Achievement {
 export interface Student {
   id: string;
   name: string;
+  displayName?: string;
   username: string;
   email: string;
   createdAt?: string;
@@ -168,6 +169,7 @@ export interface ChatConversation {
   id: string;
   participantId: string;
   participantName: string;
+  participantUsername?: string;
   participantAvatar: string;
   lastMessage: string;
   timestamp: string;
@@ -203,6 +205,7 @@ export interface Notification {
   entityType?: string | null;
   entityId?: string | null;
   actorId?: string;
+  actorUsername?: string | null;
 }
 
 export interface Group {
@@ -220,9 +223,16 @@ export interface Group {
 // Backend API types
 // ==============================
 export type ApiUserType = 'student' | 'alumni' | 'teacher' | 'unknown';
+export type ApiUserVerificationState =
+  | 'student_google_verified'
+  | 'alumni_pending_review'
+  | 'alumni_verified'
+  | 'alumni_rejected';
+export type ApiAuthProvider = 'google' | 'magic_link';
 
 export interface ApiUserProfile {
   userId: string;
+  displayName: string;
   username: string;
   email: string;
   bio: string | null;
@@ -232,6 +242,9 @@ export interface ApiUserProfile {
   isPublic: boolean;
   createdAt: string; // ISO string
   type: ApiUserType;
+  authProvider?: ApiAuthProvider;
+  verificationState?: ApiUserVerificationState | null;
+  onboardingCompletedAt?: string | null;
   details?: {
     branch?: string;
     year?: number;

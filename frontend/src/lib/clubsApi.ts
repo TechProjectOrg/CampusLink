@@ -32,6 +32,7 @@ export interface ClubCategoryOption {
 export interface ClubMember {
   clubMembershipId: string;
   userId: string;
+  displayName: string;
   username: string;
   profilePictureUrl: string | null;
   role: 'owner' | 'admin' | 'member';
@@ -198,6 +199,7 @@ export async function apiFetchClubMembers(clubId: string, token?: string, limit 
   return data.map((item: any) => ({
     clubMembershipId: String(item?.clubMembershipId ?? ''),
     userId: String(item?.userId ?? ''),
+    displayName: String(item?.displayName ?? item?.username ?? ''),
     username: String(item?.username ?? ''),
     profilePictureUrl: item?.profilePictureUrl ? String(item.profilePictureUrl) : null,
     role: String(item?.role ?? 'member') as ClubMember['role'],

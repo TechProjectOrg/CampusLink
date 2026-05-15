@@ -653,11 +653,12 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
                       <div className="flex items-center gap-4">
                         <Avatar className="w-14 h-14 ring-2 ring-primary/20">
                           <AvatarImage src={profile?.avatar ?? member.profilePictureUrl ?? undefined} />
-                          <AvatarFallback>{member.username[0]}</AvatarFallback>
+                          <AvatarFallback>{(member.displayName ?? member.username)[0]}</AvatarFallback>
                         </Avatar>
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
-                            <p className="font-semibold text-gray-900">{profile?.name ?? member.username}</p>
+                            <p className="font-semibold text-gray-900">{member.displayName ?? profile?.name ?? member.username}</p>
+                            <p className="text-xs text-gray-500">@{member.username}</p>
                             <Badge className="bg-primary/10 text-primary text-xs capitalize">{member.role}</Badge>
                             {member.role === 'owner' ? <Crown className="w-4 h-4 text-amber-500" /> : null}
                           </div>
@@ -696,9 +697,10 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
                         <div className="flex items-center gap-3 min-w-0">
                           <Avatar className="w-10 h-10">
                             <AvatarImage src={member.profilePictureUrl ?? undefined} />
-                            <AvatarFallback>{member.username[0]}</AvatarFallback>
+                            <AvatarFallback>{(member.displayName ?? member.username)[0]}</AvatarFallback>
                           </Avatar>
-                          <p className="text-sm text-gray-900 truncate">{member.username}</p>
+                          <p className="text-sm text-gray-900 truncate">{member.displayName ?? member.username}</p>
+                          <p className="text-xs text-gray-500 truncate">@{member.username}</p>
                         </div>
                         <Badge variant="outline">Invited</Badge>
                       </CardContent>
@@ -716,7 +718,8 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
                 <Card key={member.clubMembershipId} className="border border-primary/10 shadow-sm">
                   <CardContent className="p-4 flex items-center justify-between gap-3">
                     <div>
-                      <p className="font-medium text-gray-900">{member.username}</p>
+                      <p className="font-medium text-gray-900">{member.displayName ?? member.username}</p>
+                      <p className="text-xs text-gray-500">@{member.username}</p>
                       <p className="text-xs text-gray-500">Requested to join</p>
                     </div>
                     <div className="flex gap-2">
@@ -779,10 +782,11 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
                           <div className="flex items-center gap-3 min-w-0">
                             <Avatar className="w-10 h-10">
                               <AvatarImage src={user.profilePictureUrl ?? undefined} />
-                              <AvatarFallback>{user.username[0]}</AvatarFallback>
+                              <AvatarFallback>{(user.displayName ?? user.username)[0]}</AvatarFallback>
                             </Avatar>
                             <div className="min-w-0">
-                              <p className="text-sm text-gray-900 truncate">{user.username}</p>
+                              <p className="text-sm text-gray-900 truncate">{user.displayName ?? user.username}</p>
+                              <p className="text-xs text-gray-500 truncate">@{user.username}</p>
                               <p className="text-xs text-gray-500 truncate">
                                 {user.branch ?? 'Unknown branch'}{user.year ? ` · Year ${user.year}` : ''}
                               </p>
@@ -813,10 +817,11 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
                           <div className="flex items-center gap-3 min-w-0">
                             <Avatar className="w-10 h-10">
                               <AvatarImage src={user.profilePictureUrl ?? undefined} />
-                              <AvatarFallback>{user.username[0]}</AvatarFallback>
+                              <AvatarFallback>{(user.displayName ?? user.username)[0]}</AvatarFallback>
                             </Avatar>
                             <div className="min-w-0">
-                              <p className="text-sm text-gray-900 truncate">{user.username}</p>
+                              <p className="text-sm text-gray-900 truncate">{user.displayName ?? user.username}</p>
+                              <p className="text-xs text-gray-500 truncate">@{user.username}</p>
                               <p className="text-xs text-gray-500 truncate">
                                 {user.branch ?? 'Unknown branch'}{user.year ? ` · Year ${user.year}` : ''}
                               </p>

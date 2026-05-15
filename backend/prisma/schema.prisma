@@ -102,6 +102,7 @@ enum AdminReportStatus {
 
 enum VerificationRequestType {
   STUDENT @map("student")
+  ALUMNI  @map("alumni")
   CLUB    @map("club")
 }
 
@@ -110,6 +111,18 @@ enum VerificationRequestStatus {
   APPROVED  @map("approved")
   REJECTED  @map("rejected")
   MORE_INFO @map("more_info")
+}
+
+enum UserVerificationState {
+  STUDENT_GOOGLE_VERIFIED @map("student_google_verified")
+  ALUMNI_PENDING_REVIEW   @map("alumni_pending_review")
+  ALUMNI_VERIFIED         @map("alumni_verified")
+  ALUMNI_REJECTED         @map("alumni_rejected")
+}
+
+enum AuthProvider {
+  GOOGLE @map("google")
+  MAGIC_LINK  @map("magic_link")
 }
 
 enum AnnouncementStatus {
@@ -127,10 +140,13 @@ enum MessageType {
 
 model User {
   userId                 String              @id @default(dbgenerated("gen_random_uuid()")) @map("user_id") @db.Uuid
+  displayName            String              @map("display_name") @db.VarChar(100)
   username               String              @unique @db.VarChar(50)
   email                  String              @unique @db.VarChar(100)
   passwordHash           String              @map("password_hash") @db.VarChar(255)
   userType               UserType            @map("user_type")
+  authProvider           AuthProvider        @default(MAGIC_LINK) @map("auth_provider")
+  googleSubject          String?             @unique @map("google_subject") @db.VarChar(255)
   bio                    String?             @db.VarChar(500)
   headline               String?             @db.VarChar(255)
   profilePhotoUrl        String?             @map("profile_photo_url") @db.Text
@@ -139,9 +155,12 @@ model User {
   isActive               Boolean             @default(true) @map("is_active")
   isBanned               Boolean             @default(false) @map("is_banned")
   suspendedUntil         DateTime?           @map("suspended_until") @db.Timestamp(6)
+  onboardingCompletedAt  DateTime?           @map("onboarding_completed_at") @db.Timestamp(6)
   verifiedAt             DateTime?           @map("verified_at") @db.Timestamp(6)
+  verificationState      UserVerificationState? @map("verification_state")
   isOnline               Boolean             @default(false) @map("is_online")
   lastSeenAt             DateTime?           @map("last_seen_at") @db.Timestamp(6)
+  lastLoginAt            DateTime?           @map("last_login_at") @db.Timestamp(6)
   createdAt              DateTime            @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt              DateTime            @updatedAt @map("updated_at") @db.Timestamp(6)
   studentProfile         StudentProfile?
@@ -257,6 +276,25 @@ model UserSkill {
   @@unique([userId, name], map: "uq_user_skills_user_id_name")
   @@index([userId], map: "idx_user_skills_user_id")
   @@map("user_skills")
+}
+
+model AuthOnboardingSession {
+  authOnboardingSessionId String       @id @default(dbgenerated("gen_random_uuid()")) @map("auth_onboarding_session_id") @db.Uuid
+  provider                AuthProvider @map("provider")
+  email                   String       @db.VarChar(100)
+  googleSubject           String?      @unique @map("google_subject") @db.VarChar(255)
+  fullName                String       @map("full_name") @db.VarChar(150)
+  profilePhotoUrl         String?      @map("profile_photo_url") @db.Text
+  suggestedUsername       String?      @map("suggested_username") @db.VarChar(50)
+  payload                 Json         @default("{}") @db.JsonB
+  expiresAt               DateTime     @map("expires_at") @db.Timestamp(6)
+  completedAt             DateTime?    @map("completed_at") @db.Timestamp(6)
+  createdAt               DateTime     @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt               DateTime     @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@index([email], map: "idx_auth_onboarding_sessions_email")
+  @@index([expiresAt], map: "idx_auth_onboarding_sessions_expires_at")
+  @@map("auth_onboarding_sessions")
 }
 
 model UserCertification {
@@ -806,6 +844,7 @@ model AdminVerificationRequest {
   documentUrls          Json                      @default("[]") @map("document_urls") @db.JsonB
   profilePreview        Json?                     @map("profile_preview") @db.JsonB
   notes                 String?                   @db.Text
+  decisionNote          String?                   @map("decision_note") @db.Text
   status                VerificationRequestStatus @default(PENDING)
   requestedAt           DateTime                  @default(now()) @map("requested_at") @db.Timestamp(6)
   reviewedAt            DateTime?                 @map("reviewed_at") @db.Timestamp(6)

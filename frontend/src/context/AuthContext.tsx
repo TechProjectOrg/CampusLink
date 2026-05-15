@@ -1,13 +1,25 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import type { ApiUserProfile, Student } from '../types';
 import {
+  apiAuthenticateWithGoogle,
+  apiCompleteGoogleOnboarding,
+  apiCompleteMagicLinkOnboarding,
   apiDeleteAccount,
+  apiExchangeSignupVerification,
+  apiFetchAlumniVerificationResubmission,
   apiFetchUserProfile,
   apiLogin,
+  apiResubmitAlumniVerification,
+  apiSendSignupVerificationLink,
   apiSignupAlumni,
-  apiSignupStudent,
+  type AlumniVerificationResubmissionContext,
+  type AlumniVerificationResubmissionPayload,
+  type AlumniPendingVerificationResult,
   type AlumniSignupPayload,
+  type AuthOnboardingResponse,
+  type GoogleAuthResult,
   type StudentSignupPayload,
+  type SignupExchangeResult,
 } from '../lib/authApi';
 import {
   clearStoredSession,
@@ -25,8 +37,19 @@ interface AuthContextValue {
   currentUser: Student | null;
 
   login: (email: string, password: string) => Promise<void>;
-  signupStudent: (payload: StudentSignupPayload) => Promise<void>;
-  signupAlumni: (payload: AlumniSignupPayload) => Promise<void>;
+  authenticateWithGoogle: (payload: {
+    idToken: string;
+    intent?: 'login' | 'signup';
+    accountType?: 'student' | 'alumni';
+  }) => Promise<GoogleAuthResult>;
+  sendSignupVerificationLink: (email: string, accountType: 'student' | 'alumni') => Promise<{ message: string }>;
+  exchangeSignupVerification: (exchangeCode: string) => Promise<SignupExchangeResult>;
+  completeStudentSignup: (payload: StudentSignupPayload) => Promise<void>;
+  completeGoogleOnboarding: (payload: StudentSignupPayload) => Promise<void>;
+  completeMagicLinkOnboarding: (payload: StudentSignupPayload) => Promise<void>;
+  signupAlumni: (payload: AlumniSignupPayload) => Promise<AlumniPendingVerificationResult>;
+  fetchAlumniVerificationResubmission: (token: string) => Promise<AlumniVerificationResubmissionContext>;
+  resubmitAlumniVerification: (payload: AlumniVerificationResubmissionPayload) => Promise<AlumniPendingVerificationResult>;
   refreshProfile: () => Promise<void>;
   deleteAccount: (password: string) => Promise<void>;
   logout: () => void;
@@ -37,13 +60,13 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 function profileToStudent(profile: ApiUserProfile): Student {
   return {
     id: profile.userId,
-    name: profile.username,
+    name: profile.displayName,
+    displayName: profile.displayName,
     username: profile.username,
     email: profile.email,
     branch: profile.details?.branch ?? 'Unknown',
     year: profile.details?.year ?? profile.details?.passingYear ?? 0,
-    avatar:
-      profile.profilePictureUrl || undefined,
+    avatar: profile.profilePictureUrl || undefined,
     coverPhotoUrl: profile.coverPhotoUrl || undefined,
     bio: profile.bio ?? '',
     skills: [],
@@ -61,6 +84,10 @@ function handOffAdminSession(profile: ApiUserProfile, token?: string): boolean {
   writeAdminSession({ token });
   window.location.replace('/admin');
   return true;
+}
+
+function isOnboardingResult(result: GoogleAuthResult | SignupExchangeResult): result is AuthOnboardingResponse {
+  return 'onboardingRequired' in result;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -113,18 +140,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const login = async (email: string, password: string) => {
-    const { profile: p, token } = await apiLogin(email, password);
-    persistAndSet(p, token);
+    const { profile: nextProfile, token } = await apiLogin(email, password);
+    persistAndSet(nextProfile, token);
   };
 
-  const signupStudent = async (payload: StudentSignupPayload) => {
-    const { profile: p, token } = await apiSignupStudent(payload);
-    persistAndSet(p, token);
+  const authenticateWithGoogle = async (payload: {
+    idToken: string;
+    intent?: 'login' | 'signup';
+    accountType?: 'student' | 'alumni';
+  }) => {
+    const result = await apiAuthenticateWithGoogle(payload);
+    if (isOnboardingResult(result)) {
+      return result;
+    }
+
+    persistAndSet(result.profile, result.token);
+    return result;
+  };
+
+  const sendSignupVerificationLink = async (email: string, accountType: 'student' | 'alumni') => {
+    return await apiSendSignupVerificationLink(email, accountType);
+  };
+
+  const exchangeSignupVerification = async (exchangeCode: string) => {
+    return await apiExchangeSignupVerification(exchangeCode);
+  };
+
+  const completeStudentSignup = async (payload: StudentSignupPayload) => {
+    const { profile: nextProfile, token } = await apiCompleteMagicLinkOnboarding(payload);
+    persistAndSet(nextProfile, token);
+  };
+
+  const completeGoogleOnboarding = async (payload: StudentSignupPayload) => {
+    const { profile: nextProfile, token } = await apiCompleteGoogleOnboarding(payload);
+    persistAndSet(nextProfile, token);
+  };
+
+  const completeMagicLinkOnboarding = async (payload: StudentSignupPayload) => {
+    const { profile: nextProfile, token } = await apiCompleteMagicLinkOnboarding(payload);
+    persistAndSet(nextProfile, token);
   };
 
   const signupAlumni = async (payload: AlumniSignupPayload) => {
-    const { profile: p, token } = await apiSignupAlumni(payload);
-    persistAndSet(p, token);
+    return await apiSignupAlumni(payload);
+  };
+
+  const fetchAlumniVerificationResubmission = async (token: string) => {
+    return await apiFetchAlumniVerificationResubmission(token);
+  };
+
+  const resubmitAlumniVerification = async (payload: AlumniVerificationResubmissionPayload) => {
+    return await apiResubmitAlumniVerification(payload);
   };
 
   useEffect(() => {
@@ -143,13 +209,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(stored);
 
       try {
-        const p = await apiFetchUserProfile(stored.userId, stored.token);
-        if (handOffAdminSession(p, stored.token)) {
+        const nextProfile = await apiFetchUserProfile(stored.userId, stored.token);
+        if (handOffAdminSession(nextProfile, stored.token)) {
           return;
         }
-        setProfile(p);
+        setProfile(nextProfile);
       } catch {
-        // Session is invalid/expired or user no longer exists.
         clearStoredSession();
         setSession(null);
         setProfile(null);
@@ -158,7 +223,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     };
 
-    init();
+    void init();
   }, []);
 
   const value: AuthContextValue = {
@@ -168,8 +233,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     profile,
     currentUser,
     login,
-    signupStudent,
+    authenticateWithGoogle,
+    sendSignupVerificationLink,
+    exchangeSignupVerification,
+    completeStudentSignup,
+    completeGoogleOnboarding,
+    completeMagicLinkOnboarding,
     signupAlumni,
+    fetchAlumniVerificationResubmission,
+    resubmitAlumniVerification,
     refreshProfile,
     deleteAccount,
     logout,

@@ -334,13 +334,14 @@ export async function getChatMembers(chatId: string, includeInactive: boolean = 
   const rows = await prisma.$queryRaw<
     {
       user_id: string;
+      display_name: string;
       username: string;
       role: string;
       joined_at: Date;
       left_at: Date | null;
     }[]
   >`
-    SELECT cp.user_id, u.username, cp.role, cp.joined_at, cp.left_at
+    SELECT cp.user_id, u.display_name, u.username, cp.role, cp.joined_at, cp.left_at
     FROM chat_participants cp
     JOIN users u ON u.user_id = cp.user_id
     WHERE cp.chat_id = ${chatId}
@@ -396,6 +397,7 @@ export async function getGroupChatDetails(chatId: string, viewerUserId: string) 
           : (summary?.details.passingYear ?? null);
       return {
         userId: member.user_id,
+        displayName: summary?.displayName ?? member.display_name,
         username: member.username,
         avatarUrl: summary?.profilePictureUrl ?? null,
         role: member.role.toLowerCase(),

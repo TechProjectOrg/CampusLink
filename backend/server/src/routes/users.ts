@@ -51,11 +51,35 @@ const requireOwnUser: RequestHandler<GetUserParams> = (req, res, next: NextFunct
 router.use('/:userId', authenticateToken);
 
 interface UpdateUserBody {
+  displayName?: string;
   username?: string;
   branch?: string;
   year?: string | number;
   bio?: string | null;
   headline?: string | null;
+}
+
+function normalizeDisplayName(value: string): string {
+  return value.trim().replace(/\s+/g, ' ').slice(0, 100);
+}
+
+function normalizeUsername(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_')
+    .replace(/[^a-z0-9._]/g, '')
+    .slice(0, 50);
+}
+
+function validateUsername(value: string): string | null {
+  if (!value) return 'Username is required';
+  if (value.length < 3) return 'Username must be at least 3 characters long';
+  if (value.length > 50) return 'Username must be 50 characters or fewer';
+  if (!/^[a-z0-9._]+$/.test(value)) {
+    return 'Username can only include lowercase letters, numbers, dots, and underscores';
+  }
+  return null;
 }
 
 interface UpdateProfilePictureBody {
@@ -79,6 +103,35 @@ const postMediaUpload = multer({
     fileSize: 10 * 1024 * 1024,
     files: 10,
   },
+});
+
+router.get('/username-availability', async (req: Request, res: Response) => {
+  const rawUsername = typeof req.query.username === 'string' ? req.query.username : '';
+  const normalizedUsername = normalizeUsername(rawUsername);
+  const validationError = validateUsername(normalizedUsername);
+
+  if (validationError) {
+    return res.status(200).json({
+      available: false,
+      normalizedUsername,
+      message: validationError,
+    });
+  }
+
+  try {
+    const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+      SELECT EXISTS(SELECT 1 FROM users WHERE username = ${normalizedUsername}) AS "exists"
+    `;
+
+    return res.status(200).json({
+      available: !(rows[0]?.exists ?? false),
+      normalizedUsername,
+      message: (rows[0]?.exists ?? false) ? 'That username is already taken.' : 'Username is available.',
+    });
+  } catch (err) {
+    console.error('Error checking username availability:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
 });
 
 interface VerifyPasswordBody {
@@ -545,18 +598,21 @@ router.patch(
   requireOwnUser,
   async (req: Request<GetUserParams, unknown, UpdateUserBody>, res: Response) => {
     const { userId } = req.params;
-    const { username, branch, year, bio, headline } = req.body;
+    const { displayName, username, branch, year, bio, headline } = req.body;
 
-    const trimmedUsername = username?.trim();
+    const trimmedDisplayName = displayName !== undefined ? normalizeDisplayName(displayName) : undefined;
+    const trimmedUsername = username !== undefined ? normalizeUsername(username) : undefined;
     const trimmedBranch = branch?.trim();
     const numericYear = typeof year === 'string' ? Number.parseInt(year, 10) : year;
     const hasBioUpdate = Object.prototype.hasOwnProperty.call(req.body, 'bio');
     const hasHeadlineUpdate = Object.prototype.hasOwnProperty.call(req.body, 'headline');
 
+    const hasDisplayNameUpdate = trimmedDisplayName !== undefined;
     const hasUsernameUpdate = trimmedUsername !== undefined;
     const hasBranchOrYearUpdate = branch !== undefined || year !== undefined;
 
     if (
+      !hasDisplayNameUpdate &&
       !hasUsernameUpdate &&
       !hasBranchOrYearUpdate &&
       !hasBioUpdate &&
@@ -565,8 +621,19 @@ router.patch(
       return res.status(400).json({ message: 'No profile fields provided for update' });
     }
 
+    if (hasDisplayNameUpdate && !trimmedDisplayName) {
+      return res.status(400).json({ message: 'Display name cannot be empty' });
+    }
+
     if (hasUsernameUpdate && !trimmedUsername) {
       return res.status(400).json({ message: 'Username cannot be empty' });
+    }
+
+    if (hasUsernameUpdate) {
+      const validationError = validateUsername(trimmedUsername);
+      if (validationError) {
+        return res.status(400).json({ message: validationError });
+      }
     }
 
     if (hasBranchOrYearUpdate && (!trimmedBranch || year === undefined || year === null)) {
@@ -601,6 +668,7 @@ router.patch(
         await tx.$queryRaw`
           UPDATE users
           SET
+            display_name = CASE WHEN ${hasDisplayNameUpdate} THEN ${trimmedDisplayName} ELSE display_name END,
             username = CASE WHEN ${hasUsernameUpdate} THEN ${trimmedUsername} ELSE username END,
             bio = CASE WHEN ${hasBioUpdate} THEN ${bio?.trim() || null} ELSE bio END,
             headline = CASE WHEN ${hasHeadlineUpdate} THEN ${headline?.trim() || null} ELSE headline END
@@ -629,6 +697,7 @@ router.patch(
 
       await patchUserSummary(userId, (current) => ({
         ...current,
+        displayName: trimmedDisplayName ?? current.displayName,
         username: trimmedUsername ?? current.username,
         bio: hasBioUpdate ? bio?.trim() || null : current.bio,
         headline: hasHeadlineUpdate ? headline?.trim() || null : current.headline,
@@ -649,7 +718,7 @@ router.patch(
             : current.details,
       }));
 
-      if (hasUsernameUpdate) {
+      if (hasDisplayNameUpdate || hasUsernameUpdate) {
         await invalidateConversationLists(await getConversationViewerUserIds(userId));
       }
 

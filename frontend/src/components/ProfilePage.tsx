@@ -454,7 +454,7 @@ export function ProfilePage({
         id: comment.id,
         postId: comment.postId,
         authorId: comment.authorUserId,
-        authorName: comment.authorUsername,
+        authorName: comment.authorDisplayName || comment.authorUsername,
         authorAvatar:
           comment.authorProfilePictureUrl ??
           '',
@@ -468,7 +468,7 @@ export function ProfilePage({
           id: reply.id,
           postId: reply.postId,
           authorId: reply.authorUserId,
-          authorName: reply.authorUsername,
+          authorName: reply.authorDisplayName || reply.authorUsername,
           authorAvatar:
             reply.authorProfilePictureUrl ??
             '',
@@ -622,14 +622,16 @@ export function ProfilePage({
       await apiUpdateUserProfile(
         authUserId,
         {
-          username: editedStudent.name?.trim(),
+          displayName: editedStudent.name?.trim(),
+          username: editedStudent.username?.trim(),
           bio: editedStudent.bio?.trim() || null,
         },
         authToken,
       );
       onEdit?.({
         name: editedStudent.name,
-        username: editedStudent.name,
+        displayName: editedStudent.name,
+        username: editedStudent.username,
         bio: editedStudent.bio,
       });
       await auth.refreshProfile();
@@ -1758,10 +1760,17 @@ export function ProfilePage({
       <Modal isOpen={activeModal === 'editProfile'} onClose={closeModal} title="Edit Profile" className="w-[min(40rem,calc(100vw-2rem))]" style={{ width: 'min(40rem, calc(100vw - 2rem))' }}>
         <div className="space-y-4 max-w-[560px] w-full">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Display Name</label>
             <Input
               value={editedStudent.name}
               onChange={(e) => setEditedStudent({ ...editedStudent, name: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+            <Input
+              value={editedStudent.username}
+              onChange={(e) => setEditedStudent({ ...editedStudent, username: e.target.value })}
             />
           </div>
           <div>

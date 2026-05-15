@@ -222,7 +222,8 @@ function timelinePageCacheKey(key: string, limit: number, offset: number): strin
 export function apiProfileToStudent(profile: ApiUserProfile): Student {
   return {
     id: profile.userId,
-    name: profile.username,
+    name: profile.displayName,
+    displayName: profile.displayName,
     username: profile.username,
     email: profile.email,
     createdAt: profile.createdAt,
@@ -247,7 +248,8 @@ function userSummaryFromPost(post: UserPost): Student | null {
   if (!post.authorUserId) return null;
   return {
     id: post.authorUserId,
-    name: post.authorUsername ?? 'Unknown User',
+    name: post.authorDisplayName ?? post.authorUsername ?? 'Unknown User',
+    displayName: post.authorDisplayName ?? post.authorUsername ?? 'Unknown User',
     username: post.authorUsername ?? 'Unknown User',
     email: '',
     createdAt: undefined,
@@ -340,7 +342,7 @@ function mapPostCommentToComment(comment: UserPost['comments'][number]): Opportu
     id: comment.id,
     postId: comment.postId,
     authorId: comment.authorUserId,
-    authorName: comment.authorUsername,
+    authorName: comment.authorDisplayName ?? comment.authorUsername,
     authorAvatar: comment.authorProfilePictureUrl || undefined,
     content: comment.content,
     timestamp: comment.createdAt,
@@ -371,7 +373,7 @@ export function userPostToOpportunity(
   }
 
   const author = usersById[post.authorUserId];
-  const authorName = author?.name ?? post.authorUsername ?? currentUser?.name ?? 'Unknown User';
+  const authorName = author?.name ?? post.authorDisplayName ?? post.authorUsername ?? currentUser?.name ?? 'Unknown User';
   const authorAvatar =
     author?.avatar ??
     post.authorProfilePictureUrl ??
@@ -1026,7 +1028,8 @@ function createStore(): AppDataStore {
           .map((conversation) => ({
             id: conversation.participantId,
             name: conversation.participantName,
-            username: conversation.participantName,
+            displayName: conversation.participantName,
+            username: conversation.participantUsername ?? conversation.participantName,
             email: '',
             branch: 'Unknown',
             year: 0,
@@ -1078,7 +1081,8 @@ function createStore(): AppDataStore {
             .map((conversation) => ({
               id: conversation.participantId,
               name: conversation.participantName,
-              username: conversation.participantName,
+              displayName: conversation.participantName,
+              username: conversation.participantUsername ?? conversation.participantName,
               email: '',
               branch: 'Unknown',
               year: 0,

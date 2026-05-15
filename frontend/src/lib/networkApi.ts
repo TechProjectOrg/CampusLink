@@ -22,6 +22,7 @@ async function safeFetch(input: string, init?: RequestInit): Promise<Response> {
 
 export interface NetworkUser {
   userId: string;
+  displayName: string;
   username: string;
   profilePictureUrl: string | null;
   isPrivate: boolean;
@@ -43,6 +44,7 @@ export interface FollowGraphResponse {
 
 export interface SearchUserResult {
   userId: string;
+  displayName: string;
   username: string;
   email: string;
   profilePictureUrl: string | null;
@@ -77,6 +79,7 @@ export interface UnifiedSearchResult {
 export interface SuggestedUserResult {
   id: string;
   name: string;
+  username?: string;
   mutual_count: number;
   common_club: string | null;
 }
