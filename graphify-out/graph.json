@@ -13539,8 +13539,8 @@
       "source_file": "backend\\server\\src\\lib\\health.ts",
       "source_location": "L223",
       "weight": 1.0,
-      "_src": "health_buildhealthreport",
-      "_tgt": "cache_proberedishealth",
+      "_src": "cache_proberedishealth",
+      "_tgt": "health_buildhealthreport",
       "source": "cache_proberedishealth",
       "target": "health_buildhealthreport"
     },

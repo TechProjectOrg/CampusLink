@@ -1,5 +1,5 @@
 ALTER TABLE users
-ADD COLUMN display_name VARCHAR(100);
+ADD COLUMN IF NOT EXISTS display_name VARCHAR(100);
 
 UPDATE users
 SET display_name = username
