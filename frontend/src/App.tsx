@@ -46,7 +46,7 @@ import {
   type NetworkUserWithRequest,
   type SuggestedUserResult,
 } from './lib/networkApi';
-import { apiFetchUserProfile } from './lib/authApi';
+import { apiBlockUser, apiFetchUserProfile, apiUnblockUser } from './lib/authApi';
 import {
   apiFetchNotifications,
   apiFetchPushPublicKey,
@@ -2375,6 +2375,50 @@ export default function App() {
     }
   };
 
+  const handleBlockUser = useCallback(async (targetUserId: string) => {
+    if (!authToken || !targetUserId) return;
+    await apiBlockUser(targetUserId, authToken);
+    await Promise.allSettled([
+      refreshFollowGraph(),
+      refreshConversations(),
+      refreshNotifications(),
+      refreshSuggestedUsers(),
+      appData.ensureUser(targetUserId, true),
+      viewingProfileId ? appData.ensureUser(viewingProfileId, true) : Promise.resolve(null),
+    ]);
+    toast.success('User blocked');
+  }, [
+    appData,
+    authToken,
+    refreshConversations,
+    refreshFollowGraph,
+    refreshNotifications,
+    refreshSuggestedUsers,
+    viewingProfileId,
+  ]);
+
+  const handleUnblockUser = useCallback(async (targetUserId: string) => {
+    if (!authToken || !targetUserId) return;
+    await apiUnblockUser(targetUserId, authToken);
+    await Promise.allSettled([
+      refreshFollowGraph(),
+      refreshConversations(),
+      refreshNotifications(),
+      refreshSuggestedUsers(),
+      appData.ensureUser(targetUserId, true),
+      viewingProfileId ? appData.ensureUser(viewingProfileId, true) : Promise.resolve(null),
+    ]);
+    toast.success('User unblocked');
+  }, [
+    appData,
+    authToken,
+    refreshConversations,
+    refreshFollowGraph,
+    refreshNotifications,
+    refreshSuggestedUsers,
+    viewingProfileId,
+  ]);
+
   const handleChatClick = (conversationId: string) => {
     // No longer reorder on click; conversations maintain chronological order by timestamp
     // The FloatingChat component manages the selectedConversation state internally
@@ -2727,6 +2771,7 @@ export default function App() {
             onChatClick={handleChatClick}
             onCreateChat={handleCreateChat}
             onChatRead={handleChatRead}
+            onUnblockUser={handleUnblockUser}
           />
           ) : activeTab === 'clubs' ? (
           <ClubsPage
@@ -2785,6 +2830,8 @@ export default function App() {
                 onShowAllPosts={handleViewProfilePosts}
                 onShowAllProjects={handleViewProfileProjects}
                 onMessage={handleMessage}
+                onBlockUser={handleBlockUser}
+                onUnblockUser={handleUnblockUser}
                 postsRefreshToken={postsRefreshToken}
               />
             )
@@ -2829,6 +2876,7 @@ export default function App() {
             student={currentUser}
             onEdit={handleEditProfile}
             onUpdateSettings={handleUpdateSettings}
+            onUnblockUser={handleUnblockUser}
           />
           ) : null}
         </div>

@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import prisma from '../prisma';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
 import { getWebPushPublicKey } from '../lib/push';
+import { getBlockStates } from '../lib/blocking';
 
 const router = express.Router();
 
@@ -141,8 +142,20 @@ router.get('/', async (req: Request, res: Response) => {
       `;
     }
 
+    const blockStates = await getBlockStates(
+      userId,
+      rows.map((row) => row.actor_user_id).filter((value): value is string => Boolean(value)),
+    );
+
     return res.status(200).json(
-      rows.map((r) => ({
+      rows.map((r) => {
+        const state = r.actor_user_id
+          ? blockStates.get(r.actor_user_id) ?? {
+              viewerHasBlockedUser: false,
+              viewerIsBlockedByUser: false,
+            }
+          : null;
+        return ({
         id: r.notification_id,
         type: r.notification_type,
         title: r.title,
@@ -155,10 +168,13 @@ router.get('/', async (req: Request, res: Response) => {
           ? {
               userId: r.actor_user_id,
               username: r.actor_username,
-              profilePictureUrl: r.actor_profile_photo_url,
+              profilePictureUrl:
+                state?.viewerHasBlockedUser || state?.viewerIsBlockedByUser
+                  ? null
+                  : r.actor_profile_photo_url,
             }
           : null,
-      }))
+      })})
     );
   } catch (err) {
     console.error('Error fetching notifications:', err);

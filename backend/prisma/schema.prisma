@@ -173,6 +173,8 @@ model User {
   experiences            UserExperience[]
   societies              UserSociety[]
   achievements           UserAchievement[]
+  blocksInitiated        BlockedUser[]        @relation("BlockedUserBlocker")
+  blocksReceived         BlockedUser[]        @relation("BlockedUserBlocked")
   followRequestsSent     FollowRequest[]     @relation("FollowRequestRequester")
   followRequestsReceived FollowRequest[]     @relation("FollowRequestTarget")
   following              Follow[]            @relation("FollowFollower")
@@ -696,6 +698,7 @@ model Message {
   messageId               String             @id @default(dbgenerated("gen_random_uuid()")) @map("message_id") @db.Uuid
   chatId                  String             @map("chat_id") @db.Uuid
   senderUserId            String             @map("sender_user_id") @db.Uuid
+  suppressedForUserId     String?            @map("suppressed_for_user_id") @db.Uuid
   messageType             MessageType        @map("message_type")
   content                 String?            @db.Text
   reactions               Json               @default("{}") @map("reactions") @db.JsonB
@@ -712,8 +715,23 @@ model Message {
 
   @@index([chatId], map: "idx_messages_chat_id")
   @@index([senderUserId], map: "idx_messages_sender_user_id")
+  @@index([suppressedForUserId], map: "idx_messages_suppressed_for_user_id")
   @@index([replyToMessageId], map: "idx_messages_reply_to_message_id")
   @@map("messages")
+}
+
+model BlockedUser {
+  blockedUserId String   @id @default(dbgenerated("gen_random_uuid()")) @map("blocked_user_id") @db.Uuid
+  blockerId     String   @map("blocker_id") @db.Uuid
+  blockedId     String   @map("blocked_id") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  blocker       User     @relation("BlockedUserBlocker", fields: [blockerId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+  blocked       User     @relation("BlockedUserBlocked", fields: [blockedId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([blockerId, blockedId], map: "uq_blocked_users_blocker_id_blocked_id")
+  @@index([blockerId], map: "idx_blocked_users_blocker_id")
+  @@index([blockedId], map: "idx_blocked_users_blocked_id")
+  @@map("blocked_users")
 }
 
 model MessageAttachment {

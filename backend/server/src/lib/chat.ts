@@ -1,6 +1,7 @@
 import prisma from '../prisma';
 import { emitChatEvent } from './realtime';
 import { getUserSummaryById } from './userCache';
+import { canMessage } from './blocking';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -19,6 +20,7 @@ export interface ChatMessagePayload {
   replyTo: ChatReplyPreview | null;
   attachments: { fileUrl: string; fileType: string }[];
   createdAt: string;
+  viewerHasBlockedUser?: boolean;
 }
 
 export interface ChatReplyPreview {
@@ -81,6 +83,14 @@ export async function resolveMessagingPermission(
   const recipient = await getUserSummaryById(recipientUserId);
   if (!recipient) return { allowed: false, isRequest: false, reason: 'User not found' };
 
+  const blockPermission = await canMessage(senderUserId, recipientUserId);
+  if (!blockPermission.allowed && !blockPermission.suppressedForUserId) {
+    return { allowed: false, isRequest: false, reason: 'Messaging is unavailable' };
+  }
+  if (blockPermission.suppressedForUserId) {
+    return { allowed: true, isRequest: false };
+  }
+
   if (!recipient.allowMessages) {
     return { allowed: false, isRequest: false, reason: 'User does not accept messages' };
   }
@@ -113,9 +123,6 @@ export async function getOrCreateDirectChat(
   senderUserId: string,
   recipientUserId: string
 ): Promise<{ chatId: string; isRequest: boolean; isNew: boolean } | null> {
-  const permission = await resolveMessagingPermission(senderUserId, recipientUserId);
-  if (!permission.allowed) return null;
-
   // Check if a direct chat already exists between these two users
   const existing = await prisma.$queryRaw<{ chat_id: string; is_request: boolean }[]>`
     SELECT c.chat_id, c.is_request
@@ -133,6 +140,9 @@ export async function getOrCreateDirectChat(
       isNew: false,
     };
   }
+
+  const permission = await resolveMessagingPermission(senderUserId, recipientUserId);
+  if (!permission.allowed) return null;
 
   // Create new direct chat
   const chatNow = new Date().toISOString();

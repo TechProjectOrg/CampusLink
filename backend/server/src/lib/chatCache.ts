@@ -32,6 +32,7 @@ export interface ChatCachedMessage {
   id: string;
   chatId: string;
   senderId: string;
+  suppressedForUserId?: string | null;
   type: string;
   content: string | null;
   reactions: Record<string, string[]>;
@@ -59,6 +60,7 @@ export interface ChatConversationListEntry {
   lastMessage: string;
   timestamp: string;
   isRequest: boolean;
+  viewerHasBlockedUser?: boolean;
   isGroup?: boolean;
   groupMemberCount?: number;
 }
@@ -469,6 +471,7 @@ export async function reconcileUnreadState(
     LEFT JOIN messages m
       ON m.chat_id = cp.chat_id
      AND m.deleted_at IS NULL
+     AND (m.suppressed_for_user_id IS NULL OR m.suppressed_for_user_id != ${userId})
      AND m.sender_user_id != ${userId}
      AND (
        cp.last_read_message_id IS NULL

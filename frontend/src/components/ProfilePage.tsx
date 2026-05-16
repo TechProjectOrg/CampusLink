@@ -16,6 +16,7 @@ import {
   Mail,
   Eye,
   Loader2,
+  MoreHorizontal,
 } from 'lucide-react';
 import { Student, Opportunity } from '../types';
 import type { FollowGraph } from '../App';
@@ -95,6 +96,8 @@ interface ProfilePageProps {
   onShowAllPosts?: (userId: string) => void;
   onShowAllProjects?: (userId: string) => void;
   onMessage?: (userId: string) => void;
+  onBlockUser?: (userId: string) => Promise<void> | void;
+  onUnblockUser?: (userId: string) => Promise<void> | void;
   postsRefreshToken?: number;
 }
 
@@ -171,6 +174,8 @@ export function ProfilePage({
   onShowAllPosts,
   onShowAllProjects,
   onMessage,
+  onBlockUser,
+  onUnblockUser,
   postsRefreshToken = 0,
   currentUserId,
   followGraph,
@@ -225,6 +230,8 @@ export function ProfilePage({
   const [editingItem, setEditingItem] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [pendingDeleteByKey, setPendingDeleteByKey] = useState<Record<string, boolean>>({});
+  const [showProfileActions, setShowProfileActions] = useState(false);
+  const [showBlockConfirm, setShowBlockConfirm] = useState(false);
 
   // Form states
   const [newExperience, setNewExperience] = useState<Partial<Experience>>({
@@ -1172,6 +1179,8 @@ export function ProfilePage({
   };
 
   const displaySkills = isOwnProfile ? skills : student.skills.map((name, index) => ({ id: String(index), name }));
+  const isBlockedByViewer = !isOwnProfile && student.viewerHasBlockedUser === true;
+  const isRestrictedView = !isOwnProfile && student.profileVisibility === 'restricted';
   const profileEmail = student.email?.trim() || '';
   const profileBranch = student.branch?.trim() || '';
   const hasKnownBranch = Boolean(profileBranch && profileBranch.toLowerCase() !== 'unknown');
@@ -1179,13 +1188,13 @@ export function ProfilePage({
   const yearLabel = hasKnownYear ? `Year ${student.year}` : 'Year not added';
   const branchLabel = hasKnownBranch ? profileBranch : 'Branch not added';
   const clubCount = societies.length;
-  const showPostsSection = isOwnProfile || postsLoading || profilePosts.length > 0;
-  const showProjectsSection = isOwnProfile || projectsLoading || loadedProjects.length > 0;
-  const showExperienceSection = isOwnProfile || experiences.length > 0;
-  const showEducationSection = isOwnProfile || hasKnownBranch || hasKnownYear || educationRecords.length > 0;
-  const showSkillsSection = isOwnProfile || skillsLoading || displaySkills.length > 0;
-  const showCertificationsSection = isOwnProfile || certificationsLoading || loadedCertifications.length > 0;
-  const showClubsSection = isOwnProfile || societies.length > 0;
+  const showPostsSection = !isBlockedByViewer && !isRestrictedView && (isOwnProfile || postsLoading || profilePosts.length > 0);
+  const showProjectsSection = !isBlockedByViewer && !isRestrictedView && (isOwnProfile || projectsLoading || loadedProjects.length > 0);
+  const showExperienceSection = !isBlockedByViewer && !isRestrictedView && (isOwnProfile || experiences.length > 0);
+  const showEducationSection = !isBlockedByViewer && !isRestrictedView && (isOwnProfile || hasKnownBranch || hasKnownYear || educationRecords.length > 0);
+  const showSkillsSection = !isBlockedByViewer && !isRestrictedView && (isOwnProfile || skillsLoading || displaySkills.length > 0);
+  const showCertificationsSection = !isRestrictedView && (isOwnProfile || certificationsLoading || loadedCertifications.length > 0);
+  const showClubsSection = !isBlockedByViewer && !isRestrictedView && (isOwnProfile || societies.length > 0);
   const profileSectionCardClass = 'box-border flex w-full min-w-0 flex-col gap-4 overflow-hidden break-words rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5 lg:p-6';
   const educationLevelOrder: Record<EducationLevel, number> = {
     '10th': 1,
@@ -1306,6 +1315,46 @@ export function ProfilePage({
       <div className="mx-auto grid w-full [grid-template-columns:1fr] gap-4" style={{ maxWidth: '1000px' }}>
         {/* Modern Profile Header: Cover + Overlapping Avatar + Stacked Content */}
         <section className="cl-profile-header relative bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+          {!isOwnProfile ? (
+            <div className="absolute right-4 top-4 z-20">
+              <button
+                type="button"
+                onClick={() => setShowProfileActions((current) => !current)}
+                className="rounded-full bg-white/90 p-2 text-slate-700 shadow-sm hover:bg-white"
+                aria-label="Profile actions"
+              >
+                <MoreHorizontal className="h-5 w-5" />
+              </button>
+              {showProfileActions ? (
+                <div className="mt-2 w-40 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowProfileActions(false);
+                      if (isBlockedByViewer) {
+                        void onUnblockUser?.(student.id);
+                      } else {
+                        setShowBlockConfirm(true);
+                      }
+                    }}
+                    className="block w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-50"
+                  >
+                    {isBlockedByViewer ? 'Unblock User' : 'Block User'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowProfileActions(false);
+                      window.alert('Reporting UI will be connected in a later pass.');
+                    }}
+                    className="mt-1 block w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  >
+                    Report User
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           <div className="mx-auto w-full max-w-[1000px]">
           
           {/* Banner/Cover Section */}
@@ -1346,24 +1395,39 @@ export function ProfilePage({
               <div className="cl-actions-beside-avatar flex flex-col gap-2 flex-shrink-0">
                 {!isOwnProfile ? (
                   <div className="flex items-center gap-2 sm:gap-3">
-                    <FollowButton
-                      targetName={student.name}
-                      accountType={student.accountType}
-                      isFollowing={isFollowing}
-                      isFollower={isFollower}
-                      requestStatus={requestStatus}
-                      className="w-auto rounded-full gradient-primary px-4 sm:px-6 h-10 sm:h-11 font-semibold text-white shadow-md hover:shadow-lg transition-all border-none text-sm sm:text-base"
-                      onFollow={() => onFollow(student.id, student.accountType)}
-                      onUnfollow={() => onUnfollow(student.id)}
-                      onCancelRequest={() => onCancelRequest(student.id)}
-                    />
-                    <Button 
-                      onClick={() => onMessage?.(student.id)}
-                      className="rounded-full gradient-primary px-4 sm:px-6 h-10 sm:h-11 font-semibold text-white shadow-md hover:shadow-lg transition-all border-none text-sm sm:text-base"
-                    >
-                      <MessageCircle className="mr-2 h-4 w-4" />
-                      Message
-                    </Button>
+                    {isBlockedByViewer ? (
+                      <Button
+                        onClick={() => onUnblockUser?.(student.id)}
+                        className="rounded-full bg-red-600 px-4 sm:px-6 h-10 sm:h-11 font-semibold text-white shadow-md hover:bg-red-700 text-sm sm:text-base"
+                      >
+                        Unblock
+                      </Button>
+                    ) : (
+                      <>
+                        {!isRestrictedView ? (
+                          <FollowButton
+                            targetName={student.name}
+                            accountType={student.accountType}
+                            isFollowing={isFollowing}
+                            isFollower={isFollower}
+                            requestStatus={requestStatus}
+                            className="w-auto rounded-full gradient-primary px-4 sm:px-6 h-10 sm:h-11 font-semibold text-white shadow-md hover:shadow-lg transition-all border-none text-sm sm:text-base"
+                            onFollow={() => onFollow(student.id, student.accountType)}
+                            onUnfollow={() => onUnfollow(student.id)}
+                            onCancelRequest={() => onCancelRequest(student.id)}
+                          />
+                        ) : null}
+                        {!isRestrictedView ? (
+                          <Button 
+                            onClick={() => onMessage?.(student.id)}
+                            className="rounded-full gradient-primary px-4 sm:px-6 h-10 sm:h-11 font-semibold text-white shadow-md hover:shadow-lg transition-all border-none text-sm sm:text-base"
+                          >
+                            <MessageCircle className="mr-2 h-4 w-4" />
+                            Message
+                          </Button>
+                        ) : null}
+                      </>
+                    )}
                   </div>
                 ) : (
                   <Button 
@@ -1385,10 +1449,11 @@ export function ProfilePage({
                 <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-slate-900 leading-tight">
                   {student.name}
                 </h1>
+                <p className="mt-1 text-sm font-medium text-slate-500">@{student.username}</p>
               </div>
 
               {/* About Preview Row */}
-              {(isOwnProfile || Boolean(student.bio?.trim())) ? (
+              {!isRestrictedView && (isOwnProfile || Boolean(student.bio?.trim())) ? (
                 <div className="cl-about-preview-section">
                   <p className="text-base sm:text-lg text-slate-600 leading-relaxed max-w-2xl">
                     {student.bio?.trim() || 'Add an about section so people can know you better.'}
@@ -1397,6 +1462,7 @@ export function ProfilePage({
               ) : null}
 
               {/* Location, Year, Email Row */}
+              {!isRestrictedView ? (
               <div className="cl-metadata-row flex flex-wrap items-center gap-4 sm:gap-6 text-sm">
                 <div className="flex items-center gap-2 text-slate-600">
                   <Mail className="w-4 h-4 flex-shrink-0 text-slate-400" />
@@ -1411,6 +1477,7 @@ export function ProfilePage({
                   <span>{branchLabel}</span>
                 </div>
               </div>
+              ) : null}
 
               {/* Stats Row */}
               <div className="cl-stats-row flex flex-wrap items-center gap-6 sm:gap-8 pt-2 sm:pt-3 border-t border-slate-100">
@@ -1431,12 +1498,29 @@ export function ProfilePage({
                   <span className="text-sm sm:text-base text-slate-500 font-medium">Clubs</span>
                 </div>
               </div>
+              {isBlockedByViewer ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+                  You blocked this user.
+                </div>
+              ) : null}
             </div>
           </div>
           </div>
         </section>
 
-        {showPostsSection ? (
+        {isBlockedByViewer ? (
+          <section className={profileSectionCardClass}>
+            <EmptyState message="You blocked this user." />
+          </section>
+        ) : null}
+
+        {isRestrictedView ? (
+          <section className={profileSectionCardClass}>
+            <EmptyState message="This profile is unavailable." />
+          </section>
+        ) : null}
+
+        {!isBlockedByViewer && !isRestrictedView && showPostsSection ? (
         <section className={profileSectionCardClass}>
           <SectionHeader title="Activity" />
           {postsLoading ? (
@@ -1481,7 +1565,7 @@ export function ProfilePage({
         </section>
         ) : null}
 
-        {showProjectsSection ? (
+        {!isBlockedByViewer && !isRestrictedView && showProjectsSection ? (
         <section className={profileSectionCardClass}>
           <SectionHeader title="Projects" onAdd={() => setActiveModal('project')} />
           {projectsLoading ? (
@@ -1526,7 +1610,7 @@ export function ProfilePage({
         </section>
         ) : null}
 
-        {showExperienceSection || showEducationSection ? (
+        {!isBlockedByViewer && !isRestrictedView && (showExperienceSection || showEducationSection) ? (
         <section className="grid w-full [grid-template-columns:1fr] gap-4">
           {showExperienceSection ? (
           <div className={profileSectionCardClass}>
@@ -1630,7 +1714,7 @@ export function ProfilePage({
         </section>
         ) : null}
 
-        {showSkillsSection ? (
+        {!isBlockedByViewer && !isRestrictedView && showSkillsSection ? (
         <section className={profileSectionCardClass}>
           <SectionHeader title="Skills" onAdd={() => setActiveModal('skill')} />
           {skillsLoading ? (
@@ -1654,7 +1738,7 @@ export function ProfilePage({
         </section>
         ) : null}
 
-        {showCertificationsSection || showClubsSection ? (
+        {!isBlockedByViewer && !isRestrictedView && (showCertificationsSection || showClubsSection) ? (
         <section className="grid w-full [grid-template-columns:1fr] gap-4">
           {showCertificationsSection ? (
           <div className={profileSectionCardClass}>
@@ -1755,6 +1839,32 @@ export function ProfilePage({
       </div>
 
       {/* ===== MODALS ===== */}
+
+      {/* Edit Profile Modal */}
+      <Modal
+        isOpen={showBlockConfirm}
+        onClose={() => setShowBlockConfirm(false)}
+        title={`Block @${student.username}?`}
+        className="w-[min(28rem,calc(100vw-2rem))]"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-600">
+            They will no longer be able to interact with you or view your profile details.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setShowBlockConfirm(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                setShowBlockConfirm(false);
+                await onBlockUser?.(student.id);
+              }}
+            >
+              Block User
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Edit Profile Modal */}
       <Modal isOpen={activeModal === 'editProfile'} onClose={closeModal} title="Edit Profile" className="w-[min(40rem,calc(100vw-2rem))]" style={{ width: 'min(40rem, calc(100vw - 2rem))' }}>

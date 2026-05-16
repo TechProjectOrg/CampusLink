@@ -29,6 +29,7 @@ import {
   queueSuggestedUsersRecompute,
   trackPostEngagementForPost,
 } from '../lib/socialInsights';
+import { isBlockedEitherWay } from '../lib/blocking';
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -245,6 +246,9 @@ async function canViewerAccessAuthorPosts(viewerUserId: string, authorUserId: st
   if (viewerUserId === authorUserId) {
     return true;
   }
+  if (await isBlockedEitherWay(viewerUserId, authorUserId)) {
+    return false;
+  }
 
   const rows = await prisma.$queryRaw<{ is_private: boolean; is_follower: boolean }[]>`
     SELECT
@@ -267,6 +271,17 @@ async function canViewerAccessAuthorPosts(viewerUserId: string, authorUserId: st
 }
 
 async function canViewerAccessPost(viewerUserId: string, postId: string): Promise<boolean> {
+  const rows = await prisma.$queryRaw<Array<{ author_user_id: string }>>`
+    SELECT author_user_id
+    FROM posts
+    WHERE post_id = ${postId}
+    LIMIT 1
+  `;
+  const authorUserId = rows[0]?.author_user_id;
+  if (!authorUserId) return false;
+  if (!(await canViewerAccessAuthorPosts(viewerUserId, authorUserId))) {
+    return false;
+  }
   return canViewerAccessClubPost(viewerUserId, postId);
 }
 

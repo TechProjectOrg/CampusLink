@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import prisma from '../prisma';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
 import { getUserSummariesByIds, toCachedUserCard } from '../lib/userCache';
+import { getBlockStates, maskUserCardForViewer } from '../lib/blocking';
 
 const router = express.Router();
 
@@ -48,22 +49,31 @@ async function searchUsers(currentUserId: string, q: string, limit: number, offs
   `;
 
   const summaries = await getUserSummariesByIds(rows.map((row) => row.user_id));
+  const blockStates = await getBlockStates(currentUserId, rows.map((row) => row.user_id));
 
   return rows
     .map((row) => summaries.get(row.user_id))
     .filter((summary): summary is NonNullable<typeof summary> => summary !== undefined)
     .map((summary) => {
-      const card = toCachedUserCard(summary);
+      const masked = maskUserCardForViewer(
+        currentUserId,
+        summary.userId,
+        toCachedUserCard(summary),
+        blockStates.get(summary.userId) ?? {
+          viewerHasBlockedUser: false,
+          viewerIsBlockedByUser: false,
+        },
+      );
       return {
-        userId: card.userId,
-        displayName: card.displayName,
-        username: card.username,
-        email: card.email,
-        profilePictureUrl: card.profilePictureUrl,
-        isPrivate: card.isPrivate,
-        type: card.type,
-        branch: card.branch,
-        year: card.year,
+        userId: masked.userId,
+        displayName: masked.displayName,
+        username: masked.username,
+        email: masked.email,
+        profilePictureUrl: masked.profilePictureUrl,
+        isPrivate: masked.isPrivate,
+        type: masked.type,
+        branch: masked.branch,
+        year: masked.year,
       };
     });
 }

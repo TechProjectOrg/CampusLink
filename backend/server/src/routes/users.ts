@@ -26,9 +26,17 @@ import {
 } from '../lib/clubCache';
 import { invalidateConversationLists } from '../lib/chatCache';
 import { emitFeedEvent } from '../lib/realtime';
-import { incrementUserStat, patchUserSummary } from '../lib/userCache';
+import { getUserSummariesByIds, incrementUserStat, invalidateUserCache, patchUserSummary } from '../lib/userCache';
 import { requireActiveClubMembership } from '../lib/clubs';
 import { queueSuggestedUsersRecompute, trackPostCreatedHashtags } from '../lib/socialInsights';
+import {
+  canAccessUserContent,
+  getBlockState,
+  getProfileVisibility,
+  getProfileVisibilityFromState,
+  maskUserCardForViewer,
+  type ProfileVisibility,
+} from '../lib/blocking';
 
 const router = express.Router();
 
@@ -61,6 +69,11 @@ interface UpdateUserBody {
 
 function normalizeDisplayName(value: string): string {
   return value.trim().replace(/\s+/g, ' ').slice(0, 100);
+}
+
+function isValidUUID(uuid: string | undefined | null): boolean {
+  if (!uuid) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uuid);
 }
 
 function normalizeUsername(value: string): string {
@@ -171,6 +184,17 @@ interface UserSettingsResponse {
     showProjects: boolean;
     allowMessages: boolean;
   };
+}
+
+interface BlockedUserCardResponse {
+  userId: string;
+  displayName: string;
+  username: string;
+  profilePictureUrl: string | null;
+  type: 'student' | 'alumni';
+  branch: string | null;
+  year: number | null;
+  createdAt: string;
 }
 
 interface UpdateUserSettingsBody {
@@ -404,8 +428,45 @@ async function getConversationViewerUserIds(userId: string): Promise<string[]> {
   return Array.from(unique);
 }
 
+function applyProfileVisibility(profile: Awaited<ReturnType<typeof getUserProfileById>> extends infer T ? NonNullable<T> : never, visibility: ProfileVisibility) {
+  if (visibility === 'full') {
+    return profile;
+  }
+
+  if (visibility === 'restricted') {
+    return {
+      ...profile,
+      email: '',
+      bio: null,
+      headline: null,
+      profilePictureUrl: null,
+      coverPhotoUrl: null,
+      details: {},
+      stats: {
+        followerCount: 0,
+        followingCount: 0,
+        postCount: 0,
+      },
+    };
+  }
+
+  return {
+    ...profile,
+  };
+}
+
+async function ensureCanViewProfileDetails(viewerUserId: string, ownerUserId: string, res: Response): Promise<boolean> {
+  if (await canAccessUserContent(viewerUserId, ownerUserId)) {
+    return true;
+  }
+  res.status(200).json([]);
+  return false;
+}
+
 router.get('/:userId', async (req: Request<GetUserParams>, res: Response) => {
   const { userId } = req.params;
+  const authed = req as unknown as AuthedRequest;
+  const viewerUserId = authed.auth?.userId ?? userId;
 
   if (!userId) {
     return res.status(400).json({ message: 'Missing userId' });
@@ -416,10 +477,147 @@ router.get('/:userId', async (req: Request<GetUserParams>, res: Response) => {
     if (!profile) {
       return res.status(404).json({ message: 'User not found' });
     }
+    const blockState = await getBlockState(viewerUserId, userId);
+    const profileVisibility = getProfileVisibilityFromState(viewerUserId, userId, blockState);
+    const visibleProfile = applyProfileVisibility(profile, profileVisibility);
 
-    return res.status(200).json(profile);
+    return res.status(200).json({
+      ...visibleProfile,
+      viewerHasBlockedUser: blockState.viewerHasBlockedUser,
+      profileVisibility,
+    });
   } catch (err) {
     console.error('Error fetching user profile:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.get('/:userId/blocks', requireOwnUser, async (req: Request<GetUserParams>, res: Response) => {
+  const { userId } = req.params;
+
+  try {
+    const rows = await prisma.$queryRaw<Array<{ blocked_id: string; created_at: Date }>>`
+      SELECT blocked_id, created_at
+      FROM blocked_users
+      WHERE blocker_id = ${userId}
+      ORDER BY created_at DESC
+    `;
+
+    const summaries = await getUserSummariesByIds(rows.map((row) => row.blocked_id));
+    const response: BlockedUserCardResponse[] = rows
+      .map((row) => {
+        const summary = summaries.get(row.blocked_id);
+        if (!summary) return null;
+        return {
+          userId: summary.userId,
+          displayName: summary.displayName,
+          username: summary.username,
+          profilePictureUrl: summary.profilePictureUrl,
+          type: summary.type,
+          branch: summary.details.branch ?? null,
+          year: summary.details.year ?? summary.details.passingYear ?? null,
+          createdAt: row.created_at.toISOString(),
+        };
+      })
+      .filter((entry): entry is BlockedUserCardResponse => entry !== null);
+
+    return res.status(200).json(response);
+  } catch (err) {
+    console.error('Error fetching blocked users:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.post('/:userId/block', async (req: Request<GetUserParams>, res: Response) => {
+  const authed = req as unknown as AuthedRequest;
+  const blockerId = authed.auth!.userId;
+  const blockedId = req.params.userId;
+
+  if (!isValidUUID(blockedId)) {
+    return res.status(400).json({ message: 'Invalid user ID format' });
+  }
+  if (blockerId === blockedId) {
+    return res.status(400).json({ message: 'You cannot block yourself' });
+  }
+
+  try {
+    const target = await getUserProfileById(blockedId);
+    if (!target) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const inserted = await prisma.$queryRaw<Array<{ blocked_user_id: string }>>`
+      WITH inserted AS (
+        INSERT INTO blocked_users (blocker_id, blocked_id)
+        VALUES (${blockerId}, ${blockedId})
+        ON CONFLICT (blocker_id, blocked_id) DO NOTHING
+        RETURNING blocked_user_id
+      )
+      SELECT blocked_user_id FROM inserted
+    `;
+
+    if (!inserted[0]) {
+      return res.status(200).json({ success: true });
+    }
+
+    const deletedFollows = await prisma.$queryRaw<Array<{ follower_user_id: string; followed_user_id: string }>>`
+      DELETE FROM follows
+      WHERE (follower_user_id = ${blockerId} AND followed_user_id = ${blockedId})
+         OR (follower_user_id = ${blockedId} AND followed_user_id = ${blockerId})
+      RETURNING follower_user_id, followed_user_id
+    `;
+
+    for (const row of deletedFollows) {
+      await Promise.all([
+        incrementUserStat(row.follower_user_id, 'followingCount', -1),
+        incrementUserStat(row.followed_user_id, 'followerCount', -1),
+      ]);
+    }
+
+    await prisma.$queryRaw`
+      DELETE FROM follow_requests
+      WHERE (requester_user_id = ${blockerId} AND target_user_id = ${blockedId})
+         OR (requester_user_id = ${blockedId} AND target_user_id = ${blockerId})
+    `;
+
+    await Promise.all([
+      invalidateUserCache(blockerId),
+      invalidateUserCache(blockedId),
+      invalidateConversationLists([blockerId, blockedId], ['active', 'requests']),
+    ]);
+    queueSuggestedUsersRecompute(blockerId);
+    queueSuggestedUsersRecompute(blockedId);
+
+    return res.status(201).json({ success: true });
+  } catch (err) {
+    console.error('Error blocking user:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.delete('/:userId/block', async (req: Request<GetUserParams>, res: Response) => {
+  const authed = req as unknown as AuthedRequest;
+  const blockerId = authed.auth!.userId;
+  const blockedId = req.params.userId;
+
+  try {
+    await prisma.$queryRaw`
+      DELETE FROM blocked_users
+      WHERE blocker_id = ${blockerId}
+        AND blocked_id = ${blockedId}
+    `;
+
+    await Promise.all([
+      invalidateUserCache(blockerId),
+      invalidateUserCache(blockedId),
+      invalidateConversationLists([blockerId, blockedId], ['active', 'requests']),
+    ]);
+    queueSuggestedUsersRecompute(blockerId);
+    queueSuggestedUsersRecompute(blockedId);
+
+    return res.status(204).send();
+  } catch (err) {
+    console.error('Error unblocking user:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });
@@ -1065,6 +1263,8 @@ router.delete(
 // ==============================
 router.get('/:userId/skills', async (req: Request<{ userId: string }>, res: Response) => {
   const { userId } = req.params;
+  const authed = req as unknown as AuthedRequest;
+  if (!(await ensureCanViewProfileDetails(authed.auth!.userId, userId, res))) return;
 
   try {
     const rows = await prisma.$queryRaw<
@@ -1194,6 +1394,8 @@ router.delete(
 // ==============================
 router.get('/:userId/certifications', async (req: Request<{ userId: string }>, res: Response) => {
   const { userId } = req.params;
+  const authed = req as unknown as AuthedRequest;
+  if (!(await ensureCanViewProfileDetails(authed.auth!.userId, userId, res))) return;
 
   try {
     const rows = await prisma.$queryRaw<
@@ -1453,6 +1655,8 @@ router.delete(
 // ==============================
 router.get('/:userId/projects', async (req: Request<{ userId: string }>, res: Response) => {
   const { userId } = req.params;
+  const authed = req as unknown as AuthedRequest;
+  if (!(await ensureCanViewProfileDetails(authed.auth!.userId, userId, res))) return;
 
   try {
     const rows = await prisma.$queryRaw<
@@ -1854,6 +2058,8 @@ router.delete(
 // ==============================
 router.get('/:userId/experiences', async (req: Request<{ userId: string }>, res: Response) => {
   const { userId } = req.params;
+  const authed = req as unknown as AuthedRequest;
+  if (!(await ensureCanViewProfileDetails(authed.auth!.userId, userId, res))) return;
 
   try {
     const rows = await prisma.$queryRaw<
@@ -2117,6 +2323,8 @@ router.delete(
 // ==============================
 router.get('/:userId/societies', async (req: Request<{ userId: string }>, res: Response) => {
   const { userId } = req.params;
+  const authed = req as unknown as AuthedRequest;
+  if (!(await ensureCanViewProfileDetails(authed.auth!.userId, userId, res))) return;
 
   try {
     const rows = await prisma.$queryRaw<
@@ -2335,6 +2543,8 @@ router.delete(
 // ==============================
 router.get('/:userId/achievements', async (req: Request<{ userId: string }>, res: Response) => {
   const { userId } = req.params;
+  const authed = req as unknown as AuthedRequest;
+  if (!(await ensureCanViewProfileDetails(authed.auth!.userId, userId, res))) return;
 
   try {
     const rows = await prisma.$queryRaw<
@@ -2514,6 +2724,8 @@ router.delete(
 // ==============================
 router.get('/:userId/posts', async (req: Request<{ userId: string }>, res: Response) => {
   const { userId } = req.params;
+  const authed = req as unknown as AuthedRequest;
+  if (!(await ensureCanViewProfileDetails(authed.auth!.userId, userId, res))) return;
 
   try {
     const rows = await prisma.$queryRaw<UserPostRow[]>`

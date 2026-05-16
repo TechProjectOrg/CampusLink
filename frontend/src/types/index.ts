@@ -59,6 +59,8 @@ export interface Student {
     followingCount: number;
     postCount: number;
   };
+  viewerHasBlockedUser?: boolean;
+  profileVisibility?: 'full' | 'blocked-by-viewer' | 'restricted';
 }
 
 export interface Project {
@@ -177,6 +179,7 @@ export interface ChatConversation {
   isOnline?: boolean;
   lastSeenAt?: string | null;
   isRequest?: boolean;
+  viewerHasBlockedUser?: boolean;
   isPending?: boolean;
   isGroup?: boolean;
   groupMembers?: string[];
@@ -260,6 +263,19 @@ export interface ApiUserProfile {
     mustChangePassword: boolean;
     lastLoginAt: string | null;
   } | null;
+  viewerHasBlockedUser?: boolean;
+  profileVisibility?: 'full' | 'blocked-by-viewer' | 'restricted';
+}
+
+export interface BlockedUserListItem {
+  userId: string;
+  displayName: string;
+  username: string;
+  profilePictureUrl: string | null;
+  type: 'student' | 'alumni';
+  branch: string | null;
+  year: number | null;
+  createdAt: string;
 }
 
 export interface ApiUserSession {

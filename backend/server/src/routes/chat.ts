@@ -53,6 +53,7 @@ import {
 import { decryptMessage, encryptMessage } from '../lib/encryption';
 import { uploadChatMediaToStorage } from '../lib/objectStorage';
 import { getUserSummariesByIds, getUserSummaryById } from '../lib/userCache';
+import { canMessage, getBlockState, getBlockStates } from '../lib/blocking';
 
 const router = express.Router();
 router.use(authenticateToken);
@@ -83,6 +84,7 @@ interface ConversationUnreadRow {
 interface MessageRow {
   message_id: string;
   sender_user_id: string;
+  suppressed_for_user_id: string | null;
   message_type: string;
   content: string | null;
   reactions: unknown;
@@ -99,6 +101,7 @@ interface AttachmentRow {
 interface ReplyRow {
   message_id: string;
   sender_user_id: string;
+  suppressed_for_user_id: string | null;
   message_type: string;
   content: string | null;
   attachment_url: string | null;
@@ -227,8 +230,9 @@ async function fetchConversationUnreadRows(
     LEFT JOIN messages last_read
       ON last_read.message_id = cp.last_read_message_id
     LEFT JOIN messages m
-      ON m.chat_id = cp.chat_id
+     ON m.chat_id = cp.chat_id
      AND m.deleted_at IS NULL
+     AND (m.suppressed_for_user_id IS NULL OR m.suppressed_for_user_id != ${userId})
      AND m.sender_user_id != ${userId}
      AND (
        cp.last_read_message_id IS NULL
@@ -248,6 +252,56 @@ async function fetchConversationUnreadRows(
   return result;
 }
 
+async function fetchLatestVisibleMessagesForConversations(
+  viewerUserId: string,
+  conversationIds: string[],
+): Promise<Map<string, ChatCachedMessage>> {
+  const result = new Map<string, ChatCachedMessage>();
+  if (conversationIds.length === 0) return result;
+
+  const rows = await prisma.$queryRaw<Array<{
+    chat_id: string;
+    message_id: string;
+    sender_user_id: string;
+    suppressed_for_user_id: string | null;
+    message_type: string;
+    content: string | null;
+    created_at: Date;
+  }>>`
+    SELECT DISTINCT ON (m.chat_id)
+      m.chat_id,
+      m.message_id,
+      m.sender_user_id,
+      m.suppressed_for_user_id,
+      m.message_type,
+      m.content,
+      m.created_at
+    FROM messages m
+    WHERE m.chat_id IN (${Prisma.join(conversationIds)})
+      AND m.deleted_at IS NULL
+      AND (m.suppressed_for_user_id IS NULL OR m.suppressed_for_user_id != ${viewerUserId})
+    ORDER BY m.chat_id, m.created_at DESC, m.message_id DESC
+  `;
+
+  for (const row of rows) {
+    result.set(row.chat_id, {
+      id: row.message_id,
+      chatId: row.chat_id,
+      senderId: row.sender_user_id,
+      suppressedForUserId: row.suppressed_for_user_id,
+      type: row.message_type,
+      content: row.content ? decryptMessage(row.content) : null,
+      reactions: {},
+      timestamp: row.created_at.toISOString(),
+      attachments: [],
+      replyToMessageId: null,
+      replyTo: null,
+    });
+  }
+
+  return result;
+}
+
 async function buildConversationListEntries(
   userId: string,
   type: ChatConversationListType,
@@ -255,7 +309,7 @@ async function buildConversationListEntries(
   const isRequest = type === 'requests';
   const rows = await fetchConversationBaseRows(userId, isRequest);
   const conversationIds = rows.map((row) => row.chat_id);
-  const latestMessages = await fetchLatestMessagesForConversations(conversationIds);
+  const latestMessages = await fetchLatestVisibleMessagesForConversations(userId, conversationIds);
   const directParticipantIds = rows
     .map((row) => row.other_user_id)
     .filter((value): value is string => Boolean(value));
@@ -334,6 +388,7 @@ async function buildConversationListEntries(
           : 'No messages yet',
         timestamp: latestMessage?.timestamp ?? row.updated_at.toISOString(),
         isRequest,
+        viewerHasBlockedUser: false,
       };
     })
     .filter((entry): entry is ChatConversationListEntry => entry !== null);
@@ -371,17 +426,30 @@ async function hydrateConversationListResponse(
   const participantIds = entries.map((entry) => entry.participantId);
   const presenceMap = await getUserPresenceMap(participantIds);
   const summaries = await getUserSummariesByIds(participantIds);
+  const blockStates = await getBlockStates(userId, participantIds);
 
   return entries
     .map((entry) => {
       const summary = summaries.get(entry.participantId);
       const presence = presenceMap.get(entry.participantId);
+      const blockState = blockStates.get(entry.participantId);
 
       return {
         ...entry,
         unread: unreadMap.get(entry.id) ?? 0,
-        isOnline: presence?.isOnline ?? summary?.isOnline ?? false,
-        lastSeenAt: presence?.lastSeenAt ?? summary?.lastSeenAt ?? null,
+        isOnline:
+          blockState?.viewerHasBlockedUser || blockState?.viewerIsBlockedByUser
+            ? false
+            : (presence?.isOnline ?? summary?.isOnline ?? false),
+        lastSeenAt:
+          blockState?.viewerHasBlockedUser || blockState?.viewerIsBlockedByUser
+            ? null
+            : (presence?.lastSeenAt ?? summary?.lastSeenAt ?? null),
+        participantAvatar:
+          blockState?.viewerHasBlockedUser || blockState?.viewerIsBlockedByUser
+            ? null
+            : entry.participantAvatar,
+        viewerHasBlockedUser: Boolean(blockState?.viewerHasBlockedUser),
       };
     })
     .sort(
@@ -392,6 +460,7 @@ async function hydrateConversationListResponse(
 
 async function fetchReplyPreview(
   chatId: string,
+  viewerUserId: string,
   messageId: string | null | undefined,
 ): Promise<ChatReplyPreview | null> {
   if (!messageId) return null;
@@ -400,6 +469,7 @@ async function fetchReplyPreview(
     SELECT
       m.message_id,
       m.sender_user_id,
+      m.suppressed_for_user_id,
       m.message_type,
       m.content,
       (
@@ -413,6 +483,7 @@ async function fetchReplyPreview(
     WHERE m.chat_id = ${chatId}
       AND m.message_id = ${messageId}
       AND m.deleted_at IS NULL
+      AND (m.suppressed_for_user_id IS NULL OR m.suppressed_for_user_id != ${viewerUserId})
     LIMIT 1
   `;
 
@@ -433,6 +504,7 @@ async function fetchReplyPreview(
 
 async function fetchMessageRows(
   chatId: string,
+  viewerUserId: string,
   limit: number,
   before?: string,
 ): Promise<MessagePageResult> {
@@ -446,6 +518,7 @@ async function fetchMessageRows(
       WHERE message_id = ${before}
         AND chat_id = ${chatId}
         AND deleted_at IS NULL
+        AND (suppressed_for_user_id IS NULL OR suppressed_for_user_id != ${viewerUserId})
       LIMIT 1
     `;
 
@@ -459,6 +532,7 @@ async function fetchMessageRows(
       SELECT
         m.message_id,
         m.sender_user_id,
+        m.suppressed_for_user_id,
         m.message_type,
         m.content,
         m.reactions,
@@ -467,6 +541,7 @@ async function fetchMessageRows(
       FROM messages m
       WHERE m.chat_id = ${chatId}
         AND m.deleted_at IS NULL
+        AND (m.suppressed_for_user_id IS NULL OR m.suppressed_for_user_id != ${viewerUserId})
         AND (
           m.created_at < ${cursorCreatedAt}
           OR (m.created_at = ${cursorCreatedAt} AND m.message_id < ${cursorMessageId})
@@ -480,6 +555,7 @@ async function fetchMessageRows(
       SELECT
         m.message_id,
         m.sender_user_id,
+        m.suppressed_for_user_id,
         m.message_type,
         m.content,
         m.reactions,
@@ -488,6 +564,7 @@ async function fetchMessageRows(
       FROM messages m
       WHERE m.chat_id = ${chatId}
         AND m.deleted_at IS NULL
+        AND (m.suppressed_for_user_id IS NULL OR m.suppressed_for_user_id != ${viewerUserId})
       ORDER BY m.created_at DESC, m.message_id DESC
       LIMIT ${warmLimit}
     `;
@@ -529,6 +606,7 @@ async function fetchMessageRows(
           SELECT
             m.message_id,
             m.sender_user_id,
+            m.suppressed_for_user_id,
             m.message_type,
             m.content,
             (
@@ -542,6 +620,7 @@ async function fetchMessageRows(
           WHERE m.chat_id = ${chatId}
             AND m.message_id IN (${Prisma.join(replyIds)})
             AND m.deleted_at IS NULL
+            AND (m.suppressed_for_user_id IS NULL OR m.suppressed_for_user_id != ${viewerUserId})
         `
       : [];
 
@@ -557,6 +636,7 @@ async function fetchMessageRows(
       id: row.message_id,
       chatId,
       senderId: row.sender_user_id,
+      suppressedForUserId: row.suppressed_for_user_id,
       type: row.message_type,
       content: row.content ? decryptMessage(row.content) : null,
       reactions: normalizeReactions(row.reactions),
@@ -580,6 +660,7 @@ async function fetchMessageRows(
 
 async function hasOlderMessagesThan(
   chatId: string,
+  viewerUserId: string,
   oldestMessageId: string,
 ): Promise<boolean> {
   const cursorRows = await prisma.$queryRaw<Array<{ created_at: Date; message_id: string }>>`
@@ -588,6 +669,7 @@ async function hasOlderMessagesThan(
     WHERE message_id = ${oldestMessageId}
       AND chat_id = ${chatId}
       AND deleted_at IS NULL
+      AND (suppressed_for_user_id IS NULL OR suppressed_for_user_id != ${viewerUserId})
     LIMIT 1
   `;
 
@@ -600,6 +682,7 @@ async function hasOlderMessagesThan(
     FROM messages
     WHERE chat_id = ${chatId}
       AND deleted_at IS NULL
+      AND (suppressed_for_user_id IS NULL OR suppressed_for_user_id != ${viewerUserId})
       AND (
         created_at < ${cursorCreatedAt}
         OR (created_at = ${cursorCreatedAt} AND message_id < ${cursorMessageId})
@@ -627,12 +710,16 @@ async function formatMessagesForResponse(
   }
 
   const summaries = await getUserSummariesByIds(Array.from(senderIds));
+  const blockStates = await getBlockStates(viewerUserId, Array.from(senderIds));
   return messages.map((message) => ({
     id: message.id,
     senderId: message.senderId,
     senderName: summaries.get(message.senderId)?.displayName ?? summaries.get(message.senderId)?.username ?? 'Unknown user',
     senderUsername: summaries.get(message.senderId)?.username ?? null,
-    senderAvatar: summaries.get(message.senderId)?.profilePictureUrl ?? null,
+    senderAvatar:
+      blockStates.get(message.senderId)?.viewerIsBlockedByUser
+        ? null
+        : (summaries.get(message.senderId)?.profilePictureUrl ?? null),
     type: message.type,
     content: message.content,
     reactions: message.reactions,
@@ -651,7 +738,10 @@ async function formatMessagesForResponse(
       userId: seenUserId,
       displayName: summaries.get(seenUserId)?.displayName ?? summaries.get(seenUserId)?.username ?? 'Unknown user',
       username: summaries.get(seenUserId)?.username ?? 'Unknown user',
-      avatarUrl: summaries.get(seenUserId)?.profilePictureUrl ?? null,
+      avatarUrl:
+        blockStates.get(seenUserId)?.viewerIsBlockedByUser
+          ? null
+          : (summaries.get(seenUserId)?.profilePictureUrl ?? null),
     })),
     isOwn: message.senderId === viewerUserId,
   }));
@@ -672,6 +762,12 @@ async function fetchSeenByMap(
       AND cp.left_at IS NULL
       AND cp.user_id != ${viewerUserId}
       AND cp.last_read_message_id IN (${Prisma.join(messageIds)})
+      AND EXISTS (
+        SELECT 1
+        FROM messages m
+        WHERE m.message_id = cp.last_read_message_id
+          AND (m.suppressed_for_user_id IS NULL OR m.suppressed_for_user_id != ${viewerUserId})
+      )
   `;
 
   for (const row of rows) {
@@ -685,27 +781,31 @@ async function fetchSeenByMap(
 
 async function fetchMessagesForRequest(
   chatId: string,
+  viewerUserId: string,
   limit: number,
   before?: string,
 ): Promise<MessagePageResult> {
   if (before) {
-    return fetchMessageRows(chatId, limit, before);
+    return fetchMessageRows(chatId, viewerUserId, limit, before);
   }
 
   const cached = await getCachedRecentMessages(chatId);
   if (cached && cached.length > 0) {
-    const selected = cached.slice(-limit);
+    const visibleCached = cached.filter(
+      (message) => !message.suppressedForUserId || message.suppressedForUserId !== viewerUserId,
+    );
+    const selected = visibleCached.slice(-limit);
     const hasMore =
-      cached.length > limit ||
+      visibleCached.length > limit ||
       (selected.length > 0
-        ? await hasOlderMessagesThan(chatId, selected[0].id)
+        ? await hasOlderMessagesThan(chatId, viewerUserId, selected[0].id)
         : false);
 
     return { messages: selected, hasMore };
   }
 
   const warmLimit = Math.max(limit, getChatRecentWindowSize());
-  const fresh = await fetchMessageRows(chatId, warmLimit);
+  const fresh = await fetchMessageRows(chatId, viewerUserId, warmLimit);
   if (fresh.messages.length > 0) {
     await setCachedRecentMessages(chatId, fresh.messages);
   }
@@ -721,6 +821,7 @@ async function updateConversationListsForMessage(
   chatId: string,
   senderUserId: string,
   meta: ChatConversationMetaCache,
+  suppressedForUserId: string | null,
 ): Promise<void> {
   const type: ChatConversationListType = meta.isRequest ? 'requests' : 'active';
 
@@ -744,7 +845,7 @@ async function updateConversationListsForMessage(
         );
       });
 
-      if (viewerId !== senderUserId) {
+      if (viewerId !== senderUserId && viewerId !== suppressedForUserId) {
         await incrementUnreadCount(viewerId, chatId, 1);
       }
     }),
@@ -818,6 +919,43 @@ async function autoAcceptRequestOnReply(
   });
 }
 
+async function resolveMessageSuppressionForChat(
+  chatId: string,
+  senderUserId: string,
+): Promise<{ suppressedForUserId: string | null; recipientUserId: string | null }> {
+  const rows = await prisma.$queryRaw<Array<{ chat_type: string; other_user_id: string | null }>>`
+    SELECT
+      c.chat_type,
+      (
+        SELECT cp.user_id
+        FROM chat_participants cp
+        WHERE cp.chat_id = c.chat_id
+          AND cp.user_id != ${senderUserId}
+          AND cp.left_at IS NULL
+        ORDER BY cp.joined_at ASC
+        LIMIT 1
+      ) AS other_user_id
+    FROM chats c
+    WHERE c.chat_id = ${chatId}
+    LIMIT 1
+  `;
+
+  const row = rows[0];
+  if (!row || row.chat_type !== 'direct' || !row.other_user_id) {
+    return { suppressedForUserId: null, recipientUserId: null };
+  }
+
+  const permission = await canMessage(senderUserId, row.other_user_id);
+  if (!permission.allowed && !permission.suppressedForUserId) {
+    throw new Error('BLOCKED_BY_SENDER');
+  }
+
+  return {
+    suppressedForUserId: permission.suppressedForUserId,
+    recipientUserId: row.other_user_id,
+  };
+}
+
 async function persistMessage(
   chatId: string,
   userId: string,
@@ -825,6 +963,7 @@ async function persistMessage(
   content: string | null,
   replyToMessageId: string | null,
   attachments: ChatCachedAttachment[],
+  suppressedForUserId: string | null,
 ): Promise<{ messageId: string; createdAt: Date }> {
   const encryptedContent = content ? encryptMessage(content) : null;
   return prisma.$transaction(async (tx) => {
@@ -833,6 +972,7 @@ async function persistMessage(
       INSERT INTO messages (
         chat_id,
         sender_user_id,
+        suppressed_for_user_id,
         message_type,
         content,
         reply_to_message_id,
@@ -842,6 +982,7 @@ async function persistMessage(
       VALUES (
         ${chatId},
         ${userId},
+        ${suppressedForUserId},
         ${messageType},
         ${encryptedContent},
         ${replyToMessageId},
@@ -888,6 +1029,7 @@ async function cacheAndEmitMessage(
     replyToMessageId: string | null;
     replyTo: ChatReplyPreview | null;
     attachments: ChatCachedAttachment[];
+    suppressedForUserId: string | null;
   },
 ): Promise<void> {
   const meta = (await getConversationMeta(chatId)) ?? (await reconcileConversationMeta(chatId));
@@ -899,6 +1041,7 @@ async function cacheAndEmitMessage(
     id: payload.messageId,
     chatId,
     senderId: payload.senderUserId,
+    suppressedForUserId: payload.suppressedForUserId,
     type: payload.messageType,
     content: payload.content,
     reactions: {},
@@ -933,6 +1076,7 @@ async function cacheAndEmitMessage(
       chatId,
       payload.senderUserId,
       nextMeta,
+      payload.suppressedForUserId,
     );
   } catch (err) {
     console.warn('Failed to update chat cache after message send:', err);
@@ -940,7 +1084,9 @@ async function cacheAndEmitMessage(
 
   noteConversationActivity(chatId);
   const sender = await getUserSummaryById(payload.senderUserId);
-  emitChatMessage(participantIds, {
+  emitChatMessage(
+    participantIds.filter((participantId) => participantId !== payload.suppressedForUserId),
+    {
     messageId: payload.messageId,
     chatId,
     senderUserId: payload.senderUserId,
@@ -1040,7 +1186,7 @@ router.get('/conversations/:chatId/messages', async (req: Request, res: Response
       return res.status(403).json({ message: 'Not a participant' });
     }
 
-    const result = await fetchMessagesForRequest(chatId, limit, before);
+    const result = await fetchMessagesForRequest(chatId, userId, limit, before);
     const nextCursor = result.messages.length > 0 ? result.messages[0].id : null;
     const seenByMap = await fetchSeenByMap(
       chatId,
@@ -1089,9 +1235,11 @@ router.post(
         return res.status(403).json({ message: 'Not a participant' });
       }
 
+      const messagePolicy = await resolveMessageSuppressionForChat(chatId, userId);
+
       await autoAcceptRequestOnReply(chatId, userId);
 
-      const replyTo = await fetchReplyPreview(chatId, replyToMessageId);
+      const replyTo = await fetchReplyPreview(chatId, userId, replyToMessageId);
       if (replyToMessageId && !replyTo) {
         return res
           .status(400)
@@ -1105,6 +1253,7 @@ router.post(
         content,
         replyToMessageId ?? null,
         [],
+        messagePolicy.suppressedForUserId,
       );
 
       await cacheAndEmitMessage(authed, chatId, {
@@ -1116,10 +1265,14 @@ router.post(
         replyToMessageId: replyToMessageId ?? null,
         replyTo,
         attachments: [],
+        suppressedForUserId: messagePolicy.suppressedForUserId,
       });
 
       return res.status(201).json({ messageId: persisted.messageId });
     } catch (err) {
+      if (err instanceof Error && err.message === 'BLOCKED_BY_SENDER') {
+        return res.status(403).json({ message: 'You cannot message this user' });
+      }
       console.error('Error sending message:', err);
       return res.status(500).json({ message: 'Internal server error' });
     }
@@ -1155,9 +1308,11 @@ router.post(
         return res.status(403).json({ message: 'Not a participant' });
       }
 
+      const messagePolicy = await resolveMessageSuppressionForChat(chatId, userId);
+
       await autoAcceptRequestOnReply(chatId, userId);
 
-      const replyTo = await fetchReplyPreview(chatId, replyToMessageId);
+      const replyTo = await fetchReplyPreview(chatId, userId, replyToMessageId);
       if (replyToMessageId && !replyTo) {
         return res
           .status(400)
@@ -1177,6 +1332,7 @@ router.post(
         null,
         replyToMessageId ?? null,
         attachments,
+        messagePolicy.suppressedForUserId,
       );
 
       await cacheAndEmitMessage(authed, chatId, {
@@ -1188,10 +1344,14 @@ router.post(
         replyToMessageId: replyToMessageId ?? null,
         replyTo,
         attachments,
+        suppressedForUserId: messagePolicy.suppressedForUserId,
       });
 
       return res.status(201).json({ messageId: persisted.messageId, fileUrl });
     } catch (err) {
+      if (err instanceof Error && err.message === 'BLOCKED_BY_SENDER') {
+        return res.status(403).json({ message: 'You cannot message this user' });
+      }
       console.error('Error sending image:', err);
       return res.status(500).json({ message: 'Internal server error' });
     }

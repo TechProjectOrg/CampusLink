@@ -48,6 +48,7 @@ interface ChatPageProps {
   onChatClick?: (conversationId: string) => void;
   onCreateChat?: (conversation: ChatConversation) => void;
   onChatRead?: (conversationId: string) => void;
+  onUnblockUser?: (userId: string) => Promise<void> | void;
 }
 
 function TypingAnimatedText({
@@ -72,7 +73,7 @@ function TypingAnimatedText({
   );
 }
 
-export function ChatPage({ conversations, students, currentUserId, onViewProfile, onChatClick, onCreateChat, onChatRead }: ChatPageProps) {
+export function ChatPage({ conversations, students, currentUserId, onViewProfile, onChatClick, onCreateChat, onChatRead, onUnblockUser }: ChatPageProps) {
   const appData = useAppDataStore();
   const auth = useAuth();
   const selectedConversationId = useAppDataSelector((state) => state.chat.selectedConversationId);
@@ -92,6 +93,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   const readMessageByChatRef = useRef<Record<string, string>>({});
 
   const selectedConversation = conversations.find(c => c.id === selectedChat);
+  const isBlockedConversation = Boolean(selectedConversation && !selectedConversation.isGroup && selectedConversation.viewerHasBlockedUser);
   const isPendingConversation = Boolean(selectedConversation?.isPending);
   const activeConversations = conversations.filter((conversation) => !conversation.isRequest);
   const requestConversations = conversations.filter((conversation) => conversation.isRequest);
@@ -245,7 +247,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   };
 
   const handleSendMessage = async () => {
-    if (isPendingConversation) return;
+    if (isPendingConversation || isBlockedConversation) return;
     if (!message.trim() || !selectedChat) return;
 
     const content = message.trim();
@@ -261,7 +263,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   };
 
   const handleSendImage = async (file: File | undefined) => {
-    if (isPendingConversation) return;
+    if (isPendingConversation || isBlockedConversation) return;
     if (!file || !selectedChat) return;
     if (!file.type.startsWith('image/')) {
       window.alert('Please choose an image file.');
@@ -794,9 +796,16 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                     {!selectedConversation.isGroup && (
                       <>
                         <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-orange-600 focus:text-orange-600">
+                        <DropdownMenuItem
+                          className="text-orange-600 focus:text-orange-600"
+                          onClick={() => {
+                            if (selectedConversation.viewerHasBlockedUser) {
+                              void onUnblockUser?.(selectedConversation.participantId);
+                            }
+                          }}
+                        >
                           <Ban className="w-4 h-4 mr-2" />
-                          Block User
+                          {selectedConversation.viewerHasBlockedUser ? 'Unblock User' : 'Block User'}
                         </DropdownMenuItem>
                         <DropdownMenuItem className="text-destructive focus:text-destructive">
                           <Flag className="w-4 h-4 mr-2" />
@@ -1070,6 +1079,20 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
 
             {/* Fixed Input Footer */}
             <div className="cl-chat-input-footer px-4 md:px-6 py-3 md:py-4 border-t border-gray-200 flex-shrink-0">
+              {isBlockedConversation && selectedConversation ? (
+                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                  <p className="text-lg font-semibold text-slate-900">
+                    You blocked @{selectedConversation.participantUsername ?? selectedConversation.participantName}
+                  </p>
+                  <p className="mt-2 text-sm text-slate-600">
+                    You won&apos;t receive messages from this user unless you unblock them.
+                  </p>
+                  <div className="mt-4 flex gap-3">
+                    <Button onClick={() => onUnblockUser?.(selectedConversation.participantId)}>Unblock</Button>
+                    <Button variant="outline" onClick={() => appData.selectConversation(null)}>Close Chat</Button>
+                  </div>
+                </div>
+              ) : null}
               {selectedConversation?.isRequest && (
                 <div className="mb-3 flex items-center justify-center gap-2">
                   <Button
@@ -1100,7 +1123,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                   </Button>
                 </div>
               )}
-              {replyingTo && (
+              {!isBlockedConversation && replyingTo && (
                 <div className="mb-3 flex items-center justify-between rounded-xl bg-gray-50 px-3 py-2">
                   <div className="min-w-0">
                     <p className="text-xs font-medium text-gray-700">Replying to {replyingTo.isOwn ? 'yourself' : replyingTo.senderName}</p>
@@ -1111,6 +1134,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                   </Button>
                 </div>
               )}
+              {!isBlockedConversation ? (
               <div className="flex items-center gap-2 md:gap-3">
                 <input
                   ref={fileInputRef}
@@ -1167,6 +1191,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                   </Button>
                 )}
               </div>
+              ) : null}
             </div>
           </div>
         ) : (

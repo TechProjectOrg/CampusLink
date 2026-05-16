@@ -8,9 +8,9 @@ import { Switch } from './ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Separator } from './ui/separator';
 import { toast } from 'sonner@2.0.3';
-import type { ApiUserSession, Student } from '../types';
+import type { ApiUserSession, BlockedUserListItem, Student } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { apiChangePassword, apiCheckUsernameAvailability, apiFetchUserSessions, apiFetchUserSettings, apiRevokeUserSession, apiUpdateUserProfile, apiUpdateUserSettings, apiVerifyPasswordChange } from '../lib/authApi';
+import { apiChangePassword, apiCheckUsernameAvailability, apiFetchBlockedUsers, apiFetchUserSessions, apiFetchUserSettings, apiRevokeUserSession, apiUpdateUserProfile, apiUpdateUserSettings, apiVerifyPasswordChange } from '../lib/authApi';
 import { ForgotPasswordDialog } from './ForgotPasswordDialog';
 import { LoadingIndicator } from './ui/LoadingIndicator';
 
@@ -54,9 +54,10 @@ interface SettingsPageProps {
   student: Student;
   onEdit: (updates: Partial<Student>) => void;
   onUpdateSettings: (settings: any) => void;
+  onUnblockUser: (userId: string) => Promise<void> | void;
 }
 
-export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPageProps) {
+export function SettingsPage({ student, onEdit, onUpdateSettings, onUnblockUser }: SettingsPageProps) {
   const auth = useAuth();
   const accountStudent = auth.currentUser ?? student;
   const isAlumni = auth.profile?.type === 'alumni';
@@ -98,6 +99,8 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [savingNotifications, setSavingNotifications] = useState(false);
   const [savingPrivacy, setSavingPrivacy] = useState(false);
+  const [blockedUsers, setBlockedUsers] = useState<BlockedUserListItem[]>([]);
+  const [blockedUsersLoading, setBlockedUsersLoading] = useState(false);
 
   const [notificationSettings, setNotificationSettings] = useState({
     emailNotifications: true,
@@ -191,6 +194,36 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
       cancelled = true;
     };
   }, [securityView, auth.session?.token]);
+
+  useEffect(() => {
+    if (!auth.session?.userId || !auth.session?.token) return;
+
+    let cancelled = false;
+
+    const loadBlockedUsers = async () => {
+      setBlockedUsersLoading(true);
+      try {
+        const nextBlockedUsers = await apiFetchBlockedUsers(auth.session!.userId, auth.session!.token);
+        if (!cancelled) {
+          setBlockedUsers(nextBlockedUsers);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Unable to load blocked users:', err);
+        }
+      } finally {
+        if (!cancelled) {
+          setBlockedUsersLoading(false);
+        }
+      }
+    };
+
+    void loadBlockedUsers();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.session?.token, auth.session?.userId]);
 
   const handlePasswordChange = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1392,6 +1425,43 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
                       void persistPrivacySettings(next);
                     }}
                   />
+                </div>
+
+                <Separator />
+
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-gray-900">Blocked Users</p>
+                    <p className="text-sm text-gray-600">Manage people you&apos;ve blocked.</p>
+                  </div>
+                  {blockedUsersLoading ? (
+                    <LoadingIndicator label="Loading blocked users..." className="justify-start" size={20} />
+                  ) : blockedUsers.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-600">
+                      You haven&apos;t blocked anyone yet.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {blockedUsers.map((blockedUser) => (
+                        <div key={blockedUser.userId} className="flex items-center justify-between rounded-2xl border bg-white px-4 py-3">
+                          <div>
+                            <p className="font-medium text-slate-900">{blockedUser.displayName}</p>
+                            <p className="text-sm text-slate-500">@{blockedUser.username}</p>
+                          </div>
+                          <Button
+                            variant="outline"
+                            onClick={async () => {
+                              if (!window.confirm(`Unblock @${blockedUser.username}?`)) return;
+                              await onUnblockUser(blockedUser.userId);
+                              setBlockedUsers((current) => current.filter((item) => item.userId !== blockedUser.userId));
+                            }}
+                          >
+                            Unblock
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 <Separator className="my-6" />

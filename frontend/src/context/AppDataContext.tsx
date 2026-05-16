@@ -241,6 +241,8 @@ export function apiProfileToStudent(profile: ApiUserProfile): Student {
     projects: [],
     accountType: profile.isPublic ? 'public' : 'private',
     stats: profile.stats,
+    viewerHasBlockedUser: profile.viewerHasBlockedUser ?? false,
+    profileVisibility: profile.profileVisibility ?? 'full',
   };
 }
 

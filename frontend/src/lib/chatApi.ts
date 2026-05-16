@@ -42,6 +42,7 @@ export interface ConversationApiResponse {
   isOnline: boolean;
   lastSeenAt: string | null;
   isRequest: boolean;
+  viewerHasBlockedUser?: boolean;
   isGroup?: boolean;
   groupMemberCount?: number;
 }

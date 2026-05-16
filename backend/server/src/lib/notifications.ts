@@ -1,6 +1,7 @@
 import prisma from '../prisma';
 import { emitNotificationEvent } from './realtime';
 import { sendPushNotificationToUser } from './push';
+import { isBlockedEitherWay } from './blocking';
 
 export type NotificationType =
   | 'follow'
@@ -254,6 +255,12 @@ async function upsertGroupedLikeNotification(params: {
 
 export async function createNotification(params: CreateNotificationParams): Promise<void> {
   try {
+    if (
+      params.actorUserId &&
+      (await isBlockedEitherWay(params.actorUserId, params.recipientUserId))
+    ) {
+      return;
+    }
     if (!(await isNotificationEnabled(params.recipientUserId, params.type))) {
       return;
     }

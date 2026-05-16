@@ -1,4 +1,4 @@
-import type { ApiUserProfile, ApiUserSession, ApiUserSettings } from '../types';
+import type { ApiUserProfile, ApiUserSession, ApiUserSettings, BlockedUserListItem } from '../types';
 import { resolveApiBaseUrl } from './apiBase';
 
 export const API_BASE = resolveApiBaseUrl(import.meta.env.VITE_API_URL as string | undefined);
@@ -313,6 +313,49 @@ export async function apiUpdateUserSettings(
   }
 
   return (await response.json()) as ApiUserSettings;
+}
+
+export async function apiFetchBlockedUsers(userId: string, token?: string): Promise<BlockedUserListItem[]> {
+  const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}/blocks`, {
+    headers: {
+      ...authHeaders(token),
+    },
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to fetch blocked users');
+  }
+
+  return (await response.json()) as BlockedUserListItem[];
+}
+
+export async function apiBlockUser(userId: string, token?: string): Promise<void> {
+  const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}/block`, {
+    method: 'POST',
+    headers: {
+      ...authHeaders(token),
+    },
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to block user');
+  }
+}
+
+export async function apiUnblockUser(userId: string, token?: string): Promise<void> {
+  const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}/block`, {
+    method: 'DELETE',
+    headers: {
+      ...authHeaders(token),
+    },
+  });
+
+  if (!response.ok && response.status !== 204) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Unable to unblock user');
+  }
 }
 
 export async function apiFetchUserSessions(token?: string): Promise<ApiUserSession[]> {

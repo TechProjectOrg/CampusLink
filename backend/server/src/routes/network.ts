@@ -5,6 +5,7 @@ import { createNotification } from '../lib/notifications';
 import { invalidateUserFeedCache } from '../lib/feedCache';
 import { getUserSummariesByIds, getUserSummaryById, incrementUserStat, toCachedUserCard } from '../lib/userCache';
 import { dismissSuggestedUser, getSuggestedUsersForApi, queueSuggestedUsersRecompute } from '../lib/socialInsights';
+import { getBlockState, getBlockStates, maskUserCardForViewer } from '../lib/blocking';
 
 const router = express.Router();
 
@@ -12,8 +13,12 @@ router.use(authenticateToken);
 
 // ---- helpers ----
 
-function mapMinimalUserFromSummary(summary: Awaited<ReturnType<typeof getUserSummaryById>> extends infer T ? NonNullable<T> : never) {
-  const card = toCachedUserCard(summary);
+function mapMinimalUserFromSummary(
+  viewerUserId: string,
+  summary: Awaited<ReturnType<typeof getUserSummaryById>> extends infer T ? NonNullable<T> : never,
+  blockState: { viewerHasBlockedUser: boolean; viewerIsBlockedByUser: boolean },
+) {
+  const card = maskUserCardForViewer(viewerUserId, summary.userId, toCachedUserCard(summary), blockState);
   return {
     userId: card.userId,
     displayName: card.displayName,
@@ -26,12 +31,22 @@ function mapMinimalUserFromSummary(summary: Awaited<ReturnType<typeof getUserSum
   };
 }
 
-async function hydrateOrderedUsers(userIds: string[]) {
+async function hydrateOrderedUsers(viewerUserId: string, userIds: string[]) {
   const summaries = await getUserSummariesByIds(userIds);
+  const blockStates = await getBlockStates(viewerUserId, userIds);
   return userIds
     .map((userId) => summaries.get(userId))
     .filter((summary): summary is NonNullable<typeof summary> => summary !== undefined)
-    .map(mapMinimalUserFromSummary);
+    .map((summary) =>
+      mapMinimalUserFromSummary(
+        viewerUserId,
+        summary,
+        blockStates.get(summary.userId) ?? {
+          viewerHasBlockedUser: false,
+          viewerIsBlockedByUser: false,
+        },
+      ),
+    );
 }
 
 // ============================================================
@@ -82,10 +97,10 @@ router.get('/graph', async (req: Request, res: Response) => {
     `;
 
     const [followers, following, incomingUsers, outgoingUsers] = await Promise.all([
-      hydrateOrderedUsers(followerRows.map((row) => row.user_id)),
-      hydrateOrderedUsers(followingRows.map((row) => row.user_id)),
-      hydrateOrderedUsers(incomingRows.map((row) => row.user_id)),
-      hydrateOrderedUsers(outgoingRows.map((row) => row.user_id)),
+      hydrateOrderedUsers(userId, followerRows.map((row) => row.user_id)),
+      hydrateOrderedUsers(userId, followingRows.map((row) => row.user_id)),
+      hydrateOrderedUsers(userId, incomingRows.map((row) => row.user_id)),
+      hydrateOrderedUsers(userId, outgoingRows.map((row) => row.user_id)),
     ]);
 
     return res.status(200).json({
@@ -166,6 +181,10 @@ router.post('/follow', async (req: Request, res: Response) => {
     ]);
     if (!target) {
       return res.status(404).json({ message: 'User not found' });
+    }
+    const blockState = await getBlockState(currentUserId, targetUserId);
+    if (blockState.viewerHasBlockedUser || blockState.viewerIsBlockedByUser) {
+      return res.status(403).json({ message: 'You cannot follow this user' });
     }
     const currentUsername = currentUser?.username ?? 'Someone';
 
@@ -351,7 +370,7 @@ router.get('/requests/incoming', async (req: Request, res: Response) => {
         AND fr.status = 'pending'
       ORDER BY fr.created_at DESC
     `;
-    const users = await hydrateOrderedUsers(rows.map((row) => row.user_id));
+    const users = await hydrateOrderedUsers(userId, rows.map((row) => row.user_id));
 
     return res.status(200).json(
       rows.map((row, index) => ({
@@ -383,7 +402,7 @@ router.get('/requests/outgoing', async (req: Request, res: Response) => {
         AND fr.status = 'pending'
       ORDER BY fr.created_at DESC
     `;
-    const users = await hydrateOrderedUsers(rows.map((row) => row.user_id));
+    const users = await hydrateOrderedUsers(userId, rows.map((row) => row.user_id));
 
     return res.status(200).json(
       rows.map((row, index) => ({
