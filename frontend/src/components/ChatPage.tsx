@@ -39,6 +39,7 @@ import { useAppDataSelector, useAppDataStore } from '../context/AppDataContext';
 import { useAuth } from '../context/AuthContext';
 import { useBottomAnchoredChatScroll } from '../hooks/useBottomAnchoredChatScroll';
 import { LoadingIndicator } from './ui/LoadingIndicator';
+import { ImageWithFallback } from './figma/ImageWithFallback';
 import type { ReportTargetDescriptor } from './ReportDialog';
 
 interface ChatPageProps {
@@ -108,6 +109,106 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   );
   const usersById = useAppDataSelector((state) => state.usersById);
   const chatMessages = selectedChatState?.messages ?? [];
+  const postsById = useAppDataSelector((state) => state.postsById);
+
+  function PostPreview({ postId, userText }: { postId: string; userText?: string | null }) {
+    const appData = useAppDataStore();
+    const post = useAppDataSelector((s) => s.postsById[postId]);
+
+    const [isLoading, setIsLoading] = useState(false);
+    const [notAvailable, setNotAvailable] = useState(false);
+
+    // fetch post if missing and wait for hydration so UI updates from loading -> preview
+    useEffect(() => {
+      if (post) return;
+      let mounted = true;
+      (async () => {
+        try {
+          if (!mounted) return;
+          setIsLoading(true);
+          await appData.refreshPost(postId);
+          // if refreshPost completed but post still missing, likely access restricted
+          const snap = appData.getSnapshot?.()?.postsById?.[postId] ?? null;
+          if (mounted && !snap) {
+            setNotAvailable(true);
+          } else if (mounted) {
+            setNotAvailable(false);
+          }
+        } catch (e) {
+          // ignore
+        } finally {
+          if (mounted) setIsLoading(false);
+        }
+      })();
+      return () => { mounted = false; };
+    }, [postId, post, appData]);
+
+    const openPost = () => {
+      try {
+        if (typeof window !== 'undefined') {
+          const path = `/post/${postId}`;
+          window.history.pushState({ tab: 'post', postId }, '', path);
+          // notify app to re-evaluate route
+          window.dispatchEvent(new PopStateEvent('popstate'));
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+
+    if (notAvailable) {
+      return (
+        <div className="min-w-0">
+          <div className="rounded-xl overflow-hidden border bg-white shadow-sm p-3">
+            <p className="text-sm text-gray-500">Post is not available</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (!post) {
+      return (
+        <div className="min-w-0">
+          <div className="rounded-xl overflow-hidden border bg-white shadow-sm p-3">
+            {isLoading ? <LoadingIndicator label="Loading post..." /> : <p className="text-sm text-gray-500">Post</p>}
+          </div>
+          {userText ? <p className="text-sm mt-2 break-words">{userText}</p> : null}
+        </div>
+      );
+    }
+
+    return (
+      <div className="min-w-0">
+        <button type="button" onClick={openPost} className="w-full text-left">
+          <div className="rounded-xl overflow-hidden border bg-white shadow-sm">
+            <div className="flex items-center gap-3 p-3">
+              {(() => {
+                const imageUrl = (post as any).image ?? (post as any).media?.[0]?.mediaUrl ?? (post as any).mediaUrl ?? null;
+                const title = (post as any).title ?? (post as any).contentText ?? '';
+                const desc = (post as any).description ?? (post as any).contentText ?? '';
+                return (
+                  <>
+                    {imageUrl ? (
+                      <div className="flex-shrink-0 w-28 h-20 overflow-hidden rounded-md bg-gray-100">
+                        <ImageWithFallback src={imageUrl} alt={title} className="w-full h-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-100" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{title}</p>
+                      {desc ? <p className="text-xs text-gray-500 truncate mt-1">{desc}</p> : null}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+        </button>
+        {userText ? <p className="text-sm mt-2 break-words">{userText}</p> : null}
+      </div>
+    );
+  }
   const isLoadingMessages = Boolean(selectedChat && selectedChatState?.isLoadingInitial);
   const isLoadingOlder = Boolean(selectedChat && selectedChatState?.isLoadingOlder);
   const hasMoreMessages = Boolean(selectedChatState?.hasMore);
@@ -992,7 +1093,30 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                                   className="max-h-72 rounded-2xl object-cover"
                                 />
                               ) : (
-                                <p className="text-sm break-words">{msg.content}</p>
+                                (() => {
+                                  const content = msg.content ?? '';
+                                  // detect post URL like /post(s)/<id> or full origin (accept letters/digits/_/- ids)
+                                  const postUrlMatch = content.match(/https?:\/\/[\w.-]+\/posts?\/([A-Za-z0-9_-]+)(?![A-Za-z0-9_-])/) || content.match(/\/posts?\/([A-Za-z0-9_-]+)(?![A-Za-z0-9_-])/);
+                                  if (postUrlMatch) {
+                                    const postId = postUrlMatch[1];
+                                    const post = postsById[postId];
+                                    const url = (postUrlMatch[0] && postUrlMatch[0].startsWith('/')) ? `${window.location.origin}${postUrlMatch[0]}` : postUrlMatch[0];
+                                    let userText = content.replace(postUrlMatch[0], '').trim();
+                                    try {
+                                      // hide leftover origin-only links (e.g. "http://localhost:3000") — not useful as user text
+                                      const originOnly = /^https?:\/\/[\w.-]+:\d+\/?$/.test(userText) || /^https?:\/\/[\w.-]+\/?$/.test(userText);
+                                      if (!userText || originOnly) userText = '';
+                                    } catch (e) {
+                                      // ignore regex errors
+                                    }
+                                    if (post) {
+                                      return <PostPreview postId={postId} userText={userText || undefined} />;
+                                    }
+                                    // trigger fetch + render preview component which will fetch
+                                    return <PostPreview postId={postId} userText={userText || undefined} />;
+                                  }
+                                  return <p className="text-sm break-words">{content}</p>;
+                                })()
                               )}
                             </div>
                             <div

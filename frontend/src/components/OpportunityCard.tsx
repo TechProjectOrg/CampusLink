@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { ShareToChatDialog } from './share/ShareToChatDialog';
 import { Heart, MessageCircle, Bookmark, MapPin, Calendar, Trash2, Pencil, Loader2, MoreHorizontal, Flag, Share2 } from 'lucide-react';
 import { Opportunity, Comment } from '../types';
 import { Button } from './ui/button';
@@ -58,6 +59,7 @@ export function OpportunityCard({
   const [expandedRepliesByCommentId, setExpandedRepliesByCommentId] = useState<Record<string, boolean>>({});
   const [editingPost, setEditingPost] = useState(false);
   const [deletingPost, setDeletingPost] = useState(false);
+  const [isShareOpen, setIsShareOpen] = useState(false);
   const [editDraft, setEditDraft] = useState({
     title: opportunity.title,
     description: opportunity.description,
@@ -319,6 +321,7 @@ export function OpportunityCard({
 
   return (
     <>
+      <ShareToChatDialog isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} post={opportunity} />
       <div className="cl-opportunity-card bg-white rounded-2xl border border-primary/10 overflow-hidden hover-lift animate-slide-in-up shadow-sm hover:shadow-xl transition-all duration-300">
         <div className="cl-opportunity-card-body p-4 sm:p-6 pb-3 sm:pb-4">
           <div className="flex items-start justify-between mb-4">
@@ -361,13 +364,7 @@ export function OpportunityCard({
                     <Bookmark className="mr-2 h-4 w-4" />
                     {isSaved ? 'Unsave' : 'Save'}
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => {
-                      if (typeof window !== 'undefined') {
-                        void navigator.clipboard?.writeText(window.location.href);
-                      }
-                    }}
-                  >
+                  <DropdownMenuItem onClick={() => setIsShareOpen(true)}>
                     <Share2 className="mr-2 h-4 w-4" />
                     Share
                   </DropdownMenuItem>

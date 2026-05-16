@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, Bookmark, Calendar, Heart, MapPin, MessageCircle, Trash2, MoreHorizontal, Flag, Share2 } from 'lucide-react';
+import { ShareToChatDialog } from './share/ShareToChatDialog';
 import { Opportunity, Comment } from '../types';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Badge } from './ui/badge';
@@ -98,6 +99,7 @@ export function PostPage({
 }: PostPageProps) {
   const auth = useAuth();
   const [commentText, setCommentText] = useState('');
+  const [isShareOpen, setIsShareOpen] = useState(false);
   const [replyTarget, setReplyTarget] = useState<Comment | null>(null);
   const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
 
@@ -336,6 +338,7 @@ export function PostPage({
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
+      <ShareToChatDialog isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} post={post} />
       <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         <button
           type="button"
@@ -378,13 +381,7 @@ export function PostPage({
                   <Bookmark className="mr-2 h-4 w-4" />
                   {isSaved ? 'Unsave' : 'Save'}
                 </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={() => {
-                    if (typeof window !== 'undefined') {
-                      void navigator.clipboard?.writeText(window.location.href);
-                    }
-                  }}
-                >
+                <DropdownMenuItem onClick={() => setIsShareOpen(true)}>
                   <Share2 className="mr-2 h-4 w-4" />
                   Share
                 </DropdownMenuItem>
