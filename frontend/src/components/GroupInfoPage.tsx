@@ -149,8 +149,9 @@ export function GroupInfoPage({
   const hasDescriptionChanges = descriptionDraft.trim() !== (group.description ?? '').trim();
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+    <div className="cl-clubs-page">
+      <div className="cl-clubs-content hide-scrollbar bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in">
+        <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="sm" onClick={onBack} className="rounded-full w-10 h-10 p-0">
             <ArrowLeft className="w-5 h-5" />
@@ -256,7 +257,7 @@ export function GroupInfoPage({
                   placeholder="Search students to add"
                   className="rounded-xl"
                 />
-                <div className="space-y-2 max-h-72 overflow-y-auto">
+                <div className="space-y-2 max-h-72 overflow-y-auto hide-scrollbar">
                   {addableStudents.length === 0 ? (
                     <p className="text-sm text-gray-500">No more students available to add.</p>
                   ) : (
@@ -443,6 +444,7 @@ export function GroupInfoPage({
             </CardContent>
           </Card>
         )}
+        </div>
       </div>
     </div>
   );

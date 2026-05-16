@@ -482,8 +482,9 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
-      <div className="max-w-6xl mx-auto px-4 md:px-6 py-6 md:py-8 space-y-6">
+    <div className="cl-clubs-page">
+      <div className="cl-clubs-content hide-scrollbar bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in">
+        <div className="max-w-6xl mx-auto px-4 md:px-6 py-6 md:py-8 space-y-6">
         <div className="animate-slide-in-down">
           <Card className="overflow-hidden border-0 shadow-xl">
             <div className="relative h-48 md:h-64 bg-gradient-to-r from-blue-500 to-purple-600">
@@ -750,7 +751,7 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
         </Tabs>
         ) : null}
         <Dialog open={isInviteOpen} onOpenChange={(next) => !inviteBusyUserId && setIsInviteOpen(next)}>
-          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto max-w-[95vw]">
+          <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto hide-scrollbar max-w-[95vw]">
             <DialogHeader>
               <DialogTitle>Invite Members</DialogTitle>
               <DialogDescription>
@@ -850,7 +851,7 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
         </Dialog>
         {canManageClub ? (
           <Dialog open={isSettingsOpen} onOpenChange={(nextOpen) => !isSavingSettings && setIsSettingsOpen(nextOpen)}>
-            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto max-w-[95vw]">
+            <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto hide-scrollbar max-w-[95vw]">
               <DialogHeader>
                 <DialogTitle>Club Settings</DialogTitle>
                 <DialogDescription>
@@ -989,6 +990,7 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
           initialTab="post"
           postOnly
         />
+        </div>
       </div>
     </div>
   );

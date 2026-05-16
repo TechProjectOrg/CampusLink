@@ -521,6 +521,15 @@
 }
 
 @layer utilities {
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
   .\@container\/card-header {
     container: card-header / inline-size;
   }
@@ -5019,6 +5028,15 @@ div[style*="width: 25%"]::webkit-scrollbar {
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
+}
+
+.cl-clubs-content.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.cl-clubs-content.hide-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 @media (max-width: 639px) {

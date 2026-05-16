@@ -110,7 +110,7 @@ export function ClubsPage({ students, currentUserId, initialClubSlug = null, onC
     <PageLayout
       maxWidth="6xl"
       className="cl-clubs-page"
-      contentClassName="cl-clubs-content px-4 py-6 md:px-6 md:py-8 space-y-6 md:space-y-8"
+      contentClassName="cl-clubs-content hide-scrollbar px-4 py-6 md:px-6 md:py-8 space-y-6 md:space-y-8"
     >
         <div className="animate-slide-in-down flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-3">
           <div>

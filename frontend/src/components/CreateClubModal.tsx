@@ -118,7 +118,7 @@ export function CreateClubModal({ isOpen, onClose, onCreateClub }: CreateClubMod
 
   return (
     <Dialog open={isOpen} onOpenChange={(nextOpen) => !nextOpen && !isSubmitting && onClose()}>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto max-w-[95vw]">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto hide-scrollbar max-w-[95vw]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Users className="w-5 h-5 text-primary" />
