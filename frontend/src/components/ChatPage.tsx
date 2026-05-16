@@ -637,9 +637,9 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
             )}
           </div>
 
-          {/* Scrollable Conversation List */}
+          {/* Conversations List */}
           <div className="flex-1 relative">
-            <div className="absolute inset-0 overflow-y-auto">
+            <div className="absolute inset-0 overflow-y-auto hide-scrollbar">
               <div className="cl-chat-conversation-list-inner p-2 w-full">
               {visibleConversations.map(conversation => (
                 <button
@@ -839,18 +839,18 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                   </div>
                 </div>
               )}
-              <div
-                ref={messagesViewportRef}
-                style={{ overflowAnchor: 'auto' }}
-                onPointerDown={(event) => {
-                  if ((event.target as HTMLElement).closest('[data-chat-message-actions]')) return;
-                  if ((event.target as HTMLElement).closest('[data-chat-scroll-message]')) return;
-                  setMobileActionMessageId(null);
-                }}
-                className={`absolute inset-0 overflow-y-auto transition-opacity duration-300 ${
-                  !selectedChat || !showChatLoadingOverlay || isChatReady ? 'opacity-100' : 'opacity-0'
-                }`}
-              >
+                <div
+                  ref={messagesViewportRef}
+                  style={{ overflowAnchor: 'auto' }}
+                  onPointerDown={(event) => {
+                    if ((event.target as HTMLElement).closest('[data-chat-message-actions]')) return;
+                    if ((event.target as HTMLElement).closest('[data-chat-scroll-message]')) return;
+                    setMobileActionMessageId(null);
+                  }}
+                  className={`absolute inset-0 overflow-y-auto hide-scrollbar transition-opacity duration-300 ${
+                    !selectedChat || !showChatLoadingOverlay || isChatReady ? 'opacity-100' : 'opacity-0'
+                  }`}
+                >
                 <div className="cl-chat-messages-inner p-4 md:p-6 space-y-3">
                 <div ref={topSentinelRef} className="h-px w-full" aria-hidden="true" />
                 <div className="space-y-3">

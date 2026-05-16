@@ -386,7 +386,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
               <div
                 ref={messagesViewportRef}
                 style={{ overflowAnchor: 'auto' }}
-                className="h-full overflow-y-auto"
+                className="h-full overflow-y-auto hide-scrollbar"
               >
                 {!isChatReady && isLoadingMessages && chatMessages.length === 0 ? (
                   <LoadingIndicator label="Loading messages..." className="h-full" />
@@ -621,7 +621,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
             </div>
 
             {/* Conversations List */}
-            <ScrollArea viewportRef={conversationsViewportRef} className="flex-1 overflow-hidden">
+            <ScrollArea hideScrollbar viewportRef={conversationsViewportRef} className="flex-1 overflow-hidden">
               <div className="p-2">
                 {filteredConversations.length === 0 ? (
                   <div className="p-8 text-center text-gray-500">

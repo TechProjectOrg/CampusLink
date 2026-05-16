@@ -675,6 +675,18 @@ export default function App() {
   const [selectedHashtag, setSelectedHashtag] = useState<string | null>(null);
   const [postsRefreshToken, setPostsRefreshToken] = useState(0);
   const [openedPost, setOpenedPost] = useState<Opportunity | null>(null);
+
+  useLayoutEffect(() => {
+    const pagesWithHiddenScrollbar = ['profile', 'network', 'chat'];
+    if (pagesWithHiddenScrollbar.includes(activeTab)) {
+      document.body.classList.add('hide-scrollbar');
+    } else {
+      document.body.classList.remove('hide-scrollbar');
+    }
+    return () => {
+      document.body.classList.remove('hide-scrollbar');
+    };
+  }, [activeTab]);
   const [openedPostId, setOpenedPostId] = useState<string | null>(null);
   const [openedPostComments, setOpenedPostComments] = useState<DiscussionPageState<Comment>>(
     createInitialDiscussionPageState<Comment>(),

@@ -85,7 +85,7 @@ export function NetworkPage({
   };
 
   return (
-    <PageLayout maxWidth="4xl" className="cl-network-page" contentClassName="cl-network-content py-6 space-y-6">
+    <PageLayout hideScrollbar={true} maxWidth="4xl" className="cl-network-page" contentClassName="cl-network-content py-6 space-y-6">
         <div className="animate-slide-in-down">
           <h1 className="text-gray-900 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
             Network

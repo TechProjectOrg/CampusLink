@@ -14,6 +14,7 @@ interface PageLayoutProps {
   className?: string;
   contentClassName?: string;
   maxWidth?: PageLayoutMaxWidth;
+  hideScrollbar?: boolean;
 }
 
 export function PageLayout({
@@ -21,11 +22,13 @@ export function PageLayout({
   className,
   contentClassName,
   maxWidth = '7xl',
+  hideScrollbar = false,
 }: PageLayoutProps) {
   return (
     <div
       className={cn(
         'min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0',
+        hideScrollbar && 'hide-scrollbar',
         className
       )}
     >
