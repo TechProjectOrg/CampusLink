@@ -20,8 +20,10 @@ export function ShareToChatDialog({ isOpen, onClose, post }: ShareToChatDialogPr
   const isListHydrated = useAppDataSelector((s) => s.chat.isListHydrated);
   const [query, setQuery] = useState('');
   const [sendingTo, setSendingTo] = useState<string | null>(null);
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
 
-  const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/posts/${post.id}` : `/posts/${post.id}`;
+  // Use canonical SPA route so pasted links open Post page directly.
+  const shareUrl = typeof window !== 'undefined' ? `${window.location.origin}/post/${post.id}` : `/post/${post.id}`;
   // The composer should start empty — the link will be appended when sending.
   const [message, setMessage] = useState('');
 
@@ -37,6 +39,12 @@ export function ShareToChatDialog({ isOpen, onClose, post }: ShareToChatDialogPr
     if (!isOpen) return;
     void appData.ensureConversations?.({ force: false });
   }, [isOpen, appData]);
+
+  React.useEffect(() => {
+    if (copyStatus === 'idle') return;
+    const timer = window.setTimeout(() => setCopyStatus('idle'), 2000);
+    return () => window.clearTimeout(timer);
+  }, [copyStatus]);
 
   const handleSend = async (chatId: string) => {
     try {
@@ -54,8 +62,26 @@ export function ShareToChatDialog({ isOpen, onClose, post }: ShareToChatDialogPr
   };
 
   const handleCopyLink = async () => {
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      await navigator.clipboard.writeText(shareUrl);
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        await navigator.clipboard.writeText(shareUrl);
+        setCopyStatus('copied');
+        return;
+      }
+
+      // Fallback for environments where Clipboard API is unavailable.
+      const textarea = document.createElement('textarea');
+      textarea.value = shareUrl;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'absolute';
+      textarea.style.left = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(textarea);
+      setCopyStatus(ok ? 'copied' : 'failed');
+    } catch {
+      setCopyStatus('failed');
     }
   };
 
@@ -84,7 +110,9 @@ export function ShareToChatDialog({ isOpen, onClose, post }: ShareToChatDialogPr
                 <p className="text-sm font-semibold text-gray-900 truncate">{post.title}</p>
                 <p className="text-sm text-gray-500 truncate">{post.description}</p>
                 <div className="mt-2 flex items-center gap-2">
-                  <Button size="sm" variant="outline" onClick={handleCopyLink}>Copy link</Button>
+                  <Button size="sm" variant="outline" onClick={handleCopyLink}>
+                    {copyStatus === 'copied' ? 'Copied' : copyStatus === 'failed' ? 'Copy failed' : 'Copy link'}
+                  </Button>
                 </div>
               </div>
             </div>

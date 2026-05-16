@@ -735,13 +735,20 @@ export default function App() {
   useLayoutEffect(() => {
     const wasAuthenticated = prevAuthenticatedRef.current;
     const isAuthenticated = auth.isAuthenticated;
+    const currentPath = window.location.pathname;
+    const isDeepLinkPath = /^\/(feed|search|chat|network|notifications|settings|post|posts|profile|hashtag|clubs)(\/|$)/.test(currentPath);
 
     // Transition: logged in
     if (!wasAuthenticated && isAuthenticated) {
       clearSessionScopedState();
       setSearchQuery('');
-      setActiveTab('feed');
-      window.history.pushState({ tab: 'feed' }, '', '/feed');
+      if (isDeepLinkPath) {
+        // Preserve direct links like /post/:id after session restoration/login.
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      } else {
+        setActiveTab('feed');
+        window.history.pushState({ tab: 'feed' }, '', '/feed');
+      }
     }
 
     // Transition: logged out (optional, but avoids restoring old tab on next login)
@@ -774,7 +781,8 @@ export default function App() {
     const setTabFromPath = () => {
         const pathParts = window.location.pathname.split('/').filter(p => p);
         const searchParams = new URLSearchParams(window.location.search);
-        const mainPath = pathParts[0] || 'feed';
+      const rawMainPath = pathParts[0] || 'feed';
+      const mainPath = rawMainPath === 'posts' ? 'post' : rawMainPath;
         setActiveTab(mainPath);
 
         if (mainPath === 'profile' && pathParts[1]) {
