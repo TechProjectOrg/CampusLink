@@ -155,7 +155,7 @@ export function ProfilePostsPage({
   const hasMore = visibleCount < posts.length;
 
   return (
-    <PageLayout maxWidth="7xl" className="bg-slate-50 pb-24 md:pb-8" contentClassName="py-4 sm:py-5 lg:py-6">
+    <PageLayout hideScrollbar={true} maxWidth="7xl" className="bg-slate-50 pb-24 md:pb-8" contentClassName="py-4 sm:py-5 lg:py-6">
       <div className="mx-auto w-full space-y-6" style={{ maxWidth: '1000px' }}>
         <header className="overflow-visible rounded-3xl border border-slate-200/80 bg-white px-6 pb-6 pt-4 shadow-sm sm:px-7 sm:pb-7 sm:pt-5">
           <Button variant="ghost" size="sm" onClick={onBack} className="mb-5 rounded-full">
