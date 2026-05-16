@@ -677,7 +677,7 @@ export default function App() {
   const [openedPost, setOpenedPost] = useState<Opportunity | null>(null);
 
   useLayoutEffect(() => {
-    const pagesWithHiddenScrollbar = ['network', 'profile'];
+    const pagesWithHiddenScrollbar = ['network', 'profile', 'chat'];
     if (pagesWithHiddenScrollbar.includes(activeTab)) {
       document.body.classList.add('hide-scrollbar');
       document.documentElement.classList.add('hide-scrollbar');

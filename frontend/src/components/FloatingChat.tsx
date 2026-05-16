@@ -386,7 +386,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
               <div
                 ref={messagesViewportRef}
                 style={{ overflowAnchor: 'auto' }}
-                className="h-full overflow-y-auto"
+                className="h-full overflow-y-auto hide-scrollbar"
               >
                 {!isChatReady && isLoadingMessages && chatMessages.length === 0 ? (
                   <LoadingIndicator label="Loading messages..." className="h-full" />
