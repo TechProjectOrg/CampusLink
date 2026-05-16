@@ -1,9 +1,12 @@
 import { User, Briefcase, Award, Users, Eye, Edit } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { Student } from '../types';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
+import { useAuth } from '../context/AuthContext';
+import { apiFetchUserSkills } from '../lib/skillsApi';
 
 interface ProfileCardProps {
   student: Student | null | undefined;
@@ -15,13 +18,42 @@ interface ProfileCardProps {
 }
 
 export function ProfileCard({ student, followerCount, followingCount, onViewProfile, onEditProfile, onViewNetwork }: ProfileCardProps) {
+  const auth = useAuth();
   const displayName = student?.name?.trim() || student?.displayName?.trim() || student?.username?.trim() || 'User';
   const avatarSrc = student?.avatar || undefined;
   const avatarFallback = displayName.charAt(0).toUpperCase() || 'U';
   const branch = student?.branch?.trim() || 'Branch not added';
   const year = typeof student?.year === 'number' && student.year > 0 ? student.year : null;
   const bio = student?.bio?.trim() || 'Add a short bio to help others understand what you are interested in.';
-  const skills = Array.isArray(student?.skills) ? student.skills : [];
+  const [loadedSkills, setLoadedSkills] = useState<string[]>(Array.isArray(student?.skills) ? student.skills : []);
+
+  useEffect(() => {
+    setLoadedSkills(Array.isArray(student?.skills) ? student.skills : []);
+  }, [student?.skills, student?.id]);
+
+  useEffect(() => {
+    if (!student?.id) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const list = await apiFetchUserSkills(student.id, auth.session?.token);
+        if (!cancelled && list.length > 0) {
+          setLoadedSkills(list.map((skill) => skill.name).filter(Boolean));
+        }
+      } catch {
+        // Keep the profile card lightweight and fall back to existing profile data.
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [student?.id, auth.session?.token]);
+
+  const skills = loadedSkills;
+  const topSkills = skills.slice(0, 4);
 
   return (
     <div className="space-y-4">
@@ -95,7 +127,7 @@ export function ProfileCard({ student, followerCount, followingCount, onViewProf
             <h4 className="text-gray-900">Top Skills</h4>
           </div>
           <div className="flex flex-wrap gap-2">
-            {skills.slice(0, 5).map(skill => (
+            {topSkills.map(skill => (
               <Badge 
                 key={skill} 
                 className="bg-primary/10 text-primary border-primary/20 transition-all duration-300 hover:scale-105 hover:bg-primary/20"
@@ -103,9 +135,9 @@ export function ProfileCard({ student, followerCount, followingCount, onViewProf
                 {skill}
               </Badge>
             ))}
-            {skills.length > 5 && (
+            {skills.length > 4 && (
               <Badge className="bg-gray-100 text-gray-600">
-                +{skills.length - 5} more
+                +{skills.length - 4} more
               </Badge>
             )}
             {skills.length === 0 ? (
