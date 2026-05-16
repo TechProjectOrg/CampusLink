@@ -639,7 +639,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
 
           {/* Conversations List */}
           <div className="flex-1 relative">
-            <div className="absolute inset-0 overflow-y-auto hide-scrollbar">
+            <div className="absolute inset-0 overflow-y-auto">
               <div className="cl-chat-conversation-list-inner p-2 w-full">
               {visibleConversations.map(conversation => (
                 <button

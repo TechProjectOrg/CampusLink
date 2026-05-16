@@ -94,7 +94,7 @@ export function NetworkPage({
         </div>
 
         <Tabs value={activeTab} onValueChange={(v: string) => setActiveTab(v as any)} className="cl-network-tabs space-y-6">
-          <TabsList className="cl-network-tabs-list bg-white/80 backdrop-blur-lg p-1 rounded-2xl border border-primary/10 shadow-lg">
+          <TabsList className="cl-network-tabs-list bg-white/80 backdrop-blur-lg p-1 rounded-2xl border border-primary/10 shadow-lg hide-scrollbar">
             <TabsTrigger
               value="followers"
               className={`cl-network-tab-trigger flex items-center gap-2 rounded-xl data-[state=active]:gradient-primary data-[state=active]:text-white transition-all duration-300 ${

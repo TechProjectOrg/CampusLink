@@ -677,14 +677,17 @@ export default function App() {
   const [openedPost, setOpenedPost] = useState<Opportunity | null>(null);
 
   useLayoutEffect(() => {
-    const pagesWithHiddenScrollbar = ['profile', 'network', 'chat'];
+    const pagesWithHiddenScrollbar = ['network'];
     if (pagesWithHiddenScrollbar.includes(activeTab)) {
       document.body.classList.add('hide-scrollbar');
+      document.documentElement.classList.add('hide-scrollbar');
     } else {
       document.body.classList.remove('hide-scrollbar');
+      document.documentElement.classList.remove('hide-scrollbar');
     }
     return () => {
       document.body.classList.remove('hide-scrollbar');
+      document.documentElement.classList.remove('hide-scrollbar');
     };
   }, [activeTab]);
   const [openedPostId, setOpenedPostId] = useState<string | null>(null);
