@@ -7,6 +7,8 @@ interface ModalProps {
   title: string;
   children: React.ReactNode;
   className?: string;
+  headerClassName?: string;
+  bodyClassName?: string;
   style?: React.CSSProperties;
 }
 
@@ -50,7 +52,7 @@ function unlockModalBackgroundScroll() {
   }
 }
 
-export function Modal({ isOpen, onClose, title, children, className, style }: ModalProps) {
+export function Modal({ isOpen, onClose, title, children, className, headerClassName, bodyClassName, style }: ModalProps) {
   useEffect(() => {
     if (isOpen) {
       lockModalBackgroundScroll();
@@ -79,7 +81,7 @@ export function Modal({ isOpen, onClose, title, children, className, style }: Mo
         style={style}
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
+        <div className={`flex items-center justify-between border-b p-4 ${headerClassName ?? ''}`}>
           <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
           <button
             onClick={onClose}
@@ -89,7 +91,7 @@ export function Modal({ isOpen, onClose, title, children, className, style }: Mo
           </button>
         </div>
         {/* Body */}
-        <div className="p-4">{children}</div>
+        <div className={`p-4 ${bodyClassName ?? ''}`}>{children}</div>
       </div>
     </div>
   );

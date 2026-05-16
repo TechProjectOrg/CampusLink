@@ -66,50 +66,55 @@ export function ReportDialog({ open, onClose, token, target }: ReportDialogProps
   };
 
   return (
-    <Modal isOpen={open} onClose={onClose} title={title} className="min-w-0 w-[min(42rem,calc(100vw-1.5rem))]">
+    <Modal
+      isOpen={open}
+      onClose={onClose}
+      title={title}
+      className="mx-3 min-w-0 w-full max-w-2xl rounded-3xl sm:mx-4"
+      headerClassName="px-6 py-5 sm:px-7 sm:py-6"
+      bodyClassName="px-6 pb-6 pt-5 sm:px-7 sm:pb-7"
+    >
       {!target ? null : (
-        <div className="space-y-5">
-          <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-            <div className="flex items-start gap-3">
-              <div className="rounded-2xl bg-white p-2 text-slate-600 shadow-sm">
+        <div className="space-y-4">
+          <div className="rounded-3xl border border-slate-200 bg-slate-50 px-4 py-4 sm:px-5 sm:py-5">
+            <div className="grid grid-cols-[auto,1fr] items-start gap-3 sm:gap-4">
+              <div className="rounded-2xl bg-white p-3 text-slate-600 shadow-sm">
                 <ShieldAlert className="h-5 w-5" />
               </div>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-semibold text-slate-900">{target.label}</p>
-                  <Badge variant="outline" className="capitalize">{target.targetType}</Badge>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <p className="pr-2 text-base font-semibold leading-6 text-slate-900 sm:text-lg">{target.label}</p>
+                  <Badge variant="outline" className="shrink-0 capitalize">{target.targetType}</Badge>
                 </div>
                 {target.preview ? (
-                  <p className="mt-2 text-sm leading-6 text-slate-600">{target.preview}</p>
+                  <p className="mt-1.5 text-sm leading-6 text-slate-600 sm:text-[15px]">{target.preview}</p>
                 ) : (
-                  <p className="mt-2 text-sm leading-6 text-slate-600">Your report is private and reviewed only by the moderation team.</p>
+                  <p className="mt-1.5 text-sm leading-6 text-slate-600 sm:text-[15px]">Your report is private and reviewed only by the moderation team.</p>
                 )}
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-xs uppercase tracking-[0.12em] text-slate-500">
-            <span className={step === 1 ? 'text-slate-900' : ''}>Reason</span>
-            <span>/</span>
-            <span className={step === 2 ? 'text-slate-900' : ''}>Details</span>
-            <span>/</span>
-            <span className={step === 3 ? 'text-slate-900' : ''}>Submit</span>
+          <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.14em] text-slate-500">
+            <span className={`rounded-full px-2.5 py-1 ${step === 1 ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'}`}>Reason</span>
+            <span className={`rounded-full px-2.5 py-1 ${step === 2 ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'}`}>Details</span>
+            <span className={`rounded-full px-2.5 py-1 ${step === 3 ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-500'}`}>Submit</span>
           </div>
 
           {step === 1 ? (
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid gap-3 min-[540px]:grid-cols-2">
               {REPORT_REASON_OPTIONS.map((option) => (
                 <button
                   key={option.value}
                   type="button"
                   onClick={() => setReason(option.value)}
-                  className={`rounded-2xl border px-4 py-3 text-left transition ${
+                  className={`flex min-h-[76px] items-center rounded-3xl border px-4 py-4 text-left transition ${
                     reason === option.value
                       ? 'border-red-200 bg-red-50 text-red-700'
                       : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50'
                   }`}
                 >
-                  <p className="text-sm font-medium">{option.label}</p>
+                  <p className="pr-4 text-sm font-medium leading-6 sm:text-[15px]">{option.label}</p>
                 </button>
               ))}
             </div>
@@ -117,7 +122,7 @@ export function ReportDialog({ open, onClose, token, target }: ReportDialogProps
 
           {step === 2 ? (
             <div className="space-y-3">
-              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+              <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3.5">
                 <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Selected reason</p>
                 <p className="mt-2 text-sm font-medium text-slate-800">{selectedReason.label}</p>
               </div>
@@ -155,7 +160,7 @@ export function ReportDialog({ open, onClose, token, target }: ReportDialogProps
             </div>
           ) : null}
 
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
             <Button type="button" variant="outline" onClick={step === 1 ? onClose : () => setStep((current) => (current - 1) as 1 | 2 | 3)}>
               {step === 1 ? 'Cancel' : 'Back'}
             </Button>
