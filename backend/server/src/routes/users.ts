@@ -6,6 +6,7 @@ import authenticateToken, { type AuthedRequest } from '../middleware/authenticat
 import requireModerationCapability from '../middleware/requireModerationCapability';
 import { hashPassword, signPasswordChangeToken, verifyPassword, verifyPasswordChangeToken } from '../lib/auth';
 import { setAdminMustChangePassword } from '../lib/admin';
+import { normalizeUsername, validateUsername } from '../lib/username';
 import {
   deleteManagedPhotoByUrl,
   deleteManagedPostMediaByUrl,
@@ -76,25 +77,6 @@ function normalizeDisplayName(value: string): string {
 function isValidUUID(uuid: string | undefined | null): boolean {
   if (!uuid) return false;
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uuid);
-}
-
-function normalizeUsername(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '_')
-    .replace(/[^a-z0-9._]/g, '')
-    .slice(0, 50);
-}
-
-function validateUsername(value: string): string | null {
-  if (!value) return 'Username is required';
-  if (value.length < 3) return 'Username must be at least 3 characters long';
-  if (value.length > 50) return 'Username must be 50 characters or fewer';
-  if (!/^[a-z0-9._]+$/.test(value)) {
-    return 'Username can only include lowercase letters, numbers, dots, and underscores';
-  }
-  return null;
 }
 
 interface UpdateProfilePictureBody {

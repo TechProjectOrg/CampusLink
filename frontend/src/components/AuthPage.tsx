@@ -19,7 +19,7 @@ import Lottie from 'lottie-react';
 import loadingAnimation from '../assets/loading_animation.json';
 import { useAuth } from '../context/AuthContext';
 import { apiCheckUsernameAvailability, type AuthOnboardingResponse } from '../lib/authApi';
-import { getPasswordValidationMessage, validatePassword } from '../lib/validation';
+import { getPasswordValidationMessage, getUsernameValidationMessage, validatePassword } from '../lib/validation';
 import { ForgotPasswordDialog } from './ForgotPasswordDialog';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader } from './ui/card';
@@ -380,6 +380,12 @@ export function AuthPage() {
       return;
     }
 
+    const validationMessage = getUsernameValidationMessage(username);
+    if (validationMessage) {
+      setStudentUsernameStatus({ checking: false, available: false, message: validationMessage });
+      return;
+    }
+
     const timeoutId = window.setTimeout(() => {
       setStudentUsernameStatus({ checking: true, available: null, message: 'Checking username...' });
       void apiCheckUsernameAvailability(username)
@@ -409,6 +415,12 @@ export function AuthPage() {
     const username = alumniForm.username.trim();
     if (signupStep !== 'alumni-form' || !username) {
       setAlumniUsernameStatus({ checking: false, available: null, message: '' });
+      return;
+    }
+
+    const validationMessage = getUsernameValidationMessage(username);
+    if (validationMessage) {
+      setAlumniUsernameStatus({ checking: false, available: false, message: validationMessage });
       return;
     }
 
@@ -625,12 +637,19 @@ export function AuthPage() {
       return;
     }
 
+    const normalizedUsername = studentForm.username.trim();
+    const usernameValidationError = getUsernameValidationMessage(normalizedUsername);
+    if (usernameValidationError) {
+      setSignupError(usernameValidationError);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const payload = {
         sessionId: onboardingSession.sessionId,
         displayName: studentForm.displayName,
-        username: studentForm.username,
+        username: normalizedUsername,
         password: studentForm.password,
         branch: studentForm.branch,
         year: studentForm.year,
@@ -671,13 +690,20 @@ export function AuthPage() {
       return;
     }
 
+    const normalizedUsername = alumniForm.username.trim();
+    const usernameValidationError = getUsernameValidationMessage(normalizedUsername);
+    if (usernameValidationError) {
+      setSignupError(usernameValidationError);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const result = alumniResubmissionToken
         ? await auth.resubmitAlumniVerification({
           token: alumniResubmissionToken,
           displayName: alumniForm.displayName,
-          username: alumniForm.username,
+          username: normalizedUsername,
           graduationYear: alumniForm.graduationYear,
           branch: alumniForm.branch,
           currentStatus: alumniForm.currentStatus,
@@ -686,7 +712,7 @@ export function AuthPage() {
         : await auth.signupAlumni({
           sessionId: onboardingSession!.sessionId,
           displayName: alumniForm.displayName,
-          username: alumniForm.username,
+          username: normalizedUsername,
           graduationYear: alumniForm.graduationYear,
           branch: alumniForm.branch,
           currentStatus: alumniForm.currentStatus,

@@ -18,6 +18,7 @@ import { uploadVerificationProofToStorage } from '../lib/objectStorage';
 import { invalidateUserCache } from '../lib/userCache';
 import { sendMagicLinkEmail, sendPasswordResetEmail } from '../lib/authEmail';
 import { setAdminMustChangePassword } from '../lib/admin';
+import { buildUsernameSuggestion, normalizeUsername, validateUsername } from '../lib/username';
 import {
   cacheDelete,
   cacheGetJson,
@@ -264,31 +265,6 @@ function normalizeDisplayName(name: string): string {
 
 function normalizePersonName(name: string): string {
   return name.trim().replace(/\s+/g, ' ').slice(0, 150);
-}
-
-function normalizeUsername(username: string): string {
-  return username
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, '_')
-    .replace(/[^a-z0-9._]/g, '')
-    .slice(0, 50);
-}
-
-function validateUsername(username: string): string | null {
-  if (!username) return 'Username is required';
-  if (username.length < 3) return 'Username must be at least 3 characters long';
-  if (username.length > 50) return 'Username must be 50 characters or fewer';
-  if (!/^[a-z0-9._]+$/.test(username)) {
-    return 'Username can only include lowercase letters, numbers, dots, and underscores';
-  }
-  return null;
-}
-
-function buildUsernameSuggestion(baseValue: string): string {
-  const normalized = normalizeUsername(baseValue);
-  if (normalized.length >= 3) return normalized;
-  return `user_${crypto.randomBytes(3).toString('hex')}`;
 }
 
 function parseRequiredNumericValue(raw: string | number | undefined, label: string): number {

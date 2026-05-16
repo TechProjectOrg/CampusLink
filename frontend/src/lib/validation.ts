@@ -22,3 +22,15 @@ export const getPasswordValidationMessage = (password: string): string[] => {
     }
     return messages;
 }
+
+const USERNAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+export const getUsernameValidationMessage = (username: string): string | null => {
+    if (!username) return 'Username is required';
+    if (username.length < 3) return 'Username must be at least 3 characters long';
+    if (username.length > 50) return 'Username must be 50 characters or fewer';
+    if (!USERNAME_PATTERN.test(username)) {
+        return 'Username can only contain letters, numbers, and underscores, and cannot start with a digit';
+    }
+    return null;
+};
