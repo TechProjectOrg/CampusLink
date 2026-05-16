@@ -22,6 +22,8 @@ const typingSocketCountByUserId = new Map<string, Map<string, number>>();
 type RealtimeEnvelopeType =
   | 'notification:new'
   | 'notification:update'
+  | 'moderation:updated'
+  | 'auth:revoked'
   | 'feed:post_created'
   | 'feed:post_updated'
   | 'feed:post_deleted'
@@ -343,6 +345,21 @@ export function emitNotificationEvent(
   event: { type: 'notification:new' | 'notification:update'; payload: unknown }
 ): void {
   emitToUser(userId, event);
+}
+
+export function disconnectUserSockets(userId: string, reason = 'Session revoked'): void {
+  const sockets = socketsByUserId.get(userId);
+  if (!sockets || sockets.size === 0) return;
+
+  for (const socket of sockets) {
+    try {
+      if (socket.readyState === socket.OPEN) {
+        socket.close(4001, reason.slice(0, 120));
+      }
+    } catch (err) {
+      console.warn('Failed to close moderation socket:', err);
+    }
+  }
 }
 
 /**

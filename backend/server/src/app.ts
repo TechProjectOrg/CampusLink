@@ -9,6 +9,7 @@ import chatRouter from './routes/chat';
 import clubsRouter from './routes/clubs';
 import groupChatRouter from './routes/groupChat';
 import adminRouter from './routes/admin';
+import moderationRouter from './routes/moderation';
 import cors from 'cors';
 import { buildHealthReport, type RouteDescriptor, type StaticRouteDescriptor } from './lib/health';
 
@@ -112,6 +113,13 @@ const apiRouteDescriptors: RouteDescriptor[] = [
     requiredDependencies: ['database'],
     optionalDependencies: ['redis'],
   },
+  {
+    module: 'moderation',
+    prefix: '/moderation',
+    router: moderationRouter,
+    requiredDependencies: ['database'],
+    optionalDependencies: ['redis'],
+  },
 ];
 
 const staticHealthRoutes: StaticRouteDescriptor[] = [
@@ -139,5 +147,6 @@ app.use('/chat', chatRouter);
 app.use('/clubs', clubsRouter);
 app.use('/group-chat', groupChatRouter);
 app.use('/admin', adminRouter);
+app.use('/moderation', moderationRouter);
 
 export default app;

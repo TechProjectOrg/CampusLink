@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Heart, MessageCircle, Bookmark, MapPin, Calendar, Trash2, Pencil, Loader2 } from 'lucide-react';
+import { Heart, MessageCircle, Bookmark, MapPin, Calendar, Trash2, Pencil, Loader2, MoreHorizontal, Flag, Share2 } from 'lucide-react';
 import { Opportunity, Comment } from '../types';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -8,6 +8,14 @@ import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { useAuth } from '../context/AuthContext';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
+import type { ReportTargetDescriptor } from './ReportDialog';
 
 interface OpportunityCardProps {
   opportunity: Opportunity;
@@ -23,6 +31,7 @@ interface OpportunityCardProps {
   onDeletePost?: (postId: string) => Promise<void> | void;
   onViewProfile?: (authorId: string) => void;
   onOpenPost?: (post: Opportunity) => void;
+  onReportTarget?: (target: ReportTargetDescriptor) => void;
 }
 
 export function OpportunityCard({
@@ -39,6 +48,7 @@ export function OpportunityCard({
   onDeletePost,
   onViewProfile,
   onOpenPost,
+  onReportTarget,
 }: OpportunityCardProps) {
   const auth = useAuth();
   const [showComments, setShowComments] = useState(false);
@@ -116,6 +126,24 @@ export function OpportunityCard({
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
+  const openPostReport = () => {
+    onReportTarget?.({
+      targetType: 'post',
+      targetId: opportunity.id,
+      label: opportunity.title || `${opportunity.authorName}'s post`,
+      preview: opportunity.description || opportunity.title,
+    });
+  };
+
+  const openCommentReport = (comment: Comment) => {
+    onReportTarget?.({
+      targetType: 'comment',
+      targetId: comment.id,
+      label: `Comment by ${comment.authorName}`,
+      preview: comment.content,
+    });
+  };
+
   const renderCommentItem = (comment: Comment, depth = 0) => {
     const childComments = comment.replies ?? [];
     const isCommentLiked = comment.isLikedByMe ?? false;
@@ -132,15 +160,40 @@ export function OpportunityCard({
             <div className="bg-gray-50 rounded-xl p-3 transition-all duration-300 hover:bg-gray-100">
               <div className="flex items-start justify-between gap-2">
                 <p className="text-sm text-gray-900">{comment.authorName}</p>
-                {comment.canDelete && onDeleteComment && (
-                  <button
-                    type="button"
-                    className="text-gray-400 hover:text-red-600"
-                    onClick={() => onDeleteComment(comment.id)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
+                <div className="flex items-center gap-1">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                        aria-label="Comment actions"
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-44">
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={() => openCommentReport(comment)}
+                      >
+                        <Flag className="mr-2 h-4 w-4" />
+                        Report
+                      </DropdownMenuItem>
+                      {comment.canDelete && onDeleteComment ? (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={() => onDeleteComment(comment.id)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Delete
+                          </DropdownMenuItem>
+                        </>
+                      ) : null}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
               <p className="text-sm text-gray-600 mt-1">{comment.content}</p>
             </div>
@@ -293,28 +346,63 @@ export function OpportunityCard({
                   {opportunity.type.charAt(0).toUpperCase() + opportunity.type.slice(1)}
                 </Badge>
               ) : null}
-              {showManagementControls && opportunity.canEdit && (
-                <button type="button" className="text-gray-400 hover:text-gray-700" onClick={() => setEditingPost((prev) => !prev)}>
-                  <Pencil className="w-4 h-4" />
-                </button>
-              )}
-              {showManagementControls && opportunity.canDelete && onDeletePost && (
-                <button
-                  type="button"
-                  disabled={deletingPost}
-                  className="text-gray-400 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60"
-                  onClick={async () => {
-                    setDeletingPost(true);
-                    try {
-                      await onDeletePost(opportunity.id);
-                    } finally {
-                      setDeletingPost(false);
-                    }
-                  }}
-                >
-                  {deletingPost ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                </button>
-              )}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                    aria-label="Post actions"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => onSave(opportunity.id)}>
+                    <Bookmark className="mr-2 h-4 w-4" />
+                    {isSaved ? 'Unsave' : 'Save'}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => {
+                      if (typeof window !== 'undefined') {
+                        void navigator.clipboard?.writeText(window.location.href);
+                      }
+                    }}
+                  >
+                    <Share2 className="mr-2 h-4 w-4" />
+                    Share
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={openPostReport}>
+                    <Flag className="mr-2 h-4 w-4" />
+                    Report
+                  </DropdownMenuItem>
+                  {showManagementControls && opportunity.canEdit ? (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onClick={() => setEditingPost((prev) => !prev)}>
+                        <Pencil className="mr-2 h-4 w-4" />
+                        Edit
+                      </DropdownMenuItem>
+                    </>
+                  ) : null}
+                  {showManagementControls && opportunity.canDelete && onDeletePost ? (
+                    <DropdownMenuItem
+                      disabled={deletingPost}
+                      className="text-destructive focus:text-destructive"
+                      onClick={async () => {
+                        setDeletingPost(true);
+                        try {
+                          await onDeletePost(opportunity.id);
+                        } finally {
+                          setDeletingPost(false);
+                        }
+                      }}
+                    >
+                      {deletingPost ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                      Delete
+                    </DropdownMenuItem>
+                  ) : null}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
 

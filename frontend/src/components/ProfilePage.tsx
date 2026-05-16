@@ -61,6 +61,7 @@ import { fetchCachedValue } from '../cache/socialCache';
 import { cachePolicies } from '../cache/policies';
 import { invalidateCache } from '../cache/client';
 import { PageLayout } from './PageLayout';
+import type { ReportTargetDescriptor } from './ReportDialog';
 import {
   apiCreateUserExperience,
   apiDeleteUserExperience,
@@ -99,6 +100,7 @@ interface ProfilePageProps {
   onBlockUser?: (userId: string) => Promise<void> | void;
   onUnblockUser?: (userId: string) => Promise<void> | void;
   postsRefreshToken?: number;
+  onReportTarget?: (target: ReportTargetDescriptor) => void;
 }
 
 // Experience type with dates
@@ -182,6 +184,7 @@ export function ProfilePage({
   onFollow,
   onUnfollow,
   onCancelRequest,
+  onReportTarget,
 }: ProfilePageProps) {
   const auth = useAuth();
   const appData = useAppDataStore();
@@ -1358,7 +1361,12 @@ export function ProfilePage({
                       type="button"
                       onClick={() => {
                         setShowProfileActions(false);
-                        window.alert('Reporting UI will be connected in a later pass.');
+                        onReportTarget?.({
+                          targetType: 'user',
+                          targetId: student.id,
+                          label: student.name,
+                          preview: student.bio || student.branch || student.username,
+                        });
                       }}
                       className="mt-1.5 block w-full whitespace-nowrap rounded-2xl px-4 py-3 text-left text-base font-semibold text-slate-700 transition hover:bg-slate-50"
                     >

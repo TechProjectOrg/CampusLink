@@ -87,17 +87,32 @@ enum AdminSeverity {
 }
 
 enum AdminReportTargetType {
-  USER @map("user")
-  POST @map("post")
-  CLUB @map("club")
+  USER    @map("user")
+  POST    @map("post")
+  COMMENT @map("comment")
+  MESSAGE @map("message")
+  CLUB    @map("club")
 }
 
 enum AdminReportStatus {
-  OPEN      @map("open")
-  REVIEWING @map("reviewing")
-  RESOLVED  @map("resolved")
-  REJECTED  @map("rejected")
-  ESCALATED @map("escalated")
+  PENDING      @map("pending")
+  UNDER_REVIEW @map("under_review")
+  RESOLVED     @map("resolved")
+  DISMISSED    @map("dismissed")
+}
+
+enum ModerationActionType {
+  WARN           @map("warn")
+  SUSPEND        @map("suspend")
+  UNSUSPEND      @map("unsuspend")
+  BAN            @map("ban")
+  UNBAN          @map("unban")
+  DELETE_POST    @map("delete_post")
+  DELETE_COMMENT @map("delete_comment")
+  DELETE_MESSAGE @map("delete_message")
+  DELETE_MEDIA   @map("delete_media")
+  DISMISS        @map("dismiss")
+  RESOLVE        @map("resolve")
 }
 
 enum VerificationRequestType {
@@ -154,7 +169,12 @@ model User {
   isPrivate              Boolean             @default(false) @map("is_private")
   isActive               Boolean             @default(true) @map("is_active")
   isBanned               Boolean             @default(false) @map("is_banned")
+  bannedAt               DateTime?           @map("banned_at") @db.Timestamp(6)
+  suspensionStartedAt    DateTime?           @map("suspension_started_at") @db.Timestamp(6)
   suspendedUntil         DateTime?           @map("suspended_until") @db.Timestamp(6)
+  suspensionReason       String?             @map("suspension_reason") @db.Text
+  warningCount           Int                 @default(0) @map("warning_count")
+  lastWarningAt          DateTime?           @map("last_warning_at") @db.Timestamp(6)
   onboardingCompletedAt  DateTime?           @map("onboarding_completed_at") @db.Timestamp(6)
   verifiedAt             DateTime?           @map("verified_at") @db.Timestamp(6)
   verificationState      UserVerificationState? @map("verification_state")
@@ -198,7 +218,11 @@ model User {
   adminAccount           AdminAccount?
   adminAuditLogs         AdminAuditLog[]     @relation("AdminAuditActor")
   adminAssignedReports   AdminReport[]       @relation("AdminAssignedReports")
+  adminReviewedReports   AdminReport[]       @relation("AdminReviewedReports")
   adminReportNotes       AdminReportNote[]   @relation("AdminReportNoteAuthor")
+  reportSubmissions      ReportSubmission[]  @relation("ReportSubmissionReporter")
+  moderationLogsAuthored ModerationLog[]     @relation("ModerationLogAdmin")
+  moderationLogsTargeted ModerationLog[]     @relation("ModerationLogTargetUser")
   reviewedVerificationRequests AdminVerificationRequest[] @relation("AdminVerificationReviewer")
   announcementsCreated   AdminAnnouncement[] @relation("AdminAnnouncementCreator")
 
@@ -820,23 +844,33 @@ model AdminReport {
   reporterUserId       String?               @map("reporter_user_id") @db.Uuid
   targetType           AdminReportTargetType @map("target_type")
   targetId             String                @map("target_id") @db.Text
+  conversationId       String?               @map("conversation_id") @db.Text
   targetUserId         String?               @map("target_user_id") @db.Uuid
   reason               String                @db.VarChar(255)
   evidence             String?               @db.Text
   severity             AdminSeverity         @default(WARNING)
-  status               AdminReportStatus     @default(OPEN)
+  status               AdminReportStatus     @default(PENDING)
   reportCount          Int                   @default(1) @map("report_count")
   assignedAdminUserId  String?               @map("assigned_admin_user_id") @db.Uuid
+  reviewedByUserId     String?               @map("reviewed_by_user_id") @db.Uuid
+  reviewedAt           DateTime?             @map("reviewed_at") @db.Timestamp(6)
+  actionTaken          String?               @map("action_taken") @db.VarChar(100)
+  contextSnapshot      Json?                 @map("context_snapshot") @db.JsonB
+  lastReportedAt       DateTime?             @map("last_reported_at") @db.Timestamp(6)
   internalNotes        String?               @map("internal_notes") @db.Text
   createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt            DateTime              @updatedAt @map("updated_at") @db.Timestamp(6)
   resolvedAt           DateTime?             @map("resolved_at") @db.Timestamp(6)
   assignedAdmin        User?                 @relation("AdminAssignedReports", fields: [assignedAdminUserId], references: [userId], onDelete: SetNull, onUpdate: NoAction)
+  reviewedBy           User?                 @relation("AdminReviewedReports", fields: [reviewedByUserId], references: [userId], onDelete: SetNull, onUpdate: NoAction)
   notes                AdminReportNote[]
+  submissions          ReportSubmission[]
 
   @@index([status], map: "idx_admin_reports_status")
   @@index([assignedAdminUserId], map: "idx_admin_reports_assigned_admin_user_id")
   @@index([targetType], map: "idx_admin_reports_target_type")
+  @@index([targetId], map: "idx_admin_reports_target_id")
+  @@index([targetUserId], map: "idx_admin_reports_target_user_id")
   @@map("admin_reports")
 }
 
@@ -852,6 +886,42 @@ model AdminReportNote {
   @@index([reportId], map: "idx_admin_report_notes_report_id")
   @@index([adminUserId], map: "idx_admin_report_notes_admin_user_id")
   @@map("admin_report_notes")
+}
+
+model ReportSubmission {
+  reportSubmissionId String      @id @default(dbgenerated("gen_random_uuid()")) @map("report_submission_id") @db.Uuid
+  reportId           String      @map("report_id") @db.Uuid
+  reporterUserId     String      @map("reporter_user_id") @db.Uuid
+  reason             String      @db.VarChar(255)
+  description        String?     @db.Text
+  createdAt          DateTime    @default(now()) @map("created_at") @db.Timestamp(6)
+  report             AdminReport @relation(fields: [reportId], references: [reportId], onDelete: Cascade, onUpdate: NoAction)
+  reporter           User        @relation("ReportSubmissionReporter", fields: [reporterUserId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([reportId], map: "idx_report_submissions_report_id")
+  @@index([reporterUserId], map: "idx_report_submissions_reporter_user_id")
+  @@map("report_submissions")
+}
+
+model ModerationLog {
+  moderationLogId String               @id @default(dbgenerated("gen_random_uuid()")) @map("moderation_log_id") @db.Uuid
+  adminUserId     String               @map("admin_user_id") @db.Uuid
+  targetUserId    String               @map("target_user_id") @db.Uuid
+  reportId        String?              @map("report_id") @db.Uuid
+  actionType      ModerationActionType @map("action_type")
+  reason          String               @db.Text
+  durationSeconds Int?                 @map("duration_seconds")
+  metadata        Json                 @default("{}") @db.JsonB
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamp(6)
+  adminUser       User                 @relation("ModerationLogAdmin", fields: [adminUserId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+  targetUser      User                 @relation("ModerationLogTargetUser", fields: [targetUserId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+  report          AdminReport?         @relation(fields: [reportId], references: [reportId], onDelete: SetNull, onUpdate: NoAction)
+
+  @@index([adminUserId], map: "idx_moderation_logs_admin_user_id")
+  @@index([targetUserId], map: "idx_moderation_logs_target_user_id")
+  @@index([reportId], map: "idx_moderation_logs_report_id")
+  @@index([createdAt], map: "idx_moderation_logs_created_at")
+  @@map("moderation_logs")
 }
 
 model AdminVerificationRequest {

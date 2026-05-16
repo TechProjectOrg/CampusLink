@@ -16,6 +16,7 @@ import { PostPage } from './components/PostPage';
 import { HashtagPostsPage } from './components/HashtagPostsPage';
 import { FloatingChat } from './components/FloatingChat';
 import { LoadingState } from './components/LoadingState';
+import { ReportDialog, type ReportTargetDescriptor } from './components/ReportDialog';
 import { Toaster } from './components/ui/sonner';
 import { toast } from 'sonner';
 import { Student, Opportunity, Notification, Comment, ChatConversation } from './types';
@@ -88,6 +89,7 @@ import {
 } from './cache/socialCache';
 import { invalidateCache } from './cache/client';
 import { cacheKeys } from './cache/keys';
+import { apiFetchModerationState, type ModerationStateResponse } from './lib/moderationApi';
 
 const POST_COMMENTS_PAGE_SIZE = 20;
 const COMMENT_REPLIES_PAGE_SIZE = 10;
@@ -683,11 +685,29 @@ export default function App() {
   const [focusedCommentId, setFocusedCommentId] = useState<string | null>(null);
   const [hashtagPageTag, setHashtagPageTag] = useState<string | null>(null);
   const [clubPageSlug, setClubPageSlug] = useState<string | null>(null);
+  const [activeReportTarget, setActiveReportTarget] = useState<ReportTargetDescriptor | null>(null);
+  const [moderationState, setModerationState] = useState<ModerationStateResponse | null>(auth.profile?.moderation ?? null);
+  const [forcedBannedMessage, setForcedBannedMessage] = useState<string | null>(null);
 
   const prevAuthenticatedRef = useRef<boolean>(auth.isAuthenticated);
   const [showResetPasswordPage, setShowResetPasswordPage] = useState(() => shouldShowResetPasswordPage());
   const openedPostCommentsRef = useRef<DiscussionPageState<Comment>>(createInitialDiscussionPageState<Comment>());
   const openedPostRepliesRef = useRef<Record<string, ReplyThreadState>>({});
+  const guardRestrictedAction = useCallback(() => {
+    if (forcedBannedMessage || moderationState?.isBanned) {
+      toast.error(forcedBannedMessage || 'Your account has been permanently banned due to repeated violations.');
+      return true;
+    }
+    if (moderationState?.isSuspended) {
+      toast.error(
+        moderationState.suspendedUntil
+          ? `Your account is suspended until ${new Date(moderationState.suspendedUntil).toLocaleString()}.`
+          : 'Your account is currently suspended.',
+      );
+      return true;
+    }
+    return false;
+  }, [forcedBannedMessage, moderationState]);
 
   const clearSessionScopedState = useCallback(() => {
     setNotifications([]);
@@ -1212,6 +1232,31 @@ export default function App() {
   }, [auth.isAuthenticated, authToken, refreshFollowGraph, refreshSuggestedUsers, refreshNotifications, refreshFeedPosts, refreshConversations]);
 
   useEffect(() => {
+    setModerationState(auth.profile?.moderation ?? null);
+  }, [auth.profile?.moderation]);
+
+  useEffect(() => {
+    if (!authToken || !auth.isAuthenticated) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const state = await apiFetchModerationState(authToken);
+        if (!cancelled) {
+          setModerationState(state);
+          if (state.isBanned) {
+            setForcedBannedMessage('Your account has been permanently banned due to repeated violations.');
+          }
+        }
+      } catch {
+        // Keep current UI state if moderation fetch fails.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [auth.isAuthenticated, authToken]);
+
+  useEffect(() => {
     if (!auth.isAuthenticated || !authToken) return;
     if (activeTab !== 'hashtag') return;
     if (!hashtagPageTag) return;
@@ -1286,6 +1331,15 @@ export default function App() {
           if (parsed.type === 'chat:delete' || parsed.type === 'chat:request_accepted') {
             void refreshConversations();
           }
+        } else if (parsed.type === 'moderation:updated') {
+          if (parsed.payload?.state) {
+            setModerationState(parsed.payload.state as ModerationStateResponse);
+          }
+          void auth.refreshProfile().catch(() => undefined);
+        } else if (parsed.type === 'auth:revoked') {
+          const reason = String(parsed.payload?.reason ?? 'Your session was revoked.');
+          setForcedBannedMessage(reason);
+          auth.logout();
         }
       } catch (err) {
         console.error('Failed to parse realtime payload:', err);
@@ -1355,6 +1409,7 @@ export default function App() {
 
   // Opportunity handlers
   const handleLike = (opportunityId: string) => {
+    if (guardRestrictedAction()) return;
     const target =
       opportunities.find((opp) => opp.id === opportunityId) ??
       hashtagOpportunities.find((opp) => opp.id === opportunityId) ??
@@ -1420,6 +1475,7 @@ export default function App() {
   };
 
   const handleSave = (opportunityId: string) => {
+    if (guardRestrictedAction()) return;
     const target =
       opportunities.find((opp) => opp.id === opportunityId) ??
       hashtagOpportunities.find((opp) => opp.id === opportunityId);
@@ -1708,6 +1764,7 @@ export default function App() {
   }, [loadInitialReplies]);
 
   const handleComment = (opportunityId: string, commentText: string) => {
+    if (guardRestrictedAction()) return;
     void (async () => {
       try {
         const createdAt = new Date().toISOString();
@@ -1759,6 +1816,7 @@ export default function App() {
   };
 
   const handleReply = (commentId: string, content: string) => {
+    if (guardRestrictedAction()) return;
     void (async () => {
       try {
         const createdAt = new Date().toISOString();
@@ -1840,6 +1898,7 @@ export default function App() {
   };
 
   const handleLikeComment = (commentId: string, alreadyLiked: boolean) => {
+    if (guardRestrictedAction()) return;
     const containerPostId =
       openedPostId ??
       findOpportunityIdByCommentId(opportunities, commentId) ??
@@ -1900,6 +1959,7 @@ export default function App() {
   };
 
   const handleDeleteComment = (commentId: string) => {
+    if (guardRestrictedAction()) return;
     void (async () => {
       try {
         await apiDeleteComment(commentId, authToken);
@@ -1969,6 +2029,7 @@ export default function App() {
   };
 
   const handleEditPost = (postId: string, updates: Partial<Opportunity>) => {
+    if (guardRestrictedAction()) return;
     void (async () => {
       try {
         appData.updatePost(postId, (post) => ({
@@ -2010,6 +2071,7 @@ export default function App() {
   };
 
   const handleDeletePost = (postId: string) => {
+    if (guardRestrictedAction()) return;
     if (!window.confirm('Are you sure you want to delete this post?')) {
       return;
     }
@@ -2092,6 +2154,7 @@ export default function App() {
   }, [activeTab, appData, openedPostId, authToken, currentUser, loadInitialPostComments]);
 
   const persistCreatedPost = async (draft: any) => {
+    if (guardRestrictedAction()) return;
     if (!authToken) {
       throw new Error('You must be logged in to create a post');
     }
@@ -2105,11 +2168,13 @@ export default function App() {
 
   // Create post handler
   const handleCreatePost = async (post: Opportunity) => {
+    if (guardRestrictedAction()) return;
     await persistCreatedPost(post);
   };
 
   // Create event handler
   const handleCreateEvent = async (event: Opportunity) => {
+    if (guardRestrictedAction()) return;
     await persistCreatedPost(event);
   };
 
@@ -2312,6 +2377,7 @@ export default function App() {
   };
 
   const handleMessage = async (studentId: string) => {
+    if (guardRestrictedAction()) return;
     if (!studentId || typeof studentId !== 'string') {
       return;
     }
@@ -2376,6 +2442,7 @@ export default function App() {
   };
 
   const handleBlockUser = useCallback(async (targetUserId: string) => {
+    if (guardRestrictedAction()) return;
     if (!authToken || !targetUserId) return;
     await apiBlockUser(targetUserId, authToken);
     await Promise.allSettled([
@@ -2390,6 +2457,7 @@ export default function App() {
   }, [
     appData,
     authToken,
+    guardRestrictedAction,
     refreshConversations,
     refreshFollowGraph,
     refreshNotifications,
@@ -2418,6 +2486,10 @@ export default function App() {
     refreshSuggestedUsers,
     viewingProfileId,
   ]);
+
+  const handleOpenReport = useCallback((target: ReportTargetDescriptor) => {
+    setActiveReportTarget(target);
+  }, []);
 
   const handleChatClick = (conversationId: string) => {
     // No longer reorder on click; conversations maintain chronological order by timestamp
@@ -2579,6 +2651,7 @@ export default function App() {
 
   // Create opportunity handler
   const handleCreateOpportunity = async (opportunity: Opportunity) => {
+    if (guardRestrictedAction()) return;
     await persistCreatedPost(opportunity);
   };
 
@@ -2614,6 +2687,21 @@ export default function App() {
   if (!auth.isAuthenticated) {
     return <AuthPage />;
   }
+  if (forcedBannedMessage || moderationState?.isBanned) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white">
+        <div className="mx-auto flex min-h-screen max-w-3xl items-center px-6 py-16">
+          <div className="w-full rounded-3xl border border-white/10 bg-white/5 p-8 shadow-2xl backdrop-blur">
+            <p className="text-xs uppercase tracking-[0.2em] text-red-300">Account banned</p>
+            <h1 className="mt-4 text-3xl font-semibold">Access has been permanently revoked.</h1>
+            <p className="mt-4 text-sm leading-7 text-slate-300">
+              {forcedBannedMessage || 'Your account has been permanently banned due to repeated violations.'}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
   const displayedStudent = viewingProfileId
     ? students.find((s) => s.id === viewingProfileId)
     : currentUser;
@@ -2646,6 +2734,11 @@ export default function App() {
         unreadNotifications={unreadNotifications}
         onSearch={setSearchQuery}
       />
+      {moderationState?.isSuspended ? (
+        <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {`Your account is suspended${moderationState.suspendedUntil ? ` until ${new Date(moderationState.suspendedUntil).toLocaleString()}` : ''}${moderationState.suspensionReason ? ` due to ${moderationState.suspensionReason}` : ''}.`}
+        </div>
+      ) : null}
       <div className="flex flex-1 min-w-0">
         <div className="w-full min-w-0">
           {activeTab === 'feed' ? (
@@ -2694,6 +2787,7 @@ export default function App() {
                 onCreateEvent={handleCreateEvent}
                 onViewProfile={() => handleViewProfile(currentUserId)}
                 onViewStudentProfile={handleViewProfile}
+                onReportTarget={handleOpenReport}
               />
               <div ref={feedLoadMoreTriggerRef} className="h-1 w-full" aria-hidden="true" />
             </div>
@@ -2748,6 +2842,7 @@ export default function App() {
             onDeletePost={handleDeletePost}
             onOpenPost={handleOpenPost}
             onViewProfile={handleViewProfile}
+            onReportTarget={handleOpenReport}
           />
           ) : activeTab === 'network' ? (
           <NetworkPage
@@ -2772,6 +2867,7 @@ export default function App() {
             onCreateChat={handleCreateChat}
             onChatRead={handleChatRead}
             onUnblockUser={handleUnblockUser}
+            onReportTarget={handleOpenReport}
           />
           ) : activeTab === 'clubs' ? (
           <ClubsPage
@@ -2798,6 +2894,7 @@ export default function App() {
                 onDeletePost={handleDeletePost}
                 onOpenPost={handleOpenPost}
                 onViewProfile={handleViewProfile}
+                onReportTarget={handleOpenReport}
               />
             ) : profileSubpage === 'projects' ? (
               <ProfileProjectsPage
@@ -2833,6 +2930,7 @@ export default function App() {
                 onBlockUser={handleBlockUser}
                 onUnblockUser={handleUnblockUser}
                 postsRefreshToken={postsRefreshToken}
+                onReportTarget={handleOpenReport}
               />
             )
           ) : (
@@ -2857,6 +2955,7 @@ export default function App() {
               onLikeComment={handleLikeComment}
               onDeleteComment={handleDeleteComment}
               onViewProfile={handleViewProfile}
+              onReportTarget={handleOpenReport}
             />
           ) : (
             <LoadingState type="feed" />
@@ -2891,6 +2990,7 @@ export default function App() {
           onChatRead={handleChatRead}
         />
       )}
+      <ReportDialog open={Boolean(activeReportTarget)} onClose={() => setActiveReportTarget(null)} target={activeReportTarget} token={authToken} />
       <Toaster />
     </div>
   );

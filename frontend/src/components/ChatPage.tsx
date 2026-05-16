@@ -39,6 +39,7 @@ import { useAppDataSelector, useAppDataStore } from '../context/AppDataContext';
 import { useAuth } from '../context/AuthContext';
 import { useBottomAnchoredChatScroll } from '../hooks/useBottomAnchoredChatScroll';
 import { LoadingIndicator } from './ui/LoadingIndicator';
+import type { ReportTargetDescriptor } from './ReportDialog';
 
 interface ChatPageProps {
   conversations: ChatConversation[];
@@ -49,6 +50,7 @@ interface ChatPageProps {
   onCreateChat?: (conversation: ChatConversation) => void;
   onChatRead?: (conversationId: string) => void;
   onUnblockUser?: (userId: string) => Promise<void> | void;
+  onReportTarget?: (target: ReportTargetDescriptor) => void;
 }
 
 function TypingAnimatedText({
@@ -73,7 +75,7 @@ function TypingAnimatedText({
   );
 }
 
-export function ChatPage({ conversations, students, currentUserId, onViewProfile, onChatClick, onCreateChat, onChatRead, onUnblockUser }: ChatPageProps) {
+export function ChatPage({ conversations, students, currentUserId, onViewProfile, onChatClick, onCreateChat, onChatRead, onUnblockUser, onReportTarget }: ChatPageProps) {
   const appData = useAppDataStore();
   const auth = useAuth();
   const selectedConversationId = useAppDataSelector((state) => state.chat.selectedConversationId);
@@ -362,6 +364,26 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     window.setTimeout(() => {
       setHighlightedMessageId(prev => (prev === messageId ? null : prev));
     }, 1500);
+  };
+
+  const openConversationReport = () => {
+    if (!selectedConversation) return;
+    onReportTarget?.({
+      targetType: 'message',
+      targetId: selectedConversation.id,
+      label: selectedConversation.isGroup ? selectedConversation.participantName : `Conversation with ${selectedConversation.participantName}`,
+      preview: selectedConversation.lastMessage,
+    });
+  };
+
+  const openMessageReport = (msg: ChatMessageApi) => {
+    if (!selectedConversation) return;
+    onReportTarget?.({
+      targetType: 'message',
+      targetId: msg.id,
+      label: `Message from ${msg.senderName}`,
+      preview: msg.type === 'image' ? 'Image message' : msg.content,
+    });
   };
 
   const handleStartChat = async (studentId: string) => {
@@ -807,15 +829,25 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                           <Ban className="w-4 h-4 mr-2" />
                           {selectedConversation.viewerHasBlockedUser ? 'Unblock User' : 'Block User'}
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive focus:text-destructive">
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() =>
+                            onReportTarget?.({
+                              targetType: 'user',
+                              targetId: selectedConversation.participantId,
+                              label: selectedConversation.participantName,
+                              preview: selectedConversation.participantUsername ?? selectedConversation.participantName,
+                            })
+                          }
+                        >
                           <Flag className="w-4 h-4 mr-2" />
                           Report User
                         </DropdownMenuItem>
                       </>
                     )}
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-destructive focus:text-destructive">
-                      Delete Chat
+                    <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={openConversationReport}>
+                      Report Conversation
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -1021,7 +1053,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                                       Delete
                                     </DropdownMenuItem>
                                   ) : (
-                                    <DropdownMenuItem onClick={() => window.alert('Message reported. Our moderation team will review it soon.')} className="text-destructive focus:text-destructive">
+                                    <DropdownMenuItem onClick={() => openMessageReport(msg)} className="text-destructive focus:text-destructive">
                                       <Flag className="w-4 h-4 mr-2" />
                                       Report
                                     </DropdownMenuItem>

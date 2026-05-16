@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Bookmark, Calendar, Heart, MapPin, MessageCircle, Trash2 } from 'lucide-react';
+import { ArrowLeft, Bookmark, Calendar, Heart, MapPin, MessageCircle, Trash2, MoreHorizontal, Flag, Share2 } from 'lucide-react';
 import { Opportunity, Comment } from '../types';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Badge } from './ui/badge';
@@ -8,6 +8,14 @@ import { Textarea } from './ui/textarea';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { LoadingIndicator } from './ui/LoadingIndicator';
 import { useAuth } from '../context/AuthContext';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
+import type { ReportTargetDescriptor } from './ReportDialog';
 
 interface DiscussionListState {
   isLoading: boolean;
@@ -66,6 +74,7 @@ interface PostPageProps {
   onLikeComment?: (commentId: string, alreadyLiked: boolean) => void;
   onDeleteComment?: (commentId: string) => void;
   onViewProfile?: (authorId: string) => void;
+  onReportTarget?: (target: ReportTargetDescriptor) => void;
 }
 
 export function PostPage({
@@ -85,6 +94,7 @@ export function PostPage({
   onLikeComment,
   onDeleteComment,
   onViewProfile,
+  onReportTarget,
 }: PostPageProps) {
   const auth = useAuth();
   const [commentText, setCommentText] = useState('');
@@ -175,6 +185,24 @@ export function PostPage({
     setCommentText('');
   };
 
+  const openPostReport = () => {
+    onReportTarget?.({
+      targetType: 'post',
+      targetId: post.id,
+      label: post.title || `${post.authorName}'s post`,
+      preview: post.description || post.title,
+    });
+  };
+
+  const openCommentReport = (comment: Comment) => {
+    onReportTarget?.({
+      targetType: 'comment',
+      targetId: comment.id,
+      label: `Comment by ${comment.authorName}`,
+      preview: comment.content,
+    });
+  };
+
   const renderComment = (comment: Comment, depth = 0) => {
     const childComments = comment.replies ?? [];
     const replyCount = comment.replyCount ?? childComments.length;
@@ -209,15 +237,35 @@ export function PostPage({
                 >
                   {comment.authorName}
                 </button>
-                {comment.canDelete && onDeleteComment && (
-                  <button
-                    type="button"
-                    className="text-gray-400 hover:text-red-600"
-                    onClick={() => onDeleteComment(comment.id)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                      aria-label="Comment actions"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-44">
+                    <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => openCommentReport(comment)}>
+                      <Flag className="mr-2 h-4 w-4" />
+                      Report
+                    </DropdownMenuItem>
+                    {comment.canDelete && onDeleteComment ? (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => onDeleteComment(comment.id)}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </>
+                    ) : null}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
               <p className="text-sm text-gray-600 mt-1">{comment.content}</p>
             </div>
@@ -315,6 +363,37 @@ export function PostPage({
                 {post.type.charAt(0).toUpperCase() + post.type.slice(1)}
               </Badge>
             ) : null}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+                  aria-label="Post actions"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={() => onSave(post.id)}>
+                  <Bookmark className="mr-2 h-4 w-4" />
+                  {isSaved ? 'Unsave' : 'Save'}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => {
+                    if (typeof window !== 'undefined') {
+                      void navigator.clipboard?.writeText(window.location.href);
+                    }
+                  }}
+                >
+                  <Share2 className="mr-2 h-4 w-4" />
+                  Share
+                </DropdownMenuItem>
+                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={openPostReport}>
+                  <Flag className="mr-2 h-4 w-4" />
+                  Report
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           <div className="space-y-2">

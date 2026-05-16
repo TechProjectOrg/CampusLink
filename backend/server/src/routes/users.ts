@@ -3,6 +3,7 @@ import multer from 'multer';
 import prisma from '../prisma';
 import { getUserProfileById } from '../services/userProfile';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
+import requireModerationCapability from '../middleware/requireModerationCapability';
 import { hashPassword, signPasswordChangeToken, verifyPassword, verifyPasswordChangeToken } from '../lib/auth';
 import { setAdminMustChangePassword } from '../lib/admin';
 import {
@@ -41,6 +42,7 @@ import {
 const router = express.Router();
 
 interface GetUserParams {
+  [key: string]: string;
   userId: string;
 }
 
@@ -794,6 +796,7 @@ router.patch(
 router.patch(
   '/:userId',
   requireOwnUser,
+  requireModerationCapability('post'),
   async (req: Request<GetUserParams, unknown, UpdateUserBody>, res: Response) => {
     const { userId } = req.params;
     const { displayName, username, branch, year, bio, headline } = req.body;
@@ -940,6 +943,7 @@ router.patch(
 router.patch(
   '/:userId/profile-picture',
   requireOwnUser,
+  requireModerationCapability('upload'),
   profilePhotoUpload.single('image') as unknown as RequestHandler<
     GetUserParams,
     unknown,
@@ -1028,6 +1032,7 @@ router.patch(
 router.patch(
   '/:userId/cover-photo',
   requireOwnUser,
+  requireModerationCapability('upload'),
   profilePhotoUpload.single('image') as unknown as RequestHandler<
     GetUserParams,
     unknown,
@@ -1712,6 +1717,7 @@ router.get('/:userId/projects', async (req: Request<{ userId: string }>, res: Re
 router.post(
   '/:userId/projects/upload-image',
   requireOwnUser,
+  requireModerationCapability('upload'),
   profilePhotoUpload.single('image') as unknown as RequestHandler<GetUserParams>,
   async (
     req: Request<GetUserParams> & { file?: Express.Multer.File },
@@ -1754,6 +1760,7 @@ router.post(
 router.post(
   '/:userId/projects',
   requireOwnUser,
+  requireModerationCapability('post'),
   async (
     req: Request<
       { userId: string },
@@ -2790,6 +2797,7 @@ router.get('/:userId/posts', async (req: Request<{ userId: string }>, res: Respo
 router.post(
   '/:userId/posts',
   requireOwnUser,
+  requireModerationCapability('post'),
   postMediaUpload.array('media', 10),
   async (
     req: Request<{ userId: string }, unknown, CreateUserPostBody & { payload?: string }>,

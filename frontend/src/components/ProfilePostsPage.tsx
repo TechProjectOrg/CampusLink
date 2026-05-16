@@ -9,6 +9,7 @@ import { Button } from './ui/button';
 import { LoadingIndicator } from './ui/LoadingIndicator';
 import { cacheProfilePosts, readCachedProfilePosts } from '../cache/socialCache';
 import { PageLayout } from './PageLayout';
+import type { ReportTargetDescriptor } from './ReportDialog';
 
 interface ProfilePostsPageProps {
   student: Student;
@@ -25,6 +26,7 @@ interface ProfilePostsPageProps {
   onDeletePost: (postId: string) => void;
   onOpenPost: (post: Opportunity) => void;
   onViewProfile: (studentId: string) => void;
+  onReportTarget?: (target: ReportTargetDescriptor) => void;
 }
 
 function mapApiPostToOpportunity(post: UserPost, student: Student): Opportunity {
@@ -117,6 +119,7 @@ export function ProfilePostsPage({
   onDeletePost,
   onOpenPost,
   onViewProfile,
+  onReportTarget,
 }: ProfilePostsPageProps) {
   const auth = useAuth();
   const [posts, setPosts] = useState<Opportunity[]>([]);
@@ -197,6 +200,7 @@ export function ProfilePostsPage({
                 onDeletePost={onDeletePost}
                 onOpenPost={onOpenPost}
                 onViewProfile={onViewProfile}
+                onReportTarget={onReportTarget}
               />
             ))}
             {hasMore ? (

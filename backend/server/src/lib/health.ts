@@ -17,7 +17,8 @@ type RouteModuleName =
   | 'chat'
   | 'clubs'
   | 'group-chat'
-  | 'admin';
+  | 'admin'
+  | 'moderation';
 
 export type RouteDescriptor = {
   module: RouteModuleName;

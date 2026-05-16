@@ -93,7 +93,7 @@ export interface AdminReportListItem {
   id: string;
   reporter: string;
   reporterUserId: string | null;
-  targetType: 'user' | 'post' | 'club';
+  targetType: 'user' | 'post' | 'comment' | 'message' | 'club';
   targetId: string;
   targetUserId: string | null;
   targetLabel: string;
@@ -101,7 +101,7 @@ export interface AdminReportListItem {
   evidence: string | null;
   reportFrequency: number;
   severity: 'warning' | 'critical';
-  status: 'open' | 'reviewing' | 'resolved' | 'rejected' | 'escalated';
+  status: 'pending' | 'under_review' | 'resolved' | 'dismissed';
   assignedModerator: string | null;
   assignedAdminUserId: string | null;
   internalNotes: string | null;
@@ -165,10 +165,29 @@ export interface AdminReportTargetPreviewPost {
   createdAt?: string;
 }
 
+export interface AdminReportTargetPreviewComment {
+  kind: 'comment';
+  id: string;
+  label: string;
+  preview?: string | null;
+  post?: Record<string, unknown> | null;
+}
+
+export interface AdminReportTargetPreviewMessage {
+  kind: 'message';
+  id: string;
+  label: string;
+  preview?: string | null;
+  conversationId?: string | null;
+  surroundingMessages?: unknown[];
+}
+
 export type AdminReportTargetPreview =
   | AdminReportTargetPreviewUser
   | AdminReportTargetPreviewClub
-  | AdminReportTargetPreviewPost;
+  | AdminReportTargetPreviewPost
+  | AdminReportTargetPreviewComment
+  | AdminReportTargetPreviewMessage;
 
 export interface AdminReportNoteEntry {
   id: string;
@@ -190,20 +209,31 @@ export interface AdminReportAuditEntry {
 export interface AdminReportDetailResponse {
   id: string;
   reporter: AdminReportActorSummary | null;
-  targetType: 'user' | 'post' | 'club';
+  targetType: 'user' | 'post' | 'comment' | 'message' | 'club';
   targetId: string;
   targetUserId: string | null;
   reason: string;
   evidence: string | null;
   severity: 'warning' | 'critical';
-  status: 'open' | 'reviewing' | 'resolved' | 'rejected' | 'escalated';
+  status: 'pending' | 'under_review' | 'resolved' | 'dismissed';
   reportFrequency: number;
   assignee: AdminReportActorSummary | null;
+  reviewedBy: AdminReportActorSummary | null;
+  reviewedAt: string | null;
+  actionTaken: string | null;
+  contextSnapshot: Record<string, unknown>;
   internalNotes: string | null;
   createdAt: string;
   updatedAt: string;
   resolvedAt: string | null;
   targetPreview: AdminReportTargetPreview;
+  submissions: Array<{
+    id: string;
+    reporter: AdminReportActorSummary | null;
+    reason: string;
+    description: string | null;
+    createdAt: string;
+  }>;
   noteEntries: AdminReportNoteEntry[];
   auditHistory: AdminReportAuditEntry[];
 }

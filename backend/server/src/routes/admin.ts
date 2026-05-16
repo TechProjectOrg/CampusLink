@@ -27,6 +27,7 @@ import {
 } from '../lib/clubCache';
 import { getTrendingHashtagsForApi } from '../lib/socialInsights';
 import { sendVerificationDecisionEmail } from '../lib/authEmail';
+import { applyModerationAction } from '../lib/moderation';
 
 const router = express.Router();
 
@@ -234,8 +235,8 @@ const ADMIN_USER_SORT_COLUMNS = {
 type AdminUserSortKey = keyof typeof ADMIN_USER_SORT_COLUMNS;
 type AdminUserSortOrder = 'asc' | 'desc';
 type AdminUserStatusFilter = 'active' | 'suspended' | 'banned';
-type AdminReportStatusFilter = 'open' | 'reviewing' | 'resolved' | 'rejected' | 'escalated';
-type AdminReportTargetTypeFilter = 'user' | 'post' | 'club';
+type AdminReportStatusFilter = 'pending' | 'under_review' | 'resolved' | 'dismissed';
+type AdminReportTargetTypeFilter = 'user' | 'post' | 'comment' | 'message' | 'club';
 type AdminReportAssigneeFilter = 'all' | 'me' | 'unassigned';
 type AdminAuditLogSeverityFilter = 'info' | 'warning' | 'critical';
 
@@ -306,14 +307,16 @@ function parseAdminAuditLogSeverityFilter(raw: unknown): AdminAuditLogSeverityFi
 
 function parseAdminReportStatusFilter(raw: unknown): AdminReportStatusFilter | '' {
   const value = String(raw ?? '').trim().toLowerCase();
-  return value === 'open' || value === 'reviewing' || value === 'resolved' || value === 'rejected' || value === 'escalated'
+  return value === 'pending' || value === 'under_review' || value === 'resolved' || value === 'dismissed'
     ? value as AdminReportStatusFilter
     : '';
 }
 
 function parseAdminReportTargetTypeFilter(raw: unknown): AdminReportTargetTypeFilter | '' {
   const value = String(raw ?? '').trim().toLowerCase();
-  return value === 'user' || value === 'post' || value === 'club' ? value as AdminReportTargetTypeFilter : '';
+  return value === 'user' || value === 'post' || value === 'comment' || value === 'message' || value === 'club'
+    ? value as AdminReportTargetTypeFilter
+    : '';
 }
 
 function parseAdminReportAssigneeFilter(raw: unknown): AdminReportAssigneeFilter {
@@ -856,7 +859,7 @@ router.get('/dashboard', async (req: Request, res: Response) => {
           reporter.username AS reporter
         FROM admin_reports r
         LEFT JOIN users reporter ON reporter.user_id = r.reporter_user_id
-        WHERE r.status IN (CAST('open' AS "AdminReportStatus"), CAST('reviewing' AS "AdminReportStatus"), CAST('escalated' AS "AdminReportStatus"))
+        WHERE r.status IN (CAST('pending' AS "AdminReportStatus"), CAST('under_review' AS "AdminReportStatus"))
         ORDER BY
           CASE r.severity
             WHEN CAST('critical' AS "AdminSeverity") THEN 0
@@ -1309,6 +1312,12 @@ router.post('/users/:userId/actions', async (req: Request<{ userId: string }>, r
 
   try {
     if (action === 'warn') {
+      await applyModerationAction({
+        adminUserId: adminReq.auth!.userId,
+        targetUserId: userId,
+        actionType: 'warn',
+        reason: normalizedNote || 'Please review our community guidelines.',
+      });
       await recordAdminAuditLog({
         actorUserId: adminReq.auth!.userId,
         actionType: 'user.warn',
@@ -1322,29 +1331,34 @@ router.post('/users/:userId/actions', async (req: Request<{ userId: string }>, r
     }
 
     if (action === 'suspend') {
-      await prisma.$queryRawUnsafe(`
-        UPDATE users
-        SET suspended_until = NOW() + INTERVAL '${suspendDays} day', is_banned = FALSE, updated_at = NOW()
-        WHERE user_id = ${userId}
-      `);
+      await applyModerationAction({
+        adminUserId: adminReq.auth!.userId,
+        targetUserId: userId,
+        actionType: 'suspend',
+        reason: normalizedNote || 'Account suspended for policy violations.',
+        durationDays: suspendDays,
+      });
     } else if (action === 'ban') {
-      await prisma.$queryRaw`
-        UPDATE users
-        SET is_banned = TRUE, suspended_until = NULL, updated_at = NOW()
-        WHERE user_id = ${userId}
-      `;
+      await applyModerationAction({
+        adminUserId: adminReq.auth!.userId,
+        targetUserId: userId,
+        actionType: 'ban',
+        reason: normalizedNote || 'Account permanently banned for policy violations.',
+      });
     } else if (action === 'unsuspend') {
-      await prisma.$queryRaw`
-        UPDATE users
-        SET suspended_until = NULL, updated_at = NOW()
-        WHERE user_id = ${userId}
-      `;
+      await applyModerationAction({
+        adminUserId: adminReq.auth!.userId,
+        targetUserId: userId,
+        actionType: 'unsuspend',
+        reason: normalizedNote || 'Suspension lifted by admin.',
+      });
     } else if (action === 'unban') {
-      await prisma.$queryRaw`
-        UPDATE users
-        SET is_banned = FALSE, updated_at = NOW()
-        WHERE user_id = ${userId}
-      `;
+      await applyModerationAction({
+        adminUserId: adminReq.auth!.userId,
+        targetUserId: userId,
+        actionType: 'unban',
+        reason: normalizedNote || 'Ban lifted by admin.',
+      });
     } else if (action === 'verify') {
       await prisma.$queryRaw`
         UPDATE users
@@ -2207,7 +2221,7 @@ router.post('/posts/:postId/actions', async (req: Request<{ postId: string }>, r
           ${post.author_user_id},
           ${normalizedNote},
           CAST('critical' AS "AdminSeverity"),
-          CAST('escalated' AS "AdminReportStatus"),
+          CAST('pending' AS "AdminReportStatus"),
           1,
           ${adminReq.auth!.userId},
           ${normalizedNote}
@@ -2364,7 +2378,6 @@ router.get('/reports', async (req: Request, res: Response) => {
     LEFT JOIN users target_user ON target_user.user_id = r.target_user_id
     LEFT JOIN clubs target_club ON r.target_type = CAST('club' AS "AdminReportTargetType") AND target_club.club_id::text = r.target_id
     LEFT JOIN posts target_post ON r.target_type = CAST('post' AS "AdminReportTargetType") AND target_post.post_id::text = r.target_id
-    LEFT JOIN users target_post_author ON target_post_author.user_id = target_post.author_user_id
     WHERE
       ($1 = '' OR (
         COALESCE(reporter.username, 'System') ILIKE $2
@@ -2375,6 +2388,8 @@ router.get('/reports', async (req: Request, res: Response) => {
             WHEN r.target_type = CAST('user' AS "AdminReportTargetType") THEN COALESCE(target_user.username, r.target_id)
             WHEN r.target_type = CAST('club' AS "AdminReportTargetType") THEN COALESCE(target_club.name, r.target_id)
             WHEN r.target_type = CAST('post' AS "AdminReportTargetType") THEN COALESCE(NULLIF(target_post.title, ''), NULLIF(LEFT(COALESCE(target_post.content_text, ''), 120), ''), r.target_id)
+            WHEN r.target_type = CAST('comment' AS "AdminReportTargetType") THEN COALESCE(r.context_snapshot->>'content', r.target_id)
+            WHEN r.target_type = CAST('message' AS "AdminReportTargetType") THEN COALESCE(r.context_snapshot->>'content', r.target_id)
             ELSE r.target_id
           END
         ) ILIKE $2
@@ -2398,6 +2413,7 @@ router.get('/reports', async (req: Request, res: Response) => {
       reporter_user_id: string | null;
       target_type: string;
       target_id: string;
+      conversation_id: string | null;
       target_user_id: string | null;
       target_label: string;
       reason: string;
@@ -2420,11 +2436,14 @@ router.get('/reports', async (req: Request, res: Response) => {
         r.reporter_user_id,
         r.target_type::text,
         r.target_id,
+        r.conversation_id,
         r.target_user_id,
         CASE
           WHEN r.target_type = CAST('user' AS "AdminReportTargetType") THEN COALESCE(target_user.username, r.target_id)
           WHEN r.target_type = CAST('club' AS "AdminReportTargetType") THEN COALESCE(target_club.name, r.target_id)
           WHEN r.target_type = CAST('post' AS "AdminReportTargetType") THEN COALESCE(NULLIF(target_post.title, ''), NULLIF(LEFT(COALESCE(target_post.content_text, ''), 120), ''), r.target_id)
+          WHEN r.target_type = CAST('comment' AS "AdminReportTargetType") THEN COALESCE(LEFT(r.context_snapshot->>'content', 120), r.target_id)
+          WHEN r.target_type = CAST('message' AS "AdminReportTargetType") THEN COALESCE(LEFT(r.context_snapshot->>'content', 120), r.target_id)
           ELSE r.target_id
         END AS target_label,
         r.reason,
@@ -2441,9 +2460,8 @@ router.get('/reports', async (req: Request, res: Response) => {
       ${reportBaseSql}
       ORDER BY
         CASE r.status
-          WHEN CAST('open' AS "AdminReportStatus") THEN 0
-          WHEN CAST('reviewing' AS "AdminReportStatus") THEN 1
-          WHEN CAST('escalated' AS "AdminReportStatus") THEN 2
+          WHEN CAST('pending' AS "AdminReportStatus") THEN 0
+          WHEN CAST('under_review' AS "AdminReportStatus") THEN 1
           ELSE 3
         END,
         r.created_at DESC,
@@ -2536,6 +2554,7 @@ router.get('/reports/:reportId', async (req: Request<{ reportId: string }>, res:
       reporter_avatar_url: string | null;
       target_type: string;
       target_id: string;
+      conversation_id: string | null;
       target_user_id: string | null;
       reason: string;
       evidence: string | null;
@@ -2543,6 +2562,13 @@ router.get('/reports/:reportId', async (req: Request<{ reportId: string }>, res:
       status: string;
       report_count: number;
       assigned_admin_user_id: string | null;
+      reviewed_by_user_id: string | null;
+      reviewed_by_username: string | null;
+      reviewed_by_email: string | null;
+      reviewed_by_avatar_url: string | null;
+      reviewed_at: Date | null;
+      action_taken: string | null;
+      context_snapshot: unknown;
       assigned_admin_username: string | null;
       assigned_admin_email: string | null;
       assigned_admin_avatar_url: string | null;
@@ -2559,6 +2585,7 @@ router.get('/reports/:reportId', async (req: Request<{ reportId: string }>, res:
         reporter.profile_photo_url AS reporter_avatar_url,
         r.target_type::text,
         r.target_id,
+        r.conversation_id,
         r.target_user_id,
         r.reason,
         r.evidence,
@@ -2566,6 +2593,13 @@ router.get('/reports/:reportId', async (req: Request<{ reportId: string }>, res:
         r.status::text,
         r.report_count,
         r.assigned_admin_user_id,
+        r.reviewed_by_user_id,
+        reviewer.username AS reviewed_by_username,
+        reviewer.email AS reviewed_by_email,
+        reviewer.profile_photo_url AS reviewed_by_avatar_url,
+        r.reviewed_at,
+        r.action_taken,
+        r.context_snapshot,
         assignee_user.username AS assigned_admin_username,
         assignee_user.email AS assigned_admin_email,
         assignee_user.profile_photo_url AS assigned_admin_avatar_url,
@@ -2576,6 +2610,7 @@ router.get('/reports/:reportId', async (req: Request<{ reportId: string }>, res:
       FROM admin_reports r
       LEFT JOIN users reporter ON reporter.user_id = r.reporter_user_id
       LEFT JOIN users assignee_user ON assignee_user.user_id = r.assigned_admin_user_id
+      LEFT JOIN users reviewer ON reviewer.user_id = r.reviewed_by_user_id
       WHERE r.report_id = ${reportId}
       LIMIT 1
     `;
@@ -2585,7 +2620,7 @@ router.get('/reports/:reportId', async (req: Request<{ reportId: string }>, res:
       return res.status(404).json({ message: 'Report not found' });
     }
 
-    const [noteRows, auditRows, userTargetRows, clubTargetRows, postTargetRows] = await Promise.all([
+    const [noteRows, auditRows, submissionRows, userTargetRows, clubTargetRows, postTargetRows] = await Promise.all([
       prisma.$queryRaw<Array<{
         report_note_id: string;
         admin_user_id: string;
@@ -2635,6 +2670,30 @@ router.get('/reports/:reportId', async (req: Request<{ reportId: string }>, res:
         JOIN users actor ON actor.user_id = l.actor_user_id
         WHERE l.target_type = 'report' AND l.target_id = ${reportId}
         ORDER BY l.created_at DESC, l.audit_log_id DESC
+      `,
+      prisma.$queryRaw<Array<{
+        report_submission_id: string;
+        reporter_user_id: string;
+        reporter_username: string;
+        reporter_email: string;
+        reporter_avatar_url: string | null;
+        reason: string;
+        description: string | null;
+        created_at: Date;
+      }>>`
+        SELECT
+          s.report_submission_id,
+          s.reporter_user_id,
+          reporter.username AS reporter_username,
+          reporter.email AS reporter_email,
+          reporter.profile_photo_url AS reporter_avatar_url,
+          s.reason,
+          s.description,
+          s.created_at
+        FROM report_submissions s
+        JOIN users reporter ON reporter.user_id = s.reporter_user_id
+        WHERE s.report_id = ${reportId}
+        ORDER BY s.created_at DESC, s.report_submission_id DESC
       `,
       report.target_type === 'user' && report.target_user_id
         ? prisma.$queryRaw<Array<{
@@ -2703,6 +2762,8 @@ router.get('/reports/:reportId', async (req: Request<{ reportId: string }>, res:
         : Promise.resolve([]),
     ]);
 
+    const contextSnapshot = (report.context_snapshot ?? {}) as Record<string, unknown>;
+
     let targetPreview: Record<string, unknown> = {
       kind: report.target_type,
       id: report.target_id,
@@ -2752,6 +2813,23 @@ router.get('/reports/:reportId', async (req: Request<{ reportId: string }>, res:
             createdAt: post.created_at.toISOString(),
           }
         : { kind: 'post', id: report.target_id, label: report.target_id };
+    } else if (report.target_type === 'comment') {
+      targetPreview = {
+        kind: 'comment',
+        id: report.target_id,
+        label: String((contextSnapshot.content as string | undefined) ?? report.target_id),
+        preview: (contextSnapshot.content as string | undefined) ?? null,
+        post: (contextSnapshot.post as Record<string, unknown> | undefined) ?? null,
+      };
+    } else if (report.target_type === 'message') {
+      targetPreview = {
+        kind: 'message',
+        id: report.target_id,
+        label: String((contextSnapshot.content as string | undefined) ?? report.target_id),
+        preview: (contextSnapshot.content as string | undefined) ?? null,
+        conversationId: report.conversation_id,
+        surroundingMessages: (contextSnapshot.surroundingMessages as unknown[] | undefined) ?? [],
+      };
     }
 
     return res.status(200).json({
@@ -2767,9 +2845,18 @@ router.get('/reports/:reportId', async (req: Request<{ reportId: string }>, res:
       targetUserId: report.target_user_id,
       reason: report.reason,
       evidence: report.evidence,
+      contextSnapshot,
       severity: report.severity,
       status: report.status,
       reportFrequency: report.report_count,
+      reviewedBy: report.reviewed_by_user_id ? {
+        id: report.reviewed_by_user_id,
+        username: report.reviewed_by_username ?? 'Unknown admin',
+        email: report.reviewed_by_email ?? '',
+        avatarUrl: report.reviewed_by_avatar_url,
+      } : null,
+      reviewedAt: report.reviewed_at ? report.reviewed_at.toISOString() : null,
+      actionTaken: report.action_taken,
       assignee: report.assigned_admin_user_id ? {
         id: report.assigned_admin_user_id,
         username: report.assigned_admin_username ?? 'Unknown admin',
@@ -2781,6 +2868,18 @@ router.get('/reports/:reportId', async (req: Request<{ reportId: string }>, res:
       updatedAt: report.updated_at.toISOString(),
       resolvedAt: report.resolved_at ? report.resolved_at.toISOString() : null,
       targetPreview,
+      submissions: submissionRows.map((submission) => ({
+        id: submission.report_submission_id,
+        reporter: {
+          id: submission.reporter_user_id,
+          username: submission.reporter_username,
+          email: submission.reporter_email,
+          avatarUrl: submission.reporter_avatar_url,
+        },
+        reason: submission.reason,
+        description: submission.description,
+        createdAt: submission.created_at.toISOString(),
+      })),
       noteEntries: noteRows.map((note) => ({
         id: note.report_note_id,
         author: {
@@ -2829,7 +2928,7 @@ router.patch('/reports/:reportId', async (req: Request<{ reportId: string }>, re
       SET
         status = CASE
           WHEN ${status ?? ''} = '' THEN status
-          ELSE CAST(${status ?? 'open'} AS "AdminReportStatus")
+          ELSE CAST(${status ?? 'pending'} AS "AdminReportStatus")
         END,
         internal_notes = CASE
           WHEN ${internalNotes === undefined} THEN internal_notes
@@ -2841,8 +2940,8 @@ router.patch('/reports/:reportId', async (req: Request<{ reportId: string }>, re
           ELSE assigned_admin_user_id
         END,
         resolved_at = CASE
-          WHEN ${status === 'resolved' || status === 'rejected'} THEN NOW()
-          WHEN ${status === 'open' || status === 'reviewing' || status === 'escalated'} THEN NULL
+          WHEN ${status === 'resolved' || status === 'dismissed'} THEN NOW()
+          WHEN ${status === 'pending' || status === 'under_review'} THEN NULL
           ELSE resolved_at
         END,
         updated_at = NOW()
@@ -2854,7 +2953,7 @@ router.patch('/reports/:reportId', async (req: Request<{ reportId: string }>, re
       actionType: 'report.updated',
       targetType: 'report',
       targetId: reportId,
-      severity: status === 'escalated' ? 'critical' : 'info',
+      severity: 'info',
       summary: 'Admin updated report ticket',
       metadata: {
         status,
@@ -2867,6 +2966,220 @@ router.patch('/reports/:reportId', async (req: Request<{ reportId: string }>, re
     return res.status(200).json({ success: true });
   } catch (err) {
     console.error('Error updating report:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.post('/reports/:reportId/actions', async (req: Request<{ reportId: string }>, res: Response) => {
+  const adminReq = req as AdminAuthedRequest;
+  const { reportId } = req.params;
+  const body = req.body as {
+    action?: 'assign_to_me' | 'mark_under_review' | 'resolve' | 'dismiss' | 'warn_user' | 'suspend_user' | 'ban_user' | 'delete_content';
+    reason?: string;
+    durationDays?: number;
+  };
+
+  const action = String(body.action ?? '').trim();
+  const reason = body.reason?.trim() || '';
+  const durationDays = Math.min(365, Math.max(1, Number.isFinite(Number(body.durationDays)) ? Number(body.durationDays) : 7));
+
+  if (!action) {
+    return res.status(400).json({ message: 'Missing action' });
+  }
+
+  try {
+    const reportRows = await prisma.$queryRaw<Array<{
+      report_id: string;
+      target_type: string;
+      target_id: string;
+      target_user_id: string | null;
+      status: string;
+    }>>`
+      SELECT report_id, target_type::text, target_id, target_user_id, status::text
+      FROM admin_reports
+      WHERE report_id = ${reportId}
+      LIMIT 1
+    `;
+    const report = reportRows[0];
+    if (!report) {
+      return res.status(404).json({ message: 'Report not found' });
+    }
+
+    if (action === 'assign_to_me' || action === 'mark_under_review') {
+      await prisma.$queryRaw`
+        UPDATE admin_reports
+        SET
+          status = CAST('under_review' AS "AdminReportStatus"),
+          assigned_admin_user_id = ${adminReq.auth!.userId},
+          updated_at = NOW()
+        WHERE report_id = ${reportId}
+      `;
+      await recordAdminAuditLog({
+        actorUserId: adminReq.auth!.userId,
+        actionType: 'report.under_review',
+        targetType: 'report',
+        targetId: reportId,
+        summary: 'Report moved to under review',
+      });
+      return res.status(200).json({ success: true });
+    }
+
+    if (action === 'dismiss') {
+      await prisma.$queryRaw`
+        UPDATE admin_reports
+        SET
+          status = CAST('dismissed' AS "AdminReportStatus"),
+          reviewed_by_user_id = ${adminReq.auth!.userId},
+          reviewed_at = NOW(),
+          resolved_at = NOW(),
+          action_taken = 'dismiss',
+          updated_at = NOW()
+        WHERE report_id = ${reportId}
+      `;
+      if (report.target_user_id) {
+        await applyModerationAction({
+          adminUserId: adminReq.auth!.userId,
+          targetUserId: report.target_user_id,
+          reportId,
+          actionType: 'dismiss',
+          reason: reason || 'Report dismissed with no policy violation found.',
+        });
+      }
+      await recordAdminAuditLog({
+        actorUserId: adminReq.auth!.userId,
+        actionType: 'report.dismissed',
+        targetType: 'report',
+        targetId: reportId,
+        summary: reason || 'Report dismissed',
+      });
+      return res.status(200).json({ success: true });
+    }
+
+    if (action === 'resolve') {
+      await prisma.$queryRaw`
+        UPDATE admin_reports
+        SET
+          status = CAST('resolved' AS "AdminReportStatus"),
+          reviewed_by_user_id = ${adminReq.auth!.userId},
+          reviewed_at = NOW(),
+          resolved_at = NOW(),
+          action_taken = COALESCE(action_taken, 'resolve'),
+          updated_at = NOW()
+        WHERE report_id = ${reportId}
+      `;
+      if (report.target_user_id) {
+        await applyModerationAction({
+          adminUserId: adminReq.auth!.userId,
+          targetUserId: report.target_user_id,
+          reportId,
+          actionType: 'resolve',
+          reason: reason || 'Report resolved by moderation team.',
+        });
+      }
+      await recordAdminAuditLog({
+        actorUserId: adminReq.auth!.userId,
+        actionType: 'report.resolved',
+        targetType: 'report',
+        targetId: reportId,
+        summary: reason || 'Report resolved',
+      });
+      return res.status(200).json({ success: true });
+    }
+
+    if (!report.target_user_id && (action === 'warn_user' || action === 'suspend_user' || action === 'ban_user')) {
+      return res.status(400).json({ message: 'This report does not have a target user to moderate.' });
+    }
+
+    if (action === 'warn_user' || action === 'suspend_user' || action === 'ban_user') {
+      const actionType = action === 'warn_user' ? 'warn' : action === 'suspend_user' ? 'suspend' : 'ban';
+      await applyModerationAction({
+        adminUserId: adminReq.auth!.userId,
+        targetUserId: report.target_user_id!,
+        reportId,
+        actionType,
+        reason: reason || 'Action taken by moderation team.',
+        durationDays: actionType === 'suspend' ? durationDays : undefined,
+      });
+      await prisma.$queryRaw`
+        UPDATE admin_reports
+        SET
+          status = CAST('resolved' AS "AdminReportStatus"),
+          reviewed_by_user_id = ${adminReq.auth!.userId},
+          reviewed_at = NOW(),
+          resolved_at = NOW(),
+          action_taken = ${actionType},
+          updated_at = NOW()
+        WHERE report_id = ${reportId}
+      `;
+      await recordAdminAuditLog({
+        actorUserId: adminReq.auth!.userId,
+        actionType: `report.${actionType}`,
+        targetType: 'report',
+        targetId: reportId,
+        severity: actionType === 'ban' ? 'critical' : 'warning',
+        summary: reason || `Report ${actionType}`,
+        metadata: actionType === 'suspend' ? { durationDays } : undefined,
+      });
+      return res.status(200).json({ success: true });
+    }
+
+    if (action === 'delete_content') {
+      if (report.target_type === 'post') {
+        await prisma.$queryRaw`
+          UPDATE posts
+          SET deleted_at = NOW(), deleted_by_user_id = ${adminReq.auth!.userId}, updated_at = NOW()
+          WHERE post_id::text = ${report.target_id}
+        `;
+      } else if (report.target_type === 'comment') {
+        await prisma.$queryRaw`
+          DELETE FROM post_comments
+          WHERE comment_id::text = ${report.target_id}
+        `;
+      } else if (report.target_type === 'message') {
+        await prisma.$queryRaw`
+          UPDATE messages
+          SET deleted_at = NOW()
+          WHERE message_id::text = ${report.target_id}
+        `;
+      } else {
+        return res.status(400).json({ message: 'Delete content is not supported for this target type.' });
+      }
+
+      if (report.target_user_id) {
+        await applyModerationAction({
+          adminUserId: adminReq.auth!.userId,
+          targetUserId: report.target_user_id,
+          reportId,
+          actionType: report.target_type === 'post' ? 'delete_post' : report.target_type === 'comment' ? 'delete_comment' : 'delete_message',
+          reason: reason || 'Reported content removed by moderation.',
+        });
+      }
+
+      await prisma.$queryRaw`
+        UPDATE admin_reports
+        SET
+          status = CAST('resolved' AS "AdminReportStatus"),
+          reviewed_by_user_id = ${adminReq.auth!.userId},
+          reviewed_at = NOW(),
+          resolved_at = NOW(),
+          action_taken = 'delete_content',
+          updated_at = NOW()
+        WHERE report_id = ${reportId}
+      `;
+      await recordAdminAuditLog({
+        actorUserId: adminReq.auth!.userId,
+        actionType: 'report.delete_content',
+        targetType: 'report',
+        targetId: reportId,
+        severity: 'warning',
+        summary: reason || 'Reported content deleted',
+      });
+      return res.status(200).json({ success: true });
+    }
+
+    return res.status(400).json({ message: 'Unsupported report action' });
+  } catch (err) {
+    console.error('Error applying report action:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });

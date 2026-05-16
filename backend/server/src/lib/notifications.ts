@@ -13,7 +13,11 @@ export type NotificationType =
   | 'reply'
   | 'opportunity'
   | 'message'
-  | 'club';
+  | 'club'
+  | 'moderation_warning'
+  | 'moderation_suspension'
+  | 'moderation_ban'
+  | 'report_update';
 
 interface CreateNotificationParams {
   recipientUserId: string;

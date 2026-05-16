@@ -7,6 +7,7 @@
 import express, { type Request, Response } from 'express';
 import multer from 'multer';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
+import requireModerationCapability from '../middleware/requireModerationCapability';
 import {
   createGroupChat,
   addUserToChat,
@@ -32,7 +33,7 @@ const groupAvatarUpload = multer({
  * POST /api/group-chat/create
  * Create a new independent group chat
  */
-router.post('/create', async (req: AuthedRequest, res: Response) => {
+router.post('/create', requireModerationCapability('community'), async (req: AuthedRequest, res: Response) => {
   try {
     const { name, description, memberIds } = req.body;
     const userId = req.auth!.userId;
@@ -78,7 +79,7 @@ router.get('/:chatId', async (req: AuthedRequest, res: Response) => {
  * POST /api/group-chat/:chatId/add-member
  * Add a user to a group chat
  */
-router.post('/:chatId/add-member', async (req: AuthedRequest, res: Response) => {
+router.post('/:chatId/add-member', requireModerationCapability('community'), async (req: AuthedRequest, res: Response) => {
   try {
     const { userId: targetUserId, role } = req.body;
     const chatId = String(req.params.chatId);
@@ -112,7 +113,7 @@ router.post('/:chatId/add-member', async (req: AuthedRequest, res: Response) => 
  * POST /api/group-chat/:chatId/remove-member
  * Remove a user from a group chat
  */
-router.post('/:chatId/remove-member', async (req: AuthedRequest, res: Response) => {
+router.post('/:chatId/remove-member', requireModerationCapability('community'), async (req: AuthedRequest, res: Response) => {
   try {
     const { userId: targetUserId, reason } = req.body;
     const chatId = String(req.params.chatId);
@@ -142,7 +143,7 @@ router.post('/:chatId/remove-member', async (req: AuthedRequest, res: Response) 
  * POST /api/group-chat/:chatId/leave
  * User leaves a group chat
  */
-router.post('/:chatId/leave', async (req: AuthedRequest, res: Response) => {
+router.post('/:chatId/leave', requireModerationCapability('community'), async (req: AuthedRequest, res: Response) => {
   try {
     const chatId = String(req.params.chatId);
     const userId = req.auth!.userId;
@@ -164,7 +165,7 @@ router.post('/:chatId/leave', async (req: AuthedRequest, res: Response) => {
  * POST /api/group-chat/:chatId/change-role
  * Change a member's role in a group chat
  */
-router.post('/:chatId/change-role', async (req: AuthedRequest, res: Response) => {
+router.post('/:chatId/change-role', requireModerationCapability('community'), async (req: AuthedRequest, res: Response) => {
   try {
     const { userId: targetUserId, newRole } = req.body;
     const chatId = String(req.params.chatId);
@@ -201,7 +202,7 @@ router.post('/:chatId/change-role', async (req: AuthedRequest, res: Response) =>
  * PUT /api/group-chat/:chatId
  * Update group chat settings (name, description, avatar)
  */
-router.put('/:chatId', async (req: AuthedRequest, res: Response) => {
+router.put('/:chatId', requireModerationCapability('community'), async (req: AuthedRequest, res: Response) => {
   try {
     const { name, description, avatarUrl } = req.body;
     const chatId = String(req.params.chatId);
@@ -233,6 +234,7 @@ router.put('/:chatId', async (req: AuthedRequest, res: Response) => {
  */
 router.patch(
   '/:chatId/avatar',
+  requireModerationCapability('upload'),
   groupAvatarUpload.single('image'),
   async (req: AuthedRequest & { file?: Express.Multer.File }, res: Response) => {
     try {
@@ -287,7 +289,7 @@ router.patch(
  * DELETE /api/group-chat/:chatId
  * Delete a group chat (only owner can do this)
  */
-router.delete('/:chatId', async (req: AuthedRequest, res: Response) => {
+router.delete('/:chatId', requireModerationCapability('community'), async (req: AuthedRequest, res: Response) => {
   try {
     const chatId = String(req.params.chatId);
     const userId = req.auth!.userId;

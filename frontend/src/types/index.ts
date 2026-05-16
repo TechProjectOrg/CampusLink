@@ -198,7 +198,11 @@ export interface Notification {
     | 'reply'
     | 'message'
     | 'opportunity'
-    | 'club';
+    | 'club'
+    | 'moderation_warning'
+    | 'moderation_suspension'
+    | 'moderation_ban'
+    | 'report_update';
   title: string;
   message: string;
   avatar: string;
@@ -262,6 +266,16 @@ export interface ApiUserProfile {
     role: 'super_admin';
     mustChangePassword: boolean;
     lastLoginAt: string | null;
+  } | null;
+  moderation?: {
+    isBanned: boolean;
+    bannedAt: string | null;
+    isSuspended: boolean;
+    suspendedUntil: string | null;
+    suspensionReason: string | null;
+    suspensionStartedAt: string | null;
+    warningCount: number;
+    lastWarningAt: string | null;
   } | null;
   viewerHasBlockedUser?: boolean;
   profileVisibility?: 'full' | 'blocked-by-viewer' | 'restricted';

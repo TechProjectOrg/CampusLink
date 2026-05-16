@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import prisma from '../prisma';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
+import requireModerationCapability from '../middleware/requireModerationCapability';
 import { deleteManagedPostMediaByUrl } from '../lib/objectStorage';
 import {
   notifyCommentReply,
@@ -889,7 +890,7 @@ router.get('/users/:userId/posts', async (req: Request<{ userId: string }>, res:
   }
 });
 
-router.patch('/posts/:postId', async (req: Request<{ postId: string }>, res: Response) => {
+router.patch('/posts/:postId', requireModerationCapability('post'), async (req: Request<{ postId: string }>, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const viewerUserId = authed.auth!.userId;
   const { postId } = req.params;
@@ -1011,7 +1012,7 @@ router.patch('/posts/:postId', async (req: Request<{ postId: string }>, res: Res
   }
 });
 
-router.delete('/posts/:postId', async (req: Request<{ postId: string }>, res: Response) => {
+router.delete('/posts/:postId', requireModerationCapability('post'), async (req: Request<{ postId: string }>, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const viewerUserId = authed.auth!.userId;
   const { postId } = req.params;
@@ -1124,7 +1125,7 @@ router.delete('/posts/:postId', async (req: Request<{ postId: string }>, res: Re
   }
 });
 
-router.post('/posts/:postId/likes', async (req: Request<{ postId: string }>, res: Response) => {
+router.post('/posts/:postId/likes', requireModerationCapability('post'), async (req: Request<{ postId: string }>, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const viewerUserId = authed.auth!.userId;
   const { postId } = req.params;
@@ -1164,7 +1165,7 @@ router.post('/posts/:postId/likes', async (req: Request<{ postId: string }>, res
   }
 });
 
-router.delete('/posts/:postId/likes', async (req: Request<{ postId: string }>, res: Response) => {
+router.delete('/posts/:postId/likes', requireModerationCapability('post'), async (req: Request<{ postId: string }>, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const viewerUserId = authed.auth!.userId;
   const { postId } = req.params;
@@ -1198,7 +1199,7 @@ router.delete('/posts/:postId/likes', async (req: Request<{ postId: string }>, r
   }
 });
 
-router.post('/posts/:postId/saves', async (req: Request<{ postId: string }>, res: Response) => {
+router.post('/posts/:postId/saves', requireModerationCapability('post'), async (req: Request<{ postId: string }>, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const viewerUserId = authed.auth!.userId;
   const { postId } = req.params;
@@ -1227,7 +1228,7 @@ router.post('/posts/:postId/saves', async (req: Request<{ postId: string }>, res
   }
 });
 
-router.delete('/posts/:postId/saves', async (req: Request<{ postId: string }>, res: Response) => {
+router.delete('/posts/:postId/saves', requireModerationCapability('post'), async (req: Request<{ postId: string }>, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const viewerUserId = authed.auth!.userId;
   const { postId } = req.params;
@@ -1284,7 +1285,7 @@ router.get('/posts/comments/:commentId/context', async (req: Request<{ commentId
   }
 });
 
-router.post('/posts/:postId/comments', async (req: Request<{ postId: string }>, res: Response) => {
+router.post('/posts/:postId/comments', requireModerationCapability('comment'), async (req: Request<{ postId: string }>, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const viewerUserId = authed.auth!.userId;
   const { postId } = req.params;
@@ -1327,7 +1328,7 @@ router.post('/posts/:postId/comments', async (req: Request<{ postId: string }>, 
   }
 });
 
-router.post('/posts/comments/:commentId/replies', async (req: Request<{ commentId: string }>, res: Response) => {
+router.post('/posts/comments/:commentId/replies', requireModerationCapability('comment'), async (req: Request<{ commentId: string }>, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const viewerUserId = authed.auth!.userId;
   const { commentId } = req.params;
@@ -1389,7 +1390,7 @@ router.post('/posts/comments/:commentId/replies', async (req: Request<{ commentI
   }
 });
 
-router.delete('/posts/comments/:commentId', async (req: Request<{ commentId: string }>, res: Response) => {
+router.delete('/posts/comments/:commentId', requireModerationCapability('comment'), async (req: Request<{ commentId: string }>, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const viewerUserId = authed.auth!.userId;
   const { commentId } = req.params;
@@ -1431,7 +1432,7 @@ router.delete('/posts/comments/:commentId', async (req: Request<{ commentId: str
   }
 });
 
-router.post('/posts/comments/:commentId/likes', async (req: Request<{ commentId: string }>, res: Response) => {
+router.post('/posts/comments/:commentId/likes', requireModerationCapability('comment'), async (req: Request<{ commentId: string }>, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const viewerUserId = authed.auth!.userId;
   const { commentId } = req.params;
@@ -1465,7 +1466,7 @@ router.post('/posts/comments/:commentId/likes', async (req: Request<{ commentId:
   }
 });
 
-router.delete('/posts/comments/:commentId/likes', async (req: Request<{ commentId: string }>, res: Response) => {
+router.delete('/posts/comments/:commentId/likes', requireModerationCapability('comment'), async (req: Request<{ commentId: string }>, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const viewerUserId = authed.auth!.userId;
   const { commentId } = req.params;

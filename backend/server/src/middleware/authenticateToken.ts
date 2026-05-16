@@ -1,9 +1,11 @@
 import { NextFunction, Request, Response } from 'express';
 import prisma from '../prisma';
 import { verifyAuthToken, type AuthTokenPayload } from '../lib/auth';
+import { assertCanLogin, getModerationState, type ModerationState } from '../lib/moderation';
 
 export interface AuthedRequest extends Request {
   auth?: AuthTokenPayload;
+  moderationState?: ModerationState;
 }
 
 export default async function authenticateToken(req: Request, res: Response, next: NextFunction) {
@@ -40,9 +42,20 @@ export default async function authenticateToken(req: Request, res: Response, nex
       WHERE session_id = ${payload.sessionId}
     `;
 
+    const moderationState = await getModerationState(payload.userId);
+    assertCanLogin(moderationState);
+
     (req as AuthedRequest).auth = payload;
+    (req as AuthedRequest).moderationState = moderationState;
     return next();
-  } catch {
+  } catch (error) {
+    if (error instanceof Error && 'status' in error) {
+      return res.status(Number((error as any).status) || 403).json({
+        message: error.message,
+        code: (error as any).code ?? 'AUTH_RESTRICTED',
+        moderation: 'state' in error ? (error as any).state : undefined,
+      });
+    }
     return res.status(401).json({ message: 'Invalid or expired authorization token' });
   }
 }

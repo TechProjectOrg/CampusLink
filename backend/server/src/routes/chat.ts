@@ -4,6 +4,7 @@ import multer from 'multer';
 import prisma from '../prisma';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
 import { chatMessageRateLimiter } from '../middleware/rateLimiter';
+import requireModerationCapability from '../middleware/requireModerationCapability';
 import {
   type ChatMessagePayload,
   type ChatReplyPreview,
@@ -1122,7 +1123,7 @@ router.get('/conversations', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/conversations', async (req: Request, res: Response) => {
+router.post('/conversations', requireModerationCapability('message'), async (req: Request, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const currentUserId = authed.auth!.userId;
   const { targetUserId } = req.body;
@@ -1212,6 +1213,7 @@ router.get('/conversations/:chatId/messages', async (req: Request, res: Response
 
 router.post(
   '/conversations/:chatId/messages',
+  requireModerationCapability('message'),
   chatMessageRateLimiter,
   async (req: Request, res: Response) => {
     const authed = req as unknown as AuthedRequest;
@@ -1281,6 +1283,7 @@ router.post(
 
 router.post(
   '/conversations/:chatId/messages/image',
+  requireModerationCapability('message'),
   chatMessageRateLimiter,
   upload.single('image'),
   async (req: Request, res: Response) => {
@@ -1415,6 +1418,7 @@ router.patch('/conversations/:chatId/read', async (req: Request, res: Response) 
 
 router.put(
   '/conversations/:chatId/messages/:messageId/reaction',
+  requireModerationCapability('message'),
   async (req: Request, res: Response) => {
     const authed = req as unknown as AuthedRequest;
     const userId = authed.auth!.userId;
@@ -1490,6 +1494,7 @@ router.put(
 
 router.delete(
   '/conversations/:chatId/messages/:messageId',
+  requireModerationCapability('message'),
   async (req: AuthedRequest, res: Response) => {
     try {
       const chatId = String(req.params.chatId);
@@ -1565,7 +1570,7 @@ router.delete(
   },
 );
 
-router.post('/requests/:chatId/accept', async (req: Request, res: Response) => {
+router.post('/requests/:chatId/accept', requireModerationCapability('message'), async (req: Request, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const userId = authed.auth!.userId;
   const chatId = req.params.chatId as string;
@@ -1604,7 +1609,7 @@ router.post('/requests/:chatId/accept', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/requests/:chatId/reject', async (req: Request, res: Response) => {
+router.post('/requests/:chatId/reject', requireModerationCapability('message'), async (req: Request, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const userId = authed.auth!.userId;
   const chatId = req.params.chatId as string;

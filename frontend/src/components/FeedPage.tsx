@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { CreateUnifiedPostModal } from './CreateUnifiedPostModal';
 import { LoadingState } from './LoadingState';
 import { LoadingIndicator } from './ui/LoadingIndicator';
+import type { ReportTargetDescriptor } from './ReportDialog';
 
 interface FeedPageProps {
   opportunities: Opportunity[];
@@ -36,6 +37,7 @@ interface FeedPageProps {
   onCreateEvent?: (event: any) => void;
   onViewProfile?: () => void;
   onViewStudentProfile?: (studentId: string) => void;
+  onReportTarget?: (target: ReportTargetDescriptor) => void;
 }
 
 export function FeedPage({ 
@@ -60,7 +62,8 @@ export function FeedPage({
   onCreatePost,
   onCreateEvent,
   onViewProfile,
-  onViewStudentProfile
+  onViewStudentProfile,
+  onReportTarget,
 }: FeedPageProps) {
   const [isCreateUnifiedModalOpen, setIsCreateUnifiedModalOpen] = useState(false);
   const [createTab, setCreateTab] = useState<'post' | 'event' | 'opportunity'>('post');
@@ -175,6 +178,7 @@ export function FeedPage({
                     onOpenPost={onOpenPost}
 
                     onViewProfile={onViewStudentProfile}
+                    onReportTarget={onReportTarget}
                   />
                 </div>
               ))}

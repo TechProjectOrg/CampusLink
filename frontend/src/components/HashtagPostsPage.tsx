@@ -3,6 +3,7 @@ import { Opportunity } from '../types';
 import { OpportunityCard } from './OpportunityCard';
 import { Button } from './ui/button';
 import { LoadingIndicator } from './ui/LoadingIndicator';
+import type { ReportTargetDescriptor } from './ReportDialog';
 
 interface HashtagPostsPageProps {
   hashtag: string;
@@ -20,6 +21,7 @@ interface HashtagPostsPageProps {
   onDeletePost: (postId: string) => void;
   onOpenPost: (post: Opportunity) => void;
   onViewProfile: (authorId: string) => void;
+  onReportTarget?: (target: ReportTargetDescriptor) => void;
 }
 
 export function HashtagPostsPage({
@@ -38,6 +40,7 @@ export function HashtagPostsPage({
   onDeletePost,
   onOpenPost,
   onViewProfile,
+  onReportTarget,
 }: HashtagPostsPageProps) {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
@@ -79,6 +82,7 @@ export function HashtagPostsPage({
                 onDeletePost={onDeletePost}
                 onOpenPost={onOpenPost}
                 onViewProfile={onViewProfile}
+                onReportTarget={onReportTarget}
               />
             ))
           )}

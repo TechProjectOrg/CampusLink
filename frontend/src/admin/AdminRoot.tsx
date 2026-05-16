@@ -331,8 +331,8 @@ type PostFilterState = {
 };
 
 type PostActionName = 'hide' | 'unhide' | 'delete' | 'restore' | 'warn' | 'suspend_author' | 'escalate';
-type AdminReportStatus = 'open' | 'reviewing' | 'resolved' | 'rejected' | 'escalated';
-type AdminReportTargetType = 'user' | 'post' | 'club';
+type AdminReportStatus = 'pending' | 'under_review' | 'resolved' | 'dismissed';
+type AdminReportTargetType = 'user' | 'post' | 'comment' | 'message' | 'club';
 type AdminReportAssigneeFilter = 'all' | 'me' | 'unassigned';
 
 type ReportFilterState = {
@@ -418,11 +418,10 @@ const DEFAULT_REPORT_FILTERS: ReportFilterState = {
 
 const REPORT_STATUS_OPTIONS: Array<{ value: ReportFilterState['status']; label: string }> = [
   { value: '', label: 'All statuses' },
-  { value: 'open', label: 'Open' },
-  { value: 'reviewing', label: 'Reviewing' },
-  { value: 'escalated', label: 'Escalated' },
+  { value: 'pending', label: 'Pending' },
+  { value: 'under_review', label: 'Under Review' },
   { value: 'resolved', label: 'Resolved' },
-  { value: 'rejected', label: 'Rejected' },
+  { value: 'dismissed', label: 'Dismissed' },
 ];
 
 const REPORT_SEVERITY_OPTIONS: Array<{ value: ReportFilterState['severity']; label: string }> = [
@@ -436,6 +435,8 @@ const REPORT_TARGET_OPTIONS: Array<{ value: ReportFilterState['targetType']; lab
   { value: 'user', label: 'Users' },
   { value: 'club', label: 'Clubs' },
   { value: 'post', label: 'Posts' },
+  { value: 'comment', label: 'Comments' },
+  { value: 'message', label: 'Messages' },
 ];
 
 const REPORT_ASSIGNEE_OPTIONS: Array<{ value: ReportFilterState['assignee']; label: string }> = [
@@ -651,28 +652,20 @@ function getVerificationActionOptions(
 function getReportActionOptions(
   report: Pick<AdminReportListItem, 'status'> & { assignedModerator?: string | null; assignee?: AdminReportActorSummary | null },
 ): Array<
-  | { type: 'status'; label: string; body: { status: AdminReportStatus; assignToMe?: boolean } }
-  | { type: 'assignment'; label: string; body: { clearAssignee: true } }
+  | { type: 'action'; label: string; body: { action: 'assign_to_me' | 'resolve' | 'dismiss' } }
 > {
   const actions: Array<
-    | { type: 'status'; label: string; body: { status: AdminReportStatus; assignToMe?: boolean } }
-    | { type: 'assignment'; label: string; body: { clearAssignee: true } }
+    | { type: 'action'; label: string; body: { action: 'assign_to_me' | 'resolve' | 'dismiss' } }
   > = [];
 
-  if (report.status !== 'reviewing') {
-    actions.push({ type: 'status', label: 'Review and assign to me', body: { status: 'reviewing', assignToMe: true } });
+  if (report.status !== 'under_review') {
+    actions.push({ type: 'action', label: 'Review and assign to me', body: { action: 'assign_to_me' } });
   }
   if (report.status !== 'resolved') {
-    actions.push({ type: 'status', label: 'Resolve', body: { status: 'resolved' } });
+    actions.push({ type: 'action', label: 'Resolve', body: { action: 'resolve' } });
   }
-  if (report.status !== 'rejected') {
-    actions.push({ type: 'status', label: 'Reject', body: { status: 'rejected' } });
-  }
-  if (report.status !== 'escalated') {
-    actions.push({ type: 'status', label: 'Escalate', body: { status: 'escalated' } });
-  }
-  if (report.assignedModerator || report.assignee) {
-    actions.push({ type: 'assignment', label: 'Unassign', body: { clearAssignee: true } });
+  if (report.status !== 'dismissed') {
+    actions.push({ type: 'action', label: 'Dismiss', body: { action: 'dismiss' } });
   }
 
   return actions;
@@ -815,6 +808,8 @@ function humanizeSettingKey(value: string): string {
 function getReportTargetKindLabel(targetType: AdminReportTargetType): string {
   if (targetType === 'user') return 'User';
   if (targetType === 'club') return 'Club';
+  if (targetType === 'comment') return 'Comment';
+  if (targetType === 'message') return 'Message';
   return 'Post';
 }
 
@@ -1472,12 +1467,18 @@ export default function AdminRoot() {
 
   const runReportAction = async (
     reportId: string,
-    body: { status?: AdminReportStatus; assignToMe?: boolean; clearAssignee?: boolean; internalNotes?: string },
+    body:
+      | { status?: AdminReportStatus; assignToMe?: boolean; clearAssignee?: boolean; internalNotes?: string }
+      | { action: 'assign_to_me' | 'resolve' | 'dismiss' | 'warn_user' | 'suspend_user' | 'ban_user' | 'delete_content'; reason?: string; durationDays?: number },
     successMessage: string,
   ) => {
     if (!token) return;
     try {
-      await apiAdminPost(`/admin/reports/${reportId}`, token, body, 'PATCH');
+      if ('action' in body) {
+        await apiAdminPost(`/admin/reports/${reportId}/actions`, token, body);
+      } else {
+        await apiAdminPost(`/admin/reports/${reportId}`, token, body, 'PATCH');
+      }
       toast.success(successMessage);
       await refreshCurrentPage();
       if (selectedReport?.id === reportId) {
@@ -1491,6 +1492,58 @@ export default function AdminRoot() {
   const saveReportInternalNotes = async () => {
     if (!selectedReport) return;
     await runReportAction(selectedReport.id, { internalNotes: reportInternalNotes }, 'Internal notes saved');
+  };
+
+  const runModerationActionForSelectedReport = async (
+    action: 'warn_user' | 'suspend_user' | 'ban_user' | 'delete_content' | 'dismiss' | 'resolve',
+  ) => {
+    if (!selectedReportDetail) return;
+
+    let reason = reportInternalNotes.trim();
+    if (!reason) {
+      const promptMessage =
+        action === 'warn_user'
+          ? 'Enter a warning reason'
+          : action === 'suspend_user'
+            ? 'Enter a suspension reason'
+            : action === 'ban_user'
+              ? 'Enter a ban reason'
+              : action === 'delete_content'
+                ? 'Enter a reason for deleting this content'
+                : action === 'dismiss'
+                  ? 'Enter a reason for dismissing this report'
+                  : 'Enter a resolution note';
+      reason = window.prompt(promptMessage, selectedReportDetail.reason) ?? '';
+    }
+    if (!reason.trim()) {
+      toast.error('A moderation reason is required.');
+      return;
+    }
+
+    const durationDays =
+      action === 'suspend_user'
+        ? Number(window.prompt('Suspend for how many days?', '7') ?? '7')
+        : undefined;
+
+    await runReportAction(
+      selectedReportDetail.id,
+      {
+        action,
+        reason: reason.trim(),
+        durationDays: action === 'suspend_user' && Number.isFinite(durationDays) ? Math.max(1, durationDays) : undefined,
+      },
+      action === 'warn_user'
+        ? 'Warning sent'
+        : action === 'suspend_user'
+          ? 'User suspended'
+          : action === 'ban_user'
+            ? 'User banned'
+            : action === 'delete_content'
+              ? 'Reported content removed'
+              : action === 'dismiss'
+                ? 'Report dismissed'
+                : 'Report resolved',
+    );
   };
 
   const addReportNote = async () => {
@@ -1821,7 +1874,7 @@ export default function AdminRoot() {
     goTo(targetPage, { source: 'dashboard', metric: metricKey, range: dashboardRange });
   };
 
-  const notificationCount = dashboard?.moderationQueue?.length ?? reports.filter((item) => ['open', 'reviewing', 'escalated'].includes(item.status)).length ?? 0;
+  const notificationCount = dashboard?.moderationQueue?.length ?? reports.filter((item) => ['pending', 'under_review'].includes(item.status)).length ?? 0;
 
   if (!token) return null;
 
@@ -2527,8 +2580,8 @@ export default function AdminRoot() {
                           <td className="px-3 py-3">
                             <div className="flex flex-wrap gap-2">
                               <Button variant="outline" size="sm" onClick={() => void openReportDrawer(report)}>Open</Button>
-                              {report.status !== 'reviewing' ? (
-                                <Button variant="outline" size="sm" onClick={() => void runReportAction(report.id, { status: 'reviewing', assignToMe: true }, 'Report assigned and moved to review')}>Review</Button>
+                              {report.status !== 'under_review' ? (
+                                <Button variant="outline" size="sm" onClick={() => void runReportAction(report.id, { action: 'assign_to_me' }, 'Report assigned and moved to review')}>Review</Button>
                               ) : null}
                             </div>
                           </td>
@@ -3805,6 +3858,23 @@ export default function AdminRoot() {
               </div>
             </ShellCard>
 
+            <ShellCard title="Review Metadata">
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-slate-200 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Reviewed by</p>
+                  <p className="mt-2 text-sm text-slate-800">{selectedReportDetail.reviewedBy?.username ?? 'Not reviewed yet'}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Reviewed at</p>
+                  <p className="mt-2 text-sm text-slate-800">{formatDate(selectedReportDetail.reviewedAt)}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 px-4 py-3">
+                  <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Action taken</p>
+                  <p className="mt-2 text-sm text-slate-800">{selectedReportDetail.actionTaken || 'No direct action yet'}</p>
+                </div>
+              </div>
+            </ShellCard>
+
             <ShellCard title="Evidence and Reason">
               <div className="space-y-3">
                 <div>
@@ -3844,21 +3914,43 @@ export default function AdminRoot() {
                     key={`${action.type}-${action.label}`}
                     variant="outline"
                     size="sm"
-                    onClick={() =>
-                      void runReportAction(
-                        selectedReportDetail.id,
-                        action.body,
-                        action.type === 'assignment'
-                          ? 'Report unassigned'
-                          : action.body.status === 'reviewing'
-                            ? 'Report assigned and moved to review'
-                            : `Report ${action.body.status}`,
-                      )
-                    }
+                    onClick={() => void runReportAction(selectedReportDetail.id, action.body, action.label)}
                   >
                     {action.label}
                   </Button>
                 ))}
+                {selectedReportDetail.targetUserId ? (
+                  <>
+                    <Button variant="outline" size="sm" onClick={() => void runModerationActionForSelectedReport('warn_user')}>Warn user</Button>
+                    <Button variant="outline" size="sm" onClick={() => void runModerationActionForSelectedReport('suspend_user')}>Suspend user</Button>
+                    <Button variant="outline" size="sm" onClick={() => void runModerationActionForSelectedReport('ban_user')}>Ban user</Button>
+                  </>
+                ) : null}
+                {selectedReportDetail.targetType !== 'user' && selectedReportDetail.targetType !== 'club' ? (
+                  <Button variant="outline" size="sm" onClick={() => void runModerationActionForSelectedReport('delete_content')}>Delete content</Button>
+                ) : null}
+              </div>
+            </ShellCard>
+
+            <ShellCard title="Report Submissions">
+              <div className="space-y-3">
+                {selectedReportDetail.submissions.length === 0 ? (
+                  <EmptyPanel title="No submissions" body="User reports attached to this case will appear here." />
+                ) : (
+                  selectedReportDetail.submissions.map((submission) => (
+                    <div key={submission.id} className="rounded-xl border border-slate-200 px-4 py-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-slate-800">{submission.reporter?.username ?? 'Anonymous reporter'}</p>
+                          <p className="mt-1 text-xs text-slate-500">{formatDate(submission.createdAt)}</p>
+                        </div>
+                        <StatusBadge value="info" />
+                      </div>
+                      <p className="mt-3 text-sm font-medium text-slate-700">{submission.reason}</p>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">{submission.description || 'No additional details provided.'}</p>
+                    </div>
+                  ))
+                )}
               </div>
             </ShellCard>
 

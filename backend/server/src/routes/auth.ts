@@ -13,6 +13,7 @@ import {
   verifyPasswordResetToken,
   verifyVerificationActionToken,
 } from '../lib/auth';
+import { assertCanLogin, getModerationState } from '../lib/moderation';
 import { uploadVerificationProofToStorage } from '../lib/objectStorage';
 import { invalidateUserCache } from '../lib/userCache';
 import { sendMagicLinkEmail, sendPasswordResetEmail } from '../lib/authEmail';
@@ -85,6 +86,7 @@ interface ExistingUserRow {
   auth_provider: AuthProvider;
   google_subject: string | null;
   verification_state: UserVerificationState | null;
+  is_banned: boolean;
   created_at: Date;
 }
 
@@ -487,6 +489,7 @@ async function findUserByEmail(email: string): Promise<ExistingUserRow | null> {
       auth_provider::text AS auth_provider,
       google_subject,
       verification_state::text AS verification_state,
+      is_banned,
       created_at
     FROM users
     WHERE email = ${email}
@@ -707,6 +710,9 @@ async function buildAuthenticatedResponse(userId: string, req: Request, fallback
     passingYear?: number;
   };
 }): Promise<Record<string, unknown>> {
+  const moderationState = await getModerationState(userId);
+  assertCanLogin(moderationState);
+
   const session = await createAuthSession(userId, req);
   const profile = await getUserProfileById(userId);
 
@@ -751,6 +757,7 @@ async function buildAuthenticatedResponse(userId: string, req: Request, fallback
       followingCount: 0,
       postCount: 0,
     },
+    moderation: moderationState,
     token: signAuthToken({
       userId,
       email: fallback.email,
@@ -1307,6 +1314,13 @@ router.post('/login', async (req: Request, res: Response) => {
     const passwordMatches = await verifyPassword(password, user.password_hash as never);
     if (!passwordMatches) {
       return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    if (user.is_banned) {
+      return res.status(403).json({
+        message: 'Your account has been permanently banned due to repeated violations.',
+        code: 'ACCOUNT_BANNED',
+      });
     }
 
     const isAdminAccount = await userHasAdminAccount(user.user_id);

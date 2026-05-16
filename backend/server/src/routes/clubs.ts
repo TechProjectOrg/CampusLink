@@ -3,6 +3,7 @@ import multer from 'multer';
 import { Prisma } from '@prisma/client';
 import prisma from '../prisma';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
+import requireModerationCapability from '../middleware/requireModerationCapability';
 import {
   ensureUniqueClubSlug,
   normalizeClubCategoryName,
@@ -326,6 +327,7 @@ router.get('/', async (req: Request, res: Response) => {
 
 router.post(
   '/',
+  requireModerationCapability('community'),
   clubMediaUpload.fields([
     { name: 'avatar', maxCount: 1 },
     { name: 'coverImage', maxCount: 1 },
@@ -572,6 +574,7 @@ router.get('/:clubId/posts', async (req: Request<{ clubId: string }>, res: Respo
 
 router.patch(
   '/:clubId',
+  requireModerationCapability('community'),
   clubMediaUpload.fields([
     { name: 'avatar', maxCount: 1 },
     { name: 'coverImage', maxCount: 1 },
@@ -718,7 +721,7 @@ router.patch(
   },
 );
 
-router.patch('/:clubId/members/:userId/role', async (req: Request<{ clubId: string; userId: string }>, res: Response) => {
+router.patch('/:clubId/members/:userId/role', requireModerationCapability('community'), async (req: Request<{ clubId: string; userId: string }>, res: Response) => {
   const viewerUserId = getAuthedUserId(req);
   const permissions = await getCachedClubPermissionSnapshot(req.params.clubId, viewerUserId);
   if (permissions?.membershipRole !== 'owner') {
@@ -764,7 +767,7 @@ router.patch('/:clubId/members/:userId/role', async (req: Request<{ clubId: stri
   }
 });
 
-router.delete('/:clubId', async (req: Request<{ clubId: string }>, res: Response) => {
+router.delete('/:clubId', requireModerationCapability('community'), async (req: Request<{ clubId: string }>, res: Response) => {
   const viewerUserId = getAuthedUserId(req);
   const permissions = await getCachedClubPermissionSnapshot(req.params.clubId, viewerUserId);
   if (permissions?.membershipRole !== 'owner') {
@@ -807,7 +810,7 @@ router.delete('/:clubId', async (req: Request<{ clubId: string }>, res: Response
   }
 });
 
-router.post('/:clubId/join', async (req: Request<{ clubId: string }>, res: Response) => {
+router.post('/:clubId/join', requireModerationCapability('community'), async (req: Request<{ clubId: string }>, res: Response) => {
   const viewerUserId = getAuthedUserId(req);
   const clubRow = await loadClubBySlugOrId(req.params.clubId, viewerUserId);
   if (!clubRow) {
@@ -869,7 +872,7 @@ router.post('/:clubId/join', async (req: Request<{ clubId: string }>, res: Respo
   }
 });
 
-router.post('/:clubId/approve', async (req: Request<{ clubId: string }>, res: Response) => {
+router.post('/:clubId/approve', requireModerationCapability('community'), async (req: Request<{ clubId: string }>, res: Response) => {
   const viewerUserId = getAuthedUserId(req);
   const permissions = await getCachedClubPermissionSnapshot(req.params.clubId, viewerUserId);
   if (!permissions?.canModerateMembers) {
@@ -920,7 +923,7 @@ router.post('/:clubId/approve', async (req: Request<{ clubId: string }>, res: Re
   }
 });
 
-router.post('/:clubId/invite', async (req: Request<{ clubId: string }>, res: Response) => {
+router.post('/:clubId/invite', requireModerationCapability('community'), async (req: Request<{ clubId: string }>, res: Response) => {
   const viewerUserId = getAuthedUserId(req);
   const permissions = await getCachedClubPermissionSnapshot(req.params.clubId, viewerUserId);
   if (!permissions?.canInviteMembers) {
@@ -968,7 +971,7 @@ router.post('/:clubId/invite', async (req: Request<{ clubId: string }>, res: Res
   }
 });
 
-router.post('/:clubId/leave', async (req: Request<{ clubId: string }>, res: Response) => {
+router.post('/:clubId/leave', requireModerationCapability('community'), async (req: Request<{ clubId: string }>, res: Response) => {
   const viewerUserId = getAuthedUserId(req);
 
   try {
@@ -1005,7 +1008,7 @@ router.post('/:clubId/leave', async (req: Request<{ clubId: string }>, res: Resp
   }
 });
 
-router.post('/:clubId/remove', async (req: Request<{ clubId: string }>, res: Response) => {
+router.post('/:clubId/remove', requireModerationCapability('community'), async (req: Request<{ clubId: string }>, res: Response) => {
   const viewerUserId = getAuthedUserId(req);
   const permissions = await getCachedClubPermissionSnapshot(req.params.clubId, viewerUserId);
   if (!permissions?.canModerateMembers) {
