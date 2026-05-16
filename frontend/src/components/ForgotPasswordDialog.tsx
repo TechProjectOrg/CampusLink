@@ -47,7 +47,7 @@ export function ForgotPasswordDialog({ open, onOpenChange, defaultIdentifier = '
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto hide-scrollbar">
         <DialogHeader>
           <DialogTitle>Password reset</DialogTitle>
           <DialogDescription>

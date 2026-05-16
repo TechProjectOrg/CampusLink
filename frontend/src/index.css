@@ -5039,6 +5039,33 @@ div[style*="width: 25%"]::webkit-scrollbar {
   display: none;
 }
 
+.cl-settings-page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - 4rem);
+  min-height: 0;
+  padding-bottom: 0;
+  overflow: hidden;
+}
+
+.cl-settings-content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+.cl-settings-content.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.cl-settings-content.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 @media (max-width: 639px) {
   .cl-feed-page {
     max-width: none !important;

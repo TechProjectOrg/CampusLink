@@ -962,8 +962,9 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
   };
 
   return (
-    <div className="cl-settings-page min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
-      <div className="cl-settings-shell max-w-4xl mx-auto px-4 py-6 space-y-6">
+    <div className="cl-settings-page">
+      <div className="cl-settings-content hide-scrollbar bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in">
+        <div className="cl-settings-shell max-w-4xl mx-auto px-4 py-6 space-y-6">
         <div className="mb-6">
           <h1 className="text-gray-900">Settings</h1>
           <p className="text-gray-600">Manage your account settings and preferences</p>
@@ -1417,6 +1418,7 @@ export function SettingsPage({ student, onEdit, onUpdateSettings }: SettingsPage
             </Card>
           </TabsContent>
         </Tabs>
+        </div>
       </div>
       <ForgotPasswordDialog
         open={forgotPasswordOpen}
