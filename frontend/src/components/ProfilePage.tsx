@@ -1315,46 +1315,6 @@ export function ProfilePage({
       <div className="mx-auto grid w-full [grid-template-columns:1fr] gap-4" style={{ maxWidth: '1000px' }}>
         {/* Modern Profile Header: Cover + Overlapping Avatar + Stacked Content */}
         <section className="cl-profile-header relative bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
-          {!isOwnProfile ? (
-            <div className="absolute right-4 top-4 z-20">
-              <button
-                type="button"
-                onClick={() => setShowProfileActions((current) => !current)}
-                className="rounded-full bg-white/90 p-2 text-slate-700 shadow-sm hover:bg-white"
-                aria-label="Profile actions"
-              >
-                <MoreHorizontal className="h-5 w-5" />
-              </button>
-              {showProfileActions ? (
-                <div className="mt-2 w-40 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowProfileActions(false);
-                      if (isBlockedByViewer) {
-                        void onUnblockUser?.(student.id);
-                      } else {
-                        setShowBlockConfirm(true);
-                      }
-                    }}
-                    className="block w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-50"
-                  >
-                    {isBlockedByViewer ? 'Unblock User' : 'Block User'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowProfileActions(false);
-                      window.alert('Reporting UI will be connected in a later pass.');
-                    }}
-                    className="mt-1 block w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-slate-700 hover:bg-slate-50"
-                  >
-                    Report User
-                  </button>
-                </div>
-              ) : null}
-            </div>
-          ) : null}
           <div className="mx-auto w-full max-w-[1000px]">
           
           {/* Banner/Cover Section */}
@@ -1367,6 +1327,47 @@ export function ProfilePage({
               />
             ) : null}
             <div className="absolute inset-0 bg-black/5" />
+
+            {!isOwnProfile ? (
+              <div className="absolute right-4 top-4 z-30">
+                <button
+                  type="button"
+                  onClick={() => setShowProfileActions((current) => !current)}
+                  className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-white/90 bg-white/20 text-white shadow-lg backdrop-blur-md transition hover:scale-105 hover:bg-white/30"
+                  aria-label="Profile actions"
+                >
+                  <MoreHorizontal className="h-5 w-5" />
+                </button>
+                {showProfileActions ? (
+                  <div className="absolute right-0 mt-3 w-56 rounded-3xl border border-slate-200 bg-white p-2.5 shadow-2xl">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowProfileActions(false);
+                        if (isBlockedByViewer) {
+                          void onUnblockUser?.(student.id);
+                        } else {
+                          setShowBlockConfirm(true);
+                        }
+                      }}
+                      className="block w-full whitespace-nowrap rounded-2xl px-4 py-3 text-left text-base font-semibold text-red-600 transition hover:bg-red-50"
+                    >
+                      {isBlockedByViewer ? 'Unblock User' : 'Block User'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowProfileActions(false);
+                        window.alert('Reporting UI will be connected in a later pass.');
+                      }}
+                      className="mt-1.5 block w-full whitespace-nowrap rounded-2xl px-4 py-3 text-left text-base font-semibold text-slate-700 transition hover:bg-slate-50"
+                    >
+                      Report User
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             
             {/* Banner Edit Button (Owner Only) */}
             {isOwnProfile && (
