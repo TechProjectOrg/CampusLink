@@ -603,6 +603,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
         onAddMember={handleAddGroupMember}
         onDeleteGroup={handleDeleteGroup}
         onLeaveGroup={handleLeaveGroup}
+        onReportTarget={onReportTarget}
         onRemoveMember={handleRemoveGroupMember}
         onMakeAdmin={handleMakeGroupAdmin}
         onRemoveAdmin={handleRemoveGroupAdmin}

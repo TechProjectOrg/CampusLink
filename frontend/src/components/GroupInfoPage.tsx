@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Calendar, Crown, Flag, LogOut, MoreVertical, Shield, UserMinus, UserPlus, Users } from 'lucide-react';
 import { Student } from '../types';
 import type { GroupChatDetailsApi } from '../lib/chatApi';
+import type { ReportTargetDescriptor } from './ReportDialog';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Badge } from './ui/badge';
@@ -29,6 +30,7 @@ interface GroupInfoPageProps {
   onRemoveAdmin?: (groupId: string, memberId: string) => void | Promise<void>;
   onAddMember?: (groupId: string, memberId: string) => void | Promise<void>;
   onDeleteGroup?: (groupId: string) => void | Promise<void>;
+  onReportTarget?: (target: ReportTargetDescriptor) => void;
   onGroupPhotoChange?: (
     groupId: string,
     payload: { file?: File; previewUrl?: string; remove?: boolean },
@@ -49,6 +51,7 @@ export function GroupInfoPage({
   onRemoveAdmin,
   onAddMember,
   onDeleteGroup,
+  onReportTarget,
   onGroupPhotoChange,
   onGroupDescriptionSave,
 }: GroupInfoPageProps) {
@@ -413,7 +416,17 @@ export function GroupInfoPage({
                   Delete Group
                 </Button>
               )}
-              <Button variant="outline" className="w-full justify-start rounded-xl" type="button">
+              <Button
+                variant="outline"
+                className="w-full justify-start rounded-xl"
+                type="button"
+                onClick={() => onReportTarget?.({
+                  targetType: 'club',
+                  targetId: group.id,
+                  label: `Group chat: ${group.name}`,
+                  preview: group.description ?? 'Group chat',
+                })}
+              >
                 <Flag className="w-4 h-4 mr-2" />
                 Report Group
               </Button>
@@ -428,7 +441,17 @@ export function GroupInfoPage({
               <h3 className="text-gray-900">Member Settings</h3>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Button variant="outline" className="w-full justify-start rounded-xl" type="button">
+              <Button
+                variant="outline"
+                className="w-full justify-start rounded-xl"
+                type="button"
+                onClick={() => onReportTarget?.({
+                  targetType: 'club',
+                  targetId: group.id,
+                  label: `Group chat: ${group.name}`,
+                  preview: group.description ?? 'Group chat',
+                })}
+              >
                 <Flag className="w-4 h-4 mr-2" />
                 Report Group
               </Button>
