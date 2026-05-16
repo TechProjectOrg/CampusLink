@@ -107,18 +107,15 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   const typingUserIds = useAppDataSelector((state) =>
     selectedChat ? state.chat.typingByConversationId[selectedChat] ?? [] : [],
   );
-  const usersById = useAppDataSelector((state) => state.usersById);
   const chatMessages = selectedChatState?.messages ?? [];
-  const postsById = useAppDataSelector((state) => state.postsById);
 
-  function PostPreview({ postId, userText }: { postId: string; userText?: string | null }) {
+  function PostPreview({ postId }: { postId: string }) {
     const appData = useAppDataStore();
     const post = useAppDataSelector((s) => s.postsById[postId]);
 
     const [isLoading, setIsLoading] = useState(false);
     const [notAvailable, setNotAvailable] = useState(false);
 
-    // fetch post if missing and wait for hydration so UI updates from loading -> preview
     useEffect(() => {
       if (post) return;
       let mounted = true;
@@ -127,13 +124,9 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
           if (!mounted) return;
           setIsLoading(true);
           await appData.refreshPost(postId);
-          // if refreshPost completed but post still missing, likely access restricted
           const snap = appData.getSnapshot?.()?.postsById?.[postId] ?? null;
-          if (mounted && !snap) {
-            setNotAvailable(true);
-          } else if (mounted) {
-            setNotAvailable(false);
-          }
+          if (mounted && !snap) setNotAvailable(true);
+          else if (mounted) setNotAvailable(false);
         } catch (e) {
           // ignore
         } finally {
@@ -148,7 +141,6 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
         if (typeof window !== 'undefined') {
           const path = `/post/${postId}`;
           window.history.pushState({ tab: 'post', postId }, '', path);
-          // notify app to re-evaluate route
           window.dispatchEvent(new PopStateEvent('popstate'));
         }
       } catch (e) {
@@ -170,42 +162,39 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
       return (
         <div className="min-w-0">
           <div className="rounded-xl overflow-hidden border bg-white shadow-sm p-3">
-            {isLoading ? <LoadingIndicator label="Loading post..." /> : <p className="text-sm text-gray-500">Post</p>}
+            {isLoading ? <LoadingIndicator label="Loading post..." /> : null}
           </div>
-          {userText ? <p className="text-sm mt-2 break-words">{userText}</p> : null}
         </div>
       );
     }
+
+    const imageUrl = (post as any).image ?? (post as any).media?.[0]?.mediaUrl ?? (post as any).mediaUrl ?? null;
 
     return (
       <div className="min-w-0">
         <button type="button" onClick={openPost} className="w-full text-left">
           <div className="rounded-xl overflow-hidden border bg-white shadow-sm">
-            <div className="flex items-center gap-3 p-3">
-              {(() => {
-                const imageUrl = (post as any).image ?? (post as any).media?.[0]?.mediaUrl ?? (post as any).mediaUrl ?? null;
-                const title = (post as any).title ?? (post as any).contentText ?? '';
-                const desc = (post as any).description ?? (post as any).contentText ?? '';
-                return (
-                  <>
-                    {imageUrl ? (
-                      <div className="flex-shrink-0 w-28 h-20 overflow-hidden rounded-md bg-gray-100">
-                        <ImageWithFallback src={imageUrl} alt={title} className="w-full h-full object-cover" />
-                      </div>
-                    ) : (
-                      <div className="flex-shrink-0 w-10 h-10 rounded-full bg-gray-100" />
-                    )}
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{title}</p>
-                      {desc ? <p className="text-xs text-gray-500 truncate mt-1">{desc}</p> : null}
-                    </div>
-                  </>
-                );
-              })()}
+            {/* Header: show post owner's username + avatar (not the sharer) */}
+            {(post.authorUsername || post.authorProfilePictureUrl) && (
+              <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+                <Avatar className="w-6 h-6">
+                  <AvatarImage src={post.authorProfilePictureUrl ?? undefined} />
+                  <AvatarFallback>{(post.authorUsername ?? 'u')[0]}</AvatarFallback>
+                </Avatar>
+                <p className="text-sm font-medium text-gray-700 truncate">@{post.authorUsername ?? 'unknown'}</p>
+              </div>
+            )}
+            <div className="p-3 flex items-center justify-center">
+              {imageUrl ? (
+                <div className="w-64 h-40 overflow-hidden bg-gray-100 rounded-md">
+                  <ImageWithFallback src={imageUrl} alt="shared post image" className="w-full h-full object-cover" />
+                </div>
+              ) : (
+                <div className="w-64 h-40 bg-gray-100 rounded-md" />
+              )}
             </div>
           </div>
         </button>
-        {userText ? <p className="text-sm mt-2 break-words">{userText}</p> : null}
       </div>
     );
   }
@@ -215,7 +204,6 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   const nextCursor = selectedChatState?.nextCursor ?? null;
   const typingUsers = typingUserIds
     .filter((userId) => userId !== currentUserId)
-    .map((userId) => usersById[userId]?.name ?? (selectedConversation?.participantId === userId ? selectedConversation.participantName : 'Someone'));
 
   const typingStatusLabel =
     typingUsers.length === 0
@@ -1022,6 +1010,43 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                   const showGroupStartTime = startsSenderGroup && groupHasMultipleMessages;
                   const isSystemMessage = msg.type === 'system';
 
+                  // prepare content element and detect post preview
+                  const _contentRaw = msg.content ?? '';
+                  const _postUrlMatch = _contentRaw.match(/https?:\/\/[\w.-]+\/posts?\/([A-Za-z0-9_-]+)(?![A-Za-z0-9_-])/) || _contentRaw.match(/\/posts?\/([A-Za-z0-9_-]+)(?![A-Za-z0-9_-])/);
+                  const _messageWithoutLink = _postUrlMatch
+                    ? _contentRaw
+                        // remove full absolute post URL first
+                        .replace(/https?:\/\/[\w.-]+(?::\d+)?\/posts?\/[A-Za-z0-9_-]+(?![A-Za-z0-9_-])/g, '')
+                        // remove relative post URL fallback
+                        .replace(/\/posts?\/[A-Za-z0-9_-]+(?![A-Za-z0-9_-])/g, '')
+                        // remove leftover bare origin if any remains
+                        .replace(/https?:\/\/[\w.-]+(?::\d+)?\/?/g, '')
+                        .replace(/\s+/g, ' ')
+                        .trim()
+                    : '';
+                  let contentElement: any = null;
+                  let isPostPreview = false;
+                  if (msg.type === 'image' && msg.attachments[0]?.fileUrl) {
+                    contentElement = (
+                      <img src={msg.attachments[0].fileUrl} alt="Chat attachment" className="max-h-72 rounded-2xl object-cover" />
+                    );
+                  } else if (_postUrlMatch) {
+                    const postId = _postUrlMatch[1];
+                    isPostPreview = true;
+                    contentElement = (
+                      <div className="min-w-0">
+                        <PostPreview postId={postId} />
+                        {_messageWithoutLink ? (
+                          <p className={`mt-5 px-2 py-1 text-sm break-words ${msg.isOwn ? 'text-white' : 'text-gray-900'}`}>
+                            {_messageWithoutLink}
+                          </p>
+                        ) : null}
+                      </div>
+                    );
+                  } else {
+                    contentElement = <p className="text-sm break-words">{_contentRaw}</p>;
+                  }
+
                   return (
                     <div key={msg.id} id={`chat-message-${msg.id}`} data-chat-scroll-message={msg.id}>
                       {showDate && (
@@ -1070,7 +1095,9 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                           )}
                           <div className="flex items-center gap-2">
                             <div
-                              className={`cl-chat-bubble ${msg.isOwn ? 'order-2 cl-chat-bubble-own' : 'order-1 cl-chat-bubble-other'} min-w-0 w-fit max-w-full rounded-3xl px-3 py-2 transition-shadow duration-200 md:px-4 md:py-2.5 ${
+                              className={`cl-chat-bubble ${msg.isOwn ? 'order-2 cl-chat-bubble-own' : 'order-1 cl-chat-bubble-other'} min-w-0 w-fit max-w-full rounded-3xl transition-shadow duration-200 ${
+                                isPostPreview ? 'px-1 py-1 md:px-2 md:py-1' : 'px-3 py-2 md:px-4 md:py-2.5'
+                              } ${
                                 msg.isOwn
                                   ? 'bg-primary text-white'
                                   : 'bg-gray-100 text-gray-900'
@@ -1093,38 +1120,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                                   </div>
                                 </button>
                               )}
-                              {msg.type === 'image' && msg.attachments[0]?.fileUrl ? (
-                                <img
-                                  src={msg.attachments[0].fileUrl}
-                                  alt="Chat attachment"
-                                  className="max-h-72 rounded-2xl object-cover"
-                                />
-                              ) : (
-                                (() => {
-                                  const content = msg.content ?? '';
-                                  // detect post URL like /post(s)/<id> or full origin (accept letters/digits/_/- ids)
-                                  const postUrlMatch = content.match(/https?:\/\/[\w.-]+\/posts?\/([A-Za-z0-9_-]+)(?![A-Za-z0-9_-])/) || content.match(/\/posts?\/([A-Za-z0-9_-]+)(?![A-Za-z0-9_-])/);
-                                  if (postUrlMatch) {
-                                    const postId = postUrlMatch[1];
-                                    const post = postsById[postId];
-                                    const url = (postUrlMatch[0] && postUrlMatch[0].startsWith('/')) ? `${window.location.origin}${postUrlMatch[0]}` : postUrlMatch[0];
-                                    let userText = content.replace(postUrlMatch[0], '').trim();
-                                    try {
-                                      // hide leftover origin-only links (e.g. "http://localhost:3000") — not useful as user text
-                                      const originOnly = /^https?:\/\/[\w.-]+:\d+\/?$/.test(userText) || /^https?:\/\/[\w.-]+\/?$/.test(userText);
-                                      if (!userText || originOnly) userText = '';
-                                    } catch (e) {
-                                      // ignore regex errors
-                                    }
-                                    if (post) {
-                                      return <PostPreview postId={postId} userText={userText || undefined} />;
-                                    }
-                                    // trigger fetch + render preview component which will fetch
-                                    return <PostPreview postId={postId} userText={userText || undefined} />;
-                                  }
-                                  return <p className="text-sm break-words">{content}</p>;
-                                })()
-                              )}
+                              {contentElement}
                             </div>
                             <div
                               data-chat-message-actions
