@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Home, Search, Users, MessageCircle, BookOpen, User, Bell, Settings, LogOut, Menu } from 'lucide-react';
+import { Home, Search, Users, MessageCircle, BookOpen, User, Bell, Settings, LogOut, Menu, Bookmark } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
 import {
@@ -14,12 +14,13 @@ import { useAuth } from '../context/AuthContext';
 interface NavbarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
+  onOpenSavedPosts?: () => void;
   unreadCount?: number;
   unreadNotifications?: number;
   onSearch?: (query: string) => void;
 }
 
-export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifications = 0, onSearch }: NavbarProps) {
+export function Navbar({ activeTab, onTabChange, onOpenSavedPosts, unreadCount = 0, unreadNotifications = 0, onSearch }: NavbarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const { logout, profile } = useAuth();
@@ -202,6 +203,10 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
                   <User className="mr-2 h-4 w-4" />
                   <span>Profile</span>
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onOpenSavedPosts?.()}>
+                  <Bookmark className="mr-2 h-4 w-4" />
+                  <span>Saved Posts</span>
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => handleTabNavigate('settings')}>
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Settings</span>
@@ -260,6 +265,10 @@ export function Navbar({ activeTab, onTabChange, unreadCount = 0, unreadNotifica
                   <DropdownMenuItem onClick={() => handleTabNavigate('profile')}>
                     <User className="mr-2 h-4 w-4" />
                     <span>Profile</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onOpenSavedPosts?.()}>
+                    <Bookmark className="mr-2 h-4 w-4" />
+                    <span>Saved Posts</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleTabNavigate('settings')}>
                     <Settings className="mr-2 h-4 w-4" />

@@ -6,6 +6,7 @@ import { FeedPage } from './components/FeedPage';
 import { ProfilePage } from './components/ProfilePage';
 import { ProfilePostsPage } from './components/ProfilePostsPage';
 import { ProfileProjectsPage } from './components/ProfileProjectsPage';
+import { SavedPostsPage } from './components/SavedPostsPage';
 import { SearchPage } from './components/SearchPage';
 import { NetworkPage } from './components/NetworkPage';
 import { ChatPage } from './components/ChatPage';
@@ -672,7 +673,7 @@ export default function App() {
   const [requestIdMap, setRequestIdMap] = useState<RequestIdMap>({});
   const [suggestedUserIds, setSuggestedUserIds] = useState<string[]>([]);
   const [viewingProfileId, setViewingProfileId] = useState<string | null>(null);
-  const [profileSubpage, setProfileSubpage] = useState<'posts' | 'projects' | null>(null);
+  const [profileSubpage, setProfileSubpage] = useState<'posts' | 'projects' | 'saved' | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedHashtag, setSelectedHashtag] = useState<string | null>(null);
   const [postsRefreshToken, setPostsRefreshToken] = useState(0);
@@ -778,7 +779,7 @@ export default function App() {
 
         if (mainPath === 'profile' && pathParts[1]) {
             setViewingProfileId(pathParts[1]);
-            setProfileSubpage(pathParts[2] === 'posts' || pathParts[2] === 'projects' ? pathParts[2] : null);
+            setProfileSubpage(pathParts[2] === 'posts' || pathParts[2] === 'projects' || pathParts[2] === 'saved' ? pathParts[2] : null);
             setOpenedPostId(null);
             setOpenedPost(null);
             setOpenedPostComments(createInitialDiscussionPageState<Comment>());
@@ -849,10 +850,10 @@ export default function App() {
     tab: string,
     profileId?: string,
     postId?: string,
-    options?: { commentId?: string; hashtag?: string; clubSlug?: string; profileSubpage?: 'posts' | 'projects' }
+    options?: { commentId?: string; hashtag?: string; clubSlug?: string; profileSubpage?: 'posts' | 'projects' | 'saved' }
   ) => {
     let path = `/${tab}`;
-    const state: { tab: string; profileId?: string; postId?: string; commentId?: string; hashtag?: string; clubSlug?: string; profileSubpage?: 'posts' | 'projects' } = { tab };
+    const state: { tab: string; profileId?: string; postId?: string; commentId?: string; hashtag?: string; clubSlug?: string; profileSubpage?: 'posts' | 'projects' | 'saved' } = { tab };
     if (tab === 'profile' && profileId) {
         path += `/${profileId}`;
         if (options?.profileSubpage) {
@@ -1474,38 +1475,49 @@ export default function App() {
     })();
   };
 
-  const handleSave = (opportunityId: string) => {
+  const handleSave = async (
+    opportunityId: string,
+    currentSavedState?: boolean,
+    currentSaveCount?: number,
+  ) => {
     if (guardRestrictedAction()) return;
     const target =
       opportunities.find((opp) => opp.id === opportunityId) ??
-      hashtagOpportunities.find((opp) => opp.id === opportunityId);
-    if (!target) return;
-    const nextSaved = !(target.isSavedByMe ?? target.saved.includes(currentUserId));
-    const previousSaved = Boolean(target.isSavedByMe ?? target.saved.includes(currentUserId));
-    const previousSaveCount = Math.max(target.saveCount ?? target.saved.length, 0);
+      hashtagOpportunities.find((opp) => opp.id === opportunityId) ??
+      (openedPostForDisplay?.id === opportunityId ? openedPostForDisplay : null);
+    const previousSaved = target
+      ? Boolean(target.isSavedByMe ?? target.saved.includes(currentUserId))
+      : Boolean(currentSavedState);
+    const previousSaveCount = target
+      ? Math.max(target.saveCount ?? target.saved.length, 0)
+      : Math.max(currentSaveCount ?? 0, 0);
+    const nextSaved = !previousSaved;
 
-    appData.updatePost(opportunityId, (post) => ({
-      ...post,
-      isSavedByMe: nextSaved,
-      saveCount: Math.max(post.saveCount + (nextSaved ? 1 : -1), 0),
-    }));
+    if (target) {
+      appData.updatePost(opportunityId, (post) => ({
+        ...post,
+        isSavedByMe: nextSaved,
+        saveCount: Math.max(post.saveCount + (nextSaved ? 1 : -1), 0),
+      }));
+    }
 
-    void (async () => {
-      try {
-        if (nextSaved) {
-          await apiSavePost(opportunityId, authToken);
-        } else {
-          await apiUnsavePost(opportunityId, authToken);
-        }
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : 'Unable to update save');
+    try {
+      if (nextSaved) {
+        await apiSavePost(opportunityId, authToken);
+      } else {
+        await apiUnsavePost(opportunityId, authToken);
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Unable to update save');
+      if (target) {
         appData.updatePost(opportunityId, (post) => ({
           ...post,
           isSavedByMe: previousSaved,
           saveCount: previousSaveCount,
         }));
       }
-    })();
+      throw err;
+    }
   };
 
   const loadInitialPostComments = useCallback(async (postId: string) => {
@@ -2531,6 +2543,10 @@ export default function App() {
     navigate('profile', studentId, undefined, { profileSubpage: 'projects' });
   };
 
+  const handleViewSavedPosts = () => {
+    navigate('profile', currentUserId, undefined, { profileSubpage: 'saved' });
+  };
+
   useEffect(() => {
     if (!authToken) return;
     if (activeTab !== 'profile') return;
@@ -2730,6 +2746,7 @@ export default function App() {
       <Navbar 
         activeTab={activeTab} 
         onTabChange={handleTabChange}
+        onOpenSavedPosts={handleViewSavedPosts}
         unreadCount={unreadCount}
         unreadNotifications={unreadNotifications}
         onSearch={setSearchQuery}
@@ -2903,6 +2920,23 @@ export default function App() {
                 isOwnProfile={displayedStudent.id === currentUserId}
                 onBack={() => navigate('profile', displayedStudent.id)}
                 onOpenPost={handleOpenPost}
+              />
+            ) : profileSubpage === 'saved' ? (
+              <SavedPostsPage
+                student={currentUser}
+                currentUserId={currentUserId}
+                onBack={() => navigate('profile', currentUserId)}
+                onLike={handleLike}
+                onSave={handleSave}
+                onComment={handleComment}
+                onReply={handleReply}
+                onLikeComment={handleLikeComment}
+                onDeleteComment={handleDeleteComment}
+                onEditPost={handleEditPost}
+                onDeletePost={handleDeletePost}
+                onOpenPost={handleOpenPost}
+                onViewProfile={handleViewProfile}
+                onReportTarget={handleOpenReport}
               />
             ) : (
               <ProfilePage

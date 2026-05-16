@@ -301,6 +301,23 @@ export async function apiFetchProfilePosts(userId: string, token?: string, hasht
   return data.map((item) => normalizeUserPost(item));
 }
 
+export async function apiFetchSavedPosts(token?: string): Promise<UserPost[]> {
+  const response = await fetch(`${API_BASE}/posts/saved`, {
+    headers: {
+      ...authHeaders(token),
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseErrorMessage(response));
+  }
+
+  const data = (await response.json().catch(() => [])) as unknown;
+  if (!Array.isArray(data)) return [];
+
+  return data.map((item) => normalizeUserPost(item));
+}
+
 export async function apiCreateUserPost(
   userId: string,
   payload: CreateUserPostPayload,

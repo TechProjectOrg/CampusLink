@@ -563,6 +563,85 @@ router.get('/posts/feed', async (req: Request, res: Response) => {
   }
 });
 
+router.get('/posts/saved', async (req: Request, res: Response) => {
+  const authed = req as unknown as AuthedRequest;
+  const viewerUserId = authed.auth!.userId;
+
+  try {
+    const rows = await prisma.$queryRaw<FeedPostRow[]>`
+      SELECT
+        p.post_id,
+        p.author_user_id,
+        au.display_name AS author_display_name,
+        au.username AS author_username,
+        au.profile_photo_url AS author_profile_photo_url,
+        p.club_id,
+        p.post_type,
+        p.opportunity_type,
+        p.title,
+        p.content_text,
+        p.company_name,
+        p.application_deadline,
+        p.stipend,
+        p.duration,
+        p.event_date,
+        p.location,
+        p.external_url,
+        p.visibility,
+        COALESCE(
+          (
+            SELECT ARRAY_AGG(h.tag_name ORDER BY h.tag_name)
+            FROM post_hashtags ph
+            JOIN hashtags h ON h.hashtag_id = ph.hashtag_id
+            WHERE ph.post_id = p.post_id
+          ),
+          ARRAY[]::text[]
+        ) AS hashtags,
+        COALESCE(
+          (
+            SELECT JSON_AGG(
+              JSON_BUILD_OBJECT(
+                'postMediaId', pm.post_media_id,
+                'mediaUrl', pm.media_url,
+                'mediaType', pm.media_type,
+                'sortOrder', pm.sort_order
+              )
+              ORDER BY pm.sort_order ASC, pm.created_at ASC
+            )
+            FROM post_media pm
+            WHERE pm.post_id = p.post_id
+          ),
+          '[]'::json
+        ) AS media,
+        (SELECT COUNT(*)::int FROM post_likes pl WHERE pl.post_id = p.post_id) AS like_count,
+        (SELECT COUNT(*)::int FROM post_comments pc WHERE pc.post_id = p.post_id) AS comment_count,
+        (SELECT COUNT(*)::int FROM post_saves ps WHERE ps.post_id = p.post_id) AS save_count,
+        EXISTS(SELECT 1 FROM post_likes plm WHERE plm.post_id = p.post_id AND plm.user_id = ${viewerUserId}) AS is_liked_by_me,
+        EXISTS(SELECT 1 FROM post_saves psm WHERE psm.post_id = p.post_id AND psm.user_id = ${viewerUserId}) AS is_saved_by_me,
+        p.created_at,
+        p.updated_at
+      FROM post_saves saved
+      JOIN posts p ON p.post_id = saved.post_id
+      JOIN users au ON au.user_id = p.author_user_id
+      WHERE saved.user_id = ${viewerUserId}
+        AND p.deleted_at IS NULL
+      ORDER BY saved.created_at DESC
+    `;
+
+    const accessibleRows: FeedPostRow[] = [];
+    for (const row of rows) {
+      if (await canViewerAccessPost(viewerUserId, row.post_id)) {
+        accessibleRows.push(row);
+      }
+    }
+
+    return res.status(200).json(await mapFeedRows(accessibleRows, viewerUserId));
+  } catch (err) {
+    console.error('Error fetching saved posts:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 router.get('/posts/hashtags/:hashtag', async (req: Request<{ hashtag: string }>, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const viewerUserId = authed.auth!.userId;
