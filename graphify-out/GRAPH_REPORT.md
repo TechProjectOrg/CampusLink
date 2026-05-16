@@ -69,8 +69,8 @@
 ## Surprising Connections (you probably didn't know these)
 - `cacheDelete()` --calls--> `invalidateConversationLists()`  [INFERRED]
   backend\server\src\lib\cache.ts → backend\server\src\lib\chatCache.ts
-- `getSubmitLabel()` --calls--> `Boolean()`  [INFERRED]
-  frontend\src\components\CreateUnifiedPostModal.tsx → frontend\src\App.tsx
+- `Boolean()` --calls--> `getSubmitLabel()`  [INFERRED]
+  frontend\src\App.tsx → frontend\src\components\CreateUnifiedPostModal.tsx
 - `handleCreateClubPostFromModal()` --calls--> `apiCreateUserPost()`  [INFERRED]
   frontend\src\components\ClubActivityPage.tsx → frontend\src\lib\postsApi.ts
 - `handleSaveEducation()` --calls--> `apiUpdateUserProfile()`  [INFERRED]

@@ -865,6 +865,7 @@ model AdminReport {
   reviewedBy           User?                 @relation("AdminReviewedReports", fields: [reviewedByUserId], references: [userId], onDelete: SetNull, onUpdate: NoAction)
   notes                AdminReportNote[]
   submissions          ReportSubmission[]
+  moderationLogs       ModerationLog[]
 
   @@index([status], map: "idx_admin_reports_status")
   @@index([assignedAdminUserId], map: "idx_admin_reports_assigned_admin_user_id")
