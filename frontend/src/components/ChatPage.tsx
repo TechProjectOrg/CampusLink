@@ -806,7 +806,14 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                       </div>
                       <div className="flex items-center justify-between">
                         <p className={`text-sm truncate ${conversation.unread > 0 ? 'text-gray-900' : 'text-gray-500'}`}>
-                          {conversation.lastMessage}
+                          {(() => {
+                            const lm = conversation.lastMessage ?? '';
+                            const postMatch = String(lm).match(/https?:\/\/[\w.-]+\/posts?\/[A-Za-z0-9_-]+/) || String(lm).match(/\/posts?\/[A-Za-z0-9_-]+/);
+                            if (postMatch) return 'Shared a post';
+                            // hide bare origins
+                            if (/^https?:\/\/[\w.-]+(?::\d+)?\/?$/.test(String(lm).trim())) return '';
+                            return lm;
+                          })()}
                         </p>
                         {conversation.unread > 0 && (
                           <Badge className="ml-2 bg-primary text-white text-xs min-w-5 h-5 flex items-center justify-center px-1.5">

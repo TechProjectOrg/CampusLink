@@ -665,7 +665,13 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                         </div>
                         <div className="flex items-center justify-between">
                           <p className={`text-sm truncate flex-1 ${conv.unread > 0 ? 'text-gray-900' : 'text-gray-500'}`}>
-                            {conv.lastMessage}
+                            {(() => {
+                              const lm = conv.lastMessage ?? '';
+                              const postMatch = String(lm).match(/https?:\/\/[\w.-]+\/posts?\/[A-Za-z0-9_-]+/) || String(lm).match(/\/posts?\/[A-Za-z0-9_-]+/);
+                              if (postMatch) return 'Shared a post';
+                              if (/^https?:\/\/[\w.-]+(?::\d+)?\/?$/.test(String(lm).trim())) return '';
+                              return lm;
+                            })()}
                           </p>
                           {conv.unread > 0 && (
                             <Badge className="ml-2 bg-primary text-white px-2 py-0 min-w-5 h-5 flex items-center justify-center text-xs">
