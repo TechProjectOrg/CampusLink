@@ -5003,22 +5003,28 @@ div[style*="width: 25%"]::webkit-scrollbar {
   background: #2f7df6;
 }
 
-.cl-clubs-page {
+.cl-app-scroll-shell {
   display: flex;
   flex-direction: column;
   height: calc(100dvh - 4rem);
   min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+.cl-clubs-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   padding-bottom: 0;
-  overflow: hidden;
 }
 
 .cl-clubs-content {
   flex: 1 1 auto;
   min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  scroll-behavior: smooth;
 }
 
 @media (max-width: 639px) {
@@ -5736,7 +5742,7 @@ div[style*="width: 25%"]::webkit-scrollbar {
     padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
   }
 
-  .cl-clubs-page {
+  .cl-app-scroll-shell {
     height: calc(100dvh - 4.75rem - env(safe-area-inset-bottom));
   }
 

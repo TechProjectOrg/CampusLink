@@ -6,30 +6,6 @@ import { XIcon } from "lucide-react@0.487.0";
 
 import { cn } from "./utils";
 
-let dialogScrollLockCount = 0;
-let previousBodyOverflow = "";
-let previousHtmlOverflow = "";
-
-function lockDialogBackgroundScroll() {
-  if (typeof document === "undefined") return;
-  if (dialogScrollLockCount === 0) {
-    previousBodyOverflow = document.body.style.overflow;
-    previousHtmlOverflow = document.documentElement.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.documentElement.style.overflow = "hidden";
-  }
-  dialogScrollLockCount += 1;
-}
-
-function unlockDialogBackgroundScroll() {
-  if (typeof document === "undefined") return;
-  dialogScrollLockCount = Math.max(0, dialogScrollLockCount - 1);
-  if (dialogScrollLockCount === 0) {
-    document.body.style.overflow = previousBodyOverflow;
-    document.documentElement.style.overflow = previousHtmlOverflow;
-  }
-}
-
 function Dialog({
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Root>) {
@@ -77,11 +53,6 @@ function DialogContent({
   children,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content>) {
-  React.useEffect(() => {
-    lockDialogBackgroundScroll();
-    return () => unlockDialogBackgroundScroll();
-  }, []);
-
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />

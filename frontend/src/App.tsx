@@ -1405,6 +1405,8 @@ export default function App() {
     }
   }, [activeTab, refreshNotifications, refreshFollowGraph, refreshSuggestedUsers]);
 
+  const usesAppScrollShell = activeTab !== 'feed' && activeTab !== 'chat';
+
   const pendingIncomingRequestIds = useMemo(
     () => Object.values(requestIdMap).map((r) => r.requestId),
     [requestIdMap]
@@ -2765,7 +2767,7 @@ export default function App() {
         </div>
       ) : null}
       <div className="flex flex-1 min-w-0">
-        <div className="w-full min-w-0">
+        <div className={`w-full min-w-0${usesAppScrollShell ? ' cl-app-scroll-shell' : ''}`}>
           {activeTab === 'feed' ? (
           <div className="mx-auto flex w-full max-w-[1400px] justify-center">
             {/* Profile Section (Left) - Visible on XL screens and up */}
