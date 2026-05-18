@@ -9,7 +9,8 @@ import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { X, Calendar, MapPin, Link as LinkIcon, DollarSign } from 'lucide-react';
 import { Badge } from './ui/badge';
-import { ImageUpload } from './ui/ImageUpload';
+import { MultiImageUpload } from './ui/MultiImageUpload';
+import { withOpportunityImages } from '../lib/mediaUtils';
 import { Opportunity } from '../types';
 import { ButtonLoader } from './ui/ButtonLoader';
 
@@ -37,7 +38,7 @@ export function CreateUnifiedPostModal({
 
   // State for Post Form
   const [postText, setPostText] = useState('');
-  const [postImageFile, setPostImageFile] = useState<File | null>(null);
+  const [postImageFiles, setPostImageFiles] = useState<File[]>([]);
   const [postTags, setPostTags] = useState<string[]>([]);
   const [postTagInput, setPostTagInput] = useState('');
 
@@ -49,7 +50,7 @@ export function CreateUnifiedPostModal({
     location: '',
     description: '',
     registrationLink: '',
-    coverImage: null as File | null
+    coverImages: [] as File[]
   });
 
   // State for Opportunity Form
@@ -64,7 +65,7 @@ export function CreateUnifiedPostModal({
     stipend: '',
     duration: '',
     tags: [] as string[],
-    imageFile: null as File | null
+    imageFiles: [] as File[]
   });
   const [opportunityTagInput, setOpportunityTagInput] = useState('');
   const [submittingForm, setSubmittingForm] = useState<'post' | 'event' | 'opportunity' | null>(null);
@@ -102,10 +103,10 @@ export function CreateUnifiedPostModal({
 
     const hasUpload =
       formType === 'post'
-        ? Boolean(postImageFile)
+        ? postImageFiles.length > 0
         : formType === 'event'
-          ? Boolean(eventFormData.coverImage)
-          : Boolean(opportunityFormData.imageFile);
+          ? eventFormData.coverImages.length > 0
+          : opportunityFormData.imageFiles.length > 0;
 
     if (hasUpload) return 'Uploading...';
     if (formType === 'post') return 'Posting...';
@@ -116,7 +117,7 @@ export function CreateUnifiedPostModal({
   const resetAllForms = () => {
     // Reset Post Form
     setPostText('');
-    setPostImageFile(null);
+    setPostImageFiles([]);
     setPostTags([]);
     setPostTagInput('');
 
@@ -128,7 +129,7 @@ export function CreateUnifiedPostModal({
       location: '',
       description: '',
       registrationLink: '',
-      coverImage: null
+      coverImages: []
     });
 
     // Reset Opportunity Form
@@ -143,7 +144,7 @@ export function CreateUnifiedPostModal({
       stipend: '',
       duration: '',
       tags: [],
-      imageFile: null
+      imageFiles: []
     });
     setOpportunityTagInput('');
   };
@@ -172,8 +173,8 @@ export function CreateUnifiedPostModal({
       title: '',
       description: postText,
       date: new Date().toISOString(),
-      image: postImageFile ? URL.createObjectURL(postImageFile) : undefined,
-      imageFile: postImageFile ?? undefined,
+      ...withOpportunityImages(postImageFiles.map((file) => URL.createObjectURL(file))),
+      imageFiles: postImageFiles,
       tags: postTags,
       likes: [],
       comments: [],
@@ -221,8 +222,8 @@ export function CreateUnifiedPostModal({
       eventDate: eventFormData.dateTime,
       location: eventFormData.mode === 'Offline' ? eventFormData.location : 'Online',
       link: eventFormData.registrationLink || undefined,
-      image: eventFormData.coverImage ? URL.createObjectURL(eventFormData.coverImage) : undefined,
-      imageFile: eventFormData.coverImage ?? undefined,
+      ...withOpportunityImages(eventFormData.coverImages.map((file) => URL.createObjectURL(file))),
+      imageFiles: eventFormData.coverImages,
       likes: [],
       comments: [],
       saved: []
@@ -262,8 +263,8 @@ export function CreateUnifiedPostModal({
       link: opportunityFormData.link || undefined,
       deadline: opportunityFormData.deadline,
       tags: opportunityFormData.tags,
-      image: opportunityFormData.imageFile ? URL.createObjectURL(opportunityFormData.imageFile) : undefined,
-      imageFile: opportunityFormData.imageFile ?? undefined,
+      ...withOpportunityImages(opportunityFormData.imageFiles.map((file) => URL.createObjectURL(file))),
+      imageFiles: opportunityFormData.imageFiles,
       likes: [],
       comments: [],
       saved: []
@@ -334,7 +335,12 @@ export function CreateUnifiedPostModal({
                   rows={5}
                   className="resize-none"
                 />
-                <ImageUpload onFileChange={setPostImageFile} disabled={isSubmitting} />
+                <MultiImageUpload
+                  files={postImageFiles}
+                  onFilesChange={setPostImageFiles}
+                  disabled={isSubmitting}
+                  label="Images (optional)"
+                />
                 <div className="space-y-2">
                   <Label htmlFor="post-tags">Hashtags (optional)</Label>
                   <div className="flex gap-2">
@@ -456,7 +462,12 @@ export function CreateUnifiedPostModal({
                     placeholder="https://example.com/register"
                   />
                 </div>
-                <ImageUpload onFileChange={(file) => setEventFormData({ ...eventFormData, coverImage: file })} disabled={isSubmitting} />
+                <MultiImageUpload
+                  files={eventFormData.coverImages}
+                  onFilesChange={(coverImages) => setEventFormData({ ...eventFormData, coverImages })}
+                  disabled={isSubmitting}
+                  label="Cover images (optional)"
+                />
                 <div className="flex justify-end gap-2">
                   <Button type="button" variant="ghost" onClick={handleClose} disabled={isSubmitting}>Cancel</Button>
                   <Button type="submit" disabled={isSubmitting}>
@@ -567,7 +578,12 @@ export function CreateUnifiedPostModal({
                     required
                     />
                 </div>
-                <ImageUpload onFileChange={(file) => setOpportunityFormData({ ...opportunityFormData, imageFile: file })} disabled={isSubmitting} />
+                <MultiImageUpload
+                  files={opportunityFormData.imageFiles}
+                  onFilesChange={(imageFiles) => setOpportunityFormData({ ...opportunityFormData, imageFiles })}
+                  disabled={isSubmitting}
+                  label="Images (optional)"
+                />
                 <div className="cl-opportunity-details-grid grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                         <Label htmlFor="link">

@@ -168,7 +168,12 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
       );
     }
 
-    const imageUrl = (post as any).image ?? (post as any).media?.[0]?.mediaUrl ?? (post as any).mediaUrl ?? null;
+    const mediaList = Array.isArray((post as { media?: Array<{ mediaUrl?: string }> }).media)
+      ? (post as { media: Array<{ mediaUrl?: string }> }).media
+      : [];
+    const imageUrl =
+      (post as { image?: string }).image ?? mediaList[0]?.mediaUrl ?? (post as { mediaUrl?: string }).mediaUrl ?? null;
+    const extraImageCount = mediaList.length > 1 ? mediaList.length - 1 : 0;
 
     return (
       <div className="min-w-0">
@@ -186,8 +191,13 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
             )}
             <div className="p-3 flex items-center justify-center">
               {imageUrl ? (
-                <div className="w-64 h-40 overflow-hidden bg-gray-100 rounded-md">
+                <div className="relative w-64 h-40 overflow-hidden bg-gray-100 rounded-md">
                   <ImageWithFallback src={imageUrl} alt="shared post image" className="w-full h-full object-cover" />
+                  {extraImageCount > 0 && (
+                    <span className="absolute bottom-2 right-2 rounded-full bg-black/70 px-2 py-0.5 text-xs font-medium text-white">
+                      +{extraImageCount}
+                    </span>
+                  )}
                 </div>
               ) : (
                 <div className="w-64 h-40 bg-gray-100 rounded-md" />

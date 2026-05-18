@@ -321,7 +321,12 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
     const hashtags = Array.isArray(draft?.tags)
       ? draft.tags.map((tag: unknown) => String(tag).trim()).filter(Boolean)
       : [];
-    const imageFile: File | undefined = draft?.imageFile instanceof File ? draft.imageFile : undefined;
+    const mediaFiles =
+      Array.isArray(draft?.imageFiles) && draft.imageFiles.length > 0
+        ? draft.imageFiles
+        : draft?.imageFile instanceof File
+          ? [draft.imageFile]
+          : undefined;
     setIsPosting(true);
     try {
       const created = await apiCreateUserPost(
@@ -334,7 +339,7 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
           hashtags,
         },
         auth.session?.token,
-        imageFile ? [imageFile] : undefined,
+        mediaFiles,
       );
       setPosts((current) => [userPostToOpportunity(created, {}, auth.currentUser ?? null), ...current]);
       toast.success('Club post published');

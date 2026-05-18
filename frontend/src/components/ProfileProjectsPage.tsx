@@ -3,6 +3,7 @@ import { ArrowLeft, MessageCircle } from 'lucide-react';
 import { Opportunity, Student } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { apiDeleteUserProject, apiFetchUserProjects, apiUpdateUserProject, type UserProject } from '../lib/projectsApi';
+import { resolveProjectImageUrls, withOpportunityImages } from '../lib/mediaUtils';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
 import { LoadingIndicator } from './ui/LoadingIndicator';
@@ -18,6 +19,7 @@ interface ProfileProjectsPageProps {
 }
 
 function mapProjectToOpportunity(project: UserProject, student: Student): Opportunity {
+  const imageFields = withOpportunityImages(resolveProjectImageUrls(project));
   return {
     id: `project-${project.id}`,
     authorId: student.id,
@@ -28,7 +30,7 @@ function mapProjectToOpportunity(project: UserProject, student: Student): Opport
     description: project.description,
     date: new Date().toISOString(),
     link: project.demoUrl || project.sourceUrl || project.link || undefined,
-    image: project.imageUrl || undefined,
+    ...imageFields,
     tags: Array.from(new Set(['project', ...(project.tags ?? [])])),
     likes: [],
     comments: [],

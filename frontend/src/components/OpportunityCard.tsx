@@ -7,7 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
-import { ImageWithFallback } from './figma/ImageWithFallback';
+import { PostCarousel } from './feed/PostCarousel';
 import { useAuth } from '../context/AuthContext';
 import {
   DropdownMenu,
@@ -291,15 +291,11 @@ export function OpportunityCard({
         <p className="text-gray-600">{opportunity.description}</p>
       </div>
 
-      {opportunity.image && (
-        <div className="relative w-full overflow-hidden group cursor-pointer" onClick={() => onOpenPost?.(opportunity)}>
-          <ImageWithFallback
-            src={opportunity.image}
-            alt={opportunity.title}
-            className="w-full h-48 sm:h-64 md:h-80 object-cover transition-transform duration-500 group-hover:scale-105"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-        </div>
+      {((opportunity.images?.length ?? 0) > 0 || opportunity.image) && (
+        <PostCarousel
+          opportunity={opportunity}
+          onOpenPost={onOpenPost ? () => onOpenPost(opportunity) : undefined}
+        />
       )}
 
       <div className="px-6 pt-4 cursor-pointer" onClick={() => onOpenPost?.(opportunity)}>

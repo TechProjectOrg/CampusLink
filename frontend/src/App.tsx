@@ -77,6 +77,8 @@ import {
   type CreateUserPostPayload,
   type UserPost,
 } from './lib/postsApi';
+import { collectImageFiles } from './lib/mediaUtils';
+import { userPostToOpportunity } from './lib/postMappers';
 import {
   cacheCommentsPage,
   cacheFollowGraph,
@@ -239,80 +241,6 @@ function buildCreatePostPayloadFromDraft(draft: any): CreateUserPostPayload {
   };
 }
 
-function mapPostCommentToComment(comment: UserPost['comments'][number]): Opportunity['comments'][number] {
-  const fallbackSeed = encodeURIComponent(comment.authorUsername || comment.authorUserId || 'user');
-  return {
-    id: comment.id,
-    postId: comment.postId,
-    authorId: comment.authorUserId,
-    authorName: comment.authorDisplayName || comment.authorUsername,
-    authorAvatar: comment.authorProfilePictureUrl || undefined,
-    content: comment.content,
-    timestamp: comment.createdAt,
-    parentCommentId: comment.parentCommentId,
-    likeCount: comment.likeCount,
-    replyCount: comment.replyCount,
-    isLikedByMe: comment.isLikedByMe,
-    canDelete: comment.canDelete,
-    replies: comment.replies.map((reply) => mapPostCommentToComment(reply)),
-  };
-}
-
-function userPostToOpportunity(
-  post: UserPost,
-  usersById: Record<string, Student>,
-  currentUser: Student,
-): Opportunity {
-  let type: Opportunity['type'] = 'general';
-  const isProjectPost = (post.hashtags ?? []).some((tag) => tag.trim().toLowerCase() === 'project');
-  if (post.postType === 'event') {
-    type = 'event';
-  } else if (post.postType === 'club_activity') {
-    type = 'club';
-  } else if (post.postType === 'opportunity') {
-    type = (post.opportunityType ?? 'event') as Opportunity['type'];
-  } else if (isProjectPost) {
-    type = 'project';
-  }
-
-  const author = usersById[post.authorUserId];
-  const authorName = author?.name ?? post.authorDisplayName ?? post.authorUsername ?? currentUser.name;
-  const authorAvatar =
-    author?.avatar ??
-    post.authorProfilePictureUrl ??
-    (post.authorUserId === currentUser.id
-      ? currentUser.avatar
-      : undefined);
-
-  return {
-    id: post.id,
-    authorId: post.authorUserId,
-    authorName,
-    authorAvatar,
-    type,
-    title: post.title ?? '',
-    description: post.contentText ?? '',
-    date: post.createdAt,
-    company: post.company ?? undefined,
-    deadline: post.deadline ?? undefined,
-    stipend: post.stipend ?? undefined,
-    duration: post.duration ?? undefined,
-    location: post.location ?? undefined,
-    link: post.externalUrl ?? undefined,
-    image: post.media[0]?.mediaUrl,
-    tags: post.hashtags,
-    likes: [],
-    comments: (post.comments ?? []).map((comment) => mapPostCommentToComment(comment)),
-    saved: [],
-    likeCount: post.likeCount,
-    commentCount: post.commentCount,
-    saveCount: post.saveCount,
-    isLikedByMe: post.isLikedByMe,
-    isSavedByMe: post.isSavedByMe,
-    canEdit: post.canEdit,
-    canDelete: post.canDelete,
-  };
-}
 
 interface DiscussionPageState<T> {
   items: T[];
@@ -2182,7 +2110,7 @@ export default function App() {
     }
 
     const payload = buildCreatePostPayloadFromDraft(draft);
-    const mediaFiles = draft?.imageFile instanceof File ? [draft.imageFile] : [];
+    const mediaFiles = collectImageFiles(draft ?? {});
     const createdPost = await apiCreateUserPost(currentUserId, payload, authToken, mediaFiles);
     appData.prependPostToFeed(createdPost);
     setPostsRefreshToken((prev) => prev + 1);

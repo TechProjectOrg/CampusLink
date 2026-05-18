@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
-import { ImageWithFallback } from './figma/ImageWithFallback';
+import { PostCarousel } from './feed/PostCarousel';
 import { LoadingIndicator } from './ui/LoadingIndicator';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -401,12 +401,10 @@ export function PostPage({
             <p className="text-gray-700 whitespace-pre-wrap">{post.description}</p>
           </div>
 
-          {post.image && (
-            <ImageWithFallback
-              src={post.image}
-              alt={post.title}
-              className="w-full max-h-[34rem] object-contain rounded-xl bg-gray-50 mb-4"
-            />
+          {((post.images?.length ?? 0) > 0 || post.image) && (
+            <div className="mb-4 rounded-xl bg-gray-50 overflow-hidden">
+              <PostCarousel opportunity={post} variant="detail" enableLightbox />
+            </div>
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-gray-700 mb-4">

@@ -90,7 +90,9 @@ export interface Opportunity {
   duration?: string;
   location?: string;
   link?: string;
+  images?: string[];
   image?: string;
+  imageFiles?: File[];
   imageFile?: File;
   tags?: string[];
   likes: string[];

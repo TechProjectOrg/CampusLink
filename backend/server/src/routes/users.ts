@@ -1640,6 +1640,64 @@ router.delete(
 // ==============================
 // Profile: Projects
 // ==============================
+const MAX_PROJECT_IMAGES = 10;
+
+function normalizeProjectImageUrls(input: { images?: unknown; imageUrl?: string }): string[] {
+  const fromImages = Array.isArray(input.images)
+    ? input.images.map((url) => String(url).trim()).filter(Boolean)
+    : [];
+  if (fromImages.length > 0) return fromImages.slice(0, MAX_PROJECT_IMAGES);
+  const legacy = input.imageUrl?.trim();
+  return legacy ? [legacy] : [];
+}
+
+async function replaceProjectMediaRows(projectId: string, imageUrls: string[]): Promise<string | null> {
+  const capped = imageUrls.slice(0, MAX_PROJECT_IMAGES);
+  const existing = await prisma.$queryRaw<{ media_url: string }[]>`
+    SELECT media_url
+    FROM project_media
+    WHERE project_id = ${projectId}
+  `;
+
+  await prisma.$queryRaw`
+    DELETE FROM project_media
+    WHERE project_id = ${projectId}
+  `;
+
+  for (const [index, mediaUrl] of capped.entries()) {
+    await prisma.$queryRaw`
+      INSERT INTO project_media (project_id, media_url, sort_order)
+      VALUES (${projectId}, ${mediaUrl}, ${index})
+    `;
+  }
+
+  const removed = existing.filter((row) => !capped.includes(row.media_url));
+  await Promise.allSettled(
+    removed.map(async (row) => {
+      await deleteManagedPostMediaByUrl(row.media_url);
+    }),
+  );
+
+  const firstUrl = capped[0] ?? null;
+  await prisma.$queryRaw`
+    UPDATE user_projects
+    SET image_url = ${firstUrl}, updated_at = NOW()
+    WHERE project_id = ${projectId}
+  `;
+
+  return firstUrl;
+}
+
+async function fetchProjectImageUrls(projectId: string): Promise<string[]> {
+  const rows = await prisma.$queryRaw<{ media_url: string }[]>`
+    SELECT media_url
+    FROM project_media
+    WHERE project_id = ${projectId}
+    ORDER BY sort_order ASC
+  `;
+  return rows.map((row) => row.media_url);
+}
+
 router.get('/:userId/projects', async (req: Request<{ userId: string }>, res: Response) => {
   const { userId } = req.params;
   const authed = req as unknown as AuthedRequest;
@@ -1656,6 +1714,7 @@ router.get('/:userId/projects', async (req: Request<{ userId: string }>, res: Re
         image_url: string | null;
         created_at: Date;
         tags: string[] | null;
+        images: string[] | null;
       }[]
     >`
       SELECT
@@ -1669,7 +1728,15 @@ router.get('/:userId/projects', async (req: Request<{ userId: string }>, res: Re
         COALESCE(
           ARRAY_AGG(pt.tag_name ORDER BY pt.tag_name) FILTER (WHERE pt.tag_name IS NOT NULL),
           ARRAY[]::text[]
-        ) AS tags
+        ) AS tags,
+        COALESCE(
+          (
+            SELECT ARRAY_AGG(pm.media_url ORDER BY pm.sort_order)
+            FROM project_media pm
+            WHERE pm.project_id = p.project_id
+          ),
+          CASE WHEN p.image_url IS NOT NULL THEN ARRAY[p.image_url] ELSE ARRAY[]::text[] END
+        ) AS images
       FROM user_projects p
       LEFT JOIN project_tags pt ON pt.project_id = p.project_id
       WHERE p.user_id = ${userId}
@@ -1678,17 +1745,21 @@ router.get('/:userId/projects', async (req: Request<{ userId: string }>, res: Re
     `;
 
     return res.status(200).json(
-      rows.map((r) => ({
-        id: r.project_id,
-        title: r.title,
-        description: r.description,
-        link: r.demo_url ?? r.source_url,
-        sourceUrl: r.source_url,
-        demoUrl: r.demo_url,
-        imageUrl: r.image_url,
-        tags: r.tags ?? [],
-        createdAt: r.created_at.toISOString(),
-      }))
+      rows.map((r) => {
+        const images = (r.images ?? []).filter(Boolean);
+        return {
+          id: r.project_id,
+          title: r.title,
+          description: r.description,
+          link: r.demo_url ?? r.source_url,
+          sourceUrl: r.source_url,
+          demoUrl: r.demo_url,
+          images,
+          imageUrl: images[0] ?? r.image_url,
+          tags: r.tags ?? [],
+          createdAt: r.created_at.toISOString(),
+        };
+      }),
     );
   } catch (err) {
     console.error('Error fetching projects:', err);
@@ -1740,6 +1811,53 @@ router.post(
 );
 
 router.post(
+  '/:userId/projects/upload-images',
+  requireOwnUser,
+  requireModerationCapability('upload'),
+  postMediaUpload.array('images', MAX_PROJECT_IMAGES) as unknown as RequestHandler<GetUserParams>,
+  async (
+    req: Request<GetUserParams> & { files?: Express.Multer.File[] },
+    res: Response,
+  ) => {
+    const { userId } = req.params;
+    const uploadedFiles = Array.isArray(req.files) ? req.files : [];
+
+    if (uploadedFiles.length === 0) {
+      return res.status(400).json({ message: 'Provide at least one image file' });
+    }
+
+    if (uploadedFiles.some((file) => !file.mimetype.startsWith('image/'))) {
+      return res.status(400).json({ message: 'Only image uploads are allowed' });
+    }
+
+    try {
+      const imageUrls: string[] = [];
+      for (const file of uploadedFiles.slice(0, MAX_PROJECT_IMAGES)) {
+        const imageUrl = await uploadPostMediaToStorage({
+          userId,
+          fileBuffer: file.buffer,
+          mimeType: file.mimetype,
+        });
+        imageUrls.push(imageUrl);
+      }
+
+      return res.status(200).json({ imageUrls });
+    } catch (err) {
+      if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ message: 'Each project image must be 10MB or smaller' });
+      }
+
+      if (err instanceof Error && err.message.startsWith('Missing required environment variable')) {
+        return res.status(500).json({ message: 'Project image storage is not configured on the server' });
+      }
+
+      console.error('Error uploading project images:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  },
+);
+
+router.post(
   '/:userId/projects',
   requireOwnUser,
   requireModerationCapability('post'),
@@ -1747,15 +1865,28 @@ router.post(
     req: Request<
       { userId: string },
       unknown,
-      { title?: string; description?: string; sourceUrl?: string; demoUrl?: string; imageUrl?: string; tags?: string[] }
+      {
+        title?: string;
+        description?: string;
+        sourceUrl?: string;
+        demoUrl?: string;
+        imageUrl?: string;
+        images?: string[];
+        tags?: string[];
+      }
     >,
     res: Response
   ) => {
     const { userId } = req.params;
-    const { title, description, sourceUrl, demoUrl, imageUrl, tags } = req.body;
+    const { title, description, sourceUrl, demoUrl, imageUrl, images, tags } = req.body;
+    const normalizedImages = normalizeProjectImageUrls({ images, imageUrl });
 
     if (!title?.trim() || !description?.trim()) {
       return res.status(400).json({ message: 'Project title and description are required' });
+    }
+
+    if (normalizedImages.length > MAX_PROJECT_IMAGES) {
+      return res.status(400).json({ message: `A project can include at most ${MAX_PROJECT_IMAGES} images` });
     }
 
     try {
@@ -1777,7 +1908,7 @@ router.post(
           ${description.trim()},
           ${sourceUrl?.trim() || null},
           ${demoUrl?.trim() || null},
-          ${imageUrl?.trim() || null},
+          ${normalizedImages[0] ?? null},
           NOW(),
           NOW()
         )
@@ -1785,6 +1916,10 @@ router.post(
       `;
 
       const created = rows[0];
+      if (normalizedImages.length > 0) {
+        await replaceProjectMediaRows(created.project_id, normalizedImages);
+      }
+
       const normalizedTags = Array.isArray(tags)
         ? Array.from(new Set(tags.map((tag) => tag.trim()).filter(Boolean)))
         : [];
@@ -1796,6 +1931,8 @@ router.post(
         `;
       }
 
+      const storedImages = await fetchProjectImageUrls(created.project_id);
+
       return res.status(201).json({
         id: created.project_id,
         title: created.title,
@@ -1803,7 +1940,8 @@ router.post(
         link: created.demo_url ?? created.source_url,
         sourceUrl: created.source_url,
         demoUrl: created.demo_url,
-        imageUrl: created.image_url,
+        images: storedImages,
+        imageUrl: storedImages[0] ?? created.image_url,
         tags: normalizedTags,
         createdAt: created.created_at.toISOString(),
       });
@@ -1821,22 +1959,41 @@ router.patch(
     req: Request<
       { userId: string; projectId: string },
       unknown,
-      { title?: string; description?: string; sourceUrl?: string; demoUrl?: string; imageUrl?: string; tags?: string[] }
+      {
+        title?: string;
+        description?: string;
+        sourceUrl?: string;
+        demoUrl?: string;
+        imageUrl?: string;
+        images?: string[];
+        tags?: string[];
+      }
     >,
     res: Response,
   ) => {
     const { userId, projectId } = req.params;
-    const { title, description, sourceUrl, demoUrl, imageUrl, tags } = req.body;
+    const { title, description, sourceUrl, demoUrl, imageUrl, images, tags } = req.body;
 
     const hasTitle = Object.prototype.hasOwnProperty.call(req.body, 'title');
     const hasDescription = Object.prototype.hasOwnProperty.call(req.body, 'description');
     const hasSourceUrl = Object.prototype.hasOwnProperty.call(req.body, 'sourceUrl');
     const hasDemoUrl = Object.prototype.hasOwnProperty.call(req.body, 'demoUrl');
     const hasImageUrl = Object.prototype.hasOwnProperty.call(req.body, 'imageUrl');
+    const hasImages = Object.prototype.hasOwnProperty.call(req.body, 'images');
     const hasTags = Object.prototype.hasOwnProperty.call(req.body, 'tags');
 
-    if (!hasTitle && !hasDescription && !hasSourceUrl && !hasDemoUrl && !hasImageUrl && !hasTags) {
+    if (!hasTitle && !hasDescription && !hasSourceUrl && !hasDemoUrl && !hasImageUrl && !hasImages && !hasTags) {
       return res.status(400).json({ message: 'No project fields provided for update' });
+    }
+
+    if (hasImages || hasImageUrl) {
+      const normalizedImages = normalizeProjectImageUrls({
+        images: hasImages ? images : undefined,
+        imageUrl: hasImageUrl ? imageUrl : undefined,
+      });
+      if (normalizedImages.length > MAX_PROJECT_IMAGES) {
+        return res.status(400).json({ message: `A project can include at most ${MAX_PROJECT_IMAGES} images` });
+      }
     }
 
     if (hasTitle && !title?.trim()) {
@@ -1876,6 +2033,14 @@ router.patch(
         return res.status(404).json({ message: 'Project not found' });
       }
 
+      if (hasImages || hasImageUrl) {
+        const normalizedImages = normalizeProjectImageUrls({
+          images: hasImages ? images : undefined,
+          imageUrl: hasImageUrl ? imageUrl : undefined,
+        });
+        await replaceProjectMediaRows(projectId, normalizedImages);
+      }
+
       if (hasTags) {
         const normalizedTags = Array.isArray(tags)
           ? Array.from(new Set(tags.map((tag) => String(tag).trim()).filter(Boolean)))
@@ -1901,6 +2066,8 @@ router.patch(
         ORDER BY tag_name
       `;
 
+      const storedImages = await fetchProjectImageUrls(projectId);
+
       return res.status(200).json({
         id: updated.project_id,
         title: updated.title,
@@ -1908,7 +2075,8 @@ router.patch(
         link: updated.demo_url ?? updated.source_url,
         sourceUrl: updated.source_url,
         demoUrl: updated.demo_url,
-        imageUrl: updated.image_url,
+        images: storedImages,
+        imageUrl: storedImages[0] ?? updated.image_url,
         tags: tagRows.map((row) => row.tag_name),
         createdAt: updated.created_at.toISOString(),
       });
@@ -2031,6 +2199,18 @@ router.delete(
           await incrementUserStat(userId, 'postCount', -1);
         }
       }
+
+      const projectMediaRows = await prisma.$queryRaw<{ media_url: string }[]>`
+        SELECT media_url
+        FROM project_media
+        WHERE project_id = ${projectId}
+      `;
+
+      await Promise.allSettled(
+        projectMediaRows.map(async (row) => {
+          await deleteManagedPostMediaByUrl(row.media_url);
+        }),
+      );
 
       await deleteManagedPostMediaByUrl(deletedProject.image_url);
 

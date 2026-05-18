@@ -342,20 +342,32 @@ model UserCertification {
 }
 
 model UserProject {
-  projectId    String       @id @default(dbgenerated("gen_random_uuid()")) @map("project_id") @db.Uuid
-  userId       String       @map("user_id") @db.Uuid
-  title        String       @db.VarChar(255)
-  description  String       @db.Text
-  sourceUrl    String?      @map("source_url") @db.Text
-  demoUrl      String?      @map("demo_url") @db.Text
-  imageUrl     String?      @map("image_url") @db.Text
-  createdAt    DateTime     @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt    DateTime     @updatedAt @map("updated_at") @db.Timestamp(6)
-  user         User         @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+  projectId    String         @id @default(dbgenerated("gen_random_uuid()")) @map("project_id") @db.Uuid
+  userId       String         @map("user_id") @db.Uuid
+  title        String         @db.VarChar(255)
+  description  String         @db.Text
+  sourceUrl    String?        @map("source_url") @db.Text
+  demoUrl      String?        @map("demo_url") @db.Text
+  imageUrl     String?        @map("image_url") @db.Text
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamp(6)
+  user         User           @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
   projectTags  ProjectTag[]
+  media        ProjectMedia[]
 
   @@index([userId], map: "idx_user_projects_user_id")
   @@map("user_projects")
+}
+
+model ProjectMedia {
+  projectMediaId String      @id @default(dbgenerated("gen_random_uuid()")) @map("project_media_id") @db.Uuid
+  projectId      String      @map("project_id") @db.Uuid
+  mediaUrl       String      @map("media_url") @db.Text
+  sortOrder      Int         @default(0) @map("sort_order")
+  project        UserProject @relation(fields: [projectId], references: [projectId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([projectId], map: "idx_project_media_project_id")
+  @@map("project_media")
 }
 
 model ProjectTag {

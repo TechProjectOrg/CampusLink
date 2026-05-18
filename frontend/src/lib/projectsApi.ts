@@ -1,4 +1,5 @@
 import { resolveApiBaseUrl } from './apiBase';
+import { resolveProjectImageUrls } from './mediaUtils';
 
 const API_BASE = resolveApiBaseUrl(import.meta.env.VITE_API_URL as string | undefined);
 
@@ -13,6 +14,7 @@ export interface UserProject {
   link: string | null;
   sourceUrl?: string | null;
   demoUrl?: string | null;
+  images: string[];
   imageUrl: string | null;
   tags: string[];
 }
@@ -23,6 +25,7 @@ export interface CreateOrUpdateProjectPayload {
   sourceUrl?: string;
   demoUrl?: string;
   imageUrl?: string;
+  images?: string[];
   tags?: string[];
 }
 
@@ -35,6 +38,7 @@ type ProjectRaw = {
   link?: string | null;
   imageUrl?: string | null;
   image_url?: string | null;
+  images?: string[];
   tags?: string[] | string;
 };
 
@@ -44,10 +48,14 @@ function normalizeProject(raw: ProjectRaw, index: number): UserProject {
   const description = raw.description ?? '';
   const link = raw.link ?? null;
   const imageUrl = raw.imageUrl ?? raw.image_url ?? null;
-  
+  const images = resolveProjectImageUrls({
+    images: Array.isArray(raw.images) ? raw.images : undefined,
+    imageUrl,
+  });
+
   let tags: string[] = [];
   if (typeof raw.tags === 'string') {
-    tags = raw.tags.split(',').map(t => t.trim()).filter(Boolean);
+    tags = raw.tags.split(',').map((t) => t.trim()).filter(Boolean);
   } else if (Array.isArray(raw.tags)) {
     tags = raw.tags;
   }
@@ -59,7 +67,8 @@ function normalizeProject(raw: ProjectRaw, index: number): UserProject {
     link: link ? String(link) : null,
     sourceUrl: (raw as Record<string, unknown>).sourceUrl as string | null,
     demoUrl: (raw as Record<string, unknown>).demoUrl as string | null,
-    imageUrl: imageUrl ? String(imageUrl) : null,
+    images,
+    imageUrl: images[0] ?? (imageUrl ? String(imageUrl) : null),
     tags,
   };
 }
@@ -69,10 +78,7 @@ async function parseErrorMessage(response: Response): Promise<string> {
   return err?.message || `Request failed (${response.status})`;
 }
 
-export async function apiFetchUserProjects(
-  userId: string,
-  token?: string
-): Promise<UserProject[]> {
+export async function apiFetchUserProjects(userId: string, token?: string): Promise<UserProject[]> {
   const response = await fetch(`${API_BASE}/users/${encodeURIComponent(userId)}/projects`, {
     headers: {
       ...authHeaders(token),
@@ -92,7 +98,7 @@ export async function apiFetchUserProjects(
 export async function apiCreateUserProject(
   userId: string,
   payload: CreateOrUpdateProjectPayload,
-  token?: string
+  token?: string,
 ): Promise<UserProject> {
   const response = await fetch(`${API_BASE}/users/${encodeURIComponent(userId)}/projects`, {
     method: 'POST',
@@ -105,6 +111,7 @@ export async function apiCreateUserProject(
       description: payload.description,
       sourceUrl: payload.sourceUrl,
       demoUrl: payload.demoUrl,
+      images: payload.images,
       imageUrl: payload.imageUrl,
       tags: payload.tags,
     }),
@@ -121,15 +128,24 @@ export async function apiCreateUserProject(
   return normalizeProject(data, 0);
 }
 
-export async function apiUploadUserProjectImage(
-  userId: string,
-  file: File,
-  token?: string,
-): Promise<string> {
-  const formData = new FormData();
-  formData.append('image', file);
+export async function apiUploadUserProjectImage(userId: string, file: File, token?: string): Promise<string> {
+  const urls = await apiUploadUserProjectImages(userId, [file], token);
+  return urls[0];
+}
 
-  const response = await fetch(`${API_BASE}/users/${encodeURIComponent(userId)}/projects/upload-image`, {
+export async function apiUploadUserProjectImages(
+  userId: string,
+  files: File[],
+  token?: string,
+): Promise<string[]> {
+  if (files.length === 0) return [];
+
+  const formData = new FormData();
+  for (const file of files) {
+    formData.append('images', file);
+  }
+
+  const response = await fetch(`${API_BASE}/users/${encodeURIComponent(userId)}/projects/upload-images`, {
     method: 'POST',
     headers: {
       ...authHeaders(token),
@@ -141,11 +157,14 @@ export async function apiUploadUserProjectImage(
     throw new Error(await parseErrorMessage(response));
   }
 
-  const data = (await response.json().catch(() => ({}))) as { imageUrl?: string };
-  if (!data.imageUrl) {
-    throw new Error('Project image upload succeeded but image URL was missing');
+  const data = (await response.json().catch(() => ({}))) as { imageUrls?: string[]; imageUrl?: string };
+  if (Array.isArray(data.imageUrls) && data.imageUrls.length > 0) {
+    return data.imageUrls;
   }
-  return data.imageUrl;
+  if (data.imageUrl) {
+    return [data.imageUrl];
+  }
+  throw new Error('Project image upload succeeded but image URLs were missing');
 }
 
 export async function apiUpdateUserProject(
@@ -157,6 +176,7 @@ export async function apiUpdateUserProject(
     sourceUrl?: string;
     demoUrl?: string;
     imageUrl?: string;
+    images?: string[];
     tags?: string[];
   },
   token?: string,
@@ -184,11 +204,7 @@ export async function apiUpdateUserProject(
   return normalizeProject(data, 0);
 }
 
-export async function apiDeleteUserProject(
-  userId: string,
-  projectId: string,
-  token?: string
-): Promise<void> {
+export async function apiDeleteUserProject(userId: string, projectId: string, token?: string): Promise<void> {
   const response = await fetch(
     `${API_BASE}/users/${encodeURIComponent(userId)}/projects/${encodeURIComponent(projectId)}`,
     {
@@ -196,7 +212,7 @@ export async function apiDeleteUserProject(
       headers: {
         ...authHeaders(token),
       },
-    }
+    },
   );
 
   if (!response.ok) {

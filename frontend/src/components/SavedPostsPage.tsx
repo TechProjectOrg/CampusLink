@@ -3,6 +3,7 @@ import { ArrowLeft, Bookmark } from 'lucide-react';
 import { Opportunity, Student } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { apiFetchSavedPosts, type UserPost } from '../lib/postsApi';
+import { userPostToOpportunity } from '../lib/postMappers';
 import { OpportunityCard } from './OpportunityCard';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
@@ -28,78 +29,11 @@ interface SavedPostsPageProps {
 }
 
 function mapSavedPostToOpportunity(post: UserPost, fallbackStudent: Student): Opportunity {
-  let mappedType: Opportunity['type'] = 'general';
-  const isProjectPost = (post.hashtags ?? []).some((tag) => tag.trim().toLowerCase() === 'project');
-  if (post.postType === 'event') {
-    mappedType = 'event';
-  } else if (post.postType === 'club_activity') {
-    mappedType = 'club';
-  } else if (post.postType === 'opportunity') {
-    mappedType = (post.opportunityType ?? 'event') as Opportunity['type'];
-  } else if (isProjectPost) {
-    mappedType = 'project';
-  }
-
-  return {
-    id: post.id,
-    authorId: post.authorUserId || fallbackStudent.id,
-    authorName: post.authorDisplayName || post.authorUsername || fallbackStudent.name,
-    authorAvatar: post.authorProfilePictureUrl || fallbackStudent.avatar,
-    clubId: post.clubId,
-    clubName: post.clubName,
-    clubSlug: post.clubSlug,
-    clubAvatarUrl: post.clubAvatarUrl,
-    type: mappedType,
-    title: post.title ?? '',
-    description: post.contentText ?? '',
-    date: post.createdAt,
-    company: post.company ?? undefined,
-    deadline: post.deadline ?? undefined,
-    stipend: post.stipend ?? undefined,
-    duration: post.duration ?? undefined,
-    location: post.location ?? undefined,
-    link: post.externalUrl ?? undefined,
-    image: post.media[0]?.mediaUrl,
-    tags: post.hashtags,
-    likes: [],
-    comments: (post.comments ?? []).map((comment) => ({
-      id: comment.id,
-      postId: comment.postId,
-      authorId: comment.authorUserId,
-      authorName: comment.authorDisplayName || comment.authorUsername,
-      authorAvatar: comment.authorProfilePictureUrl ?? '',
-      content: comment.content,
-      timestamp: comment.createdAt,
-      parentCommentId: comment.parentCommentId,
-      likeCount: comment.likeCount,
-      replyCount: comment.replyCount,
-      isLikedByMe: comment.isLikedByMe,
-      canDelete: comment.canDelete,
-      replies: comment.replies.map((reply) => ({
-        id: reply.id,
-        postId: reply.postId,
-        authorId: reply.authorUserId,
-        authorName: reply.authorDisplayName || reply.authorUsername,
-        authorAvatar: reply.authorProfilePictureUrl ?? '',
-        content: reply.content,
-        timestamp: reply.createdAt,
-        parentCommentId: reply.parentCommentId,
-        likeCount: reply.likeCount,
-        replyCount: reply.replyCount,
-        isLikedByMe: reply.isLikedByMe,
-        canDelete: reply.canDelete,
-        replies: [],
-      })),
-    })),
-    saved: [],
-    likeCount: post.likeCount,
-    saveCount: post.saveCount,
-    commentCount: post.commentCount,
-    isLikedByMe: post.isLikedByMe,
-    isSavedByMe: post.isSavedByMe,
-    canEdit: post.canEdit,
-    canDelete: post.canDelete,
-  };
+  return userPostToOpportunity(
+    post,
+    { [fallbackStudent.id]: fallbackStudent, [post.authorUserId]: fallbackStudent },
+    null,
+  );
 }
 
 export function SavedPostsPage({

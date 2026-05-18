@@ -34,9 +34,11 @@ import {
   apiCreateUserProject,
   apiDeleteUserProject,
   apiFetchUserProjects,
-  apiUploadUserProjectImage,
+  apiUploadUserProjectImages,
   apiUpdateUserProject,
 } from '../lib/projectsApi';
+import { MultiImageUpload } from './ui/MultiImageUpload';
+import { withOpportunityImages } from '../lib/mediaUtils';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
@@ -56,6 +58,7 @@ import {
 } from '../lib/authApi';
 import { OpportunityCard } from './OpportunityCard';
 import { apiCreateUserPost, apiFetchProfilePosts, type UserPost } from '../lib/postsApi';
+import { userPostToOpportunity } from '../lib/postMappers';
 import { LoadingIndicator } from './ui/LoadingIndicator';
 import { fetchCachedValue } from '../cache/socialCache';
 import { cachePolicies } from '../cache/policies';
@@ -129,6 +132,7 @@ interface Project {
   id: string;
   title: string;
   description: string;
+  images?: string[];
   imageUrl?: string;
   githubUrl?: string;
   liveUrl?: string;
@@ -266,8 +270,8 @@ export function ProfilePage({
     duration: '',
     link: '',
   });
-  const [projectImagePreview, setProjectImagePreview] = useState<string | null>(null);
-  const [projectImageFile, setProjectImageFile] = useState<File | null>(null);
+  const [projectImageFiles, setProjectImageFiles] = useState<File[]>([]);
+  const [projectExistingImages, setProjectExistingImages] = useState<string[]>([]);
   const [newProjectTag, setNewProjectTag] = useState('');
 
   const [newCertification, setNewCertification] = useState<Partial<Certification>>({
@@ -370,6 +374,7 @@ export function ProfilePage({
           id: item.id,
           title: item.title,
           description: item.description,
+          images: item.images,
           imageUrl: item.imageUrl || undefined,
           githubUrl: item.sourceUrl || undefined,
           liveUrl: item.demoUrl || item.link || undefined,
@@ -443,76 +448,8 @@ export function ProfilePage({
     }
   };
 
-  const mapApiPostToOpportunity = (post: UserPost): Opportunity => {
-    let mappedType: Opportunity['type'] = 'general';
-    const isProjectPost = (post.hashtags ?? []).some((tag) => tag.trim().toLowerCase() === 'project');
-    if (post.postType === 'event') {
-      mappedType = 'event';
-    } else if (post.postType === 'opportunity') {
-      mappedType = (post.opportunityType ?? 'event') as Opportunity['type'];
-    } else if (isProjectPost) {
-      mappedType = 'project';
-    }
-
-    return {
-      id: post.id,
-      authorId: student.id,
-      authorName: student.name,
-      authorAvatar: student.avatar,
-      type: mappedType,
-      title: post.title ?? '',
-      description: post.contentText ?? '',
-      date: post.createdAt,
-      company: post.company ?? undefined,
-      deadline: post.deadline ?? undefined,
-      stipend: post.stipend ?? undefined,
-      duration: post.duration ?? undefined,
-      location: post.location ?? undefined,
-      link: post.externalUrl ?? undefined,
-      image: post.media[0]?.mediaUrl,
-      tags: post.hashtags,
-      likes: [],
-      comments: (post.comments ?? []).map((comment) => ({
-        id: comment.id,
-        postId: comment.postId,
-        authorId: comment.authorUserId,
-        authorName: comment.authorDisplayName || comment.authorUsername,
-        authorAvatar:
-          comment.authorProfilePictureUrl ??
-          '',
-        content: comment.content,
-        timestamp: comment.createdAt,
-        parentCommentId: comment.parentCommentId,
-        likeCount: comment.likeCount,
-        isLikedByMe: comment.isLikedByMe,
-        canDelete: comment.canDelete,
-        replies: comment.replies.map((reply) => ({
-          id: reply.id,
-          postId: reply.postId,
-          authorId: reply.authorUserId,
-          authorName: reply.authorDisplayName || reply.authorUsername,
-          authorAvatar:
-            reply.authorProfilePictureUrl ??
-            '',
-          content: reply.content,
-          timestamp: reply.createdAt,
-          parentCommentId: reply.parentCommentId,
-          likeCount: reply.likeCount,
-          isLikedByMe: reply.isLikedByMe,
-          canDelete: reply.canDelete,
-          replies: [],
-        })),
-      })),
-      saved: [],
-      likeCount: post.likeCount,
-      saveCount: post.saveCount,
-      commentCount: post.commentCount,
-      isLikedByMe: post.isLikedByMe,
-      isSavedByMe: post.isSavedByMe,
-      canEdit: post.canEdit,
-      canDelete: post.canDelete,
-    };
-  };
+  const mapApiPostToOpportunity = (post: UserPost): Opportunity =>
+    userPostToOpportunity(post, { [student.id]: student }, null);
 
   const loadPosts = async () => {
     if (!student.id) return;
@@ -641,8 +578,8 @@ export function ProfilePage({
       duration: '',
       link: '',
     });
-    setProjectImagePreview(null);
-    setProjectImageFile(null);
+    setProjectImageFiles([]);
+    setProjectExistingImages([]);
     setNewProjectTag('');
     setNewCertification({ name: '', issuer: '', issueDate: undefined, imageUrl: '', certificateUrl: '', description: '' });
     setCertImagePreview(null);
@@ -820,21 +757,10 @@ export function ProfilePage({
   const handleAddProject = async () => {
     if (!newProject.title?.trim() || !newProject.description?.trim()) return;
 
-    const normalizeProjectImageUrl = (value?: string) => {
-      if (!value) return undefined;
-      const trimmed = value.trim();
-      if (!trimmed) return undefined;
-      if (trimmed.startsWith('data:') || trimmed.startsWith('blob:')) {
-        return undefined;
-      }
-      return trimmed;
-    };
-
     const project: Project = {
       id: editingItem || `proj-${Date.now()}`,
       title: newProject.title.trim(),
       description: newProject.description.trim(),
-      imageUrl: normalizeProjectImageUrl(projectImagePreview || newProject.imageUrl || ''),
       githubUrl: newProject.githubUrl || '',
       liveUrl: newProject.liveUrl || '',
       tags: newProject.tags || [],
@@ -846,17 +772,18 @@ export function ProfilePage({
     }
 
     try {
-      let uploadedImageUrl: string | undefined;
-      if (projectImageFile) {
-        uploadedImageUrl = await apiUploadUserProjectImage(authUserId, projectImageFile, authToken);
-      }
+      const uploadedImageUrls =
+        projectImageFiles.length > 0
+          ? await apiUploadUserProjectImages(authUserId, projectImageFiles, authToken)
+          : [];
+      const projectImages = [...projectExistingImages, ...uploadedImageUrls].slice(0, 10);
 
       const payload = {
         title: project.title,
         description: project.description,
         sourceUrl: project.githubUrl,
         demoUrl: project.liveUrl,
-        imageUrl: uploadedImageUrl ?? project.imageUrl,
+        images: projectImages,
         tags: project.tags,
       };
 
@@ -884,9 +811,11 @@ export function ProfilePage({
               created.sourceUrl ??
               undefined,
             hashtags: Array.from(new Set(['project', `project-${created.id}`, ...(created.tags ?? [])])),
-            media: created.imageUrl
-              ? [{ mediaUrl: created.imageUrl, mediaType: 'image', sortOrder: 0 }]
-              : [],
+            media: created.images.map((mediaUrl, sortOrder) => ({
+              mediaUrl,
+              mediaType: 'image',
+              sortOrder,
+            })),
           },
           authToken,
         );
@@ -958,7 +887,13 @@ export function ProfilePage({
     deadline: project.deadline,
     stipend: project.stipend,
     duration: project.duration,
-    image: project.imageUrl,
+    ...withOpportunityImages(
+      project.images?.length
+        ? project.images
+        : project.imageUrl
+          ? [project.imageUrl]
+          : [],
+    ),
     tags: Array.from(new Set(['project', ...(project.tags ?? [])])),
     likes: [],
     comments: [],
@@ -975,8 +910,10 @@ export function ProfilePage({
   const handleEditProject = (project: Project) => {
     setEditingItem(project.id);
     setNewProject(project);
-    setProjectImagePreview(project.imageUrl || null);
-    setProjectImageFile(null);
+    setProjectExistingImages(
+      project.images?.length ? project.images : project.imageUrl ? [project.imageUrl] : [],
+    );
+    setProjectImageFiles([]);
     setActiveModal('project');
   };
 
@@ -1010,18 +947,6 @@ export function ProfilePage({
       console.error('Error deleting project:', errorMsg);
     } finally {
       setPendingDeleteByKey((prev) => ({ ...prev, [key]: false }));
-    }
-  };
-
-  const handleProjectImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setProjectImageFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setProjectImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
     }
   };
 
@@ -2103,25 +2028,33 @@ export function ProfilePage({
       <Modal isOpen={activeModal === 'project'} onClose={closeModal} title={editingItem ? 'Edit Project' : 'Add Project'} className="w-[min(40rem,calc(100vw-2rem))]" style={{ width: 'min(40rem, calc(100vw - 2rem))' }}>
         <div className="space-y-4 max-h-[70vh] overflow-y-auto max-w-[560px] w-full">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Project Image</label>
-            <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 text-center hover:border-blue-400 transition-colors cursor-pointer"
-              onClick={() => document.getElementById('projectImageInput')?.click()}>
-              <input
-                id="projectImageInput"
-                type="file"
-                accept="image/*"
-                onChange={handleProjectImageChange}
-                className="hidden"
-              />
-              {projectImagePreview ? (
-                <img src={projectImagePreview} alt="Preview" className="w-full h-32 object-cover rounded-lg" />
-              ) : (
-                <div className="py-4">
-                  <Upload className="w-8 h-8 mx-auto text-gray-400" />
-                  <p className="text-sm text-gray-500 mt-2">Click to upload image</p>
-                </div>
-              )}
-            </div>
+            {projectExistingImages.length > 0 && (
+              <div className="mb-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {projectExistingImages.map((url, index) => (
+                  <div key={`${url}-${index}`} className="relative aspect-video rounded-lg overflow-hidden border">
+                    <img src={url} alt={`Existing ${index + 1}`} className="h-full w-full object-cover" />
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="icon"
+                      className="absolute top-1 right-1 h-7 w-7 rounded-full"
+                      onClick={() =>
+                        setProjectExistingImages((current) => current.filter((_, i) => i !== index))
+                      }
+                      aria-label={`Remove existing image ${index + 1}`}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <MultiImageUpload
+              files={projectImageFiles}
+              onFilesChange={setProjectImageFiles}
+              label="Project images"
+              maxFiles={Math.max(0, 10 - projectExistingImages.length)}
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Project Title *</label>

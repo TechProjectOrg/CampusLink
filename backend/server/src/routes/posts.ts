@@ -1,8 +1,9 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, type RequestHandler } from 'express';
+import multer from 'multer';
 import prisma from '../prisma';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
 import requireModerationCapability from '../middleware/requireModerationCapability';
-import { deleteManagedPostMediaByUrl } from '../lib/objectStorage';
+import { deleteManagedPostMediaByUrl, uploadPostMediaToStorage } from '../lib/objectStorage';
 import {
   notifyCommentReply,
   notifyPostComment,
@@ -34,6 +35,13 @@ import { isBlockedEitherWay } from '../lib/blocking';
 
 const router = express.Router();
 router.use(authenticateToken);
+
+const postMediaUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 10 },
+});
+
+const MAX_POST_MEDIA = 10;
 
 type DbPostType = 'general' | 'opportunity' | 'event' | 'club_activity';
 type DbOpportunityType = 'internship' | 'hackathon' | 'event' | 'contest' | 'club';
@@ -969,10 +977,24 @@ router.get('/users/:userId/posts', async (req: Request<{ userId: string }>, res:
   }
 });
 
-router.patch('/posts/:postId', requireModerationCapability('post'), async (req: Request<{ postId: string }>, res: Response) => {
+router.patch(
+  '/posts/:postId',
+  requireModerationCapability('post'),
+  postMediaUpload.array('media', MAX_POST_MEDIA) as unknown as RequestHandler<{ postId: string }>,
+  async (req: Request<{ postId: string }> & { files?: Express.Multer.File[] }, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const viewerUserId = authed.auth!.userId;
   const { postId } = req.params;
+
+  let requestBody: Record<string, unknown> = req.body ?? {};
+  if (typeof req.body?.payload === 'string') {
+    try {
+      requestBody = JSON.parse(req.body.payload) as Record<string, unknown>;
+    } catch {
+      return res.status(400).json({ message: 'Invalid JSON payload' });
+    }
+  }
+
   const {
     title,
     contentText,
@@ -984,7 +1006,9 @@ router.patch('/posts/:postId', requireModerationCapability('post'), async (req: 
     location,
     externalUrl,
     hashtags,
-  } = req.body as {
+    removeMediaIds,
+    reorder,
+  } = requestBody as {
     title?: string;
     contentText?: string;
     company?: string;
@@ -995,6 +1019,8 @@ router.patch('/posts/:postId', requireModerationCapability('post'), async (req: 
     location?: string;
     externalUrl?: string;
     hashtags?: string[];
+    removeMediaIds?: string[];
+    reorder?: Array<{ postMediaId: string; sortOrder: number }>;
   };
 
   try {
@@ -1018,8 +1044,20 @@ router.patch('/posts/:postId', requireModerationCapability('post'), async (req: 
     const locationValue = location?.trim() || null;
     const externalUrlValue = externalUrl?.trim() || null;
 
-    if (!titleValue && !contentValue) {
-      return res.status(400).json({ message: 'At least one of title or contentText is required' });
+    const uploadedFiles = Array.isArray(req.files) ? req.files : [];
+    const hasMediaMutation =
+      uploadedFiles.length > 0 ||
+      (Array.isArray(removeMediaIds) && removeMediaIds.length > 0) ||
+      (Array.isArray(reorder) && reorder.length > 0);
+
+    if (!titleValue && !contentValue && !hasMediaMutation && hashtags === undefined) {
+      return res.status(400).json({ message: 'No post fields provided for update' });
+    }
+
+    if (title !== undefined || contentText !== undefined) {
+      if (!titleValue && !contentValue) {
+        return res.status(400).json({ message: 'At least one of title or contentText is required' });
+      }
     }
 
     const deadlineValue = deadline ? new Date(deadline) : null;
@@ -1034,21 +1072,33 @@ router.patch('/posts/:postId', requireModerationCapability('post'), async (req: 
     const normalizedHashtags = normalizeHashtags(hashtags);
 
     await prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`
-        UPDATE posts
-        SET
-          title = ${titleValue},
-          content_text = ${contentValue},
-          company_name = ${companyValue},
-          application_deadline = ${deadlineValue},
-          stipend = ${stipendValue},
-          duration = ${durationValue},
-          event_date = ${eventDateValue},
-          location = ${locationValue},
-          external_url = ${externalUrlValue},
-          updated_at = NOW()
-        WHERE post_id = ${postId}
-      `;
+      if (
+        title !== undefined ||
+        contentText !== undefined ||
+        company !== undefined ||
+        deadline !== undefined ||
+        stipend !== undefined ||
+        duration !== undefined ||
+        eventDate !== undefined ||
+        location !== undefined ||
+        externalUrl !== undefined
+      ) {
+        await tx.$queryRaw`
+          UPDATE posts
+          SET
+            title = COALESCE(${titleValue}, title),
+            content_text = COALESCE(${contentValue}, content_text),
+            company_name = COALESCE(${companyValue}, company_name),
+            application_deadline = COALESCE(${deadlineValue}, application_deadline),
+            stipend = COALESCE(${stipendValue}, stipend),
+            duration = COALESCE(${durationValue}, duration),
+            event_date = COALESCE(${eventDateValue}, event_date),
+            location = COALESCE(${locationValue}, location),
+            external_url = COALESCE(${externalUrlValue}, external_url),
+            updated_at = NOW()
+          WHERE post_id = ${postId}
+        `;
+      }
 
       if (hashtags !== undefined) {
         await tx.$queryRaw`DELETE FROM post_hashtags WHERE post_id = ${postId}`;
@@ -1074,6 +1124,67 @@ router.patch('/posts/:postId', requireModerationCapability('post'), async (req: 
       }
     });
 
+    if (hasMediaMutation) {
+      if (uploadedFiles.some((file) => !file.mimetype.startsWith('image/'))) {
+        return res.status(400).json({ message: 'Only image uploads are allowed for post media' });
+      }
+
+      const removedIds = Array.isArray(removeMediaIds)
+        ? removeMediaIds.map((id) => String(id).trim()).filter(Boolean)
+        : [];
+
+      if (removedIds.length > 0) {
+        const removedMedia = await prisma.$queryRaw<{ media_url: string }[]>`
+          DELETE FROM post_media
+          WHERE post_id = ${postId}
+            AND post_media_id = ANY(${removedIds}::uuid[])
+          RETURNING media_url
+        `;
+        await Promise.allSettled(
+          removedMedia.map(async (row) => {
+            await deleteManagedPostMediaByUrl(row.media_url);
+          }),
+        );
+      }
+
+      if (Array.isArray(reorder) && reorder.length > 0) {
+        for (const item of reorder) {
+          const mediaId = item.postMediaId?.trim();
+          if (!mediaId || !Number.isInteger(item.sortOrder)) continue;
+          await prisma.$queryRaw`
+            UPDATE post_media
+            SET sort_order = ${item.sortOrder}
+            WHERE post_id = ${postId} AND post_media_id = ${mediaId}
+          `;
+        }
+      }
+
+      const currentCountRows = await prisma.$queryRaw<{ count: number }[]>`
+        SELECT COUNT(*)::int AS count
+        FROM post_media
+        WHERE post_id = ${postId}
+      `;
+      const currentCount = currentCountRows[0]?.count ?? 0;
+
+      if (currentCount + uploadedFiles.length > MAX_POST_MEDIA) {
+        return res.status(400).json({ message: `A post can include at most ${MAX_POST_MEDIA} media items` });
+      }
+
+      const uploadedUrls: string[] = [];
+      for (const [index, file] of uploadedFiles.entries()) {
+        const mediaUrl = await uploadPostMediaToStorage({
+          userId: viewerUserId,
+          fileBuffer: file.buffer,
+          mimeType: file.mimetype,
+        });
+        uploadedUrls.push(mediaUrl);
+        await prisma.$queryRaw`
+          INSERT INTO post_media (post_id, media_url, media_type, sort_order)
+          VALUES (${postId}, ${mediaUrl}, 'image', ${currentCount + index})
+        `;
+      }
+    }
+
     await refreshPostCaches(postId, viewerUserId);
     if (post.club_id) {
       await invalidateClubFeedCaches(post.club_id);
@@ -1089,7 +1200,8 @@ router.patch('/posts/:postId', requireModerationCapability('post'), async (req: 
     console.error('Error updating post:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
-});
+},
+);
 
 router.delete('/posts/:postId', requireModerationCapability('post'), async (req: Request<{ postId: string }>, res: Response) => {
   const authed = req as unknown as AuthedRequest;

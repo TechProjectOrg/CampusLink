@@ -109,6 +109,8 @@ export interface UpdatePostPayload {
   location?: string;
   externalUrl?: string;
   hashtags?: string[];
+  removeMediaIds?: string[];
+  reorder?: Array<{ postMediaId: string; sortOrder: number }>;
 }
 
 export interface CommentContext {
@@ -405,14 +407,34 @@ export async function apiUnsavePost(postId: string, token?: string): Promise<voi
   }
 }
 
-export async function apiUpdatePost(postId: string, payload: UpdatePostPayload, token?: string): Promise<void> {
+export async function apiUpdatePost(
+  postId: string,
+  payload: UpdatePostPayload,
+  token?: string,
+  mediaFiles?: File[],
+): Promise<void> {
+  const hasFiles = Array.isArray(mediaFiles) && mediaFiles.length > 0;
+
   const response = await fetch(`${API_BASE}/posts/${encodeURIComponent(postId)}`, {
     method: 'PATCH',
-    headers: {
-      'Content-Type': 'application/json',
-      ...authHeaders(token),
-    },
-    body: JSON.stringify(payload),
+    headers: hasFiles
+      ? {
+          ...authHeaders(token),
+        }
+      : {
+          'Content-Type': 'application/json',
+          ...authHeaders(token),
+        },
+    body: hasFiles
+      ? (() => {
+          const formData = new FormData();
+          formData.append('payload', JSON.stringify(payload));
+          for (const file of mediaFiles) {
+            formData.append('media', file);
+          }
+          return formData;
+        })()
+      : JSON.stringify(payload),
   });
 
   if (!response.ok) {
