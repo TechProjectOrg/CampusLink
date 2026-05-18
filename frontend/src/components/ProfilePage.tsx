@@ -133,6 +133,12 @@ interface Project {
   githubUrl?: string;
   liveUrl?: string;
   tags: string[];
+  company?: string;
+  location?: string;
+  deadline?: string;
+  stipend?: string;
+  duration?: string;
+  link?: string;
 }
 
 // Certification with dates
@@ -253,6 +259,12 @@ export function ProfilePage({
     githubUrl: '',
     liveUrl: '',
     tags: [],
+    company: '',
+    location: '',
+    deadline: '',
+    stipend: '',
+    duration: '',
+    link: '',
   });
   const [projectImagePreview, setProjectImagePreview] = useState<string | null>(null);
   const [projectImageFile, setProjectImageFile] = useState<File | null>(null);
@@ -615,7 +627,20 @@ export function ProfilePage({
 
   const resetForms = () => {
     setNewExperience({ roleTitle: '', organization: '', startDate: undefined, endDate: undefined, isCurrentlyWorking: false, description: '' });
-    setNewProject({ title: '', description: '', imageUrl: '', githubUrl: '', liveUrl: '', tags: [] });
+    setNewProject({
+      title: '',
+      description: '',
+      imageUrl: '',
+      githubUrl: '',
+      liveUrl: '',
+      tags: [],
+      company: '',
+      location: '',
+      deadline: '',
+      stipend: '',
+      duration: '',
+      link: '',
+    });
     setProjectImagePreview(null);
     setProjectImageFile(null);
     setNewProjectTag('');
@@ -837,13 +862,27 @@ export function ProfilePage({
 
       if (!editingItem) {
         const created = await apiCreateUserProject(authUserId, payload, authToken);
+        const trimOrUndefined = (value?: string) => {
+          const trimmed = value?.trim();
+          return trimmed ? trimmed : undefined;
+        };
+
         const createdPost = await apiCreateUserPost(
           authUserId,
           {
             postType: 'general',
             title: created.title,
             contentText: created.description,
-            externalUrl: created.demoUrl ?? created.sourceUrl ?? undefined,
+            company: trimOrUndefined(newProject.company),
+            location: trimOrUndefined(newProject.location),
+            deadline: trimOrUndefined(newProject.deadline),
+            stipend: trimOrUndefined(newProject.stipend),
+            duration: trimOrUndefined(newProject.duration),
+            externalUrl:
+              trimOrUndefined(newProject.link) ??
+              created.demoUrl ??
+              created.sourceUrl ??
+              undefined,
             hashtags: Array.from(new Set(['project', `project-${created.id}`, ...(created.tags ?? [])])),
             media: created.imageUrl
               ? [{ mediaUrl: created.imageUrl, mediaType: 'image', sortOrder: 0 }]
@@ -913,7 +952,12 @@ export function ProfilePage({
     title: project.title,
     description: project.description,
     date: new Date().toISOString(),
-    link: project.liveUrl || project.githubUrl || undefined,
+    link: project.link || project.liveUrl || project.githubUrl || undefined,
+    company: project.company,
+    location: project.location,
+    deadline: project.deadline,
+    stipend: project.stipend,
+    duration: project.duration,
     image: project.imageUrl,
     tags: Array.from(new Set(['project', ...(project.tags ?? [])])),
     likes: [],
@@ -2095,6 +2139,56 @@ export function ProfilePage({
               placeholder="Describe your project"
               rows={3}
             />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Company</label>
+              <Input
+                value={newProject.company || ''}
+                onChange={(e) => setNewProject({ ...newProject, company: e.target.value })}
+                placeholder="Company"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+              <Input
+                value={newProject.location || ''}
+                onChange={(e) => setNewProject({ ...newProject, location: e.target.value })}
+                placeholder="Location"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+              <Input
+                type="date"
+                value={newProject.deadline ? newProject.deadline.slice(0, 10) : ''}
+                onChange={(e) => setNewProject({ ...newProject, deadline: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">External Link</label>
+              <Input
+                value={newProject.link || ''}
+                onChange={(e) => setNewProject({ ...newProject, link: e.target.value })}
+                placeholder="External link"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Stipend</label>
+              <Input
+                value={newProject.stipend || ''}
+                onChange={(e) => setNewProject({ ...newProject, stipend: e.target.value })}
+                placeholder="Stipend"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Duration</label>
+              <Input
+                value={newProject.duration || ''}
+                onChange={(e) => setNewProject({ ...newProject, duration: e.target.value })}
+                placeholder="Duration"
+              />
+            </div>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Tech Stack</label>
