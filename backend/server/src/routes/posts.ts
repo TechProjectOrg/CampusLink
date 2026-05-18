@@ -1380,8 +1380,8 @@ router.post('/posts/:postId/comments', requireModerationCapability('comment'), a
     }
 
     const rows = await prisma.$queryRaw<{ comment_id: string }[]>`
-      INSERT INTO post_comments (post_id, author_user_id, content)
-      VALUES (${postId}, ${viewerUserId}, ${content.trim()})
+      INSERT INTO post_comments (post_id, author_user_id, content, created_at, updated_at)
+      VALUES (${postId}, ${viewerUserId}, ${content.trim()}, NOW(), NOW())
       RETURNING comment_id
     `;
     const createdCommentId = rows[0]?.comment_id;
@@ -1434,8 +1434,8 @@ router.post('/posts/comments/:commentId/replies', requireModerationCapability('c
     }
 
     const rows = await prisma.$queryRaw<{ comment_id: string }[]>`
-      INSERT INTO post_comments (post_id, author_user_id, parent_comment_id, content)
-      VALUES (${parent.post_id}, ${viewerUserId}, ${commentId}, ${content.trim()})
+      INSERT INTO post_comments (post_id, author_user_id, parent_comment_id, content, created_at, updated_at)
+      VALUES (${parent.post_id}, ${viewerUserId}, ${commentId}, ${content.trim()}, NOW(), NOW())
       RETURNING comment_id
     `;
     const createdReplyId = rows[0]?.comment_id;
