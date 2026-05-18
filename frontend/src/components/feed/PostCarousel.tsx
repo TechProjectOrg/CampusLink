@@ -187,7 +187,7 @@ export function PostCarousel({
               handlePrevious();
             }}
             aria-label="Previous image"
-            className="hidden md:inline-flex absolute left-3 top-1/2 -translate-y-1/2 z-20 items-center justify-center rounded-full bg-slate-600/85 hover:bg-slate-700 border border-slate-500/60 shadow-lg hover:shadow-xl p-2.5 text-white transition-all duration-200"
+            className="hidden md:flex absolute left-3 top-1/2 -translate-y-1/2 z-20 items-center justify-center rounded-full bg-slate-600/90 hover:bg-slate-700 border border-slate-500 shadow-xl p-2.5 text-white transition-all duration-200"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
@@ -202,7 +202,7 @@ export function PostCarousel({
               handleNext();
             }}
             aria-label="Next image"
-            className="hidden md:inline-flex absolute right-3 top-1/2 -translate-y-1/2 z-20 items-center justify-center rounded-full bg-slate-600/85 hover:bg-slate-700 border border-slate-500/60 shadow-lg hover:shadow-xl p-2.5 text-white transition-all duration-200"
+            className="hidden md:flex absolute right-3 top-1/2 -translate-y-1/2 z-20 items-center justify-center rounded-full bg-slate-600/90 hover:bg-slate-700 border border-slate-500 shadow-xl p-2.5 text-white transition-all duration-200"
           >
             <ChevronRight className="w-5 h-5" />
           </button>
@@ -220,10 +220,10 @@ export function PostCarousel({
                   setCurrentIndex(i);
                 }}
                 aria-label={`Go to image ${i + 1}`}
-                className={`pointer-events-auto h-2 w-2 rounded-full transition-all duration-200 ${
+                className={`pointer-events-auto h-2.5 w-2.5 rounded-full transition-all duration-200 ${
                   i === currentIndex
                     ? 'bg-white scale-125 shadow-lg ring-2 ring-white/30'
-                    : 'bg-white/40 hover:bg-white/60'
+                    : 'bg-white'
                 }`}
               />
             ))}
@@ -306,10 +306,10 @@ export function PostCarousel({
                       setLightboxIndex(i);
                     }}
                     aria-label={`Go to fullscreen image ${i + 1}`}
-                    className={`pointer-events-auto h-2 w-2 rounded-full transition-all duration-200 ${
+                    className={`pointer-events-auto h-2.5 w-2.5 rounded-full transition-all duration-200 ${
                       i === lightboxIndex
                         ? 'bg-white scale-125 shadow-lg ring-2 ring-white/50'
-                        : 'bg-white/35 hover:bg-white/55'
+                        : 'bg-white'
                     }`}
                   />
                 ))}
