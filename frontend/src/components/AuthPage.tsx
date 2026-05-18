@@ -199,6 +199,16 @@ type ScreenMode = 'login' | 'signup';
 type SignupStep = 'role' | 'method' | 'verify-email' | 'await-verification' | 'student-form' | 'alumni-form' | 'alumni-pending';
 type AccountType = 'student' | 'alumni';
 
+const SIGNUP_STEP_SUBTITLES: Record<SignupStep, string> = {
+  role: 'Choose the profile you want to create.',
+  method: 'Verify your identity to continue.',
+  'verify-email': "We'll send a secure verification link to your email.",
+  'await-verification': 'Open the link in your email to continue.',
+  'student-form': 'Complete your student profile and create a password.',
+  'alumni-form': 'Complete your alumni profile and upload verification proof.',
+  'alumni-pending': 'Your alumni proof has been sent for review.',
+};
+
 export function AuthPage() {
   const auth = useAuth();
 
@@ -730,13 +740,6 @@ export function AuthPage() {
 
   const renderSignupRoleStep = () => (
     <div className="space-y-4 animate-fade-slide-in">
-      <div className="space-y-1">
-        <h3 className="text-3xl text-slate-900">Choose your account type</h3>
-        <p className="text-sm text-slate-600">
-          Start by selecting the profile you want to create.
-        </p>
-      </div>
-
       <div className="grid gap-3">
         <button
           type="button"
@@ -745,10 +748,10 @@ export function AuthPage() {
             setSignupStep('method');
             resetMessages();
           }}
-          className="rounded-2xl border border-primary/20 bg-primary/5 p-5 text-left transition hover:border-primary/40 hover:bg-primary/10"
+          className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-left transition hover:border-primary/40 hover:bg-slate-50"
         >
-          <p className="text-base font-semibold text-slate-900">Student</p>
-          <p className="mt-1 text-sm text-slate-600">Official college email required.</p>
+          <p className="text-sm font-medium text-slate-900">Student</p>
+          <p className="mt-0.5 text-xs text-slate-500">Official college email required.</p>
         </button>
 
         <button
@@ -758,10 +761,10 @@ export function AuthPage() {
             setSignupStep('method');
             resetMessages();
           }}
-          className="rounded-2xl border border-primary/20 bg-primary/5 p-5 text-left transition hover:border-primary/40 hover:bg-primary/10"
+          className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-left transition hover:border-primary/40 hover:bg-slate-50"
         >
-          <p className="text-base font-semibold text-slate-900">Alumni</p>
-          <p className="mt-1 text-sm text-slate-600">Signup includes the existing proof verification process.</p>
+          <p className="text-sm font-medium text-slate-900">Alumni</p>
+          <p className="mt-0.5 text-xs text-slate-500">Includes proof verification before account approval.</p>
         </button>
       </div>
     </div>
@@ -770,58 +773,42 @@ export function AuthPage() {
   const renderSignupMethodStep = () => (
     <div className="space-y-4 animate-fade-slide-in">
       <div className="flex items-center justify-between">
-        <div className="space-y-1">
-          <h3 className="text-3xl text-slate-900">
-            Sign up as {selectedRole === 'student' ? 'Student' : 'Alumni'}
-          </h3>
-          <p className="text-sm text-slate-600">
-            Verify your identity with Google or your email, then complete the original signup form.
-          </p>
-        </div>
+        <p className="text-sm text-slate-600">
+          Signing up as{' '}
+          <span className="font-medium text-slate-900">
+            {selectedRole === 'student' ? 'Student' : 'Alumni'}
+          </span>
+        </p>
         <button
           type="button"
           onClick={() => {
             setSignupStep('role');
             resetMessages();
           }}
-          className="text-sm text-slate-500 transition hover:text-slate-900"
+          className="text-xs font-normal text-blue-600 transition hover:underline"
         >
           Change
         </button>
       </div>
 
-      <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
-        <p className="text-sm font-semibold text-slate-900">Continue with Google</p>
-        <p className="mt-1 text-xs text-slate-600">
-          {selectedRole === 'student'
-            ? 'Use your official college Google account if you want the fastest setup.'
-            : 'Use Google to prefill your profile details before uploading your alumni proof.'}
-        </p>
-        <div className="mt-4 flex justify-center">
-          <GoogleAuthButton disabled={isLoading} onCredential={handleSignupGoogle} />
-        </div>
+      <div className="flex justify-center">
+        <GoogleAuthButton disabled={isLoading} onCredential={handleSignupGoogle} />
       </div>
 
       <Divider />
 
-      <div className="rounded-2xl border border-slate-200 p-4">
-        <p className="text-sm font-semibold text-slate-900">Verify with email</p>
-        <p className="mt-1 text-xs text-slate-600">
-          Magic links are used only to verify email ownership during signup.
-        </p>
-        <div className="mt-4">
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full rounded-2xl"
-            onClick={() => {
-              setSignupStep('verify-email');
-              resetMessages();
-            }}
-          >
-            Continue with Email
-          </Button>
-        </div>
+      <div className="mx-auto w-full max-w-[320px]">
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full rounded-2xl"
+          onClick={() => {
+            setSignupStep('verify-email');
+            resetMessages();
+          }}
+        >
+          Continue with Email
+        </Button>
       </div>
 
       {signupError ? <FormMessage tone="error">{signupError}</FormMessage> : null}
@@ -831,13 +818,6 @@ export function AuthPage() {
 
   const renderVerifyEmailStep = () => (
     <div className="space-y-4 animate-fade-slide-in">
-      <div className="space-y-1">
-        <h3 className="text-3xl text-slate-900">Verify your email</h3>
-        <p className="text-sm text-slate-600">
-          We&apos;ll send a secure verification link before you fill the signup form.
-        </p>
-      </div>
-
       <form onSubmit={handleSendVerificationLink} className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="signup-email">
@@ -863,54 +843,44 @@ export function AuthPage() {
         {signupError ? <FormMessage tone="error">{signupError}</FormMessage> : null}
         {signupMessage ? <FormMessage tone="info">{signupMessage}</FormMessage> : null}
 
-        <Button type="submit" className="w-full rounded-2xl gradient-success" disabled={isLoading}>
-          {isLoading
-            ? <Lottie animationData={loadingAnimation} style={{ height: 40, width: 40 }} />
-            : 'Send Verification Link'}
-        </Button>
+        <div className="mx-auto w-full max-w-[320px]">
+          <Button type="submit" className="w-full rounded-2xl gradient-primary" disabled={isLoading}>
+            {isLoading
+              ? <Lottie animationData={loadingAnimation} style={{ height: 40, width: 40 }} />
+              : 'Send Verification Link'}
+          </Button>
+        </div>
       </form>
     </div>
   );
 
   const renderAwaitVerificationStep = () => (
     <div className="space-y-4 animate-fade-slide-in">
-      <div className="space-y-1">
-        <h3 className="text-3xl text-slate-900">Check your inbox</h3>
-        <p className="text-sm text-slate-600">
-          Open the verification link from your email to continue to the signup form.
-        </p>
-      </div>
-
       {signupMessage ? <FormMessage tone="info">{signupMessage}</FormMessage> : null}
       {signupError ? <FormMessage tone="error">{signupError}</FormMessage> : null}
 
-      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+      <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500">
         The email will take you back here and unlock the onboarding form automatically.
       </div>
 
-      <Button
-        type="button"
-        variant="outline"
-        className="w-full rounded-2xl"
-        onClick={() => {
-          setSignupStep('verify-email');
-          resetMessages();
-        }}
-      >
-        Use a different email
-      </Button>
+      <div className="mx-auto w-full max-w-[320px]">
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full rounded-2xl"
+          onClick={() => {
+            setSignupStep('verify-email');
+            resetMessages();
+          }}
+        >
+          Use a different email
+        </Button>
+      </div>
     </div>
   );
 
   const renderStudentForm = () => (
     <form onSubmit={handleStudentSignup} className="space-y-4 animate-fade-slide-in">
-      <div className="space-y-1">
-        <h3 className="text-3xl text-slate-900">Create your student account</h3>
-        <p className="text-sm text-slate-600">
-          Complete the original student signup form and create your password.
-        </p>
-      </div>
-
       {signupMessage ? <FormMessage tone="info">{signupMessage}</FormMessage> : null}
 
       <div className="space-y-2">
@@ -1053,31 +1023,22 @@ export function AuthPage() {
 
       {signupError ? <FormMessage tone="error">{signupError}</FormMessage> : null}
 
-      <Button
-        type="submit"
-        className="w-full rounded-2xl gradient-success"
-        disabled={isLoading || studentUsernameStatus.available === false || studentUsernameStatus.checking}
-      >
-        {isLoading
-          ? <Lottie animationData={loadingAnimation} style={{ height: 40, width: 40 }} />
-          : 'Create Student Account'}
-      </Button>
+      <div className="mx-auto w-full max-w-[320px]">
+        <Button
+          type="submit"
+          className="w-full rounded-2xl gradient-primary"
+          disabled={isLoading || studentUsernameStatus.available === false || studentUsernameStatus.checking}
+        >
+          {isLoading
+            ? <Lottie animationData={loadingAnimation} style={{ height: 40, width: 40 }} />
+            : 'Create Student Account'}
+        </Button>
+      </div>
     </form>
   );
 
   const renderAlumniForm = () => (
     <form onSubmit={handleAlumniSignup} className="space-y-4 animate-fade-slide-in">
-      <div className="space-y-1">
-        <h3 className="text-3xl text-slate-900">
-          {alumniResubmissionToken ? 'Upload more alumni proof' : 'Create your alumni account'}
-        </h3>
-        <p className="text-sm text-slate-600">
-          {alumniResubmissionToken
-            ? 'Update your details if needed and upload the additional proof requested by the reviewer.'
-            : 'Complete the original alumni signup form and upload your verification proof.'}
-        </p>
-      </div>
-
       {signupMessage ? <FormMessage tone="info">{signupMessage}</FormMessage> : null}
       {alumniResubmissionToken ? (
         <FormMessage tone="info">
@@ -1265,40 +1226,37 @@ export function AuthPage() {
 
       {signupError ? <FormMessage tone="error">{signupError}</FormMessage> : null}
 
-      <Button
-        type="submit"
-          className="w-full rounded-2xl gradient-success"
+      <div className="mx-auto w-full max-w-[320px]">
+        <Button
+          type="submit"
+          className="w-full rounded-2xl gradient-primary"
           disabled={isLoading || alumniUsernameStatus.available === false || alumniUsernameStatus.checking}
         >
-        {isLoading
-          ? <Lottie animationData={loadingAnimation} style={{ height: 40, width: 40 }} />
-          : alumniResubmissionToken ? 'Resubmit Alumni Proof' : 'Submit Alumni Signup'}
-      </Button>
+          {isLoading
+            ? <Lottie animationData={loadingAnimation} style={{ height: 40, width: 40 }} />
+            : alumniResubmissionToken ? 'Resubmit Alumni Proof' : 'Submit Alumni Signup'}
+        </Button>
+      </div>
     </form>
   );
 
   const renderAlumniPending = () => (
     <div className="space-y-4 animate-fade-slide-in">
-      <div className="space-y-1">
-        <h3 className="text-3xl text-slate-900">Verification submitted</h3>
-        <p className="text-sm text-slate-600">
-          Your alumni proof has been sent for review. We&apos;ll unlock your account after approval.
-        </p>
-      </div>
-
       {signupMessage ? <FormMessage tone="info">{signupMessage}</FormMessage> : null}
       {signupError ? <FormMessage tone="error">{signupError}</FormMessage> : null}
 
-      <Button
-        type="button"
-        className="w-full rounded-2xl"
-        onClick={() => {
-          openLogin();
-          resetSignupFlow();
-        }}
-      >
-        Return to Login
-      </Button>
+      <div className="mx-auto w-full max-w-[320px]">
+        <Button
+          type="button"
+          className="w-full rounded-2xl gradient-primary"
+          onClick={() => {
+            openLogin();
+            resetSignupFlow();
+          }}
+        >
+          Return to Login
+        </Button>
+      </div>
     </div>
   );
 
@@ -1387,28 +1345,20 @@ export function AuthPage() {
                 {mode === 'login' ? 'Welcome to CampusLynk' : 'Create Your Account'}
               </h2>
             </div>
-            <p className="text-gray-600 text-center">
-              {mode === 'signup'
-                ? 'Signup begins with role selection, verification, and then the original onboarding form.'
-                  : ''}
+            <p className="text-sm text-gray-500 text-center">
+              {mode === 'login'
+                ? 'Sign in to connect with your campus network.'
+                : signupStep === 'alumni-form' && alumniResubmissionToken
+                  ? 'Upload additional proof requested by the reviewer.'
+                  : SIGNUP_STEP_SUBTITLES[signupStep]}
             </p>
-            {mode === 'login' ? (
-              <p className="text-sm text-gray-500 text-center">
-                Sign in to connect with your campus network.
-              </p>
-            ) : null}
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {mode === 'signup' ? (
+              {mode === 'signup' && signupStep !== 'role' ? (
                 <button
                   type="button"
                   onClick={() => {
-                    if (signupStep === 'role') {
-                      openLogin();
-                      return;
-                    }
-
                     if (signupStep === 'method') {
                       setSignupStep('role');
                       resetMessages();
@@ -1432,9 +1382,9 @@ export function AuthPage() {
                       resetMessages();
                     }
                   }}
-                  className="inline-flex items-center gap-2 text-sm text-slate-500 transition hover:text-slate-900"
+                  className="inline-flex items-center gap-1.5 text-xs font-normal text-slate-500 transition hover:text-slate-900"
                 >
-                  <ArrowLeft className="h-4 w-4" />
+                  <ArrowLeft className="h-3.5 w-3.5" />
                   Back
                 </button>
               ) : null}
@@ -1529,6 +1479,21 @@ export function AuthPage() {
                   </div>
                 </div>
               ) : renderSignupBody()}
+
+              {mode === 'signup' ? (
+                <div className="flex justify-center text-xs font-normal text-slate-500">
+                  <p>
+                    Already have an account?{' '}
+                    <button
+                      type="button"
+                      onClick={openLogin}
+                      className="font-normal text-blue-600 transition hover:underline"
+                    >
+                      Log in
+                    </button>
+                  </p>
+                </div>
+              ) : null}
             </div>
           </CardContent>
         </Card>
