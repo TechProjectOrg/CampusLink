@@ -220,7 +220,7 @@ export function PostPage({
       <div
         key={comment.id}
         id={`comment-${comment.id}`}
-        className={`${depth > 0 ? 'ml-8 mt-3' : ''} rounded-xl transition-colors duration-300 ${
+        className={`${depth > 0 ? 'ml-8 mt-4' : 'mt-0'} rounded-xl transition-colors duration-300 ${
           highlightedCommentId === comment.id ? 'bg-yellow-100/70' : ''
         }`}
       >
@@ -230,8 +230,8 @@ export function PostPage({
             <AvatarFallback>{comment.authorName[0]}</AvatarFallback>
           </Avatar>
           <div className="flex-1">
-            <div className="bg-gray-50 rounded-xl p-3">
-              <div className="flex items-start justify-between gap-2">
+            <div className="bg-gray-50 rounded-xl px-4 py-3">
+              <div className="flex items-start justify-between gap-3">
                 <button
                   type="button"
                   className="text-sm text-gray-900 text-left hover:text-primary"
@@ -269,10 +269,10 @@ export function PostPage({
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
-              <p className="text-sm text-gray-600 mt-1">{comment.content}</p>
+              <p className="text-sm text-gray-600 mt-2">{comment.content}</p>
             </div>
 
-            <div className="mt-2 flex items-center gap-3 text-xs text-gray-500">
+            <div className="mt-3 flex items-center gap-3 text-xs text-gray-500">
               <span>{new Date(comment.timestamp).toLocaleString()}</span>
               <button
                 type="button"
@@ -349,20 +349,22 @@ export function PostPage({
           Back
         </button>
 
-        <div className="bg-white rounded-2xl border border-primary/10 p-6 shadow-sm space-y-5">
-          <div className="flex items-center gap-3">
-            <button type="button" className="flex items-center gap-3" onClick={() => onViewProfile?.(post.authorId)}>
-              <Avatar>
+        <div className="cl-post-detail-card bg-white rounded-2xl border border-primary/10 shadow-sm overflow-hidden">
+          <div className="p-4 sm:p-6">
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <button type="button" className="flex items-center gap-3 min-w-0" onClick={() => onViewProfile?.(post.authorId)}>
+              <Avatar className="w-10 h-10 ring-2 ring-primary/20 shrink-0">
                 <AvatarImage src={post.authorAvatar} />
                 <AvatarFallback>{post.authorName[0]}</AvatarFallback>
               </Avatar>
-              <div className="text-left">
+              <div className="text-left min-w-0">
                 <p className="text-gray-900">{post.authorName}</p>
                 <p className="text-sm text-gray-500">{new Date(post.date).toLocaleString()}</p>
               </div>
             </button>
+            <div className="flex items-center gap-2 shrink-0">
             {post.type !== 'general' ? (
-              <Badge className={`${typeColors[post.type]} border ml-auto`}>
+              <Badge className={`${typeColors[post.type]} border`}>
                 {post.type.charAt(0).toUpperCase() + post.type.slice(1)}
               </Badge>
             ) : null}
@@ -391,18 +393,23 @@ export function PostPage({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2 mb-4">
             <h1 className="text-2xl text-gray-900">{post.title}</h1>
             <p className="text-gray-700 whitespace-pre-wrap">{post.description}</p>
           </div>
 
           {post.image && (
-            <ImageWithFallback src={post.image} alt={post.title} className="w-full max-h-[34rem] object-contain rounded-xl bg-gray-50" />
+            <ImageWithFallback
+              src={post.image}
+              alt={post.title}
+              className="w-full max-h-[34rem] object-contain rounded-xl bg-gray-50 mb-4"
+            />
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-gray-700">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-gray-700 mb-4">
             <div className="flex items-center gap-2"><Calendar className="w-4 h-4" /><span>Posted: {formatDate(post.date)}</span></div>
             {post.location && <div className="flex items-center gap-2"><MapPin className="w-4 h-4" /><span>Location: {post.location}</span></div>}
             {post.company && <div>Company: {post.company}</div>}
@@ -413,7 +420,7 @@ export function PostPage({
           </div>
 
           {visibleTags.length > 0 && (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 mb-4">
               {visibleTags.map((tag) => (
                 <Badge key={`${post.id}-${tag}`} className="bg-primary/10 text-primary border-primary/20">
                   #{tag}
@@ -421,8 +428,9 @@ export function PostPage({
               ))}
             </div>
           )}
+          </div>
 
-          <div className="flex items-center gap-2 pt-2 border-t border-primary/10">
+          <div className="cl-post-detail-actions flex items-center gap-2 px-4 sm:px-6 py-3 sm:py-4 border-t border-primary/10">
             <button
               onClick={() => onLike(post.id)}
               className={`flex items-center gap-2 px-3 py-2 rounded-xl transition-all duration-300 ${
@@ -444,8 +452,10 @@ export function PostPage({
             <span className="text-sm text-gray-600 ml-auto">{commentCount} comments</span>
           </div>
 
-          <div className="space-y-4 border-t border-primary/10 pt-4">
+          <div className="cl-post-detail-comments px-4 sm:px-6 py-4 sm:py-6 border-t border-primary/10 space-y-4">
+            <div className="space-y-4">
             {topLevelComments.map((comment) => renderComment(comment))}
+            </div>
 
             {commentsState.isLoading && topLevelComments.length === 0 && (
               <LoadingIndicator label="Loading comments..." className="justify-start py-1" size={20} />
@@ -469,8 +479,8 @@ export function PostPage({
               </div>
             )}
 
-            <div className="flex gap-3">
-              <Avatar className="w-8 h-8 ring-2 ring-primary/10">
+            <div className="flex gap-3 pt-2">
+              <Avatar className="w-8 h-8 ring-2 ring-primary/10 shrink-0">
                 <AvatarImage src={currentUserAvatar} />
                 <AvatarFallback>{currentUserInitial}</AvatarFallback>
               </Avatar>

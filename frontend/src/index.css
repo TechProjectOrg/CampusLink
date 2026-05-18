@@ -5027,6 +5027,14 @@ div[style*="width: 25%"]::webkit-scrollbar {
   min-height: 0;
 }
 
+.cl-post-detail-card .cl-post-detail-actions {
+  border-top-color: #eef2f7;
+}
+
+.cl-post-detail-card .cl-post-detail-comments {
+  border-top-color: #eef2f7;
+}
+
 @media (max-width: 639px) {
   .cl-feed-page {
     max-width: none !important;
