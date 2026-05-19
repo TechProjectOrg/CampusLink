@@ -102,8 +102,8 @@ export function Navbar({ activeTab, onTabChange, onOpenSavedPosts, unreadCount =
         <div className="cl-navbar-row flex items-center gap-4 h-16">
           {/* Logo */}
           <div className="flex items-center gap-2 flex-shrink-0 cursor-pointer" onClick={() => handleTabNavigate('feed')}>
-            <div className="bg-white/20 backdrop-blur-lg text-white rounded-xl p-2 shadow-lg hover-lift border border-white/30">
-              <Users className="w-6 h-6" />
+            <div className="overflow-hidden rounded-xl border border-white/30 bg-white/20 shadow-lg backdrop-blur-lg hover-lift">
+              <img src="/logo.png" alt="CampusLynk logo" className="h-10 w-10 object-cover" />
             </div>
             <span className="cl-navbar-logo-text text-white text-xl tracking-tight hidden sm:inline">CampusLynk</span>
           </div>

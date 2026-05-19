@@ -1291,8 +1291,8 @@ export function AuthPage() {
       <div className="cl-auth-layout w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 gap-8 items-center relative z-10">
         <div className="cl-auth-branding space-y-6 text-center md:text-left animate-slide-in-up">
           <div className="inline-flex items-center gap-3 glass-morphism-solid rounded-2xl p-4 shadow-2xl hover-lift">
-            <div className="gradient-primary text-white rounded-xl p-3 shadow-lg">
-              <Users className="w-8 h-8" />
+            <div className="overflow-hidden rounded-full border border-white/20 shadow-lg">
+              <img src="/logo.png" alt="CampusLynk logo" className="h-14 w-14 object-cover" />
             </div>
             <span className="text-white text-2xl">CampusLynk</span>
           </div>

@@ -309,7 +309,13 @@ router.get('/', async (req: Request, res: Response) => {
             AND ct_filter.normalized_name = ${tagPattern}
         )
       )
-      ORDER BY member_count DESC, c.created_at DESC
+      ORDER BY
+        CASE cm.status
+          WHEN CAST('active' AS "ClubMembershipStatus") THEN 0
+          ELSE 1
+        END,
+        member_count DESC,
+        c.created_at DESC
       LIMIT ${limit}
       OFFSET ${offset}
     `;

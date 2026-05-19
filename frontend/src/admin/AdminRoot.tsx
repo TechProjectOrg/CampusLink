@@ -1888,12 +1888,15 @@ export default function AdminRoot() {
             <div className="border-b border-slate-200 px-4 py-4">
               <div className="flex items-center justify-between">
                 {!collapsed ? (
-                  <div className="overflow-hidden">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">CampusLynk</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-900">Admin Console</p>
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <img src="/logo.png" alt="CampusLynk logo" className="h-10 w-10 shrink-0 rounded-xl object-cover ring-1 ring-slate-200" />
+                    <div className="overflow-hidden">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-slate-500">CampusLynk</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-900">Admin Console</p>
+                    </div>
                   </div>
                 ) : (
-                  <div className="w-3" />
+                  <img src="/logo.png" alt="CampusLynk logo" className="h-9 w-9 rounded-xl object-cover ring-1 ring-slate-200" />
                 )}
                 <Button variant="ghost" size="icon" onClick={() => setCollapsed((value) => !value)}>
                   <ChevronRight className={`h-4 w-4 transition-transform ${collapsed ? '' : 'rotate-180'}`} />
