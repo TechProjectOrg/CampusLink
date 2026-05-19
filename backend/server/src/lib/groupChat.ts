@@ -344,33 +344,47 @@ export async function addUserToChat(
   // Check permission
   await checkChatPermission(actorUserId, chatId, ChatPermission.ADD_MEMBER);
 
-  // Check if user is already a member
-  const existing = await prisma.$queryRaw<{ count: number }[]>`
-    SELECT COUNT(*)::int as count
+  // Check whether the user is active already or needs reactivation.
+  const existing = await prisma.$queryRaw<Array<{ left_at: Date | null }>>`
+    SELECT left_at
     FROM chat_participants
-    WHERE chat_id = ${chatId} AND user_id = ${targetUserId}
+    WHERE chat_id = ${chatId}
+      AND user_id = ${targetUserId}
+    LIMIT 1
   `;
 
-  if ((existing[0]?.count ?? 0) > 0) {
-    // Already a member (even if left) - don't add again
+  if (existing[0] && existing[0].left_at === null) {
+    // Already an active member.
     return;
   }
 
-  // Add user
   const now = new Date().toISOString();
-  await prisma.$queryRaw`
-    INSERT INTO chat_participants (
-      chat_id,
-      user_id,
-      role,
-      joined_at
-    ) VALUES (
-      ${chatId},
-      ${targetUserId},
-      ${role.toLowerCase()},
-      ${now}
-    )
-  `;
+  if (existing[0]?.left_at) {
+    // Restore a former member instead of blocking re-adds forever.
+    await prisma.$queryRaw`
+      UPDATE chat_participants
+      SET
+        left_at = NULL,
+        role = ${role.toLowerCase()},
+        joined_at = ${now}
+      WHERE chat_id = ${chatId}
+        AND user_id = ${targetUserId}
+    `;
+  } else {
+    await prisma.$queryRaw`
+      INSERT INTO chat_participants (
+        chat_id,
+        user_id,
+        role,
+        joined_at
+      ) VALUES (
+        ${chatId},
+        ${targetUserId},
+        ${role.toLowerCase()},
+        ${now}
+      )
+    `;
+  }
 
   // Emit event
   await emitUserJoined(chatId, targetUserId, actorUserId);

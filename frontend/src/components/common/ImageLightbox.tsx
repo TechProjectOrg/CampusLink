@@ -14,6 +14,10 @@ export interface ImageLightboxProps {
 export function ImageLightbox({ images, alt, open, initialIndex = 0, onOpenChange }: ImageLightboxProps) {
   const [startIndex, setStartIndex] = useState(initialIndex);
 
+  const handleBack = () => {
+    onOpenChange(false);
+  };
+
   useEffect(() => {
     if (open) setStartIndex(initialIndex);
   }, [open, initialIndex]);
@@ -27,14 +31,17 @@ export function ImageLightbox({ images, alt, open, initialIndex = 0, onOpenChang
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
           <div className="relative flex h-full w-full items-center justify-center overflow-hidden">
             <DialogTitle className="sr-only">{alt}</DialogTitle>
-            <button
-              type="button"
-              className="absolute right-3 top-3 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white transition-colors hover:bg-black/60"
-              onClick={() => onOpenChange(false)}
-              aria-label="Close image viewer"
-            >
-              <X className="h-5 w-5" />
-            </button>
+            <div className="absolute left-0 right-0 top-0 z-20 flex items-center justify-start p-3 sm:p-4">
+              <button
+                type="button"
+                className="inline-flex items-center gap-2 rounded-full bg-black/40 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-black/60"
+                onClick={handleBack}
+                aria-label="Go back"
+              >
+                <X className="h-5 w-5" />
+                Back
+              </button>
+            </div>
             {images.length === 1 ? (
               <div className="flex h-full w-full items-center justify-center">
                 <img
