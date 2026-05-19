@@ -128,6 +128,7 @@ function TypingAnimatedText({
 export function ChatPage({ conversations, students, currentUserId, onViewProfile, onChatClick, onCreateChat, onChatRead, onUnblockUser, onReportTarget }: ChatPageProps) {
   const appData = useAppDataStore();
   const auth = useAuth();
+  const isCreatingGroupRef = useRef(false);
   const selectedConversationId = useAppDataSelector((state) => state.chat.selectedConversationId);
   const selectedChat = selectedConversationId;
   const [message, setMessage] = useState('');
@@ -573,17 +574,23 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   };
 
   const handleCreateGroup = async (name: string, description: string, memberIds: string[]) => {
-    try {
-      const token = auth.session?.token;
-      if (!token) return;
+    if (isCreatingGroupRef.current) {
+      return;
+    }
 
+    const token = auth.session?.token;
+    if (!token) {
+      throw new Error('You must be signed in to create a group');
+    }
+
+    isCreatingGroupRef.current = true;
+    try {
       const { chatId } = await apiCreateGroupConversation(name, description, memberIds, token);
       await appData.ensureConversations({ force: true });
       appData.selectConversation(chatId);
       setIsNewChatOpen(false);
-    } catch (err: any) {
-      console.error('Failed to create group chat:', err);
-      window.alert(err?.message || 'Failed to create group chat');
+    } finally {
+      isCreatingGroupRef.current = false;
     }
   };
 

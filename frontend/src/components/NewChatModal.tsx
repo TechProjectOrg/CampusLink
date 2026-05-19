@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { X, Search, Users, User, Check } from 'lucide-react';
 import { Student } from '../types';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from './ui/dialog';
@@ -30,6 +30,8 @@ export function NewChatModal({
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [groupName, setGroupName] = useState('');
   const [groupDescription, setGroupDescription] = useState('');
+  const [isCreatingGroup, setIsCreatingGroup] = useState(false);
+  const isCreatingGroupRef = useRef(false);
 
   // Filter students excluding current user
   const availableStudents = students.filter(s => s.id !== currentUserId);
@@ -50,9 +52,20 @@ export function NewChatModal({
   };
 
   const handleCreateGroup = async () => {
-    if (groupName.trim() && selectedMembers.length > 0) {
-      await onCreateGroup(groupName, groupDescription, selectedMembers);
+    if (!groupName.trim() || selectedMembers.length === 0 || isCreatingGroupRef.current) {
+      return;
+    }
+
+    isCreatingGroupRef.current = true;
+    setIsCreatingGroup(true);
+    try {
+      await onCreateGroup(groupName.trim(), groupDescription.trim(), selectedMembers);
       handleClose();
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Failed to create group chat');
+    } finally {
+      isCreatingGroupRef.current = false;
+      setIsCreatingGroup(false);
     }
   };
 
@@ -62,6 +75,9 @@ export function NewChatModal({
   };
 
   const handleClose = () => {
+    if (isCreatingGroupRef.current) {
+      return;
+    }
     setSearchQuery('');
     setSelectedMembers([]);
     setGroupName('');
@@ -71,7 +87,11 @@ export function NewChatModal({
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
+    <Dialog open={isOpen} onOpenChange={(nextOpen) => {
+      if (!nextOpen) {
+        handleClose();
+      }
+    }}>
       <DialogContent className="cl-new-chat-modal max-w-2xl max-h-[90vh] flex flex-col p-0">
         <DialogHeader className="p-6 pb-4 border-b">
           <DialogTitle>New Message</DialogTitle>
@@ -145,12 +165,14 @@ export function NewChatModal({
                   placeholder="Group name (required)"
                   value={groupName}
                   onChange={(e) => setGroupName(e.target.value)}
+                  disabled={isCreatingGroup}
                   className="rounded-xl"
                 />
                 <Input
                   placeholder="Group description (optional)"
                   value={groupDescription}
                   onChange={(e) => setGroupDescription(e.target.value)}
+                  disabled={isCreatingGroup}
                   className="rounded-xl"
                 />
               </div>
@@ -168,7 +190,9 @@ export function NewChatModal({
                       >
                         {member.name}
                         <button
+                          type="button"
                           onClick={() => toggleMemberSelection(memberId)}
+                          disabled={isCreatingGroup}
                           className="hover:bg-primary/20 rounded-full p-0.5"
                         >
                           <X className="w-3 h-3" />
@@ -189,7 +213,9 @@ export function NewChatModal({
                   return (
                     <button
                       key={student.id}
+                      type="button"
                       onClick={() => toggleMemberSelection(student.id)}
+                      disabled={isCreatingGroup}
                       className={`w-full p-3 rounded-xl transition-colors flex items-center gap-3 text-left ${
                         isSelected ? 'bg-primary/10 border border-primary/20' : 'hover:bg-gray-50'
                       }`}
@@ -216,10 +242,10 @@ export function NewChatModal({
               <div className="sticky bottom-0 bg-white p-6 border-t">
                 <Button
                   onClick={handleCreateGroup}
-                  disabled={!groupName.trim() || selectedMembers.length === 0}
+                  disabled={!groupName.trim() || selectedMembers.length === 0 || isCreatingGroup}
                   className="w-full gradient-primary rounded-xl"
                 >
-                  Create Group ({selectedMembers.length} members)
+                  {isCreatingGroup ? 'Creating Group...' : `Create Group (${selectedMembers.length} members)`}
                 </Button>
               </div>
             )}
