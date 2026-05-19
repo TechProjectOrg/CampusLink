@@ -8,7 +8,7 @@ import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { CreateClubModal } from './CreateClubModal';
 import { ClubActivityPage } from './ClubActivityPage';
-import { LoadingState } from './LoadingState';
+import { LoadingIndicator } from './ui/LoadingIndicator';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { cacheClubsList, readCachedClubsList } from '../cache/socialCache';
 import { cacheKeys } from '../cache/keys';
@@ -106,6 +106,22 @@ export function ClubsPage({ students, currentUserId, initialClubSlug = null, onC
     );
   }
 
+  if (isLoading) {
+    return (
+      <PageLayout
+        maxWidth="6xl"
+        className="cl-clubs-page h-full min-h-0"
+        contentClassName="cl-clubs-content flex h-full min-h-0 items-center justify-center px-4 md:px-6"
+      >
+        <LoadingIndicator
+          label="Loading..."
+          size={110}
+          className="flex-col gap-4 text-2xl text-gray-600"
+        />
+      </PageLayout>
+    );
+  }
+
   return (
     <PageLayout
       maxWidth="6xl"
@@ -123,10 +139,9 @@ export function ClubsPage({ students, currentUserId, initialClubSlug = null, onC
           </Button>
         </div>
 
-        {isLoading ? <LoadingState type="page" /> : null}
-        {!isLoading && error ? <p className="text-sm text-red-600">{error}</p> : null}
+        {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
-        {!isLoading && clubs.length === 0 ? (
+        {clubs.length === 0 ? (
           <p className="text-sm text-gray-600">No clubs found.</p>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6 animate-slide-in-up">
