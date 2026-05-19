@@ -11,3 +11,17 @@ export function resolveApiBaseUrl(rawValue: string | undefined): string {
   const withProtocol = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
   return withProtocol.replace(/\/+$/, '');
 }
+
+export function resolveRealtimeWebSocketUrl(apiBase: string): string {
+  const fallbackOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:4000';
+  const parsed = (() => {
+    try {
+      return new URL(apiBase || fallbackOrigin, fallbackOrigin);
+    } catch {
+      return new URL(fallbackOrigin);
+    }
+  })();
+
+  const socketProtocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${socketProtocol}//${parsed.host}/ws`;
+}

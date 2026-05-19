@@ -442,6 +442,10 @@ function createStore(): AppDataStore {
 
   const emitTypingSignal = (chatId: string, isTyping: boolean) => {
     if (!chatId || !realtimeSender) return;
+    try {
+      // eslint-disable-next-line no-console
+      console.debug('[appdata] emitTypingSignal', { chatId, isTyping });
+    } catch {}
     realtimeSender({ type: 'chat:typing', chatId, isTyping });
   };
 
@@ -754,12 +758,26 @@ function createStore(): AppDataStore {
     },
     setRealtimeSender: (sender) => {
       realtimeSender = sender;
+      try {
+        if (sender) {
+          // eslint-disable-next-line no-console
+          console.info('[appdata] realtimeSender bound');
+        } else {
+          // eslint-disable-next-line no-console
+          console.info('[appdata] realtimeSender cleared');
+        }
+      } catch {}
+
       if (!sender) return;
 
       const now = Date.now();
       for (const [chatId, typingState] of localTypingStateByConversationId.entries()) {
         if (!typingState.isTyping) continue;
-        sender({ type: 'chat:typing', chatId, isTyping: true });
+        try {
+          sender({ type: 'chat:typing', chatId, isTyping: true });
+        } catch (err) {
+          // ignore send errors here
+        }
         typingState.lastSignalAt = now;
       }
     },

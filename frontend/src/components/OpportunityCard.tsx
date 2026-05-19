@@ -312,6 +312,7 @@ export function OpportunityCard({
           </div>
         </div>
       </div>
+      
     </>
   );
 

@@ -24,7 +24,7 @@ import { Student, Opportunity, Notification, Comment, ChatConversation } from '.
 import { ProfileCard } from './components/ProfileCard';
 import { SuggestionsCard } from './components/SuggestionsCard';
 import { useAuth } from './context/AuthContext';
-import { resolveApiBaseUrl } from './lib/apiBase';
+import { resolveApiBaseUrl, resolveRealtimeWebSocketUrl } from './lib/apiBase';
 import {
   apiProfileToStudent,
   getFeedTimelineKey,
@@ -78,7 +78,7 @@ import {
   type UserPost,
 } from './lib/postsApi';
 import { collectImageFiles } from './lib/mediaUtils';
-import { userPostToOpportunity } from './lib/postMappers';
+import { userPostToOpportunity, mapPostCommentToComment } from './lib/postMappers';
 import {
   cacheCommentsPage,
   cacheFollowGraph,
@@ -1203,14 +1203,30 @@ export default function App() {
   useEffect(() => {
     if (!authToken || !auth.isAuthenticated) return;
 
-    const wsBase = apiBase.replace(/^http/i, 'ws').replace(/\/+$/, '');
-    const socket = new WebSocket(`${wsBase}/ws?token=${encodeURIComponent(authToken)}`);
-    appData.setRealtimeSender((payload) => {
-      if (socket.readyState !== WebSocket.OPEN) return;
-      socket.send(JSON.stringify(payload));
-    });
+    const socketBaseUrl = resolveRealtimeWebSocketUrl(apiBase);
+    let socket: WebSocket | null = null;
+    let reconnectTimerId: number | null = null;
+    let reconnectAttempt = 0;
+    let isDisposed = false;
 
-    socket.onmessage = (event) => {
+    const clearReconnectTimer = () => {
+      if (reconnectTimerId !== null) {
+        window.clearTimeout(reconnectTimerId);
+        reconnectTimerId = null;
+      }
+    };
+
+    const scheduleReconnect = () => {
+      if (isDisposed) return;
+      const delayMs = Math.min(1000 * 2 ** reconnectAttempt, 10_000);
+      reconnectAttempt += 1;
+      clearReconnectTimer();
+      reconnectTimerId = window.setTimeout(() => {
+        connect();
+      }, delayMs);
+    };
+
+    const handleMessage = (event: MessageEvent) => {
       try {
         const parsed = JSON.parse(String(event.data)) as {
           type?: string;
@@ -1283,9 +1299,50 @@ export default function App() {
       }
     };
 
+    const connect = () => {
+      if (isDisposed) return;
+
+      const wsUrl = `${socketBaseUrl}?token=${encodeURIComponent(authToken)}`;
+      socket = new WebSocket(wsUrl);
+      appData.setRealtimeSender((payload) => {
+        if (!socket || socket.readyState !== WebSocket.OPEN) return;
+        socket.send(JSON.stringify(payload));
+      });
+
+      socket.onopen = () => {
+        reconnectAttempt = 0;
+        clearReconnectTimer();
+        console.info('[realtime] websocket open');
+      };
+
+      socket.onmessage = handleMessage;
+
+      socket.onerror = (err) => {
+        console.warn('[realtime] websocket error', err);
+      };
+
+      socket.onclose = (closeEvent) => {
+        appData.setRealtimeSender(null);
+        console.warn('[realtime] websocket closed', { code: closeEvent.code, reason: closeEvent.reason });
+        if (isDisposed) return;
+
+        // Do not reconnect for explicit auth failures.
+        if (closeEvent.code === 1008 || closeEvent.code === 4001) {
+          console.warn('[realtime] websocket closed due to auth; not reconnecting');
+          return;
+        }
+
+        scheduleReconnect();
+      };
+    };
+
+    connect();
+
     return () => {
+      isDisposed = true;
+      clearReconnectTimer();
       appData.setRealtimeSender(null);
-      socket.close();
+      socket?.close();
     };
   }, [appData, authToken, auth.isAuthenticated, apiBase, currentUserId, refreshConversations]);
 
