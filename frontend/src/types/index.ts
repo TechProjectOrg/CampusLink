@@ -92,10 +92,12 @@ export interface Opportunity {
   location?: string;
   link?: string;
   images?: string[];
+  imageMediaIds?: string[];
   image?: string;
   imageFiles?: File[];
   imageFile?: File;
   tags?: string[];
+  removeMediaIds?: string[];
   likes: string[];
   comments: Comment[];
   saved: string[];

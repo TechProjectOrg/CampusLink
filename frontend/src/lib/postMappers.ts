@@ -46,6 +46,10 @@ export function userPostToOpportunity(
     (post.authorUserId === currentUser?.id ? currentUser?.avatar : undefined);
 
   const imageFields = withOpportunityImages(resolvePostImageUrls(post.media));
+  const imageMediaIds = [...post.media]
+    .sort((left, right) => left.sortOrder - right.sortOrder)
+    .map((item) => item.postMediaId)
+    .filter(Boolean);
 
   return {
     id: post.id,
@@ -68,6 +72,7 @@ export function userPostToOpportunity(
     location: post.location ?? undefined,
     link: post.externalUrl ?? undefined,
     ...imageFields,
+    imageMediaIds,
     tags: post.hashtags,
     likes: [],
     comments: (post.comments ?? []).map((comment) => mapPostCommentToComment(comment)),

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Bookmark, Calendar, Heart, MapPin, MessageCircle, Trash2, MoreHorizontal, Flag, Share2, Link as LinkIcon, BriefcaseBusiness, Wallet, Clock3 } from 'lucide-react';
+import { ArrowLeft, Bookmark, Calendar, Heart, MapPin, MessageCircle, Trash2, MoreHorizontal, Flag, Share2, Link as LinkIcon, BriefcaseBusiness, Wallet, Clock3, Pencil, X } from 'lucide-react';
 import { ShareToChatDialog } from './share/ShareToChatDialog';
 import { Opportunity, Comment } from '../types';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
+import { Input } from './ui/input';
 import { PostCarousel } from './feed/PostCarousel';
 import { LoadingIndicator } from './ui/LoadingIndicator';
 import { useAuth } from '../context/AuthContext';
@@ -74,6 +75,8 @@ interface PostPageProps {
   onLoadMoreReplies?: (commentId: string) => Promise<void> | void;
   onLikeComment?: (commentId: string, alreadyLiked: boolean) => void;
   onDeleteComment?: (commentId: string) => void;
+  onEditPost?: (postId: string, updates: Partial<Opportunity>) => void;
+  onDeletePost?: (postId: string) => Promise<void> | void;
   onViewProfile?: (authorId: string) => void;
   onReportTarget?: (target: ReportTargetDescriptor) => void;
 }
@@ -94,14 +97,36 @@ export function PostPage({
   onLoadMoreReplies,
   onLikeComment,
   onDeleteComment,
+  onEditPost,
+  onDeletePost,
   onViewProfile,
   onReportTarget,
 }: PostPageProps) {
+  const buildEditableImageItems = () =>
+    (post.images ?? []).map((imageUrl, index) => ({
+      key: `${post.id}:${post.imageMediaIds?.[index] ?? imageUrl}:${index}`,
+      imageUrl,
+      mediaId: post.imageMediaIds?.[index] ?? '',
+    }));
+
   const auth = useAuth();
   const [commentText, setCommentText] = useState('');
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [replyTarget, setReplyTarget] = useState<Comment | null>(null);
   const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
+  const [editingPost, setEditingPost] = useState(false);
+  const [editableImageItems, setEditableImageItems] = useState(buildEditableImageItems);
+  const [editDraft, setEditDraft] = useState({
+    title: post.title,
+    description: post.description,
+    company: post.company ?? '',
+    deadline: post.deadline ?? '',
+    stipend: post.stipend ?? '',
+    duration: post.duration ?? '',
+    location: post.location ?? '',
+    link: post.link ?? '',
+    tags: (post.tags ?? []).join(', '),
+  });
 
   const isLiked = post.isLikedByMe ?? post.likes.includes(currentUserId);
   const isSaved = post.isSavedByMe ?? post.saved.includes(currentUserId);
@@ -122,6 +147,24 @@ export function PostPage({
     club: 'bg-pink-100 text-pink-700 border-pink-200',
     general: 'bg-gray-100 text-gray-700 border-gray-200',
   };
+  const showTitleField = post.type !== 'general' || post.title.trim().length > 0;
+  const showDescriptionField =
+    post.type === 'general' ||
+    post.type === 'project' ||
+    post.type === 'internship' ||
+    post.type === 'hackathon' ||
+    post.type === 'event' ||
+    post.type === 'contest' ||
+    post.type === 'club' ||
+    post.description.trim().length > 0;
+  const showCompanyField = Boolean(post.company?.trim());
+  const showLocationField = Boolean(post.location?.trim());
+  const showDeadlineField = Boolean(post.deadline?.trim());
+  const showLinkField = Boolean(post.link?.trim());
+  const showStipendField = Boolean(post.stipend?.trim());
+  const showDurationField = Boolean(post.duration?.trim());
+  const showTagsField = (post.tags?.length ?? 0) > 0;
+  const visibleEditableImages = editableImageItems.filter((item) => !item.mediaId.startsWith('certification:'));
 
   const topLevelComments = useMemo(
     () => (post.comments ?? []).filter((comment) => !comment.parentCommentId),
@@ -166,6 +209,22 @@ export function PostPage({
       window.clearTimeout(clearTimeoutId);
     };
   }, [focusCommentId, parentCommentById]);
+
+  useEffect(() => {
+    setEditDraft({
+      title: post.title,
+      description: post.description,
+      company: post.company ?? '',
+      deadline: post.deadline ?? '',
+      stipend: post.stipend ?? '',
+      duration: post.duration ?? '',
+      location: post.location ?? '',
+      link: post.link ?? '',
+      tags: (post.tags ?? []).join(', '),
+    });
+    setEditableImageItems(buildEditableImageItems());
+    setEditingPost(false);
+  }, [post]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -275,6 +334,38 @@ export function PostPage({
 
     onComment(post.id, next);
     setCommentText('');
+  };
+
+  const submitPostEdit = () => {
+    if (!onEditPost) return;
+
+    const tags = editDraft.tags
+      .split(',')
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+    const originalMediaIds = post.imageMediaIds ?? [];
+    const remainingMediaIds = new Set(
+      editableImageItems.map((item) => item.mediaId).filter((mediaId) => Boolean(mediaId)),
+    );
+    const removeMediaIds = originalMediaIds.filter(
+      (mediaId) => mediaId && !mediaId.startsWith('certification:') && !remainingMediaIds.has(mediaId),
+    );
+
+    onEditPost(post.id, {
+      title: editDraft.title,
+      description: editDraft.description,
+      company: editDraft.company,
+      deadline: editDraft.deadline,
+      stipend: editDraft.stipend,
+      duration: editDraft.duration,
+      location: editDraft.location,
+      link: editDraft.link,
+      tags,
+      images: editableImageItems.map((item) => item.imageUrl),
+      removeMediaIds,
+    });
+    setEditableImageItems(buildEditableImageItems());
+    setEditingPost(false);
   };
 
   const openPostReport = () => {
@@ -458,6 +549,31 @@ export function PostPage({
                 {post.type.charAt(0).toUpperCase() + post.type.slice(1)}
               </Badge>
             ) : null}
+            {editingPost ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="rounded-full"
+                onClick={() => {
+                  setEditableImageItems(buildEditableImageItems());
+                  setEditDraft({
+                    title: post.title,
+                    description: post.description,
+                    company: post.company ?? '',
+                    deadline: post.deadline ?? '',
+                    stipend: post.stipend ?? '',
+                    duration: post.duration ?? '',
+                    location: post.location ?? '',
+                    link: post.link ?? '',
+                    tags: (post.tags ?? []).join(', '),
+                  });
+                  setEditingPost(false);
+                }}
+              >
+                Cancel edit
+              </Button>
+            ) : (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
@@ -481,11 +597,125 @@ export function PostPage({
                   <Flag className="mr-2 h-4 w-4" />
                   Report
                 </DropdownMenuItem>
+                {post.canEdit && onEditPost ? (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setEditableImageItems(buildEditableImageItems());
+                        setEditDraft({
+                          title: post.title,
+                          description: post.description,
+                          company: post.company ?? '',
+                          deadline: post.deadline ?? '',
+                          stipend: post.stipend ?? '',
+                          duration: post.duration ?? '',
+                          location: post.location ?? '',
+                          link: post.link ?? '',
+                          tags: (post.tags ?? []).join(', '),
+                        });
+                        setEditingPost(true);
+                      }}
+                    >
+                      <Pencil className="mr-2 h-4 w-4" />
+                      Edit
+                    </DropdownMenuItem>
+                  </>
+                ) : null}
+                {post.canDelete && onDeletePost ? (
+                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => void onDeletePost(post.id)}>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Delete
+                  </DropdownMenuItem>
+                ) : null}
               </DropdownMenuContent>
             </DropdownMenu>
+            )}
             </div>
           </div>
 
+          {editingPost ? (
+            <div className="space-y-4 mb-4">
+              {visibleEditableImages.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-600">Post images</p>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {visibleEditableImages.map((item) => (
+                      <div key={item.key} className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                        <img src={item.imageUrl} alt="Post media" className="h-24 w-full object-cover" />
+                        <button
+                          type="button"
+                          className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/60 bg-black/65 text-white shadow-md backdrop-blur-sm transition hover:bg-red-600"
+                          aria-label="Delete image"
+                          onClick={() => setEditableImageItems((prev) => prev.filter((image) => image.key !== item.key))}
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {showTitleField ? (
+                <Input value={editDraft.title} onChange={(e) => setEditDraft((prev) => ({ ...prev, title: e.target.value }))} placeholder="Title" />
+              ) : null}
+              {showDescriptionField ? (
+                <Textarea value={editDraft.description} onChange={(e) => setEditDraft((prev) => ({ ...prev, description: e.target.value }))} rows={4} placeholder="Description" />
+              ) : null}
+              {showCompanyField || showLocationField || showDeadlineField || showLinkField || showStipendField || showDurationField ? (
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  {showCompanyField ? (
+                    <Input value={editDraft.company} onChange={(e) => setEditDraft((prev) => ({ ...prev, company: e.target.value }))} placeholder="Company" />
+                  ) : null}
+                  {showLocationField ? (
+                    <Input value={editDraft.location} onChange={(e) => setEditDraft((prev) => ({ ...prev, location: e.target.value }))} placeholder="Location" />
+                  ) : null}
+                  {showDeadlineField ? (
+                    <Input type="date" value={editDraft.deadline ? editDraft.deadline.slice(0, 10) : ''} onChange={(e) => setEditDraft((prev) => ({ ...prev, deadline: e.target.value }))} />
+                  ) : null}
+                  {showLinkField ? (
+                    <Input value={editDraft.link} onChange={(e) => setEditDraft((prev) => ({ ...prev, link: e.target.value }))} placeholder="External link" />
+                  ) : null}
+                  {showStipendField ? (
+                    <Input value={editDraft.stipend} onChange={(e) => setEditDraft((prev) => ({ ...prev, stipend: e.target.value }))} placeholder="Stipend" />
+                  ) : null}
+                  {showDurationField ? (
+                    <Input value={editDraft.duration} onChange={(e) => setEditDraft((prev) => ({ ...prev, duration: e.target.value }))} placeholder="Duration" />
+                  ) : null}
+                </div>
+              ) : null}
+              {showTagsField ? (
+                <Input value={editDraft.tags} onChange={(e) => setEditDraft((prev) => ({ ...prev, tags: e.target.value }))} placeholder="Tags (comma separated)" />
+              ) : null}
+              <div className="flex justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setEditableImageItems(buildEditableImageItems());
+                    setEditDraft({
+                      title: post.title,
+                      description: post.description,
+                      company: post.company ?? '',
+                      deadline: post.deadline ?? '',
+                      stipend: post.stipend ?? '',
+                      duration: post.duration ?? '',
+                      location: post.location ?? '',
+                      link: post.link ?? '',
+                      tags: (post.tags ?? []).join(', '),
+                    });
+                    setEditingPost(false);
+                  }}
+                >
+                  Exit edit
+                </Button>
+                <Button type="button" onClick={submitPostEdit} className="gradient-primary">
+                  Save changes
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
           <div className="space-y-2 mb-4">
             <h1 className="text-2xl text-gray-900">{post.title}</h1>
             <p className="text-gray-700 whitespace-pre-wrap">{post.description}</p>
@@ -530,6 +760,8 @@ export function PostPage({
                 </Badge>
               ))}
             </div>
+          )}
+            </>
           )}
           </div>
 

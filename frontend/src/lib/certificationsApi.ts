@@ -39,7 +39,7 @@ type CertificationRaw = {
 function normalizeCertification(raw: CertificationRaw, index: number): UserCertification {
   const id = raw.id ?? raw.certificationId ?? raw.certification_id ?? String(index);
   const name = raw.name ?? '';
-  const description = (raw.description ?? raw.issuer ?? null) as string | null;
+  const description = raw.description ?? null;
   const imageUrl = (raw.imageUrl ?? raw.credentialUrl ?? raw.image_url ?? raw.credential_url ?? null) as
     | string
     | null;

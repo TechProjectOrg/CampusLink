@@ -2040,6 +2040,7 @@ export default function App() {
     if (guardRestrictedAction()) return;
     void (async () => {
       try {
+        const removedMediaIds = updates.removeMediaIds ?? [];
         appData.updatePost(postId, (post) => ({
           ...post,
           title: updates.title ?? post.title,
@@ -2051,6 +2052,10 @@ export default function App() {
           location: updates.location ?? post.location,
           externalUrl: updates.link ?? post.externalUrl,
           hashtags: updates.tags ?? post.hashtags,
+          media:
+            removedMediaIds.length > 0
+              ? post.media.filter((item) => !removedMediaIds.includes(item.postMediaId))
+              : post.media,
         }));
         await apiUpdatePost(
           postId,
@@ -2064,6 +2069,7 @@ export default function App() {
             location: updates.location,
             externalUrl: updates.link,
             hashtags: updates.tags,
+            removeMediaIds: removedMediaIds,
           },
           authToken,
         );
@@ -2984,6 +2990,8 @@ export default function App() {
               onLoadMoreReplies={loadMoreReplies}
               onLikeComment={handleLikeComment}
               onDeleteComment={handleDeleteComment}
+              onEditPost={handleEditPost}
+              onDeletePost={handleDeletePost}
               onViewProfile={handleViewProfile}
               onReportTarget={handleOpenReport}
             />

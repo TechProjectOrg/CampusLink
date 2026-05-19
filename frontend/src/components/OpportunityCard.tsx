@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ShareToChatDialog } from './share/ShareToChatDialog';
-import { Heart, MessageCircle, Bookmark, MapPin, Trash2, Pencil, Loader2, MoreHorizontal, Flag, Share2 } from 'lucide-react';
+import { Heart, MessageCircle, Bookmark, MapPin, Trash2, Pencil, Loader2, MoreHorizontal, Flag, Share2, X } from 'lucide-react';
 import { Opportunity, Comment } from '../types';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -71,6 +71,7 @@ export function OpportunityCard({
     link: opportunity.link ?? '',
     tags: (opportunity.tags ?? []).join(', '),
   });
+  const [removedMediaIds, setRemovedMediaIds] = useState<string[]>([]);
 
   const likeCount = opportunity.likeCount ?? opportunity.likes.length;
   const saveCount = opportunity.saveCount ?? opportunity.saved.length;
@@ -101,6 +102,30 @@ export function OpportunityCard({
     [comments],
   );
   const inlineTopLevelComments = topLevelComments.slice(0, 3);
+  const showTitleField = opportunity.type !== 'general' || opportunity.title.trim().length > 0;
+  const showDescriptionField =
+    opportunity.type === 'general' ||
+    opportunity.type === 'project' ||
+    opportunity.type === 'internship' ||
+    opportunity.type === 'hackathon' ||
+    opportunity.type === 'event' ||
+    opportunity.type === 'contest' ||
+    opportunity.type === 'club' ||
+    opportunity.description.trim().length > 0;
+  const showCompanyField = Boolean(opportunity.company?.trim());
+  const showLocationField = Boolean(opportunity.location?.trim());
+  const showDeadlineField = Boolean(opportunity.deadline?.trim());
+  const showLinkField = Boolean(opportunity.link?.trim());
+  const showStipendField = Boolean(opportunity.stipend?.trim());
+  const showDurationField = Boolean(opportunity.duration?.trim());
+  const showTagsField = (opportunity.tags?.length ?? 0) > 0;
+  const editableImages = (opportunity.images ?? []).map((imageUrl, index) => ({
+    imageUrl,
+    mediaId: opportunity.imageMediaIds?.[index] ?? '',
+  }));
+  const visibleEditableImages = editableImages.filter(
+    (item) => item.mediaId && !item.mediaId.startsWith('certification:') && !removedMediaIds.includes(item.mediaId),
+  );
 
   const handleComment = () => {
     if (!commentText.trim()) return;
@@ -280,7 +305,9 @@ export function OpportunityCard({
       location: editDraft.location,
       link: editDraft.link,
       tags,
+      removeMediaIds: removedMediaIds,
     });
+    setRemovedMediaIds([]);
     setEditingPost(false);
   };
 
@@ -368,7 +395,12 @@ export function OpportunityCard({
                   {showManagementControls && opportunity.canEdit ? (
                     <>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => setEditingPost((prev) => !prev)}>
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setRemovedMediaIds([]);
+                          setEditingPost((prev) => !prev);
+                        }}
+                      >
                         <Pencil className="mr-2 h-4 w-4" />
                         Edit
                       </DropdownMenuItem>
@@ -398,19 +430,69 @@ export function OpportunityCard({
 
           {showManagementControls && editingPost ? (
             <div className="space-y-2">
-              <Input value={editDraft.title} onChange={(e) => setEditDraft((prev) => ({ ...prev, title: e.target.value }))} placeholder="Title" />
-              <Textarea value={editDraft.description} onChange={(e) => setEditDraft((prev) => ({ ...prev, description: e.target.value }))} rows={3} placeholder="Description" />
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                <Input value={editDraft.company} onChange={(e) => setEditDraft((prev) => ({ ...prev, company: e.target.value }))} placeholder="Company" />
-                <Input value={editDraft.location} onChange={(e) => setEditDraft((prev) => ({ ...prev, location: e.target.value }))} placeholder="Location" />
-                <Input type="date" value={editDraft.deadline ? editDraft.deadline.slice(0, 10) : ''} onChange={(e) => setEditDraft((prev) => ({ ...prev, deadline: e.target.value }))} />
-                <Input value={editDraft.link} onChange={(e) => setEditDraft((prev) => ({ ...prev, link: e.target.value }))} placeholder="External link" />
-                <Input value={editDraft.stipend} onChange={(e) => setEditDraft((prev) => ({ ...prev, stipend: e.target.value }))} placeholder="Stipend" />
-                <Input value={editDraft.duration} onChange={(e) => setEditDraft((prev) => ({ ...prev, duration: e.target.value }))} placeholder="Duration" />
-              </div>
-              <Input value={editDraft.tags} onChange={(e) => setEditDraft((prev) => ({ ...prev, tags: e.target.value }))} placeholder="Tags (comma separated)" />
+              {visibleEditableImages.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-sm text-gray-600">Post images</p>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    {visibleEditableImages.map((item) => (
+                      <div key={item.mediaId} className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                        <img src={item.imageUrl} alt="Post media" className="h-24 w-full object-cover" />
+                        <button
+                          type="button"
+                          className="absolute right-2 top-2 rounded-full bg-white/90 p-1 text-slate-700 shadow hover:bg-white"
+                          aria-label="Delete image"
+                          onClick={() =>
+                            setRemovedMediaIds((prev) => (prev.includes(item.mediaId) ? prev : [...prev, item.mediaId]))
+                          }
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              {showTitleField ? (
+                <Input value={editDraft.title} onChange={(e) => setEditDraft((prev) => ({ ...prev, title: e.target.value }))} placeholder="Title" />
+              ) : null}
+              {showDescriptionField ? (
+                <Textarea value={editDraft.description} onChange={(e) => setEditDraft((prev) => ({ ...prev, description: e.target.value }))} rows={3} placeholder="Description" />
+              ) : null}
+              {showCompanyField || showLocationField || showDeadlineField || showLinkField || showStipendField || showDurationField ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {showCompanyField ? (
+                    <Input value={editDraft.company} onChange={(e) => setEditDraft((prev) => ({ ...prev, company: e.target.value }))} placeholder="Company" />
+                  ) : null}
+                  {showLocationField ? (
+                    <Input value={editDraft.location} onChange={(e) => setEditDraft((prev) => ({ ...prev, location: e.target.value }))} placeholder="Location" />
+                  ) : null}
+                  {showDeadlineField ? (
+                    <Input type="date" value={editDraft.deadline ? editDraft.deadline.slice(0, 10) : ''} onChange={(e) => setEditDraft((prev) => ({ ...prev, deadline: e.target.value }))} />
+                  ) : null}
+                  {showLinkField ? (
+                    <Input value={editDraft.link} onChange={(e) => setEditDraft((prev) => ({ ...prev, link: e.target.value }))} placeholder="External link" />
+                  ) : null}
+                  {showStipendField ? (
+                    <Input value={editDraft.stipend} onChange={(e) => setEditDraft((prev) => ({ ...prev, stipend: e.target.value }))} placeholder="Stipend" />
+                  ) : null}
+                  {showDurationField ? (
+                    <Input value={editDraft.duration} onChange={(e) => setEditDraft((prev) => ({ ...prev, duration: e.target.value }))} placeholder="Duration" />
+                  ) : null}
+                </div>
+              ) : null}
+              {showTagsField ? (
+                <Input value={editDraft.tags} onChange={(e) => setEditDraft((prev) => ({ ...prev, tags: e.target.value }))} placeholder="Tags (comma separated)" />
+              ) : null}
               <div className="flex gap-2 justify-end">
-                <Button variant="outline" size="sm" type="button" onClick={() => setEditingPost(false)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  type="button"
+                  onClick={() => {
+                    setRemovedMediaIds([]);
+                    setEditingPost(false);
+                  }}
+                >
                   Cancel
                 </Button>
                 <Button size="sm" type="button" onClick={submitPostEdit}>
