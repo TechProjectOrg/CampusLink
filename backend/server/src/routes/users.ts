@@ -1198,8 +1198,7 @@ interface DeleteUserBody {
   password: string;
 }
 
-// Deletes the user and all dependent records via DB cascades.
-// For now, this uses password confirmation (no JWT/session validation implemented yet).
+// Soft-deletes the account so relationships (especially chats/messages) remain intact.
 router.delete(
   '/:userId',
   requireOwnUser,
@@ -1216,8 +1215,10 @@ router.delete(
     }
 
     try {
-      const rows = await prisma.$queryRaw<{ password_hash: string }[]>`
-        SELECT password_hash
+      const rows = await prisma.$queryRaw<
+        { password_hash: string; is_deleted: boolean; profile_photo_url: string | null; cover_photo_url: string | null }[]
+      >`
+        SELECT password_hash, is_deleted, profile_photo_url, cover_photo_url
         FROM users
         WHERE user_id = ${userId}
       `;
@@ -1227,15 +1228,68 @@ router.delete(
         return res.status(404).json({ message: 'User not found' });
       }
 
+      if (row.is_deleted) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
       const passwordMatches = await verifyPassword(password, row.password_hash);
       if (!passwordMatches) {
         return res.status(401).json({ message: 'Invalid password' });
       }
 
-      await prisma.$queryRaw`
-        DELETE FROM users
-        WHERE user_id = ${userId}
-      `;
+      await prisma.$transaction(async (tx) => {
+        await tx.$executeRaw`
+          UPDATE users
+          SET
+            is_deleted = TRUE,
+            deleted_at = NOW(),
+            delete_reason = 'user_requested',
+            is_active = FALSE,
+            is_online = FALSE,
+            last_seen_at = NOW(),
+            profile_photo_url = NULL,
+            cover_photo_url = NULL,
+            bio = NULL,
+            headline = NULL,
+            updated_at = NOW()
+          WHERE user_id = ${userId}
+            AND is_deleted = FALSE
+        `;
+
+        await tx.$executeRaw`
+          UPDATE posts
+          SET
+            deleted_at = NOW(),
+            deleted_by_user_id = ${userId},
+            updated_at = NOW()
+          WHERE author_user_id = ${userId}
+            AND deleted_at IS NULL
+        `;
+
+        await tx.$executeRaw`
+          UPDATE user_sessions
+          SET revoked_at = NOW()
+          WHERE user_id = ${userId}
+            AND revoked_at IS NULL
+        `;
+      });
+
+      await Promise.all([
+        invalidateUserCache(userId),
+        invalidateConversationLists(await getConversationViewerUserIds(userId)),
+      ]);
+
+      queueSuggestedUsersRecompute(userId);
+
+      const oldPhotoUrl = row.profile_photo_url?.trim() || null;
+      const oldCoverUrl = row.cover_photo_url?.trim() || null;
+
+      if (oldPhotoUrl || oldCoverUrl) {
+        void Promise.allSettled([
+          oldPhotoUrl ? deleteManagedPhotoByUrl(oldPhotoUrl) : Promise.resolve(),
+          oldCoverUrl ? deleteManagedPhotoByUrl(oldCoverUrl) : Promise.resolve(),
+        ]);
+      }
 
       return res.status(204).send();
     } catch (err) {

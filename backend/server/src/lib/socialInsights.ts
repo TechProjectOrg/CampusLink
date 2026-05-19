@@ -188,6 +188,18 @@ export function queueSuggestedUsersRecompute(userId: string): void {
 }
 
 export async function recomputeSuggestedUsers(userId: string): Promise<void> {
+  const userRows = await prisma.$queryRaw<Array<{ is_deleted: boolean }>>`
+    SELECT is_deleted
+    FROM users
+    WHERE user_id = ${userId}
+    LIMIT 1
+  `;
+  const viewer = userRows[0];
+  if (!viewer || viewer.is_deleted) {
+    await cacheSetJson(suggestedKey(userId), [], SUGGESTED_TTL_SECONDS);
+    return;
+  }
+
   const followedRows = await prisma.$queryRaw<Array<{ user_id: string }>>`
     SELECT followed_user_id AS user_id
     FROM follows
@@ -306,6 +318,7 @@ export async function recomputeSuggestedUsers(userId: string): Promise<void> {
       ) AS engagement_count
     FROM users u
     WHERE u.user_id IN (${Prisma.join(candidateIds)})
+      AND u.is_deleted = FALSE
   `;
 
   const vectorMap = await getVectorMap([userId, ...candidateIds]);
@@ -353,13 +366,29 @@ export async function getSuggestedUsersForApi(userId: string, limit: number): Pr
     await recomputeSuggestedUsers(userId);
     cached = (await cacheGetJson<SuggestedUserCacheRow[]>(suggestedKey(userId))) ?? [];
   }
-  const rows = cached.slice(0, limit).map((row) => ({
+  const candidateIds = Array.from(new Set(cached.map((row) => row.id)));
+  if (candidateIds.length === 0) {
+    return [];
+  }
+
+  const activeRows = await prisma.$queryRaw<Array<{ user_id: string }>>`
+    SELECT user_id
+    FROM users
+    WHERE user_id IN (${Prisma.join(candidateIds)})
+      AND is_deleted = FALSE
+  `;
+  const activeUserIds = new Set(activeRows.map((row) => row.user_id));
+
+  const rows = cached
+    .filter((row) => activeUserIds.has(row.id))
+    .slice(0, limit)
+    .map((row) => ({
     id: row.id,
     name: row.name,
     username: row.username,
     mutual_count: row.mutual_count,
     common_club: row.common_club ?? null,
-  }));
+    }));
   return rows;
 }
 
@@ -549,6 +578,7 @@ export function maybeStartSocialInsightsSchedulers(): void {
             SELECT user_id
             FROM users
             WHERE is_active = true
+              AND is_deleted = false
               AND (last_seen_at IS NULL OR last_seen_at >= NOW() - INTERVAL '2 days')
             ORDER BY COALESCE(last_seen_at, created_at) DESC
             LIMIT 500

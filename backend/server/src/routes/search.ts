@@ -38,6 +38,7 @@ async function searchUsers(currentUserId: string, q: string, limit: number, offs
       u.user_id
     FROM users u
     WHERE u.user_id <> ${currentUserId}
+      AND u.is_deleted = FALSE
       AND (
         u.username ILIKE ${pattern}
         OR u.display_name ILIKE ${pattern}
@@ -96,6 +97,7 @@ async function searchHashtags(currentUserId: string, q: string, limit: number, o
     JOIN users au ON au.user_id = p.author_user_id
     LEFT JOIN clubs c ON c.club_id = p.club_id
     WHERE h.tag_name ILIKE ${pattern}
+      AND au.is_deleted = FALSE
       AND (
         p.author_user_id = ${currentUserId}
         OR (

@@ -42,6 +42,8 @@ export type ReportStatus = (typeof REPORT_STATUS_VALUES)[number];
 export type ModerationActionType = (typeof MODERATION_ACTION_VALUES)[number];
 
 export interface ModerationState {
+  isDeleted: boolean;
+  deletedAt: string | null;
   isBanned: boolean;
   bannedAt: string | null;
   isSuspended: boolean;
@@ -71,6 +73,8 @@ function dateToIso(value: Date | null | undefined): string | null {
 
 export async function getModerationState(userId: string): Promise<ModerationState> {
   const rows = await prisma.$queryRaw<Array<{
+    is_deleted: boolean;
+    deleted_at: Date | null;
     is_banned: boolean;
     banned_at: Date | null;
     suspended_until: Date | null;
@@ -80,6 +84,8 @@ export async function getModerationState(userId: string): Promise<ModerationStat
     last_warning_at: Date | null;
   }>>`
     SELECT
+      is_deleted,
+      deleted_at,
       is_banned,
       banned_at,
       suspended_until,
@@ -97,6 +103,8 @@ export async function getModerationState(userId: string): Promise<ModerationStat
   const isSuspended = Boolean(row?.suspended_until && row.suspended_until > new Date());
 
   return {
+    isDeleted: Boolean(row?.is_deleted),
+    deletedAt: dateToIso(row?.deleted_at),
     isBanned: Boolean(row?.is_banned),
     bannedAt: dateToIso(row?.banned_at),
     isSuspended,
@@ -109,6 +117,15 @@ export async function getModerationState(userId: string): Promise<ModerationStat
 }
 
 export function assertCanLogin(state: ModerationState): void {
+  if (state.isDeleted) {
+    throw new ModerationError(
+      'This account has been deleted and can no longer be accessed.',
+      410,
+      'ACCOUNT_DELETED',
+      state,
+    );
+  }
+
   if (state.isBanned) {
     throw new ModerationError(
       'Your account has been permanently banned due to repeated violations.',

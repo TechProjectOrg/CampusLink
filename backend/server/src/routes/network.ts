@@ -63,7 +63,9 @@ router.get('/graph', async (req: Request, res: Response) => {
       SELECT
         f.follower_user_id AS user_id
       FROM follows f
+      JOIN users u ON u.user_id = f.follower_user_id
       WHERE f.followed_user_id = ${userId}
+        AND u.is_deleted = FALSE
       ORDER BY f.created_at DESC
     `;
 
@@ -72,7 +74,9 @@ router.get('/graph', async (req: Request, res: Response) => {
       SELECT
         f.followed_user_id AS user_id
       FROM follows f
+      JOIN users u ON u.user_id = f.followed_user_id
       WHERE f.follower_user_id = ${userId}
+        AND u.is_deleted = FALSE
       ORDER BY f.created_at DESC
     `;
 
@@ -81,8 +85,10 @@ router.get('/graph', async (req: Request, res: Response) => {
       SELECT fr.follow_request_id,
              fr.requester_user_id AS user_id
       FROM follow_requests fr
+      JOIN users u ON u.user_id = fr.requester_user_id
       WHERE fr.target_user_id = ${userId}
         AND fr.status = 'pending'
+        AND u.is_deleted = FALSE
       ORDER BY fr.created_at DESC
     `;
 
@@ -91,8 +97,10 @@ router.get('/graph', async (req: Request, res: Response) => {
       SELECT fr.follow_request_id,
              fr.target_user_id AS user_id
       FROM follow_requests fr
+      JOIN users u ON u.user_id = fr.target_user_id
       WHERE fr.requester_user_id = ${userId}
         AND fr.status = 'pending'
+        AND u.is_deleted = FALSE
       ORDER BY fr.created_at DESC
     `;
 
@@ -174,6 +182,17 @@ router.post('/follow', async (req: Request, res: Response) => {
   }
 
   try {
+    const targetRows = await prisma.$queryRaw<Array<{ is_deleted: boolean }>>`
+      SELECT is_deleted
+      FROM users
+      WHERE user_id = ${targetUserId}
+      LIMIT 1
+    `;
+    const targetState = targetRows[0];
+    if (!targetState || targetState.is_deleted) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
     // Check if target user exists and get privacy status
     const [target, currentUser] = await Promise.all([
       getUserSummaryById(targetUserId),
@@ -366,8 +385,10 @@ router.get('/requests/incoming', async (req: Request, res: Response) => {
       SELECT fr.follow_request_id, fr.created_at,
              fr.requester_user_id AS user_id
       FROM follow_requests fr
+      JOIN users u ON u.user_id = fr.requester_user_id
       WHERE fr.target_user_id = ${userId}
         AND fr.status = 'pending'
+        AND u.is_deleted = FALSE
       ORDER BY fr.created_at DESC
     `;
     const users = await hydrateOrderedUsers(userId, rows.map((row) => row.user_id));
@@ -398,8 +419,10 @@ router.get('/requests/outgoing', async (req: Request, res: Response) => {
       SELECT fr.follow_request_id, fr.created_at,
              fr.target_user_id AS user_id
       FROM follow_requests fr
+      JOIN users u ON u.user_id = fr.target_user_id
       WHERE fr.requester_user_id = ${userId}
         AND fr.status = 'pending'
+        AND u.is_deleted = FALSE
       ORDER BY fr.created_at DESC
     `;
     const users = await hydrateOrderedUsers(userId, rows.map((row) => row.user_id));

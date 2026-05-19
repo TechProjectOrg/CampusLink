@@ -31,9 +31,10 @@ CREATE INDEX IF NOT EXISTS idx_chat_participants_chat_joined ON chat_participant
 ALTER TABLE user_settings
   ADD COLUMN IF NOT EXISTS group_add_preference VARCHAR(20) DEFAULT 'everyone' CHECK (group_add_preference IN ('everyone', 'friends', 'none'));
 
--- Create a unique constraint on club.linked_chat_id to ensure 1:1 relationship
-ALTER TABLE clubs
-  ADD CONSTRAINT uq_clubs_linked_chat_id UNIQUE (linked_chat_id) WHERE linked_chat_id IS NOT NULL;
+-- Create a partial unique index on club.linked_chat_id to ensure 1:1 relationship
+CREATE UNIQUE INDEX IF NOT EXISTS uq_clubs_linked_chat_id
+  ON clubs(linked_chat_id)
+  WHERE linked_chat_id IS NOT NULL;
 
 -- Create index for club chat lookups
 CREATE INDEX IF NOT EXISTS idx_clubs_linked_chat_id ON clubs(linked_chat_id) WHERE linked_chat_id IS NOT NULL;

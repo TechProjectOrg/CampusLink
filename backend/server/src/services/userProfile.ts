@@ -71,6 +71,7 @@ export async function getUserProfileById(userId: string): Promise<UserProfile | 
     `,
     prisma.$queryRaw<
       Array<{
+        is_deleted: boolean;
         is_banned: boolean;
         banned_at: Date | null;
         suspended_until: Date | null;
@@ -81,6 +82,7 @@ export async function getUserProfileById(userId: string): Promise<UserProfile | 
       }>
     >`
       SELECT
+        is_deleted,
         is_banned,
         banned_at,
         suspended_until,
@@ -97,6 +99,10 @@ export async function getUserProfileById(userId: string): Promise<UserProfile | 
 
   const admin = adminRows[0];
   const moderation = moderationRows[0];
+
+  if (moderation?.is_deleted) {
+    return null;
+  }
 
   return {
     userId: summary.userId,

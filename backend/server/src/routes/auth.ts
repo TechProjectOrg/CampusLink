@@ -13,7 +13,7 @@ import {
   verifyPasswordResetToken,
   verifyVerificationActionToken,
 } from '../lib/auth';
-import { assertCanLogin, getModerationState } from '../lib/moderation';
+import { assertCanLogin, getModerationState, ModerationError } from '../lib/moderation';
 import { uploadVerificationProofToStorage } from '../lib/objectStorage';
 import { invalidateUserCache } from '../lib/userCache';
 import { sendMagicLinkEmail, sendPasswordResetEmail } from '../lib/authEmail';
@@ -87,6 +87,7 @@ interface ExistingUserRow {
   auth_provider: AuthProvider;
   google_subject: string | null;
   verification_state: UserVerificationState | null;
+  is_deleted: boolean;
   is_banned: boolean;
   created_at: Date;
 }
@@ -465,6 +466,7 @@ async function findUserByEmail(email: string): Promise<ExistingUserRow | null> {
       auth_provider::text AS auth_provider,
       google_subject,
       verification_state::text AS verification_state,
+      is_deleted,
       is_banned,
       created_at
     FROM users
@@ -487,12 +489,14 @@ async function findUserForPasswordResetByIdentifier(identifier: string): Promise
         SELECT user_id, email, username
         FROM users
         WHERE email = ${normalizeEmail(normalizedIdentifier)}
+          AND is_deleted = FALSE
         LIMIT 1
       `
     : await prisma.$queryRaw<PasswordResetRequestRow[]>`
         SELECT user_id, email, username
         FROM users
         WHERE username = ${normalizeUsername(normalizedIdentifier)}
+          AND is_deleted = FALSE
         LIMIT 1
       `;
 
@@ -630,6 +634,19 @@ function sessionToResponse(row: UserSessionRow, currentSessionId?: string) {
     lastSeenAt: row.last_seen_at ? row.last_seen_at.toISOString() : null,
     isCurrent: currentSessionId ? row.session_id === currentSessionId : false,
   };
+}
+
+function handleModerationError(res: Response, err: unknown): boolean {
+  if (!(err instanceof ModerationError)) {
+    return false;
+  }
+
+  res.status(err.status).json({
+    message: err.message,
+    code: err.code,
+    state: err.state,
+  });
+  return true;
 }
 
 async function createDefaultUserSettings(userId: string): Promise<void> {
@@ -1299,6 +1316,13 @@ router.post('/login', async (req: Request, res: Response) => {
       });
     }
 
+    if (user.is_deleted) {
+      return res.status(410).json({
+        message: 'This account has been deleted and can no longer be accessed.',
+        code: 'ACCOUNT_DELETED',
+      });
+    }
+
     const isAdminAccount = await userHasAdminAccount(user.user_id);
 
     if (!isAdminAccount && user.verification_state === 'alumni_pending_review') {
@@ -1334,6 +1358,10 @@ router.post('/login', async (req: Request, res: Response) => {
 
     return res.status(200).json(responsePayload);
   } catch (err) {
+    if (handleModerationError(res, err)) {
+      return;
+    }
+
     console.error('Error during login:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
@@ -1440,6 +1468,10 @@ router.post('/google', async (req: Request, res: Response) => {
 
     return res.status(200).json(buildOnboardingResponse(onboardingSession));
   } catch (err: any) {
+    if (handleModerationError(res, err)) {
+      return;
+    }
+
     console.error('Error during Google auth:', err);
     return res.status(500).json({ message: err?.message || 'Unable to sign in with Google' });
   }
@@ -1882,6 +1914,10 @@ router.post('/signup/student', validatePassword, async (req: Request, res: Respo
 
     return res.status(201).json(responsePayload);
   } catch (err: any) {
+    if (handleModerationError(res, err)) {
+      return;
+    }
+
     if (err?.code === '23505') {
       return res.status(409).json({ message: 'That username is already taken. Please choose another one.' });
     }
