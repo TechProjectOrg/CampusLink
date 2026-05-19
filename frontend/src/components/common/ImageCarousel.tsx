@@ -27,7 +27,7 @@ const variantStyles: Record<ImageCarouselVariant, { container: string; image: st
     image: 'object-cover',
   },
   detail: {
-    container: 'max-h-[34rem] min-h-[12rem]',
+    container: 'h-full min-h-0 max-h-full',
     image: 'object-contain',
   },
 };

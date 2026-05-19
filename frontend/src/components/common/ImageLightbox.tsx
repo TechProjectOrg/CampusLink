@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Dialog, DialogContent, DialogTitle } from '../ui/dialog';
+import { Dialog, DialogOverlay, DialogPortal, DialogTitle } from '../ui/dialog';
 import { ImageCarousel } from './ImageCarousel';
 import { X } from 'lucide-react';
-import { Button } from '../ui/button';
 
 export interface ImageLightboxProps {
   images: string[];
@@ -23,29 +22,42 @@ export function ImageLightbox({ images, alt, open, initialIndex = 0, onOpenChang
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[min(96vw,56rem)] border-0 bg-black/95 p-0 text-white shadow-2xl [&>button]:hidden">
-        <DialogTitle className="sr-only">{alt}</DialogTitle>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          className="absolute right-3 top-3 z-20 text-white hover:bg-white/20"
-          onClick={() => onOpenChange(false)}
-          aria-label="Close image viewer"
-        >
-          <X className="h-5 w-5" />
-        </Button>
-        <div className="p-2 sm:p-4">
-          <ImageCarousel
-            key={`${open}-${startIndex}-${images.join('|')}`}
-            images={images}
-            alt={alt}
-            variant="detail"
-            className="w-full rounded-lg bg-black"
-            startIndex={startIndex}
-          />
+      <DialogPortal>
+        <DialogOverlay className="z-50 bg-black/80 backdrop-blur-sm" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+          <div className="relative flex h-full w-full items-center justify-center overflow-hidden">
+            <DialogTitle className="sr-only">{alt}</DialogTitle>
+            <button
+              type="button"
+              className="absolute right-3 top-3 z-20 flex h-10 w-10 items-center justify-center rounded-full bg-black/40 text-white transition-colors hover:bg-black/60"
+              onClick={() => onOpenChange(false)}
+              aria-label="Close image viewer"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            {images.length === 1 ? (
+              <div className="flex h-full w-full items-center justify-center">
+                <img
+                  src={images[0]}
+                  alt={alt}
+                  className="max-h-[calc(100dvh-1.5rem)] max-w-[calc(100dvw-1.5rem)] object-contain sm:max-h-[calc(100dvh-3rem)] sm:max-w-[calc(100dvw-3rem)]"
+                />
+              </div>
+            ) : (
+              <div className="h-full w-full">
+                <ImageCarousel
+                  key={`${open}-${startIndex}-${images.join('|')}`}
+                  images={images}
+                  alt={alt}
+                  variant="detail"
+                  className="h-full min-h-0 w-full bg-black"
+                  startIndex={startIndex}
+                />
+              </div>
+            )}
+          </div>
         </div>
-      </DialogContent>
+      </DialogPortal>
     </Dialog>
   );
 }

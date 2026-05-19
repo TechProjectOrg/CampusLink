@@ -40,6 +40,7 @@ import { useAuth } from '../context/AuthContext';
 import { useBottomAnchoredChatScroll } from '../hooks/useBottomAnchoredChatScroll';
 import { LoadingIndicator } from './ui/LoadingIndicator';
 import { ImageWithFallback } from './figma/ImageWithFallback';
+import { ImageLightbox } from './common/ImageLightbox';
 import type { ReportTargetDescriptor } from './ReportDialog';
 
 interface ChatPageProps {
@@ -140,6 +141,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   const [replyingTo, setReplyingTo] = useState<ChatMessageApi | null>(null);
   const [highlightedMessageId, setHighlightedMessageId] = useState<string | null>(null);
   const [mobileActionMessageId, setMobileActionMessageId] = useState<string | null>(null);
+  const [openedChatImage, setOpenedChatImage] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const longPressTimerRef = useRef<number | null>(null);
@@ -1093,8 +1095,21 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                   let contentElement: any = null;
                   let isPostPreview = false;
                   if (msg.type === 'image' && msg.attachments[0]?.fileUrl) {
+                    const imageUrl = msg.attachments[0].fileUrl;
                     contentElement = (
-                      <img src={msg.attachments[0].fileUrl} alt="Chat attachment" className="max-h-72 rounded-2xl object-cover" />
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setOpenedChatImage(imageUrl);
+                        }}
+                        className="block"
+                        aria-label="Open image in full view"
+                      >
+                        <div className="relative h-44 w-64 max-w-full overflow-hidden rounded-2xl bg-gray-100 sm:h-48 sm:w-72">
+                          <ImageWithFallback src={imageUrl} alt="Chat attachment" className="h-full w-full object-cover" />
+                        </div>
+                      </button>
                     );
                   } else if (_postUrlMatch) {
                     const postId = _postUrlMatch[1];
@@ -1432,6 +1447,15 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
           </div>
         )}
       </div>
+
+      <ImageLightbox
+        images={openedChatImage ? [openedChatImage] : []}
+        alt="Chat image"
+        open={Boolean(openedChatImage)}
+        onOpenChange={(open) => {
+          if (!open) setOpenedChatImage(null);
+        }}
+      />
 
       {/* New Chat Modal */}
       <NewChatModal
