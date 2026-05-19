@@ -130,14 +130,7 @@ export function SuggestionsCard({
 
         {/* Suggestion rows */}
         <div className="divide-y divide-slate-100">
-          {suggestedStudents.map(({ student, sharedSkills, sharedInterests }) => {
-              const socialProof =
-                sharedSkills.length > 0
-                  ? `${sharedSkills[0]} in common`
-                  : sharedInterests.length > 0
-                    ? `${sharedInterests[0]} in common`
-                    : '3 mutual connections';
-
+          {suggestedStudents.map(({ student }) => {
               const isFollowing = (followGraph.followingByUserId[currentUserId] ?? []).includes(student.id);
               const isFollower = (followGraph.followersByUserId[currentUserId] ?? []).includes(student.id);
               const requestStatus = (followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id)
@@ -147,7 +140,7 @@ export function SuggestionsCard({
               return (
                 <div
                   key={student.id}
-                  className="group relative flex items-start gap-2 px-3 py-2 transition-colors duration-150 hover:bg-slate-50/80"
+                  className="group relative flex items-start gap-3 px-4 py-3 transition-colors duration-150 hover:bg-slate-50/80"
                 >
                   {/* Avatar */}
                   <button
@@ -166,7 +159,7 @@ export function SuggestionsCard({
                   </button>
 
                   {/* Content column */}
-                  <div className="flex min-w-0 flex-1 flex-col">
+                  <div className="flex min-w-0 flex-1 flex-col justify-center">
                     {/* Top row: Name & X */}
                     <div className="flex items-start justify-between gap-2 w-full">
                       <div className="flex-1 min-w-0">
@@ -188,16 +181,13 @@ export function SuggestionsCard({
                       </button>
                     </div>
 
-                    {/* Bottom section: Subtext & Follow Button */}
-                    <div className="mt-0.5 flex items-end justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-xs text-gray-600">
-                          {student.branch} <span className="text-gray-400 mx-0.5">·</span> <span className="text-secondary">Y{student.year}</span>
-                        </p>
-                        <p className="truncate text-xs text-gray-500" title={socialProof}>
-                          {socialProof}
-                        </p>
-                      </div>
+                    {/* Bottom section: Branch/Year & Follow Button */}
+                    <div className="mt-1 flex items-center justify-between gap-3">
+                      <p className="min-w-0 flex-1 truncate text-xs text-gray-600" title={`${student.branch} · Y${student.year}`}>
+                        <span className="truncate">{student.branch}</span>
+                        <span className="text-gray-400 mx-0.5">·</span>
+                        <span className="text-secondary">Y{student.year}</span>
+                      </p>
                       <div className="shrink-0">
                         <FollowButton
                           compact

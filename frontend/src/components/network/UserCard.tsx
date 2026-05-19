@@ -34,11 +34,6 @@ export function UserCard({ user, onClick, mutualFollowersCount, secondaryLabel, 
               {secondaryLabel && (
                 <p className="text-xs text-gray-500 mt-1">{secondaryLabel}</p>
               )}
-              {showMutual && (
-                <p className="text-xs text-gray-500 mt-1">
-                  {mutualFollowersCount} mutual follower{mutualFollowersCount === 1 ? '' : 's'}
-                </p>
-              )}
             </div>
           </button>
 

@@ -250,6 +250,14 @@ export function SearchPage({
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {suggestedUsers.map((suggestion, index) => {
                     const { student, sharedSkills, sharedInterests } = suggestion;
+                    const isFollowing = (followGraph.followingByUserId[currentUserId] ?? []).includes(student.id);
+                    const isRequested = (followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id);
+                    const isFollower = (followGraph.followersByUserId[currentUserId] ?? []).includes(student.id);
+                    const socialProof = sharedSkills.length > 0
+                      ? `Shared skills: ${sharedSkills.slice(0, 2).join(', ')}`
+                      : sharedInterests.length > 0
+                        ? `Shared interests: ${sharedInterests.slice(0, 2).join(', ')}`
+                        : null;
 
                     return (
                       <Card
@@ -257,44 +265,44 @@ export function SearchPage({
                         className="hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 border-primary/10 rounded-2xl animate-slide-in-up"
                         style={{ animationDelay: `${index * 50}ms` }}
                       >
-                        <CardContent className="p-5 space-y-4">
+                        <CardContent className="p-4 sm:p-5">
                           <div className="flex items-start gap-3">
-                            <Avatar className="w-14 h-14 ring-2 ring-primary/20 transition-all duration-300 hover:ring-primary/40">
+                            <Avatar className="w-14 h-14 shrink-0 ring-2 ring-primary/20 transition-all duration-300 hover:ring-primary/40">
                               <AvatarImage src={student.avatar} />
                               <AvatarFallback>{student.name[0]}</AvatarFallback>
                             </Avatar>
-                            <div className="flex-1 min-w-0">
+                            <div className="min-w-0 flex-1">
                               <h3 className="text-gray-900 truncate">{student.name}</h3>
-                              <p className="text-sm text-gray-600">{student.branch}</p>
+                              <p className="truncate text-sm text-gray-600">{student.branch}</p>
                               {student.year > 0 && <p className="text-sm text-secondary">Year {student.year}</p>}
-                              <p className="text-xs text-gray-500 mt-1">
-                                {sharedSkills.length > 0
-                                  ? `Shared skills: ${sharedSkills.slice(0, 2).join(', ')}`
-                                  : sharedInterests.length > 0
-                                    ? `Shared interests: ${sharedInterests.slice(0, 2).join(', ')}`
-                                    : 'New member'}
-                              </p>
+                              {socialProof ? (
+                                <p className="mt-1 line-clamp-2 text-xs text-gray-500">
+                                  {socialProof}
+                                </p>
+                              ) : null}
                             </div>
                           </div>
 
                           {/* followers/projects counts hidden in search results */}
 
-                          <div className="flex gap-2 items-center">
+                          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
                             <button
                               type="button"
                               onClick={() => onViewProfile(student.id)}
-                              className="flex-1 border border-primary/20 hover:border-primary hover:bg-primary/10 text-primary transition-all duration-300 hover:scale-105 rounded-xl px-3 py-2 text-sm font-medium"
+                              className="w-full sm:flex-1 border border-primary/20 hover:border-primary hover:bg-primary/10 text-primary transition-all duration-300 rounded-xl px-4 py-2.5 text-sm font-medium"
                             >
                               View Profile
                             </button>
-                            {!((followGraph.followingByUserId[currentUserId] ?? []).includes(student.id)) && !((followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id)) && (
-                              <div className="flex-shrink-0">
+                            {!isFollowing && !isRequested && (
+                              <div className="w-full sm:w-auto sm:flex-shrink-0">
                                 <FollowButton
+                                  compact
+                                  className="h-10 w-full rounded-xl px-4 text-sm sm:min-w-[124px] sm:w-auto"
                                   targetName={student.name}
                                   accountType={student.accountType}
-                                  isFollowing={(followGraph.followingByUserId[currentUserId] ?? []).includes(student.id)}
-                                  isFollower={(followGraph.followersByUserId[currentUserId] ?? []).includes(student.id)}
-                                  requestStatus={(followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id) ? 'requested' : 'none'}
+                                  isFollowing={isFollowing}
+                                  isFollower={isFollower}
+                                  requestStatus={isRequested ? 'requested' : 'none'}
                                   onFollow={() => onFollow(student.id, student.accountType)}
                                   onUnfollow={() => onUnfollow(student.id)}
                                   onCancelRequest={() => onCancelRequest(student.id)}

@@ -74,15 +74,7 @@ export function NetworkPage({
   const followersCount = followersIds.length;
   const followingCount = followingIds.length;
 
-  const mutualFollowersCount = (otherUserId: string) => {
-    // Future-ready: mutual followers = people who follow BOTH you and the other user.
-    const mutual = uniqueIntersection(
-      followGraph.followersByUserId[currentUserId] ?? [],
-      followGraph.followersByUserId[otherUserId] ?? []
-    ).filter((id) => id !== currentUserId && id !== otherUserId);
-
-    return mutual.length;
-  };
+  // mutual followers UI not available yet; do not compute mutual counts
 
   return (
     <PageLayout maxWidth="4xl" className="cl-network-page" contentClassName="cl-network-content py-6 space-y-6">
@@ -130,14 +122,12 @@ export function NetworkPage({
               <div className="space-y-3">
                 {followers.map((user) => {
                   const isFollowingBack = followingIds.includes(user.id);
-                  const mutual = mutualFollowersCount(user.id);
 
                   return (
                     <UserCard
                       key={user.id}
                       user={user}
                       onClick={() => onViewProfile(user.id)}
-                      mutualFollowersCount={mutual}
                       action={
                         <div className="flex gap-2">
                           {!isFollowingBack && !outgoingRequestIds.includes(user.id) && (
@@ -186,13 +176,11 @@ export function NetworkPage({
             ) : (
               <div className="space-y-3">
                 {following.map((user) => {
-                  const mutual = mutualFollowersCount(user.id);
                   return (
                     <UserCard
                       key={user.id}
                       user={user}
                       onClick={() => onViewProfile(user.id)}
-                      mutualFollowersCount={mutual}
                       action={
                        outgoingRequestIds.includes(user.id) ? (
                         <Button

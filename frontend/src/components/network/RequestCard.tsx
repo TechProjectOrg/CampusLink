@@ -15,7 +15,6 @@ export function RequestCard({ user, mutualFollowersCount, onViewProfile, onAccep
     <UserCard
       user={user}
       onClick={onViewProfile}
-      mutualFollowersCount={mutualFollowersCount}
       action={
         <div className="flex gap-2">
           <Button size="sm" className="bg-green-500 text-white shadow-lg hover:shadow-xl rounded-xl" onClick={onAccept}>
