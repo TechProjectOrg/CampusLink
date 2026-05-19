@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Bookmark, Calendar, Heart, MapPin, MessageCircle, Trash2, MoreHorizontal, Flag, Share2, Link as LinkIcon, BriefcaseBusiness, Wallet, Clock3, Pencil, X } from 'lucide-react';
+import { ArrowLeft, Bookmark, Calendar, Heart, MapPin, MessageCircle, Trash2, MoreHorizontal, Flag, Share2, Link as LinkIcon, BriefcaseBusiness, Wallet, Clock3, Pencil } from 'lucide-react';
 import { ShareToChatDialog } from './share/ShareToChatDialog';
 import { Opportunity, Comment } from '../types';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -104,20 +104,12 @@ export function PostPage({
 }: PostPageProps) {
   const editableImageSources = post.images?.length ? post.images : post.image ? [post.image] : [];
 
-  const buildEditableImageItems = () =>
-    editableImageSources.map((imageUrl, index) => ({
-      key: `${post.id}:${post.imageMediaIds?.[index] ?? imageUrl}:${index}`,
-      imageUrl,
-      mediaId: post.imageMediaIds?.[index] ?? '',
-    }));
-
   const auth = useAuth();
   const [commentText, setCommentText] = useState('');
   const [isShareOpen, setIsShareOpen] = useState(false);
   const [replyTarget, setReplyTarget] = useState<Comment | null>(null);
   const [highlightedCommentId, setHighlightedCommentId] = useState<string | null>(null);
   const [editingPost, setEditingPost] = useState(false);
-  const [editableImageItems, setEditableImageItems] = useState(buildEditableImageItems);
   const [editDraft, setEditDraft] = useState({
     title: post.title,
     description: post.description,
@@ -166,7 +158,10 @@ export function PostPage({
   const showStipendField = Boolean(post.stipend?.trim());
   const showDurationField = Boolean(post.duration?.trim());
   const showTagsField = (post.tags?.length ?? 0) > 0;
-  const visibleEditableImages = editableImageItems.filter((item) => !item.mediaId.startsWith('certification:'));
+  const visibleEditableImages = editableImageSources.filter((_, index) => {
+    const mediaId = post.imageMediaIds?.[index] ?? '';
+    return !mediaId.startsWith('certification:');
+  });
 
   const topLevelComments = useMemo(
     () => (post.comments ?? []).filter((comment) => !comment.parentCommentId),
@@ -224,7 +219,6 @@ export function PostPage({
       link: post.link ?? '',
       tags: (post.tags ?? []).join(', '),
     });
-    setEditableImageItems(buildEditableImageItems());
     setEditingPost(false);
   }, [post]);
 
@@ -345,13 +339,6 @@ export function PostPage({
       .split(',')
       .map((tag) => tag.trim())
       .filter(Boolean);
-    const originalMediaIds = post.imageMediaIds ?? [];
-    const remainingMediaIds = new Set(
-      editableImageItems.map((item) => item.mediaId).filter((mediaId) => Boolean(mediaId)),
-    );
-    const removeMediaIds = originalMediaIds.filter(
-      (mediaId) => mediaId && !mediaId.startsWith('certification:') && !remainingMediaIds.has(mediaId),
-    );
 
     onEditPost(post.id, {
       title: editDraft.title,
@@ -363,10 +350,7 @@ export function PostPage({
       location: editDraft.location,
       link: editDraft.link,
       tags,
-      images: editableImageItems.map((item) => item.imageUrl),
-      removeMediaIds,
     });
-    setEditableImageItems(buildEditableImageItems());
     setEditingPost(false);
   };
 
@@ -558,7 +542,6 @@ export function PostPage({
                 size="sm"
                 className="rounded-full"
                 onClick={() => {
-                  setEditableImageItems(buildEditableImageItems());
                   setEditDraft({
                     title: post.title,
                     description: post.description,
@@ -604,7 +587,6 @@ export function PostPage({
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       onClick={() => {
-                        setEditableImageItems(buildEditableImageItems());
                         setEditDraft({
                           title: post.title,
                           description: post.description,
@@ -642,17 +624,9 @@ export function PostPage({
                 <div className="space-y-2">
                   <p className="text-sm text-gray-600">Post images</p>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    {visibleEditableImages.map((item) => (
-                      <div key={item.key} className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-                        <img src={item.imageUrl} alt="Post media" className="h-24 w-full object-cover" />
-                        <button
-                          type="button"
-                          className="absolute right-2 top-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/60 bg-black/65 text-white shadow-md backdrop-blur-sm transition hover:bg-red-600"
-                          aria-label="Delete image"
-                          onClick={() => setEditableImageItems((prev) => prev.filter((image) => image.key !== item.key))}
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
+                    {visibleEditableImages.map((imageUrl, index) => (
+                      <div key={`${post.id}:edit-image:${index}`} className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                        <img src={imageUrl} alt="Post media" className="h-24 w-full object-cover" />
                       </div>
                     ))}
                   </div>
@@ -694,7 +668,6 @@ export function PostPage({
                   type="button"
                   variant="outline"
                   onClick={() => {
-                    setEditableImageItems(buildEditableImageItems());
                     setEditDraft({
                       title: post.title,
                       description: post.description,

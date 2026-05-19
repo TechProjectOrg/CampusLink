@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ShareToChatDialog } from './share/ShareToChatDialog';
-import { Heart, MessageCircle, Bookmark, MapPin, Trash2, Pencil, Loader2, MoreHorizontal, Flag, Share2, X } from 'lucide-react';
+import { Heart, MessageCircle, Bookmark, MapPin, Trash2, Pencil, Loader2, MoreHorizontal, Flag, Share2 } from 'lucide-react';
 import { Opportunity, Comment } from '../types';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -71,7 +71,6 @@ export function OpportunityCard({
     link: opportunity.link ?? '',
     tags: (opportunity.tags ?? []).join(', '),
   });
-  const [removedMediaIds, setRemovedMediaIds] = useState<string[]>([]);
 
   const likeCount = opportunity.likeCount ?? opportunity.likes.length;
   const saveCount = opportunity.saveCount ?? opportunity.saved.length;
@@ -120,13 +119,10 @@ export function OpportunityCard({
   const showDurationField = Boolean(opportunity.duration?.trim());
   const showTagsField = (opportunity.tags?.length ?? 0) > 0;
   const editableImageSources = opportunity.images?.length ? opportunity.images : opportunity.image ? [opportunity.image] : [];
-  const editableImages = editableImageSources.map((imageUrl, index) => ({
-    imageUrl,
-    mediaId: opportunity.imageMediaIds?.[index] ?? '',
-  }));
-  const visibleEditableImages = editableImages.filter(
-    (item) => (!item.mediaId || !item.mediaId.startsWith('certification:')) && !removedMediaIds.includes(item.mediaId),
-  );
+  const visibleEditableImages = editableImageSources.filter((_, index) => {
+    const mediaId = opportunity.imageMediaIds?.[index] ?? '';
+    return !mediaId || !mediaId.startsWith('certification:');
+  });
 
   const handleComment = () => {
     if (!commentText.trim()) return;
@@ -306,9 +302,7 @@ export function OpportunityCard({
       location: editDraft.location,
       link: editDraft.link,
       tags,
-      removeMediaIds: removedMediaIds,
     });
-    setRemovedMediaIds([]);
     setEditingPost(false);
   };
 
@@ -397,10 +391,7 @@ export function OpportunityCard({
                     <>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
-                        onClick={() => {
-                          setRemovedMediaIds([]);
-                          setEditingPost((prev) => !prev);
-                        }}
+                        onClick={() => setEditingPost((prev) => !prev)}
                       >
                         <Pencil className="mr-2 h-4 w-4" />
                         Edit
@@ -435,19 +426,9 @@ export function OpportunityCard({
                 <div className="space-y-2">
                   <p className="text-sm text-gray-600">Post images</p>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    {visibleEditableImages.map((item) => (
-                      <div key={item.mediaId} className="relative overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-                        <img src={item.imageUrl} alt="Post media" className="h-24 w-full object-cover" />
-                        <button
-                          type="button"
-                          className="absolute right-2 top-2 z-10 rounded-full bg-white/90 p-1 text-slate-700 shadow hover:bg-white"
-                          aria-label="Delete image"
-                          onClick={() =>
-                            setRemovedMediaIds((prev) => (prev.includes(item.mediaId) ? prev : [...prev, item.mediaId]))
-                          }
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
+                    {visibleEditableImages.map((imageUrl, index) => (
+                      <div key={`${opportunity.id}:edit-image:${index}`} className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                        <img src={imageUrl} alt="Post media" className="h-24 w-full object-cover" />
                       </div>
                     ))}
                   </div>
@@ -489,10 +470,7 @@ export function OpportunityCard({
                   variant="outline"
                   size="sm"
                   type="button"
-                  onClick={() => {
-                    setRemovedMediaIds([]);
-                    setEditingPost(false);
-                  }}
+                  onClick={() => setEditingPost(false)}
                 >
                   Cancel
                 </Button>

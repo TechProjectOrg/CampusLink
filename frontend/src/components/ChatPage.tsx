@@ -794,9 +794,6 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                       <div className="flex items-center justify-between mb-1">
                         <p className={`text-sm truncate ${conversation.unread > 0 ? 'text-gray-900' : 'text-gray-900'}`}>
                           {conversation.participantName}
-                          {conversation.participantUsername ? (
-                            <span className="block text-xs font-normal text-gray-500">@{conversation.participantUsername}</span>
-                          ) : null}
                         </p>
                         <span className="text-xs text-gray-500 flex-shrink-0 ml-2">
                           {formatDate(conversation.timestamp)}
