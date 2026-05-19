@@ -54,6 +54,55 @@ interface ChatPageProps {
   onReportTarget?: (target: ReportTargetDescriptor) => void;
 }
 
+function getRequiredLeaveSuccessor(group: GroupChatDetailsApi, currentUserId: string) {
+  const currentMember = group.members.find((member) => member.userId === currentUserId);
+  if (!currentMember || (currentMember.role !== 'owner' && currentMember.role !== 'admin')) {
+    return null;
+  }
+
+  const adminCount = group.members.filter((member) => member.role === 'owner' || member.role === 'admin').length;
+  if (adminCount !== 1) {
+    return null;
+  }
+
+  const eligibleSuccessors = group.members.filter((member) => member.userId !== currentUserId);
+  if (eligibleSuccessors.length === 0) {
+    return null;
+  }
+
+  return {
+    nextRoleLabel: currentMember.role === 'owner' ? 'owner' : 'admin',
+    eligibleSuccessors,
+  };
+}
+
+function promptForGroupSuccessor(group: GroupChatDetailsApi, currentUserId: string): string | null {
+  const requirement = getRequiredLeaveSuccessor(group, currentUserId);
+  if (!requirement) {
+    return null;
+  }
+
+  const choice = window.prompt(
+    `You are the last admin in "${group.name}". Enter the username of the member who should become the new ${requirement.nextRoleLabel} before you leave:\n${requirement.eligibleSuccessors
+      .map((member) => `@${member.username}`)
+      .join('\n')}`,
+  );
+
+  const normalizedChoice = choice?.trim().replace(/^@/, '').toLowerCase();
+  if (!normalizedChoice) {
+    throw new Error(`Choose a new ${requirement.nextRoleLabel} before leaving the group.`);
+  }
+
+  const successor = requirement.eligibleSuccessors.find(
+    (member) => member.username.trim().toLowerCase() === normalizedChoice,
+  );
+  if (!successor) {
+    throw new Error(`Select a valid member username to assign as the new ${requirement.nextRoleLabel}.`);
+  }
+
+  return successor.userId;
+}
+
 function TypingAnimatedText({
   text,
   className = '',
@@ -630,7 +679,10 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     const token = auth.session?.token;
     if (!token) return;
     try {
-      await apiLeaveGroupChat(groupId, token);
+      const successorUserId = groupInfo && groupInfo.id === groupId
+        ? promptForGroupSuccessor(groupInfo, currentUserId)
+        : undefined;
+      await apiLeaveGroupChat(groupId, token, successorUserId ?? undefined);
       setViewingGroupInfo(null);
       setGroupInfo(null);
       appData.selectConversation(null);
@@ -638,7 +690,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     } catch (err) {
       window.alert(err instanceof Error ? err.message : 'Failed to leave group');
     }
-  }, [appData, auth.session?.token]);
+  }, [appData, auth.session?.token, currentUserId, groupInfo]);
 
   const handleDeleteGroup = useCallback(async (groupId: string) => {
     const token = auth.session?.token;

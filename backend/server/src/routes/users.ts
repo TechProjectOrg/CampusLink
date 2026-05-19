@@ -39,6 +39,12 @@ import {
   maskUserCardForViewer,
   type ProfileVisibility,
 } from '../lib/blocking';
+import {
+  GroupAdminReassignmentRequiredError,
+  leaveAllIndependentGroupChatsForDeletedUser,
+  listGroupAdminReassignmentRequirementsForUser,
+  type GroupAdminTransfer,
+} from '../lib/groupChat';
 
 const router = express.Router();
 
@@ -1196,6 +1202,7 @@ router.patch(
 
 interface DeleteUserBody {
   password: string;
+  groupAdminTransfers?: GroupAdminTransfer[];
 }
 
 // Soft-deletes the account so relationships (especially chats/messages) remain intact.
@@ -1205,6 +1212,14 @@ router.delete(
   async (req: Request<GetUserParams, unknown, Partial<DeleteUserBody>>, res: Response) => {
     const { userId } = req.params;
     const { password } = req.body;
+    const groupAdminTransfers = Array.isArray(req.body?.groupAdminTransfers)
+      ? req.body.groupAdminTransfers.filter(
+          (transfer): transfer is GroupAdminTransfer =>
+            Boolean(transfer)
+            && typeof transfer.chatId === 'string'
+            && typeof transfer.successorUserId === 'string',
+        )
+      : [];
 
     if (!userId) {
       return res.status(400).json({ message: 'Missing userId' });
@@ -1237,7 +1252,29 @@ router.delete(
         return res.status(401).json({ message: 'Invalid password' });
       }
 
+      const reassignmentRequirements = await listGroupAdminReassignmentRequirementsForUser(userId);
+      const transferChatIds = new Set(groupAdminTransfers.map((transfer) => transfer.chatId));
+      const missingRequirements = reassignmentRequirements.filter(
+        (requirement) => !transferChatIds.has(requirement.chatId),
+      );
+
+      if (missingRequirements.length > 0) {
+        return res.status(409).json({
+          message: 'Appoint a new admin in each group you still manage before deleting your account.',
+          code: 'GROUP_ADMIN_REASSIGNMENT_REQUIRED',
+          groups: missingRequirements,
+        });
+      }
+
+      let invalidatedConversationUserIds: string[] = [];
+
       await prisma.$transaction(async (tx) => {
+        invalidatedConversationUserIds = await leaveAllIndependentGroupChatsForDeletedUser(
+          userId,
+          groupAdminTransfers,
+          tx,
+        );
+
         await tx.$executeRaw`
           UPDATE users
           SET
@@ -1276,7 +1313,14 @@ router.delete(
 
       await Promise.all([
         invalidateUserCache(userId),
-        invalidateConversationLists(await getConversationViewerUserIds(userId)),
+        invalidateConversationLists(
+          Array.from(
+            new Set([
+              ...(await getConversationViewerUserIds(userId)),
+              ...invalidatedConversationUserIds,
+            ]),
+          ),
+        ),
       ]);
 
       queueSuggestedUsersRecompute(userId);
@@ -1293,6 +1337,13 @@ router.delete(
 
       return res.status(204).send();
     } catch (err) {
+      if (err instanceof GroupAdminReassignmentRequiredError) {
+        return res.status(409).json({
+          message: 'Appoint a new admin in each group you still manage before deleting your account.',
+          code: 'GROUP_ADMIN_REASSIGNMENT_REQUIRED',
+          groups: await listGroupAdminReassignmentRequirementsForUser(userId),
+        });
+      }
       console.error('Error deleting user account:', err);
       return res.status(500).json({ message: 'Internal server error' });
     }

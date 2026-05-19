@@ -17,7 +17,8 @@ import {
   deleteGroupChat,
   getGroupChatDetails,
   getChatMembers,
-  leaveGroupChat,
+  leaveGroupChatWithSuccessor,
+  GroupAdminReassignmentRequiredError,
 } from '../lib/groupChat';
 import { validateChatAccess, validateActiveChatAccess } from '../lib/chatMembership';
 import { deleteManagedChatMediaByUrl, uploadChatMediaToStorage } from '../lib/objectStorage';
@@ -147,16 +148,30 @@ router.post('/:chatId/leave', requireModerationCapability('community'), async (r
   try {
     const chatId = String(req.params.chatId);
     const userId = req.auth!.userId;
+    const successorUserId = typeof req.body?.successorUserId === 'string'
+      ? req.body.successorUserId
+      : undefined;
 
     // Validate user is a member
     await validateActiveChatAccess(userId, chatId);
 
     // Leave
-    await leaveGroupChat(userId, chatId);
+    await leaveGroupChatWithSuccessor(userId, chatId, successorUserId);
 
     res.json({ success: true });
   } catch (err: any) {
     console.error('Error leaving group chat:', err);
+    if (err instanceof GroupAdminReassignmentRequiredError) {
+      return res.status(409).json({
+        error: err.message,
+        code: 'GROUP_ADMIN_REASSIGNMENT_REQUIRED',
+        chatId: err.chatId,
+        eligibleSuccessors: err.eligibleSuccessors,
+      });
+    }
+    if (err.message.includes('Selected successor')) {
+      return res.status(400).json({ error: err.message });
+    }
     res.status(500).json({ error: 'Failed to leave group chat' });
   }
 });

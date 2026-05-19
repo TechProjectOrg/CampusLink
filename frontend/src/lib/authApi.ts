@@ -649,14 +649,24 @@ export async function apiUploadUserCoverPhoto(
   return (await response.json()) as ApiUserProfile;
 }
 
-export async function apiDeleteAccount(userId: string, password: string, token?: string): Promise<void> {
+export async function apiDeleteAccount(
+  userId: string,
+  password: string,
+  token?: string,
+  options?: {
+    groupAdminTransfers?: Array<{ chatId: string; successorUserId: string }>;
+  },
+): Promise<void> {
   const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}`, {
     method: 'DELETE',
     headers: {
       'Content-Type': 'application/json',
       ...authHeaders(token),
     },
-    body: JSON.stringify({ password }),
+    body: JSON.stringify({
+      password,
+      groupAdminTransfers: options?.groupAdminTransfers ?? [],
+    }),
   });
 
   if (!response.ok) {

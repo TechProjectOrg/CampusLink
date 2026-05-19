@@ -75,6 +75,11 @@ export interface GroupChatDetailsApi {
   currentUserRole: 'owner' | 'admin' | 'member' | null;
 }
 
+export interface GroupAdminTransferApi {
+  chatId: string;
+  successorUserId: string;
+}
+
 export async function apiCreateGroupConversation(
   name: string,
   description: string,
@@ -330,12 +335,22 @@ export async function apiChangeGroupMemberRole(
   }
 }
 
-export async function apiLeaveGroupChat(chatId: string, token: string): Promise<void> {
+export async function apiLeaveGroupChat(
+  chatId: string,
+  token: string,
+  successorUserId?: string,
+): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/group-chat/${chatId}/leave`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+    headers: successorUserId
+      ? {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        }
+      : {
+          Authorization: `Bearer ${token}`,
+        },
+    body: successorUserId ? JSON.stringify({ successorUserId }) : undefined,
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));

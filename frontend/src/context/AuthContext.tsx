@@ -51,7 +51,12 @@ interface AuthContextValue {
   fetchAlumniVerificationResubmission: (token: string) => Promise<AlumniVerificationResubmissionContext>;
   resubmitAlumniVerification: (payload: AlumniVerificationResubmissionPayload) => Promise<AlumniPendingVerificationResult>;
   refreshProfile: () => Promise<void>;
-  deleteAccount: (password: string) => Promise<void>;
+  deleteAccount: (
+    password: string,
+    options?: {
+      groupAdminTransfers?: Array<{ chatId: string; successorUserId: string }>;
+    },
+  ) => Promise<void>;
   logout: () => void;
 }
 
@@ -137,12 +142,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setProfile(latest);
   };
 
-  const deleteAccount = async (password: string) => {
+  const deleteAccount = async (
+    password: string,
+    options?: {
+      groupAdminTransfers?: Array<{ chatId: string; successorUserId: string }>;
+    },
+  ) => {
     if (!session) {
       throw new Error('Not authenticated');
     }
 
-    await apiDeleteAccount(session.userId, password, session.token);
+    await apiDeleteAccount(session.userId, password, session.token, options);
     logout();
   };
 

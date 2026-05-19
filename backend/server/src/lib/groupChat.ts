@@ -12,10 +12,242 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../prisma';
 import { checkChatPermission, ChatPermission } from './chatPermissions';
-import { emitUserJoined, emitUserRemoved, emitUserRoleChanged } from './chatSystemEvents';
+import { emitUserJoined, emitUserLeft, emitUserRemoved, emitUserRoleChanged } from './chatSystemEvents';
 import { invalidateConversationLists } from './chatCache';
 import { emitChatMessage, getChatParticipantIds } from './chat';
 import { getUserSummariesByIds } from './userCache';
+
+type PrismaExecutor = typeof prisma | Prisma.TransactionClient;
+
+interface ActiveGroupMemberRow {
+  user_id: string;
+  role: string;
+}
+
+export interface GroupAdminTransfer {
+  chatId: string;
+  successorUserId: string;
+}
+
+export interface GroupAdminReassignmentRequirement {
+  chatId: string;
+  name: string;
+  currentRole: 'owner' | 'admin';
+  eligibleSuccessors: Array<{
+    userId: string;
+    username: string;
+    displayName: string | null;
+    role: 'owner' | 'admin' | 'member';
+  }>;
+}
+
+export class GroupAdminReassignmentRequiredError extends Error {
+  chatId: string;
+  eligibleSuccessors: GroupAdminReassignmentRequirement['eligibleSuccessors'];
+
+  constructor(requirement: GroupAdminReassignmentRequirement) {
+    super(
+      requirement.currentRole === 'owner'
+        ? 'You are the last admin in this group. Appoint a new owner before leaving.'
+        : 'You are the last admin in this group. Appoint a new admin before leaving.',
+    );
+    this.name = 'GroupAdminReassignmentRequiredError';
+    this.chatId = requirement.chatId;
+    this.eligibleSuccessors = requirement.eligibleSuccessors;
+  }
+}
+
+async function getActiveGroupMembers(
+  executor: PrismaExecutor,
+  chatId: string,
+): Promise<ActiveGroupMemberRow[]> {
+  return executor.$queryRaw<ActiveGroupMemberRow[]>`
+    SELECT cp.user_id, cp.role
+    FROM chat_participants cp
+    JOIN chats c ON c.chat_id = cp.chat_id
+    WHERE cp.chat_id = ${chatId}
+      AND cp.left_at IS NULL
+      AND c.chat_type = 'group'
+    ORDER BY cp.joined_at ASC
+  `;
+}
+
+async function getGroupName(executor: PrismaExecutor, chatId: string): Promise<string> {
+  const rows = await executor.$queryRaw<Array<{ name: string | null }>>`
+    SELECT name
+    FROM chats
+    WHERE chat_id = ${chatId}
+    LIMIT 1
+  `;
+
+  return rows[0]?.name?.trim() || 'Group chat';
+}
+
+async function buildGroupAdminReassignmentRequirement(
+  executor: PrismaExecutor,
+  userId: string,
+  chatId: string,
+): Promise<GroupAdminReassignmentRequirement | null> {
+  const members = await getActiveGroupMembers(executor, chatId);
+  const currentMember = members.find((member) => member.user_id === userId);
+  const currentRole = currentMember?.role?.toLowerCase();
+
+  if (currentRole !== 'owner' && currentRole !== 'admin') {
+    return null;
+  }
+
+  const activeAdmins = members.filter((member) => {
+    const role = member.role.toLowerCase();
+    return role === 'owner' || role === 'admin';
+  });
+
+  if (activeAdmins.length !== 1) {
+    return null;
+  }
+
+  const eligibleMembers = members.filter((member) => member.user_id !== userId);
+  if (eligibleMembers.length === 0) {
+    return null;
+  }
+
+  const summaries = await getUserSummariesByIds(eligibleMembers.map((member) => member.user_id));
+  const name = await getGroupName(executor, chatId);
+
+  return {
+    chatId,
+    name,
+    currentRole,
+    eligibleSuccessors: eligibleMembers.map((member) => {
+      const summary = summaries.get(member.user_id);
+      const role = member.role.toLowerCase();
+      return {
+        userId: member.user_id,
+        username: summary?.username ?? '',
+        displayName: summary?.displayName ?? null,
+        role: (role === 'owner' || role === 'admin' ? role : 'member') as 'owner' | 'admin' | 'member',
+      };
+    }),
+  };
+}
+
+async function assignGroupSuccessorIfNeeded(
+  executor: PrismaExecutor,
+  userId: string,
+  chatId: string,
+  successorUserId?: string,
+): Promise<void> {
+  const requirement = await buildGroupAdminReassignmentRequirement(executor, userId, chatId);
+  if (!requirement) {
+    return;
+  }
+
+  if (!successorUserId) {
+    throw new GroupAdminReassignmentRequiredError(requirement);
+  }
+
+  const successor = requirement.eligibleSuccessors.find((member) => member.userId === successorUserId);
+  if (!successor) {
+    throw new Error('Selected successor must be another active group member');
+  }
+
+  const nextRole = requirement.currentRole === 'owner' ? 'owner' : 'admin';
+  await executor.$executeRaw`
+    UPDATE chat_participants
+    SET role = ${nextRole}
+    WHERE chat_id = ${chatId}
+      AND user_id = ${successorUserId}
+      AND left_at IS NULL
+  `;
+
+  const previousRole = successor.role.toUpperCase();
+  const nextRoleForEvent = nextRole.toUpperCase() as 'OWNER' | 'ADMIN';
+  if (previousRole !== nextRoleForEvent) {
+    await emitUserRoleChanged(chatId, successorUserId, previousRole, nextRoleForEvent, userId);
+  }
+}
+
+async function deleteGroupChatIfEmpty(executor: PrismaExecutor, chatId: string): Promise<boolean> {
+  const rows = await executor.$queryRaw<Array<{ count: number }>>`
+    SELECT COUNT(*)::int AS count
+    FROM chat_participants
+    WHERE chat_id = ${chatId}
+      AND left_at IS NULL
+  `;
+
+  if ((rows[0]?.count ?? 0) > 0) {
+    return false;
+  }
+
+  await executor.$executeRaw`
+    DELETE FROM chats
+    WHERE chat_id = ${chatId}
+  `;
+
+  return true;
+}
+
+export async function listGroupAdminReassignmentRequirementsForUser(
+  userId: string,
+  executor: PrismaExecutor = prisma,
+): Promise<GroupAdminReassignmentRequirement[]> {
+  const groupRows = await executor.$queryRaw<Array<{ chat_id: string }>>`
+    SELECT c.chat_id
+    FROM chats c
+    JOIN chat_participants cp ON cp.chat_id = c.chat_id
+    WHERE cp.user_id = ${userId}
+      AND cp.left_at IS NULL
+      AND c.chat_type = 'group'
+  `;
+
+  const requirements = await Promise.all(
+    groupRows.map(async (row) => buildGroupAdminReassignmentRequirement(executor, userId, row.chat_id)),
+  );
+
+  return requirements.filter((item): item is GroupAdminReassignmentRequirement => item !== null);
+}
+
+export async function leaveAllIndependentGroupChatsForDeletedUser(
+  userId: string,
+  transfers: GroupAdminTransfer[],
+  executor: PrismaExecutor = prisma,
+): Promise<string[]> {
+  const activeGroupRows = await executor.$queryRaw<Array<{ chat_id: string }>>`
+    SELECT c.chat_id
+    FROM chats c
+    JOIN chat_participants cp ON cp.chat_id = c.chat_id
+    WHERE cp.user_id = ${userId}
+      AND cp.left_at IS NULL
+      AND c.chat_type = 'group'
+  `;
+
+  const transferMap = new Map(transfers.map((transfer) => [transfer.chatId, transfer.successorUserId]));
+  const invalidatedUserIds = new Set<string>();
+
+  for (const row of activeGroupRows) {
+    const chatId = row.chat_id;
+    await assignGroupSuccessorIfNeeded(executor, userId, chatId, transferMap.get(chatId));
+
+    const participantsBeforeLeave = await getChatParticipantIds(chatId);
+
+    await executor.$executeRaw`
+      UPDATE chat_participants
+      SET left_at = NOW()
+      WHERE chat_id = ${chatId}
+        AND user_id = ${userId}
+        AND left_at IS NULL
+    `;
+
+    const deletedChat = await deleteGroupChatIfEmpty(executor, chatId);
+    if (!deletedChat) {
+      await emitUserRemoved(chatId, userId, userId, 'account_deleted');
+    }
+
+    participantsBeforeLeave.forEach((participantId) => invalidatedUserIds.add(participantId));
+    invalidatedUserIds.add(userId);
+  }
+
+  return Array.from(invalidatedUserIds);
+}
 
 /**
  * Creates a new independent group chat
@@ -191,7 +423,38 @@ export async function removeUserFromChat(
  * User voluntarily leaves a group chat
  */
 export async function leaveGroupChat(userId: string, chatId: string): Promise<void> {
-  await removeUserFromChat(userId, userId, chatId);
+  await leaveGroupChatWithSuccessor(userId, chatId);
+}
+
+export async function leaveGroupChatWithSuccessor(
+  userId: string,
+  chatId: string,
+  successorUserId?: string,
+): Promise<void> {
+  const { participantIds, deletedChat } = await prisma.$transaction(async (tx) => {
+    await assignGroupSuccessorIfNeeded(tx, userId, chatId, successorUserId);
+
+    const participantIdsBeforeLeave = await getChatParticipantIds(chatId);
+    const now = new Date().toISOString();
+    await tx.$executeRaw`
+      UPDATE chat_participants
+      SET left_at = ${now}
+      WHERE chat_id = ${chatId}
+        AND user_id = ${userId}
+        AND left_at IS NULL
+    `;
+
+    const wasDeleted = await deleteGroupChatIfEmpty(tx, chatId);
+    return {
+      participantIds: participantIdsBeforeLeave,
+      deletedChat: wasDeleted,
+    };
+  });
+
+  if (!deletedChat) {
+    await emitUserLeft(chatId, userId);
+  }
+  await invalidateConversationLists(Array.from(new Set([...participantIds, userId])));
 }
 
 /**

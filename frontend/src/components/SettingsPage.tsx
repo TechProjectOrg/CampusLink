@@ -11,6 +11,7 @@ import { toast } from 'sonner@2.0.3';
 import type { ApiUserSession, BlockedUserListItem, Student } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { apiChangePassword, apiCheckUsernameAvailability, apiFetchBlockedUsers, apiFetchUserSessions, apiFetchUserSettings, apiRevokeUserSession, apiUpdateUserProfile, apiUpdateUserSettings, apiVerifyPasswordChange } from '../lib/authApi';
+import { apiFetchConversations, apiFetchGroupChatDetails, type GroupAdminTransferApi, type GroupChatDetailsApi } from '../lib/chatApi';
 import { ForgotPasswordDialog } from './ForgotPasswordDialog';
 import { LoadingIndicator } from './ui/LoadingIndicator';
 
@@ -48,6 +49,28 @@ function formatSessionIp(ipAddress: string | null): string {
 
 function formatSessionLastActive(lastSeenAt: string | null, createdAt: string): string {
   return new Date(lastSeenAt ?? createdAt).toLocaleString();
+}
+
+function getRequiredDeleteSuccessor(group: GroupChatDetailsApi, currentUserId: string) {
+  const currentMember = group.members.find((member) => member.userId === currentUserId);
+  if (!currentMember || (currentMember.role !== 'owner' && currentMember.role !== 'admin')) {
+    return null;
+  }
+
+  const adminCount = group.members.filter((member) => member.role === 'owner' || member.role === 'admin').length;
+  if (adminCount !== 1) {
+    return null;
+  }
+
+  const eligibleSuccessors = group.members.filter((member) => member.userId !== currentUserId);
+  if (eligibleSuccessors.length === 0) {
+    return null;
+  }
+
+  return {
+    nextRoleLabel: currentMember.role === 'owner' ? 'owner' : 'admin',
+    eligibleSuccessors,
+  };
 }
 
 interface SettingsPageProps {
@@ -692,7 +715,56 @@ export function SettingsPage({ student, onEdit, onUpdateSettings, onUnblockUser 
     }
 
     try {
-      await auth.deleteAccount(password);
+      const token = auth.session?.token;
+      const currentUserId = auth.session?.userId;
+      const groupAdminTransfers: GroupAdminTransferApi[] = [];
+
+      if (token && currentUserId) {
+        const conversations = await apiFetchConversations(token, 'active');
+        const groupConversations = conversations.filter((conversation) => conversation.isGroup);
+        const groups = await Promise.all(
+          groupConversations.map(async (conversation) => {
+            try {
+              return await apiFetchGroupChatDetails(conversation.id, token);
+            } catch {
+              return null;
+            }
+          }),
+        );
+
+        for (const group of groups) {
+          if (!group) continue;
+          const requirement = getRequiredDeleteSuccessor(group, currentUserId);
+          if (!requirement) continue;
+
+          const choice = window.prompt(
+            `Before deleting your account, choose the new ${requirement.nextRoleLabel} for "${group.name}". Enter one username from:\n${requirement.eligibleSuccessors
+              .map((member) => `@${member.username}`)
+              .join('\n')}`,
+          );
+
+          const normalizedChoice = choice?.trim().replace(/^@/, '').toLowerCase();
+          if (!normalizedChoice) {
+            toast.error(`Account deletion cancelled. ${group.name} still needs a new ${requirement.nextRoleLabel}.`);
+            return;
+          }
+
+          const successor = requirement.eligibleSuccessors.find(
+            (member) => member.username.trim().toLowerCase() === normalizedChoice,
+          );
+          if (!successor) {
+            toast.error(`Select a valid username for ${group.name}.`);
+            return;
+          }
+
+          groupAdminTransfers.push({
+            chatId: group.id,
+            successorUserId: successor.userId,
+          });
+        }
+      }
+
+      await auth.deleteAccount(password, { groupAdminTransfers });
       toast.success('Your account has been deleted.');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Unable to delete account');
