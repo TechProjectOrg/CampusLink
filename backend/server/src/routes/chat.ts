@@ -1060,47 +1060,50 @@ async function cacheAndEmitMessage(
       : null,
   };
 
-  try {
-    await appendRecentMessage(chatId, recentMessage);
-    const nextMeta: ChatConversationMetaCache = {
-      conversationId: chatId,
-      lastMessageId: payload.messageId,
-      lastMessagePreview: formatMessagePreview(payload.messageType, payload.content),
-      lastMessageAt: payload.createdAt.toISOString(),
-      isRequest: meta?.isRequest ?? false,
-      participantIds,
-      lastNonDeletedMessageId: payload.messageId,
-    };
-    await setConversationMeta(chatId, nextMeta);
-    await updateConversationListsForMessage(
-      participantIds,
-      chatId,
-      payload.senderUserId,
-      nextMeta,
-      payload.suppressedForUserId,
-    );
-  } catch (err) {
-    console.warn('Failed to update chat cache after message send:', err);
-  }
-
   noteConversationActivity(chatId);
-  const sender = await getUserSummaryById(payload.senderUserId);
+
   emitChatMessage(
     participantIds.filter((participantId) => participantId !== payload.suppressedForUserId),
     {
-    messageId: payload.messageId,
-    chatId,
-    senderUserId: payload.senderUserId,
-    senderUsername: sender?.username ?? authed.auth?.username ?? 'Unknown user',
-    senderProfilePhotoUrl: sender?.profilePictureUrl ?? null,
-    messageType: payload.messageType,
-    content: payload.content,
-    reactions: {},
-    replyToMessageId: payload.replyToMessageId,
-    replyTo: payload.replyTo,
-    attachments: payload.attachments,
-    createdAt: payload.createdAt.toISOString(),
-  });
+      messageId: payload.messageId,
+      chatId,
+      senderUserId: payload.senderUserId,
+      senderUsername: authed.auth?.username ?? 'Unknown user',
+      senderProfilePhotoUrl: null,
+      messageType: payload.messageType,
+      content: payload.content,
+      reactions: {},
+      replyToMessageId: payload.replyToMessageId,
+      replyTo: payload.replyTo,
+      attachments: payload.attachments,
+      createdAt: payload.createdAt.toISOString(),
+    },
+  );
+
+  void (async () => {
+    try {
+      await appendRecentMessage(chatId, recentMessage);
+      const nextMeta: ChatConversationMetaCache = {
+        conversationId: chatId,
+        lastMessageId: payload.messageId,
+        lastMessagePreview: formatMessagePreview(payload.messageType, payload.content),
+        lastMessageAt: payload.createdAt.toISOString(),
+        isRequest: meta?.isRequest ?? false,
+        participantIds,
+        lastNonDeletedMessageId: payload.messageId,
+      };
+      await setConversationMeta(chatId, nextMeta);
+      await updateConversationListsForMessage(
+        participantIds,
+        chatId,
+        payload.senderUserId,
+        nextMeta,
+        payload.suppressedForUserId,
+      );
+    } catch (err) {
+      console.warn('Failed to update chat cache after message send:', err);
+    }
+  })();
 }
 
 router.get('/conversations', async (req: Request, res: Response) => {
