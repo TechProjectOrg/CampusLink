@@ -981,7 +981,7 @@ router.patch(
   '/posts/:postId',
   requireModerationCapability('post'),
   postMediaUpload.array('media', MAX_POST_MEDIA) as unknown as RequestHandler<{ postId: string }>,
-  async (req: Request<{ postId: string }> & { files?: Express.Multer.File[] }, res: Response) => {
+  async (req: Request<{ postId: string }>, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const viewerUserId = authed.auth!.userId;
   const { postId } = req.params;

@@ -119,12 +119,13 @@ export function OpportunityCard({
   const showStipendField = Boolean(opportunity.stipend?.trim());
   const showDurationField = Boolean(opportunity.duration?.trim());
   const showTagsField = (opportunity.tags?.length ?? 0) > 0;
-  const editableImages = (opportunity.images ?? []).map((imageUrl, index) => ({
+  const editableImageSources = opportunity.images?.length ? opportunity.images : opportunity.image ? [opportunity.image] : [];
+  const editableImages = editableImageSources.map((imageUrl, index) => ({
     imageUrl,
     mediaId: opportunity.imageMediaIds?.[index] ?? '',
   }));
   const visibleEditableImages = editableImages.filter(
-    (item) => item.mediaId && !item.mediaId.startsWith('certification:') && !removedMediaIds.includes(item.mediaId),
+    (item) => (!item.mediaId || !item.mediaId.startsWith('certification:')) && !removedMediaIds.includes(item.mediaId),
   );
 
   const handleComment = () => {
@@ -439,7 +440,7 @@ export function OpportunityCard({
                         <img src={item.imageUrl} alt="Post media" className="h-24 w-full object-cover" />
                         <button
                           type="button"
-                          className="absolute right-2 top-2 rounded-full bg-white/90 p-1 text-slate-700 shadow hover:bg-white"
+                          className="absolute right-2 top-2 z-10 rounded-full bg-white/90 p-1 text-slate-700 shadow hover:bg-white"
                           aria-label="Delete image"
                           onClick={() =>
                             setRemovedMediaIds((prev) => (prev.includes(item.mediaId) ? prev : [...prev, item.mediaId]))

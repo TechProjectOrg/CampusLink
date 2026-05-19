@@ -932,7 +932,7 @@ router.patch(
     UpdateProfilePictureBody
   >,
   async (
-    req: Request<GetUserParams, unknown, UpdateProfilePictureBody> & { file?: Express.Multer.File },
+    req: Request<GetUserParams, unknown, UpdateProfilePictureBody>,
     res: Response,
   ) => {
     const { userId } = req.params;
@@ -1021,7 +1021,7 @@ router.patch(
     UpdateCoverPhotoBody
   >,
   async (
-    req: Request<GetUserParams, unknown, UpdateCoverPhotoBody> & { file?: Express.Multer.File },
+    req: Request<GetUserParams, unknown, UpdateCoverPhotoBody>,
     res: Response,
   ) => {
     const { userId } = req.params;
@@ -1773,7 +1773,7 @@ router.post(
   requireModerationCapability('upload'),
   profilePhotoUpload.single('image') as unknown as RequestHandler<GetUserParams>,
   async (
-    req: Request<GetUserParams> & { file?: Express.Multer.File },
+    req: Request<GetUserParams>,
     res: Response,
   ) => {
     const { userId } = req.params;
@@ -1816,7 +1816,7 @@ router.post(
   requireModerationCapability('upload'),
   postMediaUpload.array('images', MAX_PROJECT_IMAGES) as unknown as RequestHandler<GetUserParams>,
   async (
-    req: Request<GetUserParams> & { files?: Express.Multer.File[] },
+    req: Request<GetUserParams>,
     res: Response,
   ) => {
     const { userId } = req.params;

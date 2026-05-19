@@ -102,8 +102,10 @@ export function PostPage({
   onViewProfile,
   onReportTarget,
 }: PostPageProps) {
+  const editableImageSources = post.images?.length ? post.images : post.image ? [post.image] : [];
+
   const buildEditableImageItems = () =>
-    (post.images ?? []).map((imageUrl, index) => ({
+    editableImageSources.map((imageUrl, index) => ({
       key: `${post.id}:${post.imageMediaIds?.[index] ?? imageUrl}:${index}`,
       imageUrl,
       mediaId: post.imageMediaIds?.[index] ?? '',
@@ -645,7 +647,7 @@ export function PostPage({
                         <img src={item.imageUrl} alt="Post media" className="h-24 w-full object-cover" />
                         <button
                           type="button"
-                          className="absolute right-2 top-2 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/60 bg-black/65 text-white shadow-md backdrop-blur-sm transition hover:bg-red-600"
+                          className="absolute right-2 top-2 z-10 inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/60 bg-black/65 text-white shadow-md backdrop-blur-sm transition hover:bg-red-600"
                           aria-label="Delete image"
                           onClick={() => setEditableImageItems((prev) => prev.filter((image) => image.key !== item.key))}
                         >

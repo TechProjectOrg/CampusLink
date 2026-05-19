@@ -2040,7 +2040,20 @@ export default function App() {
     if (guardRestrictedAction()) return;
     void (async () => {
       try {
-        const removedMediaIds = updates.removeMediaIds ?? [];
+        const currentPost = appData.getSnapshot().postsById[postId];
+        if (!currentPost) return;
+
+        const removedMediaIdSet = new Set((updates.removeMediaIds ?? []).filter(Boolean));
+        if (Array.isArray(updates.images)) {
+          const remainingImageUrls = new Set(updates.images.filter((imageUrl): imageUrl is string => Boolean(imageUrl)));
+          for (const mediaItem of currentPost.media) {
+            if (!remainingImageUrls.has(mediaItem.mediaUrl)) {
+              removedMediaIdSet.add(mediaItem.postMediaId);
+            }
+          }
+        }
+
+        const removedMediaIds = [...removedMediaIdSet].filter(Boolean);
         appData.updatePost(postId, (post) => ({
           ...post,
           title: updates.title ?? post.title,
