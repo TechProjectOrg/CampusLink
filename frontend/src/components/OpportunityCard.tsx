@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { ShareToChatDialog } from './share/ShareToChatDialog';
-import { Heart, MessageCircle, Bookmark, MapPin, Calendar, Trash2, Pencil, Loader2, MoreHorizontal, Flag, Share2 } from 'lucide-react';
+import { Heart, MessageCircle, Bookmark, MapPin, Trash2, Pencil, Loader2, MoreHorizontal, Flag, Share2 } from 'lucide-react';
 import { Opportunity, Comment } from '../types';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -306,10 +306,6 @@ export function OpportunityCard({
               <span>{opportunity.location}</span>
             </div>
           )}
-          <div className="flex items-center gap-1 transition-colors duration-300 hover:text-primary">
-            <Calendar className="w-4 h-4" />
-            <span>{formatDate(opportunity.date)}</span>
-          </div>
         </div>
       </div>
       

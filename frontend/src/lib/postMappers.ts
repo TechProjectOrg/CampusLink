@@ -61,6 +61,7 @@ export function userPostToOpportunity(
     description: post.contentText ?? '',
     date: post.createdAt,
     company: post.company ?? undefined,
+    eventDate: post.eventDate ?? undefined,
     deadline: post.deadline ?? undefined,
     stipend: post.stipend ?? undefined,
     duration: post.duration ?? undefined,

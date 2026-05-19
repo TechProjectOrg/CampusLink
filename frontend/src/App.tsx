@@ -567,6 +567,7 @@ function isSameOpportunitySummary(left: Opportunity, right: Opportunity): boolea
     left.description === right.description &&
     left.date === right.date &&
     left.company === right.company &&
+    left.eventDate === right.eventDate &&
     left.deadline === right.deadline &&
     left.stipend === right.stipend &&
     left.duration === right.duration &&

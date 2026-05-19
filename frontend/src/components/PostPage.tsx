@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Bookmark, Calendar, Heart, MapPin, MessageCircle, Trash2, MoreHorizontal, Flag, Share2 } from 'lucide-react';
+import { ArrowLeft, Bookmark, Calendar, Heart, MapPin, MessageCircle, Trash2, MoreHorizontal, Flag, Share2, Link as LinkIcon, BriefcaseBusiness, Wallet, Clock3 } from 'lucide-react';
 import { ShareToChatDialog } from './share/ShareToChatDialog';
 import { Opportunity, Comment } from '../types';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -171,6 +171,96 @@ export function PostPage({
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
+
+  const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  };
+
+  const detailItems: Array<{
+    key: string;
+    icon?: JSX.Element;
+    label: string;
+    value: string;
+    href?: string;
+  }> = [];
+
+  detailItems.push({
+    key: 'posted',
+    icon: <Calendar className="h-4 w-4" />,
+    label: 'Posted',
+    value: formatDate(post.date),
+  });
+
+  if (post.eventDate) {
+    detailItems.push({
+      key: 'event-date',
+      icon: <Calendar className="h-4 w-4" />,
+      label: post.type === 'event' ? 'Event Date & Time' : 'Schedule',
+      value: formatDateTime(post.eventDate),
+    });
+  }
+
+  if (post.location) {
+    detailItems.push({
+      key: 'location',
+      icon: <MapPin className="h-4 w-4" />,
+      label: post.type === 'event' ? 'Venue' : 'Location',
+      value: post.location,
+    });
+  }
+
+  if (post.company) {
+    detailItems.push({
+      key: 'company',
+      icon: <BriefcaseBusiness className="h-4 w-4" />,
+      label: 'Company',
+      value: post.company,
+    });
+  }
+
+  if (post.deadline) {
+    detailItems.push({
+      key: 'deadline',
+      icon: <Calendar className="h-4 w-4" />,
+      label: 'Deadline',
+      value: formatDateTime(post.deadline),
+    });
+  }
+
+  if (post.stipend) {
+    detailItems.push({
+      key: 'stipend',
+      icon: <Wallet className="h-4 w-4" />,
+      label: 'Stipend',
+      value: post.stipend,
+    });
+  }
+
+  if (post.duration) {
+    detailItems.push({
+      key: 'duration',
+      icon: <Clock3 className="h-4 w-4" />,
+      label: 'Duration',
+      value: post.duration,
+    });
+  }
+
+  if (post.link) {
+    detailItems.push({
+      key: 'link',
+      icon: <LinkIcon className="h-4 w-4" />,
+      label: post.type === 'event' ? 'Registration Link' : 'External Link',
+      value: post.link,
+      href: post.link,
+    });
+  }
 
   const submitComposer = () => {
     const next = commentText.trim();
@@ -407,15 +497,30 @@ export function PostPage({
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-gray-700 mb-4">
-            <div className="flex items-center gap-2"><Calendar className="w-4 h-4" /><span>Posted: {formatDate(post.date)}</span></div>
-            {post.location && <div className="flex items-center gap-2"><MapPin className="w-4 h-4" /><span>Location: {post.location}</span></div>}
-            {post.company && <div>Company: {post.company}</div>}
-            {post.deadline && <div>Deadline: {formatDate(post.deadline)}</div>}
-            {post.stipend && <div>Stipend: {post.stipend}</div>}
-            {post.duration && <div>Duration: {post.duration}</div>}
-            {post.link && <div className="break-all">Link: {post.link}</div>}
-          </div>
+          {detailItems.length > 0 && (
+            <div className="mb-4 grid grid-cols-1 gap-3 text-sm text-gray-700 md:grid-cols-2">
+              {detailItems.map((item) => (
+                <div key={item.key} className="flex items-start gap-2 rounded-xl bg-slate-50 px-3 py-2.5">
+                  {item.icon ? <span className="mt-0.5 shrink-0 text-slate-500">{item.icon}</span> : null}
+                  <div className="min-w-0">
+                    <p className="text-xs uppercase tracking-wide text-slate-500">{item.label}</p>
+                    {item.href ? (
+                      <a
+                        href={item.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="break-all text-primary hover:underline"
+                      >
+                        {item.value}
+                      </a>
+                    ) : (
+                      <p className="break-words text-slate-700">{item.value}</p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {visibleTags.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-4">

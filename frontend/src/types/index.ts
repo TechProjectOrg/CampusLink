@@ -85,6 +85,7 @@ export interface Opportunity {
   description: string;
   date: string;
   company?: string;
+  eventDate?: string;
   deadline?: string;
   stipend?: string;
   duration?: string;
