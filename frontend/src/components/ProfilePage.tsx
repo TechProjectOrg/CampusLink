@@ -283,6 +283,7 @@ export function ProfilePage({
     description: '',
   });
   const [certImagePreview, setCertImagePreview] = useState<string | null>(null);
+  const [certImageFile, setCertImageFile] = useState<File | null>(null);
 
   const [newSociety, setNewSociety] = useState<Partial<Society>>({
     societyName: '',
@@ -583,6 +584,7 @@ export function ProfilePage({
     setNewProjectTag('');
     setNewCertification({ name: '', issuer: '', issueDate: undefined, imageUrl: '', certificateUrl: '', description: '' });
     setCertImagePreview(null);
+    setCertImageFile(null);
     setShareCertificationAsPost(false);
     setNewSociety({ societyName: '', role: '', startDate: undefined, endDate: undefined });
   };
@@ -968,12 +970,19 @@ export function ProfilePage({
     if (authUserId) {
       setBusyAction('save-certification');
       try {
+        const certificationImageUrl = certImagePreview || newCertification.imageUrl;
+        const certificateMedia =
+          certificationImageUrl && !certificationImageUrl.startsWith('blob:')
+            ? [{ mediaUrl: certificationImageUrl, mediaType: 'image', sortOrder: 0 }]
+            : [];
+        const certificateMediaFiles = certImageFile ? [certImageFile] : undefined;
+
         if (!editingItem) {
           await apiCreateUserCertification(authUserId, {
             name: newCertification.name.trim(),
             issuer: newCertification.issuer?.trim(),
             description: newCertification.description?.trim(),
-            imageUrl: certImagePreview || newCertification.imageUrl,
+            imageUrl: certificationImageUrl,
             credentialUrl: newCertification.certificateUrl,
             issuedAt: newCertification.issueDate ? format(newCertification.issueDate, 'yyyy-MM-dd') : undefined,
           }, authToken);
@@ -996,9 +1005,12 @@ export function ProfilePage({
                 postType: 'general',
                 title: certName,
                 contentText: lines.join('\n'),
+                externalUrl: credentialUrl || undefined,
                 hashtags: ['certificate'],
+                media: certificateMedia,
               },
               authToken,
+              certificateMediaFiles,
             );
 
             appData.prependPostToFeed(createdPost);
@@ -1011,7 +1023,7 @@ export function ProfilePage({
               name: newCertification.name.trim(),
               issuer: newCertification.issuer?.trim(),
               description: newCertification.description?.trim(),
-              imageUrl: certImagePreview || newCertification.imageUrl,
+              imageUrl: certificationImageUrl,
               credentialUrl: newCertification.certificateUrl,
               issuedAt: newCertification.issueDate ? format(newCertification.issueDate, 'yyyy-MM-dd') : undefined,
             },
@@ -1033,6 +1045,7 @@ export function ProfilePage({
     setEditingItem(cert.id);
     setNewCertification(cert);
     setCertImagePreview(cert.imageUrl || null);
+    setCertImageFile(null);
     setActiveModal('certification');
   };
 
@@ -1058,6 +1071,7 @@ export function ProfilePage({
   const handleCertImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setCertImageFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
         setCertImagePreview(reader.result as string);

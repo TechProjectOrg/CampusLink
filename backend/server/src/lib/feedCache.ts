@@ -384,6 +384,30 @@ function postSelectSql(viewerUserId: string): Prisma.Sql {
           FROM post_media pm
           WHERE pm.post_id = p.post_id
         ),
+        (
+          SELECT JSON_BUILD_ARRAY(
+            JSON_BUILD_OBJECT(
+              'postMediaId', CONCAT('certification:', uc.certification_id),
+              'mediaUrl', uc.image_url,
+              'mediaType', 'image',
+              'sortOrder', 0
+            )
+          )
+          FROM user_certifications uc
+          WHERE uc.user_id = p.author_user_id
+            AND uc.image_url IS NOT NULL
+            AND BTRIM(uc.image_url) <> ''
+            AND lower(BTRIM(uc.name)) = lower(BTRIM(COALESCE(p.title, '')))
+            AND EXISTS (
+              SELECT 1
+              FROM post_hashtags ph
+              JOIN hashtags h ON h.hashtag_id = ph.hashtag_id
+              WHERE ph.post_id = p.post_id
+                AND lower(h.tag_name) = 'certificate'
+            )
+          ORDER BY uc.created_at DESC
+          LIMIT 1
+        ),
         '[]'::json
       ) AS media,
       (SELECT COUNT(*)::int FROM post_likes pl WHERE pl.post_id = p.post_id) AS like_count,
@@ -801,7 +825,15 @@ export async function hydratePosts(viewerUserId: string, postIds: string[]): Pro
   for (let index = 0; index < postIds.length; index += 1) {
     const snapshot = cachedSnapshots[index];
     if (snapshot) {
-      snapshots.set(snapshot.postId, snapshot);
+      const shouldRefreshCertificateSnapshot =
+        snapshot.media.length === 0 &&
+        snapshot.hashtags.some((tag) => tag.trim().toLowerCase() === 'certificate');
+
+      if (shouldRefreshCertificateSnapshot) {
+        missingIds.push(postIds[index]);
+      } else {
+        snapshots.set(snapshot.postId, snapshot);
+      }
     } else {
       missingIds.push(postIds[index]);
     }
