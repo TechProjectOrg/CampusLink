@@ -143,8 +143,8 @@ async function hideConversationForUser(chatId: string, userId: string): Promise<
   await prisma.$queryRaw`
     UPDATE chat_participants
     SET hidden_at = NOW()
-    WHERE chat_id = ${chatId}
-      AND user_id = ${userId}
+    WHERE chat_id = ${chatId}::uuid
+      AND user_id = ${userId}::uuid
       AND left_at IS NULL
   `;
 }
@@ -153,7 +153,7 @@ async function clearHiddenConversationState(chatId: string): Promise<void> {
   await prisma.$queryRaw`
     UPDATE chat_participants
     SET hidden_at = NULL
-    WHERE chat_id = ${chatId}
+    WHERE chat_id = ${chatId}::uuid
       AND left_at IS NULL
       AND hidden_at IS NOT NULL
   `;
@@ -1288,7 +1288,7 @@ router.delete('/conversations/:chatId', requireModerationCapability('message'), 
           INSERT INTO message_hidden_for_users (message_id, user_id)
           SELECT message_id, ${userId}::uuid
           FROM messages
-          WHERE chat_id = ${chatId}
+          WHERE chat_id = ${chatId}::uuid
             AND created_at <= ${now}
           ON CONFLICT (message_id, user_id) DO NOTHING
         `;
@@ -1685,7 +1685,7 @@ router.delete(
       if (scope === 'me') {
         await prisma.$queryRaw`
           INSERT INTO message_hidden_for_users (message_id, user_id)
-          VALUES (${messageId}, ${userId})
+          VALUES (${messageId}::uuid, ${userId}::uuid)
           ON CONFLICT (message_id, user_id) DO NOTHING
         `;
 
