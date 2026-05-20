@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import type { MouseEvent } from 'react';
 import { Send, Search, MoreVertical, Info, Image, Smile, CircleDot, Plus, Flag, Ban, Eye, Reply, X, Trash2, Copy, ChevronDown } from 'lucide-react';
 import { ChatConversation, Student } from '../types';
@@ -43,10 +43,13 @@ import { LoadingIndicator } from './ui/LoadingIndicator';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { ImageLightbox } from './common/ImageLightbox';
 import type { ReportTargetDescriptor } from './ReportDialog';
+import { toast } from 'sonner';
+import type { FollowGraph } from '../App';
 
 interface ChatPageProps {
   conversations: ChatConversation[];
   students: Student[];
+  followGraph: FollowGraph;
   currentUserId: string;
   onViewProfile?: (studentId: string) => void;
   onChatClick?: (conversationId: string) => void;
@@ -139,6 +142,7 @@ function normalizeAvatarUrl(url: string | null | undefined): string | undefined 
 export function ChatPage({
   conversations,
   students,
+  followGraph,
   currentUserId,
   onViewProfile,
   onChatClick,
@@ -176,6 +180,19 @@ export function ChatPage({
   const activeConversations = conversations.filter((conversation) => !conversation.isRequest);
   const requestConversations = conversations.filter((conversation) => conversation.isRequest);
   const visibleConversations = showMessageRequests ? requestConversations : activeConversations;
+  const connectedUserIds = useMemo(
+    () => Array.from(new Set([
+      ...(followGraph.followersByUserId[currentUserId] ?? []),
+      ...(followGraph.followingByUserId[currentUserId] ?? []),
+    ])),
+    [currentUserId, followGraph.followersByUserId, followGraph.followingByUserId],
+  );
+  const connectedUsers = useMemo(
+    () => connectedUserIds
+      .map((userId) => students.find((student) => student.id === userId))
+      .filter(Boolean) as Student[],
+    [connectedUserIds, students],
+  );
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const filteredConversations = visibleConversations.filter((conversation) => {
     if (!normalizedSearchQuery) {
@@ -697,7 +714,9 @@ export function ChatPage({
       await apiAddGroupMember(groupId, memberId, token);
       await refreshGroupConversationData(groupId);
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : 'Failed to add member');
+      const message = err instanceof Error ? err.message : 'Failed to add member';
+      toast.error(message);
+      throw err instanceof Error ? err : new Error(message);
     }
   }, [auth.session?.token, refreshGroupConversationData]);
 
@@ -708,7 +727,9 @@ export function ChatPage({
       await apiRemoveGroupMember(groupId, memberId, token);
       await refreshGroupConversationData(groupId);
     } catch (err) {
-      window.alert(err instanceof Error ? err.message : 'Failed to remove member');
+      const message = err instanceof Error ? err.message : 'Failed to remove member';
+      toast.error(message);
+      throw err instanceof Error ? err : new Error(message);
     }
   }, [auth.session?.token, refreshGroupConversationData]);
 
@@ -806,6 +827,7 @@ export function ChatPage({
       <GroupInfoPage
         group={groupInfo}
         students={students}
+        connectedUsers={connectedUsers}
         currentUserId={currentUserId}
         isLoading={isGroupInfoLoading}
         onBack={() => setViewingGroupInfo(null)}

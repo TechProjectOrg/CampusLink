@@ -366,6 +366,7 @@ export async function addUserToChat(
       UPDATE chat_participants
       SET
         left_at = NULL,
+        hidden_at = NULL,
         role = ${role.toLowerCase()},
         joined_at = ${now}
       WHERE chat_id = ${chatId}

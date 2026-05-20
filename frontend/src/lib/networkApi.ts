@@ -92,9 +92,11 @@ export async function apiSearchUsers(
   query: string,
   token?: string,
   limit = 20,
-  offset = 0
+  offset = 0,
+  excludeUserIds: string[] = [],
 ): Promise<SearchUserResult[]> {
   const params = new URLSearchParams({ q: query, limit: String(limit), offset: String(offset) });
+  excludeUserIds.forEach((userId) => params.append('excludeUserIds', userId));
   const response = await safeFetch(`${API_BASE}/search/users?${params}`, {
     headers: { ...authHeaders(token) },
   });
@@ -111,12 +113,20 @@ export async function apiSearchAll(
   query: string,
   token?: string,
   usersLimit = 20,
-  hashtagsLimit = 20
+  hashtagsLimit = 20,
+  clubsLimit = 12,
+  usersOffset = 0,
+  hashtagsOffset = 0,
+  clubsOffset = 0,
 ): Promise<UnifiedSearchResult> {
   const params = new URLSearchParams({
     q: query,
     usersLimit: String(usersLimit),
     hashtagsLimit: String(hashtagsLimit),
+    clubsLimit: String(clubsLimit),
+    usersOffset: String(usersOffset),
+    hashtagsOffset: String(hashtagsOffset),
+    clubsOffset: String(clubsOffset),
   });
   const response = await safeFetch(`${API_BASE}/search/all?${params}`, {
     headers: { ...authHeaders(token) },
@@ -145,6 +155,28 @@ export async function apiGetFollowGraph(token?: string): Promise<FollowGraphResp
   }
 
   return (await response.json()) as FollowGraphResponse;
+}
+
+export async function apiGetConnectedUsers(
+  token?: string,
+  options?: { limit?: number; offset?: number; excludeUserIds?: string[] },
+): Promise<SearchUserResult[]> {
+  const params = new URLSearchParams({
+    limit: String(options?.limit ?? 5),
+    offset: String(options?.offset ?? 0),
+  });
+  (options?.excludeUserIds ?? []).forEach((userId) => params.append('excludeUserIds', userId));
+
+  const response = await safeFetch(`${API_BASE}/network/connections/users?${params}`, {
+    headers: { ...authHeaders(token) },
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Failed to fetch connected users');
+  }
+
+  return (await response.json()) as SearchUserResult[];
 }
 
 export async function apiGetSuggestedUsers(token?: string, limit = 5): Promise<SuggestedUserResult[]> {

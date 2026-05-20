@@ -2939,6 +2939,7 @@ export default function App() {
           <ChatPage
             conversations={conversations}
             students={students}
+            followGraph={followGraph}
             currentUserId={currentUserId}
             onViewProfile={handleViewProfile}
             onChatClick={handleChatClick}

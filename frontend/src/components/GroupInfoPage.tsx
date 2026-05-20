@@ -1,8 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Calendar, Crown, Flag, LogOut, MoreVertical, Shield, UserMinus, UserPlus, Users } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { UIEvent } from 'react';
+import { ArrowLeft, Calendar, Crown, Flag, Loader2, LogOut, MoreVertical, Shield, UserMinus, UserPlus, Users } from 'lucide-react';
 import { Student } from '../types';
 import type { GroupChatDetailsApi } from '../lib/chatApi';
 import type { ReportTargetDescriptor } from './ReportDialog';
+import { apiSearchAll, type SearchUserResult } from '../lib/networkApi';
+import { fetchCachedValue } from '../cache/socialCache';
+import { cacheKeys } from '../cache/keys';
+import { cachePolicies } from '../cache/policies';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Badge } from './ui/badge';
@@ -16,10 +21,12 @@ import {
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
 import { LoadingIndicator } from './ui/LoadingIndicator';
+import { useAuth } from '../context/AuthContext';
 
 interface GroupInfoPageProps {
   group: GroupChatDetailsApi;
   students: Student[];
+  connectedUsers: Student[];
   currentUserId: string;
   isLoading?: boolean;
   onBack: () => void;
@@ -41,6 +48,7 @@ interface GroupInfoPageProps {
 export function GroupInfoPage({
   group,
   students,
+  connectedUsers,
   currentUserId,
   isLoading = false,
   onBack,
@@ -55,26 +63,63 @@ export function GroupInfoPage({
   onGroupPhotoChange,
   onGroupDescriptionSave,
 }: GroupInfoPageProps) {
-  const [searchQuery, setSearchQuery] = useState('');
+  const FEEDBACK_RESET_MS = 3000;
+  const ADD_MEMBER_PAGE_SIZE = 5;
+  const [memberSearchQuery, setMemberSearchQuery] = useState('');
+  const [addMemberSearchQuery, setAddMemberSearchQuery] = useState('');
   const [isAddMembersOpen, setIsAddMembersOpen] = useState(false);
   const [descriptionDraft, setDescriptionDraft] = useState(group.description ?? '');
   const [isSavingDescription, setIsSavingDescription] = useState(false);
+  const [pendingAddIds, setPendingAddIds] = useState<string[]>([]);
+  const [pendingRemoveIds, setPendingRemoveIds] = useState<string[]>([]);
+  const [memberActionFeedback, setMemberActionFeedback] = useState<{
+    kind: 'success' | 'error';
+    message: string;
+  } | null>(null);
+  const [addMemberCandidates, setAddMemberCandidates] = useState<SearchUserResult[]>([]);
+  const [isInitialCandidateLoad, setIsInitialCandidateLoad] = useState(false);
+  const [isLoadingMoreCandidates, setIsLoadingMoreCandidates] = useState(false);
+  const [hasMoreCandidates, setHasMoreCandidates] = useState(false);
+  const [candidateOffset, setCandidateOffset] = useState(0);
+  const auth = useAuth();
 
   const currentMember = group.members.find((member) => member.userId === currentUserId) ?? null;
   const isAdmin = currentMember?.role === 'owner' || currentMember?.role === 'admin';
   const isOwner = currentMember?.role === 'owner';
+  const normalizedAddMemberQuery = addMemberSearchQuery.trim();
+  const isSearchMode = normalizedAddMemberQuery.length > 0;
 
   const studentLookup = useMemo(
     () => new Map(students.map((student) => [student.id, student])),
     [students],
   );
-  const memberIds = useMemo(
-    () => new Set(group.members.map((member) => member.userId)),
+  const activeMemberIds = useMemo(
+    () => new Set(group.members.filter((member) => member.leftAt === null).map((member) => member.userId)),
     [group.members],
+  );
+  const activeMemberIdList = useMemo(
+    () => Array.from(activeMemberIds).sort(),
+    [activeMemberIds],
+  );
+  const availableConnectedCandidates = useMemo(
+    () => connectedUsers
+      .filter((user) => user.id !== currentUserId && !activeMemberIds.has(user.id))
+      .map<SearchUserResult>((user) => ({
+        userId: user.id,
+        displayName: user.displayName ?? user.name,
+        username: user.username,
+        email: user.email,
+        profilePictureUrl: user.avatar ?? null,
+        isPrivate: user.accountType === 'private',
+        type: 'student',
+        branch: user.branch ?? null,
+        year: user.year ?? null,
+      })),
+    [activeMemberIds, connectedUsers, currentUserId],
   );
 
   const filteredMembers = useMemo(() => {
-    const normalizedQuery = searchQuery.trim().toLowerCase();
+    const normalizedQuery = memberSearchQuery.trim().toLowerCase();
     const roleRank: Record<string, number> = {
       owner: 0,
       admin: 1,
@@ -90,18 +135,7 @@ export function GroupInfoPage({
       if (rankDiff !== 0) return rankDiff;
       return left.username.localeCompare(right.username);
     });
-  }, [group.members, searchQuery]);
-
-  const addableStudents = useMemo(
-    () =>
-      students.filter(
-        (student) =>
-          student.id !== currentUserId &&
-          !memberIds.has(student.id) &&
-          student.name.toLowerCase().includes(searchQuery.trim().toLowerCase()),
-      ),
-    [currentUserId, memberIds, searchQuery, students],
-  );
+  }, [group.members, memberSearchQuery]);
 
   const formatDate = (dateString: string) =>
     new Date(dateString).toLocaleDateString('en-US', {
@@ -133,6 +167,148 @@ export function GroupInfoPage({
     setDescriptionDraft(group.description ?? '');
   }, [group.description]);
 
+  useEffect(() => {
+    setPendingAddIds((current) => current.filter((userId) => !activeMemberIds.has(userId)));
+  }, [activeMemberIds]);
+
+  useEffect(() => {
+    setAddMemberCandidates((current) => current.filter((candidate) => !activeMemberIds.has(candidate.userId)));
+  }, [activeMemberIds]);
+
+  useEffect(() => {
+    setPendingRemoveIds((current) => current.filter((userId) => activeMemberIds.has(userId)));
+  }, [activeMemberIds]);
+
+  useEffect(() => {
+    if (!memberActionFeedback) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setMemberActionFeedback(null);
+    }, FEEDBACK_RESET_MS);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [memberActionFeedback]);
+
+  const loadSearchCandidates = useCallback(async (options: {
+    query: string;
+    offset: number;
+    reset: boolean;
+  }) => {
+    const token = auth.session?.token;
+    if (!token || !isAdmin || !isAddMembersOpen) return;
+
+    if (options.reset) {
+      setIsInitialCandidateLoad(true);
+    } else {
+      setIsLoadingMoreCandidates(true);
+    }
+
+    try {
+      const trimmedQuery = options.query.trim();
+      const result = await fetchCachedValue({
+        key: cacheKeys.page.searchAll(trimmedQuery, options.offset, 0, 0),
+        policy: cachePolicies.search,
+        fetcher: () => apiSearchAll(trimmedQuery, token, ADD_MEMBER_PAGE_SIZE, 1, 1, options.offset, 0, 0),
+      });
+      const rows = result.users.filter((candidate) => !activeMemberIds.has(candidate.userId));
+
+      setAddMemberCandidates((current) => {
+        if (options.reset) return rows;
+        const merged = new Map<string, SearchUserResult>();
+        current.forEach((candidate) => merged.set(candidate.userId, candidate));
+        rows.forEach((candidate) => merged.set(candidate.userId, candidate));
+        return Array.from(merged.values());
+      });
+      setCandidateOffset(options.offset + rows.length);
+      setHasMoreCandidates(rows.length === ADD_MEMBER_PAGE_SIZE);
+    } catch (err) {
+      console.error('Failed to load add-member candidates:', err);
+      if (options.reset) {
+        setAddMemberCandidates([]);
+      }
+      setHasMoreCandidates(false);
+      setMemberActionFeedback({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Failed to load people to add.',
+      });
+    } finally {
+      setIsInitialCandidateLoad(false);
+      setIsLoadingMoreCandidates(false);
+    }
+  }, [
+    ADD_MEMBER_PAGE_SIZE,
+    availableConnectedCandidates,
+    activeMemberIds,
+    auth.session?.token,
+    isAdmin,
+    isAddMembersOpen,
+  ]);
+
+  useEffect(() => {
+    if (!isAdmin || !isAddMembersOpen) return;
+
+    setCandidateOffset(0);
+    setHasMoreCandidates(false);
+    if (!isSearchMode) {
+      const nextRows = availableConnectedCandidates.slice(0, ADD_MEMBER_PAGE_SIZE);
+      setAddMemberCandidates(nextRows);
+      setCandidateOffset(nextRows.length);
+      setHasMoreCandidates(nextRows.length < availableConnectedCandidates.length);
+      setIsInitialCandidateLoad(false);
+      setIsLoadingMoreCandidates(false);
+      return;
+    }
+
+    const timerId = window.setTimeout(() => {
+      void loadSearchCandidates({ query: normalizedAddMemberQuery, offset: 0, reset: true });
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, [
+    ADD_MEMBER_PAGE_SIZE,
+    availableConnectedCandidates,
+    group.id,
+    isAddMembersOpen,
+    isAdmin,
+    isSearchMode,
+    loadSearchCandidates,
+    normalizedAddMemberQuery,
+  ]);
+
+  const handleAddMemberListScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
+    if (!hasMoreCandidates || isInitialCandidateLoad || isLoadingMoreCandidates) return;
+
+    const element = event.currentTarget;
+    const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+    if (distanceFromBottom > 48) return;
+
+    if (!isSearchMode) {
+      const nextRows = availableConnectedCandidates.slice(candidateOffset, candidateOffset + ADD_MEMBER_PAGE_SIZE);
+      setAddMemberCandidates((current) => [...current, ...nextRows]);
+      setCandidateOffset((current) => current + nextRows.length);
+      setHasMoreCandidates(candidateOffset + nextRows.length < availableConnectedCandidates.length);
+      return;
+    }
+
+    void loadSearchCandidates({
+      query: normalizedAddMemberQuery,
+      offset: candidateOffset,
+      reset: false,
+    });
+  }, [
+    ADD_MEMBER_PAGE_SIZE,
+    availableConnectedCandidates,
+    candidateOffset,
+    hasMoreCandidates,
+    isInitialCandidateLoad,
+    isLoadingMoreCandidates,
+    isSearchMode,
+    loadSearchCandidates,
+    normalizedAddMemberQuery,
+  ]);
+
   const handleSaveDescription = async () => {
     const normalized = descriptionDraft.trim();
     const current = (group.description ?? '').trim();
@@ -146,6 +322,55 @@ export function GroupInfoPage({
       window.alert(err instanceof Error ? err.message : 'Failed to update group description');
     } finally {
       setIsSavingDescription(false);
+    }
+  };
+
+  const handleAddMember = async (studentId: string) => {
+    if (!onAddMember || pendingAddIds.includes(studentId)) return;
+
+    setPendingAddIds((current) => [...current, studentId]);
+    setMemberActionFeedback(null);
+    const candidate = addMemberCandidates.find((entry) => entry.userId === studentId);
+    const student = studentLookup.get(studentId);
+    try {
+      await onAddMember(group.id, studentId);
+      setAddMemberCandidates((current) => current.filter((entry) => entry.userId !== studentId));
+      setCandidateOffset((current) => Math.max(0, current - 1));
+      setMemberActionFeedback({
+        kind: 'success',
+        message: `${candidate?.displayName ?? student?.displayName ?? student?.name ?? 'Member'} added to the group.`,
+      });
+    } catch (err) {
+      setMemberActionFeedback({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Failed to add member.',
+      });
+    } finally {
+      setPendingAddIds((current) => current.filter((userId) => userId !== studentId));
+    }
+  };
+
+  const handleRemoveMember = async (
+    memberId: string,
+    memberName: string,
+  ) => {
+    if (!onRemoveMember || pendingRemoveIds.includes(memberId)) return;
+
+    setPendingRemoveIds((current) => [...current, memberId]);
+    setMemberActionFeedback(null);
+    try {
+      await onRemoveMember(group.id, memberId);
+      setMemberActionFeedback({
+        kind: 'success',
+        message: `${memberName} removed from the group.`,
+      });
+    } catch (err) {
+      setMemberActionFeedback({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Failed to remove member.',
+      });
+    } finally {
+      setPendingRemoveIds((current) => current.filter((userId) => userId !== memberId));
     }
   };
 
@@ -251,42 +476,81 @@ export function GroupInfoPage({
               <div className="mt-4 rounded-2xl border border-primary/10 bg-white p-4 space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-gray-900">Add Members</h3>
-                  <Badge variant="secondary">{addableStudents.length} available</Badge>
+                  <Badge variant="secondary">{addMemberCandidates.length} shown</Badge>
                 </div>
+                {memberActionFeedback && (
+                  <div
+                    className={`rounded-xl px-3 py-2 text-sm ${
+                      memberActionFeedback.kind === 'success'
+                        ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
+                        : 'border border-red-200 bg-red-50 text-red-700'
+                    }`}
+                  >
+                    {memberActionFeedback.message}
+                  </div>
+                )}
                 <Input
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
+                  value={addMemberSearchQuery}
+                  onChange={(event) => setAddMemberSearchQuery(event.target.value)}
                   placeholder="Search students to add"
                   className="rounded-xl"
                 />
-                <div className="space-y-2 max-h-72 overflow-y-auto">
-                  {addableStudents.length === 0 ? (
-                    <p className="text-sm text-gray-500">No more students available to add.</p>
+                <div onScroll={handleAddMemberListScroll} className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  {isInitialCandidateLoad ? (
+                    <LoadingIndicator
+                      label={isSearchMode ? 'Searching users...' : 'Loading connected users...'}
+                      className="py-4"
+                      size={20}
+                    />
+                  ) : addMemberCandidates.length === 0 ? (
+                    <p className="text-sm text-gray-500">
+                      {isSearchMode ? 'No users found for this search.' : 'No connected users available to add.'}
+                    </p>
                   ) : (
-                    addableStudents.map((student) => (
-                      <div key={student.id} className="flex items-center justify-between gap-3 rounded-xl border border-gray-100 p-3">
+                    addMemberCandidates.map((candidate) => (
+                      <div key={candidate.userId} className="flex items-center justify-between gap-3 rounded-xl border border-gray-100 p-3">
                         <button
                           type="button"
-                          onClick={() => onViewProfile?.(student.id)}
+                          onClick={() => onViewProfile?.(candidate.userId)}
                           className="flex items-center gap-3 text-left flex-1"
                         >
                           <Avatar className="w-10 h-10">
-                            <AvatarImage src={student.avatar} />
-                            <AvatarFallback>{student.name[0]}</AvatarFallback>
+                            <AvatarImage src={candidate.profilePictureUrl ?? undefined} />
+                            <AvatarFallback>{(candidate.displayName ?? candidate.username)[0]}</AvatarFallback>
                           </Avatar>
                           <div>
-                            <p className="text-sm font-medium text-gray-900">{student.name}</p>
+                            <p className="text-sm font-medium text-gray-900">{candidate.displayName}</p>
+                            <p className="text-xs text-gray-500">@{candidate.username}</p>
                             <p className="text-xs text-gray-500">
-                              {student.branch} - Year {student.year}
+                              {candidate.branch && candidate.year
+                                ? `${candidate.branch} - Year ${candidate.year}`
+                                : candidate.branch
+                                  ? candidate.branch
+                                  : candidate.year
+                                    ? `Year ${candidate.year}`
+                                    : 'Campus connection'}
                             </p>
                           </div>
                         </button>
-                        <Button size="sm" className="rounded-full" onClick={() => void onAddMember?.(group.id, student.id)}>
-                          Add
+                        <Button
+                          size="sm"
+                          className="rounded-full"
+                          disabled={pendingAddIds.includes(candidate.userId)}
+                          onClick={() => void handleAddMember(candidate.userId)}
+                        >
+                          {pendingAddIds.includes(candidate.userId) ? (
+                            <span className="inline-flex items-center gap-2">
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              Adding...
+                            </span>
+                          ) : 'Add'}
                         </Button>
                       </div>
                     ))
                   )}
+                  {isLoadingMoreCandidates ? (
+                    <LoadingIndicator label="Loading more..." className="py-2 text-xs" size={18} />
+                  ) : null}
                 </div>
               </div>
             )}
@@ -304,8 +568,8 @@ export function GroupInfoPage({
               )}
             </div>
             <Input
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
+              value={memberSearchQuery}
+              onChange={(event) => setMemberSearchQuery(event.target.value)}
               placeholder="Search group members"
               className="rounded-xl"
             />
@@ -322,6 +586,8 @@ export function GroupInfoPage({
                 const isOwner = member.role === 'owner';
                 const canModerate = isAdmin && !isCurrentUser && !isOwner;
                 const canDemoteAdmin = currentMember?.role === 'owner' && member.role === 'admin' && !isCurrentUser;
+                const isRemovingMember = pendingRemoveIds.includes(member.userId);
+                const memberName = member.displayName ?? member.username;
 
                 return (
                   <div key={member.userId} className="flex items-center gap-3 p-3 rounded-xl hover:bg-gray-50 transition-colors">
@@ -362,8 +628,8 @@ export function GroupInfoPage({
                     {canModerate && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm" className="h-9 w-9 rounded-full p-0">
-                            <MoreVertical className="h-4 w-4" />
+                          <Button variant="ghost" size="sm" className="h-9 w-9 rounded-full p-0" disabled={isRemovingMember}>
+                            {isRemovingMember ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreVertical className="h-4 w-4" />}
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-44">
@@ -380,11 +646,12 @@ export function GroupInfoPage({
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuItem
-                            onClick={() => void onRemoveMember?.(group.id, member.userId)}
+                            disabled={isRemovingMember}
+                            onClick={() => void handleRemoveMember(member.userId, memberName)}
                             className="text-destructive focus:text-destructive"
                           >
                             <UserMinus className="w-4 h-4 mr-2" />
-                            Remove
+                            {isRemovingMember ? 'Removing...' : 'Remove'}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -402,10 +669,6 @@ export function GroupInfoPage({
               <h3 className="text-gray-900">Admin Settings</h3>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Button variant="outline" className="w-full justify-start rounded-xl" onClick={() => setIsAddMembersOpen(true)}>
-                <UserPlus className="w-4 h-4 mr-2" />
-                Manage Members
-              </Button>
               {isOwner && (
                 <Button
                   variant="outline"
@@ -431,7 +694,7 @@ export function GroupInfoPage({
                 Report Group
               </Button>
               <p className="text-xs text-gray-500 px-1">
-                Admins can manage members here. Editing and delete flows can be connected next.
+                Use the Add Members action above for membership changes. Delete and report options stay here.
               </p>
             </CardContent>
           </Card>

@@ -24,20 +24,38 @@ interface SearchClubRow {
   member_count: number;
 }
 
+function parseExcludeUserIds(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => (typeof entry === 'string' && entry.trim() ? [entry.trim()] : []));
+  }
+  if (typeof value === 'string' && value.trim()) {
+    return [value.trim()];
+  }
+  return [];
+}
+
 function parsePaging(value: string | undefined, fallback: number, max: number): number {
   const parsed = parseInt(value ?? '', 10);
   const safe = Number.isFinite(parsed) ? parsed : fallback;
   return Math.min(Math.max(safe, 0), max);
 }
 
-async function searchUsers(currentUserId: string, q: string, limit: number, offset: number) {
+async function searchUsers(
+  currentUserId: string,
+  q: string,
+  limit: number,
+  offset: number,
+  excludeUserIds: string[] = [],
+) {
   const pattern = `%${q}%`;
+  const excludedUserIds = Array.from(new Set(excludeUserIds.filter((userId) => userId && userId !== currentUserId)));
 
   const rows = await prisma.$queryRaw<Array<{ user_id: string }>>`
     SELECT
       u.user_id
     FROM users u
     WHERE u.user_id <> ${currentUserId}
+      AND NOT (u.user_id = ANY(${excludedUserIds}::uuid[]))
       AND u.is_deleted = FALSE
       AND (
         u.username ILIKE ${pattern}
@@ -233,13 +251,14 @@ router.get('/users', async (req: Request, res: Response) => {
   const q = (req.query.q as string | undefined)?.trim() ?? '';
   const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 20, 1), 50);
   const offset = Math.max(parseInt(req.query.offset as string, 10) || 0, 0);
+  const excludeUserIds = parseExcludeUserIds(req.query.excludeUserIds);
 
   if (!q) {
     return res.status(200).json([]);
   }
 
   try {
-    const users = await searchUsers(currentUserId, q, limit, offset);
+    const users = await searchUsers(currentUserId, q, limit, offset, excludeUserIds);
     return res.status(200).json(users);
   } catch (err) {
     console.error('Error searching users:', err);

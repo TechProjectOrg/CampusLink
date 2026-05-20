@@ -23,6 +23,7 @@ function mapMinimalUserFromSummary(
     userId: card.userId,
     displayName: card.displayName,
     username: card.username,
+    email: card.email,
     profilePictureUrl: card.profilePictureUrl,
     isPrivate: card.isPrivate,
     type: card.type,
@@ -47,6 +48,16 @@ async function hydrateOrderedUsers(viewerUserId: string, userIds: string[]) {
         },
       ),
     );
+}
+
+function parseExcludeUserIds(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((entry) => (typeof entry === 'string' && entry.trim() ? [entry.trim()] : []));
+  }
+  if (typeof value === 'string' && value.trim()) {
+    return [value.trim()];
+  }
+  return [];
 }
 
 // ============================================================
@@ -125,6 +136,57 @@ router.get('/graph', async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error('Error fetching follow graph:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.get('/connections/users', async (req: Request, res: Response) => {
+  const authed = req as unknown as AuthedRequest;
+  const userId = authed.auth!.userId;
+  const limit = Math.min(Math.max(parseInt(req.query.limit as string, 10) || 5, 1), 20);
+  const offset = Math.max(parseInt(req.query.offset as string, 10) || 0, 0);
+  const excludedUserIds = Array.from(
+    new Set(parseExcludeUserIds(req.query.excludeUserIds).filter((candidateId) => candidateId && candidateId !== userId)),
+  );
+
+  try {
+    const rows = await prisma.$queryRaw<Array<{ user_id: string }>>`
+      WITH connected AS (
+        SELECT
+          candidate.user_id,
+          MAX(candidate.connected_at) AS latest_connected_at
+        FROM (
+          SELECT
+            f.follower_user_id AS user_id,
+            f.created_at AS connected_at
+          FROM follows f
+          WHERE f.followed_user_id = ${userId}
+
+          UNION ALL
+
+          SELECT
+            f.followed_user_id AS user_id,
+            f.created_at AS connected_at
+          FROM follows f
+          WHERE f.follower_user_id = ${userId}
+        ) candidate
+        GROUP BY candidate.user_id
+      )
+      SELECT connected.user_id
+      FROM connected
+      JOIN users u ON u.user_id = connected.user_id
+      WHERE connected.user_id <> ${userId}
+        AND NOT (connected.user_id = ANY(${excludedUserIds}::uuid[]))
+        AND u.is_deleted = FALSE
+      ORDER BY connected.latest_connected_at DESC, u.username ASC
+      LIMIT ${limit}
+      OFFSET ${offset}
+    `;
+
+    const users = await hydrateOrderedUsers(userId, rows.map((row) => row.user_id));
+    return res.status(200).json(users);
+  } catch (err) {
+    console.error('Error fetching connected users:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });
