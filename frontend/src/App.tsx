@@ -606,6 +606,7 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedHashtag, setSelectedHashtag] = useState<string | null>(null);
   const [postsRefreshToken, setPostsRefreshToken] = useState(0);
+  const [isMobileTopNavVisible, setIsMobileTopNavVisible] = useState(true);
   const [openedPost, setOpenedPost] = useState<Opportunity | null>(null);
   const [openedPostId, setOpenedPostId] = useState<string | null>(null);
   const [openedPostComments, setOpenedPostComments] = useState<DiscussionPageState<Comment>>(
@@ -623,6 +624,7 @@ export default function App() {
   const [showResetPasswordPage, setShowResetPasswordPage] = useState(() => shouldShowResetPasswordPage());
   const openedPostCommentsRef = useRef<DiscussionPageState<Comment>>(createInitialDiscussionPageState<Comment>());
   const openedPostRepliesRef = useRef<Record<string, ReplyThreadState>>({});
+  const lastFeedScrollTopRef = useRef(0);
   const guardRestrictedAction = useCallback(() => {
     if (forcedBannedMessage || moderationState?.isBanned) {
       toast.error(forcedBannedMessage || 'Your account has been permanently banned due to repeated violations.');
@@ -1117,6 +1119,19 @@ export default function App() {
   const handleFeedScroll = useCallback(
     (event: React.UIEvent<HTMLDivElement>) => {
       const element = event.currentTarget;
+      const nextScrollTop = Math.max(element.scrollTop, 0);
+      const previousScrollTop = lastFeedScrollTopRef.current;
+      const scrollDelta = nextScrollTop - previousScrollTop;
+
+      if (nextScrollTop <= 16) {
+        setIsMobileTopNavVisible(true);
+      } else if (scrollDelta >= 8) {
+        setIsMobileTopNavVisible(false);
+      } else if (scrollDelta <= -8) {
+        setIsMobileTopNavVisible(true);
+      }
+
+      lastFeedScrollTopRef.current = nextScrollTop;
       const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
       if (distanceFromBottom <= 240) {
         void loadMoreFeedPosts();
@@ -1158,6 +1173,11 @@ export default function App() {
       void loadMoreFeedPosts();
     }
   }, [activeTab, feedTimeline, loadMoreFeedPosts, opportunities.length]);
+
+  useEffect(() => {
+    setIsMobileTopNavVisible(true);
+    lastFeedScrollTopRef.current = 0;
+  }, [activeTab]);
 
   useEffect(() => {
     if (auth.isAuthenticated && authToken) {
@@ -2811,6 +2831,7 @@ export default function App() {
         unreadCount={unreadCount}
         unreadNotifications={unreadNotifications}
         onSearch={setSearchQuery}
+        isMobileTopNavVisible={isMobileTopNavVisible}
       />
       {moderationState?.isSuspended ? (
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -2838,7 +2859,7 @@ export default function App() {
             {/* Feed Section (Center) */}
             <div
               ref={feedViewportRef}
-              className="flex-1 min-w-0 px-2 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)]"
+              className="cl-feed-mobile-viewport flex-1 min-w-0 px-2 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)]"
               style={{ maxWidth: '1000px', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               onScroll={handleFeedScroll}
             >

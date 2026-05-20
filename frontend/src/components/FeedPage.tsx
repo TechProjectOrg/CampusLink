@@ -78,8 +78,8 @@ export function FeedPage({
             {/* Header */}
             <div className="animate-slide-in-down">
               <div className="cl-feed-composer rounded-3xl border border-slate-200/80 bg-white shadow-lg hover-lift overflow-hidden transition-all duration-300 hover:shadow-xl">
-                <div className="cl-feed-composer-top flex items-center sm:items-start gap-3 sm:gap-4 p-3 sm:p-4 md:p-5">
-                  <Avatar className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 flex-shrink-0 ring-2 ring-primary/10">
+                <div className="cl-feed-composer-top cl-feed-composer-top-mobile flex items-center sm:items-start gap-3 sm:gap-4 p-3 sm:p-4 md:p-5">
+                  <Avatar className="hidden h-12 w-12 flex-shrink-0 ring-2 ring-primary/10 sm:flex sm:h-14 sm:w-14 md:h-16 md:w-16">
                     <AvatarImage src={currentUser?.avatar} alt={currentUser?.name} />
                     <AvatarFallback className="bg-slate-100 text-slate-700 text-base font-medium">
                       {currentUser?.name?.[0] ?? 'U'}

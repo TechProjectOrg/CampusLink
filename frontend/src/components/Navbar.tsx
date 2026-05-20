@@ -9,6 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
+import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { useAuth } from '../context/AuthContext';
 
 interface NavbarProps {
@@ -18,14 +19,24 @@ interface NavbarProps {
   unreadCount?: number;
   unreadNotifications?: number;
   onSearch?: (query: string) => void;
+  isMobileTopNavVisible?: boolean;
 }
 
-export function Navbar({ activeTab, onTabChange, onOpenSavedPosts, unreadCount = 0, unreadNotifications = 0, onSearch }: NavbarProps) {
+export function Navbar({
+  activeTab,
+  onTabChange,
+  onOpenSavedPosts,
+  unreadCount = 0,
+  unreadNotifications = 0,
+  onSearch,
+  isMobileTopNavVisible = true,
+}: NavbarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const { logout, profile } = useAuth();
   const navbarProfilePhoto = profile?.profilePictureUrl ?? null;
   const showMobileTopActions = activeTab === 'feed' || activeTab === 'search';
+  const shouldShowMobileTopNav = isMobileSearchOpen || isMobileTopNavVisible;
 
   const navItems = [
     { id: 'feed', label: 'Feed', icon: Home },
@@ -97,16 +108,33 @@ export function Navbar({ activeTab, onTabChange, onOpenSavedPosts, unreadCount =
   }, [activeTab]);
 
   return (
-    <nav className="cl-navbar-root sticky top-0 z-50 w-full overflow-x-hidden backdrop-blur-xl bg-gradient-to-r from-primary via-secondary to-primary shadow-lg animate-slide-in-down">
+    <nav className={`cl-navbar-root sticky top-0 z-50 w-full overflow-x-hidden backdrop-blur-xl bg-gradient-to-r from-primary via-secondary to-primary shadow-lg animate-slide-in-down ${shouldShowMobileTopNav ? 'cl-navbar-mobile-visible' : 'cl-navbar-mobile-hidden'}`}>
       <div className="cl-navbar-shell max-w-7xl mx-auto px-4">
         <div className="cl-navbar-row flex items-center gap-4 h-16">
           {/* Logo */}
-          <div className="flex items-center gap-2 flex-shrink-0 cursor-pointer" onClick={() => handleTabNavigate('feed')}>
+          <div className="hidden sm:flex items-center gap-2 flex-shrink-0 cursor-pointer" onClick={() => handleTabNavigate('feed')}>
             <div className="overflow-hidden rounded-xl border border-white/30 bg-white/20 shadow-lg backdrop-blur-lg hover-lift">
               <img src="/logo.png" alt="CampusLynk logo" className="h-10 w-10 object-cover" />
             </div>
             <span className="cl-navbar-logo-text text-white text-xl tracking-tight hidden sm:inline">CampusLynk</span>
           </div>
+
+          {showMobileTopActions ? (
+            <button
+              aria-label="Open profile"
+              onClick={() => handleTabNavigate('profile')}
+              className="cl-mobile-top-action cl-mobile-profile-action md:hidden relative overflow-hidden rounded-full border border-white/30 shadow-lg"
+            >
+              <Avatar className="h-11 w-11">
+                <AvatarImage src={navbarProfilePhoto ?? undefined} alt="My profile" className="object-cover" />
+                <AvatarFallback className="bg-white/20 text-white text-sm font-medium">
+                  {profile?.displayName?.[0] ?? profile?.username?.[0] ?? 'U'}
+                </AvatarFallback>
+              </Avatar>
+            </button>
+          ) : (
+            <div className="md:hidden flex h-11 w-11 flex-shrink-0" aria-hidden="true" />
+          )}
 
           {/* Search Bar - Desktop */}
           <div className="cl-navbar-search hidden md:flex flex-1 max-w-2xl mx-4">
@@ -226,7 +254,7 @@ export function Navbar({ activeTab, onTabChange, onOpenSavedPosts, unreadCount =
 
 
           {showMobileTopActions && (
-            <>
+            <div className="cl-mobile-top-actions-group md:hidden">
               {/* Search Icon - Mobile */}
               <button 
                 onClick={handleMobileSearchToggle}
@@ -284,7 +312,7 @@ export function Navbar({ activeTab, onTabChange, onOpenSavedPosts, unreadCount =
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            </>
+            </div>
           )}
         </div>
 
@@ -316,7 +344,7 @@ export function Navbar({ activeTab, onTabChange, onOpenSavedPosts, unreadCount =
         </div>
 
         {/* Mobile Navigation */}
-        <div className="cl-mobile-bottom-nav md:hidden fixed bottom-0 left-0 right-0 backdrop-blur-xl bg-gradient-to-r from-primary via-secondary to-primary border-t border-white/20 flex items-center justify-center gap-2 py-3 px-4 shadow-2xl z-50 safe-area-inset-bottom">
+        <div className="cl-mobile-bottom-nav md:hidden fixed bottom-0 left-0 right-0 backdrop-blur-xl bg-gradient-to-r from-primary via-secondary to-primary border-t border-white/20 flex items-center justify-center gap-2 py-2 px-4 shadow-2xl z-50 safe-area-inset-bottom">
           {mobileNavItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -327,13 +355,13 @@ export function Navbar({ activeTab, onTabChange, onOpenSavedPosts, unreadCount =
                 onClick={() => handleTabNavigate(item.id)}
                 aria-label={item.label}
                 title={item.label}
-                className={`relative flex h-12 flex-1 max-w-[72px] items-center justify-center rounded-2xl transition-all duration-300 ${
+                className={`relative flex h-10 flex-1 max-w-[64px] items-center justify-center rounded-2xl transition-all duration-300 ${
                   isActive 
                     ? 'cl-mobile-nav-active text-white bg-white/25 scale-105 shadow-xl border border-white/40 backdrop-blur-sm' 
                     : 'text-white/70 hover:text-white hover:bg-white/10 active:scale-95'
                 }`}
               >
-                <Icon className="w-6 h-6" />
+                <Icon className="h-5 w-5" />
                 <span className="cl-mobile-nav-label sr-only">{item.label}</span>
                 {(item.badge ?? 0) > 0 && (
                   <Badge className="absolute -top-1 -right-1 bg-destructive text-white px-1 py-0 min-w-4 h-4 flex items-center justify-center text-xs animate-pulse">

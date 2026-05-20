@@ -5042,6 +5042,10 @@ div[style*="width: 25%"]::webkit-scrollbar {
     background: #fff;
   }
 
+  .cl-feed-mobile-viewport {
+    padding-top: 0;
+  }
+
   .cl-feed-page > .space-y-6 {
     gap: 0;
   }
@@ -5083,6 +5087,12 @@ div[style*="width: 25%"]::webkit-scrollbar {
 
   .cl-start-post-trigger {
     display: none;
+  }
+
+  .cl-feed-composer-top-mobile {
+    display: none;
+    min-height: 0;
+    padding: 0;
   }
 
   .cl-feed-action-row {
@@ -5759,17 +5769,24 @@ div[style*="width: 25%"]::webkit-scrollbar {
   }
 
   .cl-navbar-root {
-    position: relative;
-    height: 0;
+    position: sticky;
+    top: 0;
+    height: 4rem;
     overflow: visible;
-    background: transparent;
-    box-shadow: none;
+    background: rgba(255, 255, 255, 1);
+    box-shadow: 0 10px 24px rgba(15, 23, 42, .08);
     backdrop-filter: none;
-    transition: height .32s ease;
+    transition: height .32s ease, background-color .24s ease, box-shadow .24s ease;
   }
 
   .cl-navbar-root:has(.cl-navbar-mobile-search-panel-open) {
     height: 17.75rem;
+  }
+
+  .cl-navbar-mobile-hidden {
+    height: 0;
+    background: rgba(255, 255, 255, 0);
+    box-shadow: none;
   }
 
   .cl-navbar-shell {
@@ -5786,15 +5803,30 @@ div[style*="width: 25%"]::webkit-scrollbar {
   .cl-navbar-row:has(.cl-mobile-top-action) {
     display: flex;
     position: absolute;
-    top: 1rem;
+    top: .25rem;
+    left: 1rem;
     right: 1rem;
     z-index: 60;
-    width: 12rem;
+    width: auto;
     height: 3.5rem;
-    gap: .75rem;
+    gap: .5rem;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     pointer-events: none;
+    transition: transform .28s ease, opacity .2s ease;
+  }
+
+  .cl-mobile-top-actions-group {
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+    margin-left: auto;
+    pointer-events: auto;
+  }
+
+  .cl-navbar-mobile-hidden .cl-navbar-row:has(.cl-mobile-top-action) {
+    opacity: 0;
+    transform: translateY(-1.5rem);
   }
 
   .cl-navbar-mobile-search-panel {
@@ -5815,6 +5847,12 @@ div[style*="width: 25%"]::webkit-scrollbar {
     border-bottom: 0;
     border-radius: 1.125rem 1.125rem 0 0;
     box-shadow: none;
+  }
+
+  .cl-navbar-mobile-hidden .cl-navbar-mobile-search-panel {
+    opacity: 0;
+    transform: translateY(-1rem);
+    pointer-events: none;
   }
 
   .cl-navbar-mobile-search-panel-open {
@@ -5857,7 +5895,7 @@ div[style*="width: 25%"]::webkit-scrollbar {
     padding: 1rem;
   }
 
-  .cl-navbar-row > :not(.cl-mobile-top-action):not([data-radix-menu-anchor]) {
+  .cl-navbar-row > :not(.cl-mobile-top-action):not(.cl-mobile-top-actions-group):not([data-radix-menu-anchor]) {
     display: none;
   }
 
