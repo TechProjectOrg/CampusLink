@@ -5035,6 +5035,33 @@ div[style*="width: 25%"]::webkit-scrollbar {
   border-top-color: #eef2f7;
 }
 
+.cl-expandable-text {
+  position: relative;
+}
+
+.cl-expandable-text-measure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: -1;
+  white-space: normal;
+}
+
+.cl-expandable-text-toggle,
+.cl-opportunity-description-toggle {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: .875rem;
+  line-height: 1.25rem;
+  font-weight: 500;
+  vertical-align: baseline;
+  cursor: pointer;
+}
+
 @media (max-width: 639px) {
   .cl-feed-page {
     max-width: none !important;
@@ -5146,6 +5173,28 @@ div[style*="width: 25%"]::webkit-scrollbar {
     font-size: 1.125rem;
     font-weight: 700;
     color: #020617;
+  }
+
+  .cl-opportunity-author-name {
+    font-size: .9375rem;
+    line-height: 1.375rem;
+    font-weight: 500;
+  }
+
+  .cl-opportunity-title {
+    font-size: 1rem;
+    line-height: 1.5rem;
+  }
+
+  .cl-opportunity-description,
+  .cl-opportunity-meta-text {
+    font-size: .9375rem;
+    line-height: 1.5rem;
+  }
+
+  .cl-opportunity-type-badge {
+    font-size: .75rem;
+    line-height: 1rem;
   }
 
   .cl-opportunity-card-body p {

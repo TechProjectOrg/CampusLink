@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
+import { ExpandableText } from './ExpandableText';
 import { PostCarousel } from './feed/PostCarousel';
 import { useAuth } from '../context/AuthContext';
 import {
@@ -309,8 +310,12 @@ export function OpportunityCard({
   const postCore = (
     <>
       <div className="space-y-2 cursor-pointer" onClick={() => onOpenPost?.(opportunity)}>
-        <h3 className="text-gray-900">{opportunity.title}</h3>
-        <p className="text-gray-600">{opportunity.description}</p>
+        <h3 className="cl-opportunity-title text-gray-900">{opportunity.title}</h3>
+        <ExpandableText
+          text={opportunity.description}
+          className="cl-opportunity-description text-gray-600"
+          buttonClassName="cl-opportunity-description-toggle text-primary"
+        />
       </div>
 
       {((opportunity.images?.length ?? 0) > 0 || opportunity.image) && (
@@ -325,7 +330,7 @@ export function OpportunityCard({
           {opportunity.location && (
             <div className="flex items-center gap-1 transition-colors duration-300 hover:text-primary">
               <MapPin className="w-4 h-4" />
-              <span>{opportunity.location}</span>
+              <span className="cl-opportunity-meta-text">{opportunity.location}</span>
             </div>
           )}
         </div>
@@ -346,7 +351,7 @@ export function OpportunityCard({
                 <AvatarFallback>{opportunity.authorName[0]}</AvatarFallback>
               </Avatar>
               <div>
-                <p className="text-gray-900 group-hover:text-primary transition-colors">{opportunity.authorName}</p>
+                <p className="cl-opportunity-author-name text-gray-900 group-hover:text-primary transition-colors">{opportunity.authorName}</p>
                 <p className="text-sm text-gray-500">{formatDate(opportunity.date)}</p>
                 {opportunity.clubName ? (
                   <p className="text-xs text-primary">{opportunity.clubName}</p>
@@ -360,7 +365,7 @@ export function OpportunityCard({
                 </Badge>
               ) : null}
               {opportunity.type !== 'general' ? (
-                <Badge className={`${typeColors[opportunity.type]} border transition-all duration-300 hover:scale-110`}>
+                <Badge className={`cl-opportunity-type-badge ${typeColors[opportunity.type]} border transition-all duration-300 hover:scale-110`}>
                   {opportunity.type.charAt(0).toUpperCase() + opportunity.type.slice(1)}
                 </Badge>
               ) : null}

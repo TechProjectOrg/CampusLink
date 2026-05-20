@@ -9,6 +9,7 @@ import { Textarea } from './ui/textarea';
 import { Input } from './ui/input';
 import { PostCarousel } from './feed/PostCarousel';
 import { LoadingIndicator } from './ui/LoadingIndicator';
+import { ExpandableText } from './ExpandableText';
 import { useAuth } from '../context/AuthContext';
 import {
   DropdownMenu,
@@ -693,7 +694,11 @@ export function PostPage({
             <>
           <div className="space-y-2 mb-4">
             <h1 className="text-2xl text-gray-900">{post.title}</h1>
-            <p className="text-gray-700 whitespace-pre-wrap">{post.description}</p>
+            <ExpandableText
+              text={post.description}
+              className="text-gray-700 whitespace-pre-wrap"
+              buttonClassName="cl-opportunity-description-toggle text-primary"
+            />
           </div>
 
           {((post.images?.length ?? 0) > 0 || post.image) && (
