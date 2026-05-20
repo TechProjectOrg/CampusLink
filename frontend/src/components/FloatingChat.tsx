@@ -20,6 +20,7 @@ import {
 import { useAppDataSelector, useAppDataStore } from '../context/AppDataContext';
 import { useBottomAnchoredChatScroll } from '../hooks/useBottomAnchoredChatScroll';
 import { LoadingIndicator } from './ui/LoadingIndicator';
+import { ImageWithFallback } from './figma/ImageWithFallback';
 
 interface FloatingChatProps {
   conversations: ChatConversation[];
@@ -27,6 +28,116 @@ interface FloatingChatProps {
   onOpenFullChat: () => void;
   onChatClick?: (conversationId: string) => void;
   onChatRead?: (conversationId: string) => void;
+}
+
+function PostPreview({ postId }: { postId: string }) {
+  const appData = useAppDataStore();
+  const post = useAppDataSelector((state) => state.postsById[postId]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [notAvailable, setNotAvailable] = useState(false);
+
+  useEffect(() => {
+    if (post) return;
+    let mounted = true;
+
+    (async () => {
+      try {
+        if (!mounted) return;
+        setIsLoading(true);
+        await appData.refreshPost(postId);
+        const snapshot = appData.getSnapshot?.()?.postsById?.[postId] ?? null;
+        if (mounted && !snapshot) {
+          setNotAvailable(true);
+        } else if (mounted) {
+          setNotAvailable(false);
+        }
+      } catch (_error) {
+        // Ignore fetch failures and show the unavailable state if needed.
+      } finally {
+        if (mounted) {
+          setIsLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [appData, post, postId]);
+
+  const openPost = () => {
+    try {
+      if (typeof window !== 'undefined') {
+        const path = `/post/${postId}`;
+        window.history.pushState({ tab: 'post', postId }, '', path);
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }
+    } catch (_error) {
+      // Ignore navigation errors in compact chat mode.
+    }
+  };
+
+  if (notAvailable) {
+    return (
+      <div className="min-w-0">
+        <div className="rounded-xl overflow-hidden border bg-white shadow-sm p-3">
+          <p className="text-sm text-gray-500">Post is not available</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!post) {
+    return (
+      <div className="min-w-0">
+        <div className="rounded-xl overflow-hidden border bg-white shadow-sm p-3">
+          {isLoading ? <LoadingIndicator label="Loading post..." /> : null}
+        </div>
+      </div>
+    );
+  }
+
+  const mediaList = Array.isArray((post as { media?: Array<{ mediaUrl?: string }> }).media)
+    ? (post as { media: Array<{ mediaUrl?: string }> }).media
+    : [];
+  const imageUrl =
+    (post as { image?: string }).image ??
+    mediaList[0]?.mediaUrl ??
+    (post as { mediaUrl?: string }).mediaUrl ??
+    null;
+  const extraImageCount = mediaList.length > 1 ? mediaList.length - 1 : 0;
+
+  return (
+    <div className="min-w-0">
+      <button type="button" onClick={openPost} className="w-full text-left">
+        <div className="rounded-xl overflow-hidden border bg-white shadow-sm">
+          {(post.authorUsername || post.authorProfilePictureUrl) && (
+            <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-100">
+              <Avatar className="w-6 h-6">
+                <AvatarImage src={post.authorProfilePictureUrl ?? undefined} />
+                <AvatarFallback>{(post.authorUsername ?? 'u')[0]}</AvatarFallback>
+              </Avatar>
+              <p className="text-sm font-medium text-gray-700 truncate">@{post.authorUsername ?? 'unknown'}</p>
+            </div>
+          )}
+          <div className="p-3 flex items-center justify-center">
+            {imageUrl ? (
+              <div className="relative w-64 h-40 overflow-hidden bg-gray-100 rounded-md">
+                <ImageWithFallback src={imageUrl} alt="shared post image" className="w-full h-full object-cover" />
+                {extraImageCount > 0 && (
+                  <span className="absolute bottom-2 right-2 rounded-full bg-black/70 px-2 py-0.5 text-xs font-medium text-white">
+                    +{extraImageCount}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <div className="w-64 h-40 bg-gray-100 rounded-md" />
+            )}
+          </div>
+        </div>
+      </button>
+    </div>
+  );
 }
 
 export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onChatClick, onChatRead }: FloatingChatProps) {
@@ -402,6 +513,11 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                   const showDate = startsNewDate;
                   const showGroupStartTime = startsSenderGroup && groupHasMultipleMessages;
                   const isSystemMessage = msg.type === 'system';
+                  const contentRaw = msg.content ?? '';
+                  const postUrlMatch =
+                    contentRaw.match(/https?:\/\/[\w.-]+\/posts?\/([A-Za-z0-9_-]+)(?![A-Za-z0-9_-])/) ||
+                    contentRaw.match(/\/posts?\/([A-Za-z0-9_-]+)(?![A-Za-z0-9_-])/);
+                  const isSharedPostMessage = Boolean(postUrlMatch);
 
                   return (
                     <div key={msg.id} id={`floating-chat-message-${msg.id}`} data-chat-scroll-message={msg.id}>
@@ -444,7 +560,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                           )}
                           <div className="flex items-start gap-2">
                             <div
-                              className={`${msg.isOwn ? 'order-2' : 'order-1'} min-w-0 w-fit max-w-full rounded-3xl px-4 py-2 transition-shadow duration-200 ${
+                              className={`${msg.isOwn ? 'order-2' : 'order-1'} min-w-0 w-fit max-w-full rounded-3xl ${isSharedPostMessage ? 'px-2 py-2' : 'px-4 py-2'} transition-shadow duration-200 ${
                                 msg.isOwn
                                   ? 'bg-gradient-to-br from-primary to-secondary text-white'
                                   : 'bg-gray-100 text-gray-900'
@@ -467,11 +583,41 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                                   </div>
                                 </button>
                               )}
-                              {msg.type === 'image' && msg.attachments[0]?.fileUrl ? (
-                                <img src={msg.attachments[0].fileUrl} alt="Chat attachment" className="max-h-52 rounded-2xl object-cover" />
-                              ) : (
-                                <p className="text-sm break-words">{msg.content}</p>
-                              )}
+                              {(() => {
+                                const messageWithoutLink = postUrlMatch
+                                  ? contentRaw
+                                      .replace(/https?:\/\/[\w.-]+(?::\d+)?\/posts?\/[A-Za-z0-9_-]+(?![A-Za-z0-9_-])/g, '')
+                                      .replace(/\/posts?\/[A-Za-z0-9_-]+(?![A-Za-z0-9_-])/g, '')
+                                      .replace(/https?:\/\/[\w.-]+(?::\d+)?\/?/g, '')
+                                      .replace(/\s+/g, ' ')
+                                      .trim()
+                                  : '';
+
+                                if (msg.type === 'image' && msg.attachments[0]?.fileUrl) {
+                                  return (
+                                    <img
+                                      src={msg.attachments[0].fileUrl}
+                                      alt="Chat attachment"
+                                      className="max-h-52 rounded-2xl object-cover"
+                                    />
+                                  );
+                                }
+
+                                if (postUrlMatch) {
+                                  return (
+                                    <div className="min-w-0">
+                                      <PostPreview postId={postUrlMatch[1]} />
+                                      {messageWithoutLink ? (
+                                        <p className={`mt-5 px-2 py-1 text-sm break-words ${msg.isOwn ? 'text-white' : 'text-gray-900'}`}>
+                                          {messageWithoutLink}
+                                        </p>
+                                      ) : null}
+                                    </div>
+                                  );
+                                }
+
+                                return <p className="text-sm break-words">{contentRaw}</p>;
+                              })()}
                             </div>
                             <div className={`mt-1 flex shrink-0 items-center gap-1 opacity-0 transition-opacity duration-200 group-hover:opacity-100 group-focus-within:opacity-100 ${msg.isOwn ? 'order-1 flex-row-reverse' : 'order-2 flex-row'}`}>
                               <Popover>
