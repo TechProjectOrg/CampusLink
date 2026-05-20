@@ -1278,14 +1278,31 @@ router.delete('/conversations/:chatId', requireModerationCapability('message'), 
       return res.status(403).json({ message: 'Not a participant' });
     }
 
-    await hideConversationForUser(chatId, userId);
-    await invalidateConversationLists([userId], ['active', 'requests']);
-    noteConversationActivity(chatId);
+    res.status(200).json({ message: 'Conversation hidden' });
 
-    return res.status(200).json({ message: 'Conversation hidden' });
+    Promise.resolve().then(async () => {
+      try {
+        await hideConversationForUser(chatId, userId);
+        const now = new Date();
+        await prisma.$queryRaw`
+          INSERT INTO message_hidden_for_users (message_id, user_id)
+          SELECT message_id, ${userId}::uuid
+          FROM messages
+          WHERE chat_id = ${chatId}
+            AND created_at <= ${now}
+          ON CONFLICT (message_id, user_id) DO NOTHING
+        `;
+        await invalidateConversationLists([userId], ['active', 'requests']);
+        noteConversationActivity(chatId);
+      } catch (err) {
+        console.error('Failed to hide conversation completely in background:', err);
+      }
+    });
   } catch (err) {
     console.error('Error hiding conversation:', err);
-    return res.status(500).json({ message: 'Internal server error' });
+    if (!res.headersSent) {
+      return res.status(500).json({ message: 'Internal server error' });
+    }
   }
 });
 

@@ -2370,9 +2370,6 @@ export default function AdminRoot() {
                     <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={clubFilters.status} onChange={(event) => setClubFilters((current) => ({ ...current, status: event.target.value as ClubFilterState['status'], page: 1 }))}>
                       {CLUB_STATUS_OPTIONS.map((option) => <option key={option.label} value={option.value}>{option.label}</option>)}
                     </select>
-                    <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={clubFilters.verified} onChange={(event) => setClubFilters((current) => ({ ...current, verified: event.target.value as ClubFilterState['verified'], page: 1 }))}>
-                      {USER_BOOLEAN_OPTIONS.map((option) => <option key={`club-verified-${option.label}`} value={option.value}>{`Verified: ${option.label}`}</option>)}
-                    </select>
                     <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={clubFilters.sort} onChange={(event) => setClubFilters((current) => ({ ...current, sort: event.target.value as AdminClubSortKey, page: 1 }))}>
                       {CLUB_SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                     </select>
@@ -2423,7 +2420,6 @@ export default function AdminRoot() {
                                 <td className="px-3 py-3">
                                   <div className="flex flex-wrap gap-2">
                                     <StatusBadge value={club.status} />
-                                    <StatusBadge value={club.verified ? 'verified' : 'unverified'} />
                                   </div>
                                 </td>
                                 <td className="px-3 py-3">
@@ -3691,14 +3687,10 @@ export default function AdminRoot() {
           <DrawerSkeleton showFooterBlocks={4} />
         ) : selectedClubDetail ? (
           <div className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-1">
               <div className="rounded-2xl border border-slate-200 px-4 py-3">
                 <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Status</p>
                 <div className="mt-2"><StatusBadge value={selectedClubDetail.status} /></div>
-              </div>
-              <div className="rounded-2xl border border-slate-200 px-4 py-3">
-                <p className="text-xs uppercase tracking-[0.12em] text-slate-500">Verified</p>
-                <div className="mt-2"><StatusBadge value={selectedClubDetail.verified ? 'verified' : 'unverified'} /></div>
               </div>
             </div>
 

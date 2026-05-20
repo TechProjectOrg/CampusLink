@@ -584,13 +584,13 @@ export function ChatPage({
     );
     if (!confirmed) return;
 
-    try {
-      await apiDeleteConversation(selectedConversation.id, token);
-      appData.removeConversation(selectedConversation.id);
-      setViewingGroupInfo(null);
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : 'Failed to delete conversation');
-    }
+    const conversationId = selectedConversation.id;
+    appData.removeConversation(conversationId);
+    setViewingGroupInfo(null);
+
+    apiDeleteConversation(conversationId, token).catch((err) => {
+      console.error('Failed to delete conversation:', err);
+    });
   };
 
   const openMessageReport = (msg: ChatMessageApi) => {
@@ -665,8 +665,10 @@ export function ChatPage({
   const handleDeleteMessage = async (msg: ChatMessageApi, scope: 'me' | 'everyone') => {
     if (!selectedChat) return;
     try {
-      await appData.deleteMessage(selectedChat, msg.id, scope);
-      await appData.ensureConversations({ force: true });
+      appData.deleteMessage(selectedChat, msg.id, scope).catch((err) => {
+        console.error('Failed to delete message:', err);
+      });
+      appData.ensureConversations({ force: true }).catch(console.error);
     } catch (err: any) {
       window.alert(err.message || 'Failed to delete message');
     }

@@ -1321,11 +1321,15 @@ function createStore(): AppDataStore {
     },
     deleteMessage: async (chatId, messageId, scope = 'everyone') => {
       if (!authToken || !chatId || !messageId || messageId.startsWith('temp-')) return;
-      await apiDeleteMessage(chatId, messageId, authToken, scope);
       setMessagesState(chatId, (current) => ({
         ...current,
         messages: current.messages.filter((message) => message.id !== messageId),
       }));
+      try {
+        await apiDeleteMessage(chatId, messageId, authToken, scope);
+      } catch (err) {
+        console.error('Failed to delete message:', err);
+      }
     },
     upsertConversation: (conversation) => {
       const nextConversations = sortConversationsByTimestamp([
