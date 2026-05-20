@@ -13,6 +13,7 @@ import {
   apiAddGroupMember,
   apiChangeGroupMemberRole,
   apiCreateGroupConversation,
+  apiDeleteConversation,
   apiDeleteGroupChat,
   apiFetchGroupChatDetails,
   apiLeaveGroupChat,
@@ -517,14 +518,24 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     }, 1500);
   };
 
-  const openConversationReport = () => {
+  const handleDeleteConversation = async () => {
     if (!selectedConversation) return;
-    onReportTarget?.({
-      targetType: 'message',
-      targetId: selectedConversation.id,
-      label: selectedConversation.isGroup ? selectedConversation.participantName : `Conversation with ${selectedConversation.participantName}`,
-      preview: selectedConversation.lastMessage,
-    });
+
+    const token = auth.session?.token;
+    if (!token) return;
+
+    const confirmed = window.confirm(
+      'Delete this chat from your inbox? The other person will still see the conversation.',
+    );
+    if (!confirmed) return;
+
+    try {
+      await apiDeleteConversation(selectedConversation.id, token);
+      appData.removeConversation(selectedConversation.id);
+      setViewingGroupInfo(null);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Failed to delete conversation');
+    }
   };
 
   const openMessageReport = (msg: ChatMessageApi) => {
@@ -596,10 +607,11 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
     }
   };
 
-  const handleDeleteMessage = async (msg: ChatMessageApi) => {
+  const handleDeleteMessage = async (msg: ChatMessageApi, scope: 'me' | 'everyone') => {
     if (!selectedChat) return;
     try {
-      await appData.deleteMessage(selectedChat, msg.id);
+      await appData.deleteMessage(selectedChat, msg.id, scope);
+      await appData.ensureConversations({ force: true });
     } catch (err: any) {
       window.alert(err.message || 'Failed to delete message');
     }
@@ -1011,8 +1023,9 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                       </>
                     )}
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={openConversationReport}>
-                      Report Conversation
+                    <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={handleDeleteConversation}>
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete Chat
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -1253,14 +1266,23 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                                   </DropdownMenuItem>
                                   <DropdownMenuSeparator />
                                   {msg.isOwn ? (
-                                    <DropdownMenuItem 
-                                      onClick={() => handleDeleteMessage(msg)} 
-                                      className="text-destructive focus:text-destructive"
-                                      disabled={Date.now() - new Date(msg.timestamp).getTime() > 24 * 60 * 60 * 1000}
-                                    >
-                                      <Trash2 className="w-4 h-4 mr-2" />
-                                      Delete
-                                    </DropdownMenuItem>
+                                    <>
+                                      <DropdownMenuItem
+                                        onClick={() => handleDeleteMessage(msg, 'me')}
+                                        className="text-destructive focus:text-destructive"
+                                      >
+                                        <Trash2 className="w-4 h-4 mr-2" />
+                                        Delete from you
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        onClick={() => handleDeleteMessage(msg, 'everyone')}
+                                        className="text-destructive focus:text-destructive"
+                                        disabled={Date.now() - new Date(msg.timestamp).getTime() > 24 * 60 * 60 * 1000}
+                                      >
+                                        <Trash2 className="w-4 h-4 mr-2" />
+                                        Delete from everyone
+                                      </DropdownMenuItem>
+                                    </>
                                   ) : (
                                     <DropdownMenuItem onClick={() => openMessageReport(msg)} className="text-destructive focus:text-destructive">
                                       <Flag className="w-4 h-4 mr-2" />

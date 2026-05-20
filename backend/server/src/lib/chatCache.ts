@@ -472,6 +472,12 @@ export async function reconcileUnreadState(
       ON m.chat_id = cp.chat_id
      AND m.deleted_at IS NULL
      AND (m.suppressed_for_user_id IS NULL OR m.suppressed_for_user_id != ${userId})
+     AND NOT EXISTS (
+       SELECT 1
+       FROM message_hidden_for_users mh
+       WHERE mh.message_id = m.message_id
+         AND mh.user_id = ${userId}
+     )
      AND m.sender_user_id != ${userId}
      AND (
        cp.last_read_message_id IS NULL

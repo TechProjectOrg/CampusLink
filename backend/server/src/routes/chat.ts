@@ -139,6 +139,41 @@ function normalizeReactions(value: unknown): Record<string, string[]> {
   return reactions;
 }
 
+async function hideConversationForUser(chatId: string, userId: string): Promise<void> {
+  await prisma.$queryRaw`
+    UPDATE chat_participants
+    SET hidden_at = NOW()
+    WHERE chat_id = ${chatId}
+      AND user_id = ${userId}
+      AND left_at IS NULL
+  `;
+}
+
+async function clearHiddenConversationState(chatId: string): Promise<void> {
+  await prisma.$queryRaw`
+    UPDATE chat_participants
+    SET hidden_at = NULL
+    WHERE chat_id = ${chatId}
+      AND left_at IS NULL
+      AND hidden_at IS NOT NULL
+  `;
+}
+
+async function fetchHiddenMessageIdsForUser(chatId: string, userId: string): Promise<Set<string>> {
+  const rows = await prisma.$queryRaw<Array<{ message_id: string }>>`
+    SELECT message_id
+    FROM message_hidden_for_users
+    WHERE user_id = ${userId}
+      AND message_id IN (
+        SELECT message_id
+        FROM messages
+        WHERE chat_id = ${chatId}
+      )
+  `;
+
+  return new Set(rows.map((row) => row.message_id));
+}
+
 async function fetchConversationBaseRows(
   userId: string,
   isRequest: boolean,
@@ -160,6 +195,7 @@ async function fetchConversationBaseRows(
         ON cp_me.chat_id = c.chat_id
        AND cp_me.user_id = ${userId}
        AND cp_me.left_at IS NULL
+       AND cp_me.hidden_at IS NULL
       LEFT JOIN LATERAL (
         SELECT cp.user_id
         FROM chat_participants cp
@@ -195,6 +231,7 @@ async function fetchConversationBaseRows(
       ON cp_me.chat_id = c.chat_id
      AND cp_me.user_id = ${userId}
      AND cp_me.left_at IS NULL
+     AND cp_me.hidden_at IS NULL
     LEFT JOIN LATERAL (
       SELECT cp.user_id
       FROM chat_participants cp
@@ -234,6 +271,12 @@ async function fetchConversationUnreadRows(
      ON m.chat_id = cp.chat_id
      AND m.deleted_at IS NULL
      AND (m.suppressed_for_user_id IS NULL OR m.suppressed_for_user_id != ${userId})
+     AND NOT EXISTS (
+       SELECT 1
+       FROM message_hidden_for_users mh
+       WHERE mh.message_id = m.message_id
+         AND mh.user_id = ${userId}
+     )
      AND m.sender_user_id != ${userId}
      AND (
        cp.last_read_message_id IS NULL
@@ -281,6 +324,12 @@ async function fetchLatestVisibleMessagesForConversations(
     WHERE m.chat_id IN (${Prisma.join(conversationIds)})
       AND m.deleted_at IS NULL
       AND (m.suppressed_for_user_id IS NULL OR m.suppressed_for_user_id != ${viewerUserId})
+      AND NOT EXISTS (
+        SELECT 1
+        FROM message_hidden_for_users mh
+        WHERE mh.message_id = m.message_id
+          AND mh.user_id = ${viewerUserId}
+      )
     ORDER BY m.chat_id, m.created_at DESC, m.message_id DESC
   `;
 
@@ -520,6 +569,12 @@ async function fetchMessageRows(
         AND chat_id = ${chatId}
         AND deleted_at IS NULL
         AND (suppressed_for_user_id IS NULL OR suppressed_for_user_id != ${viewerUserId})
+        AND NOT EXISTS (
+          SELECT 1
+          FROM message_hidden_for_users mh
+          WHERE mh.message_id = messages.message_id
+            AND mh.user_id = ${viewerUserId}
+        )
       LIMIT 1
     `;
 
@@ -543,6 +598,12 @@ async function fetchMessageRows(
       WHERE m.chat_id = ${chatId}
         AND m.deleted_at IS NULL
         AND (m.suppressed_for_user_id IS NULL OR m.suppressed_for_user_id != ${viewerUserId})
+        AND NOT EXISTS (
+          SELECT 1
+          FROM message_hidden_for_users mh
+          WHERE mh.message_id = m.message_id
+            AND mh.user_id = ${viewerUserId}
+        )
         AND (
           m.created_at < ${cursorCreatedAt}
           OR (m.created_at = ${cursorCreatedAt} AND m.message_id < ${cursorMessageId})
@@ -566,6 +627,12 @@ async function fetchMessageRows(
       WHERE m.chat_id = ${chatId}
         AND m.deleted_at IS NULL
         AND (m.suppressed_for_user_id IS NULL OR m.suppressed_for_user_id != ${viewerUserId})
+        AND NOT EXISTS (
+          SELECT 1
+          FROM message_hidden_for_users mh
+          WHERE mh.message_id = m.message_id
+            AND mh.user_id = ${viewerUserId}
+        )
       ORDER BY m.created_at DESC, m.message_id DESC
       LIMIT ${warmLimit}
     `;
@@ -622,6 +689,12 @@ async function fetchMessageRows(
             AND m.message_id IN (${Prisma.join(replyIds)})
             AND m.deleted_at IS NULL
             AND (m.suppressed_for_user_id IS NULL OR m.suppressed_for_user_id != ${viewerUserId})
+            AND NOT EXISTS (
+              SELECT 1
+              FROM message_hidden_for_users mh
+              WHERE mh.message_id = m.message_id
+                AND mh.user_id = ${viewerUserId}
+            )
         `
       : [];
 
@@ -671,6 +744,12 @@ async function hasOlderMessagesThan(
       AND chat_id = ${chatId}
       AND deleted_at IS NULL
       AND (suppressed_for_user_id IS NULL OR suppressed_for_user_id != ${viewerUserId})
+      AND NOT EXISTS (
+        SELECT 1
+        FROM message_hidden_for_users mh
+        WHERE mh.message_id = messages.message_id
+          AND mh.user_id = ${viewerUserId}
+      )
     LIMIT 1
   `;
 
@@ -684,6 +763,12 @@ async function hasOlderMessagesThan(
     WHERE chat_id = ${chatId}
       AND deleted_at IS NULL
       AND (suppressed_for_user_id IS NULL OR suppressed_for_user_id != ${viewerUserId})
+      AND NOT EXISTS (
+        SELECT 1
+        FROM message_hidden_for_users mh
+        WHERE mh.message_id = messages.message_id
+          AND mh.user_id = ${viewerUserId}
+      )
       AND (
         created_at < ${cursorCreatedAt}
         OR (created_at = ${cursorCreatedAt} AND message_id < ${cursorMessageId})
@@ -786,6 +871,8 @@ async function fetchMessagesForRequest(
   limit: number,
   before?: string,
 ): Promise<MessagePageResult> {
+  const hiddenMessageIds = await fetchHiddenMessageIdsForUser(chatId, viewerUserId);
+
   if (before) {
     return fetchMessageRows(chatId, viewerUserId, limit, before);
   }
@@ -793,7 +880,7 @@ async function fetchMessagesForRequest(
   const cached = await getCachedRecentMessages(chatId);
   if (cached && cached.length > 0) {
     const visibleCached = cached.filter(
-      (message) => !message.suppressedForUserId || message.suppressedForUserId !== viewerUserId,
+      (message) => (!message.suppressedForUserId || message.suppressedForUserId !== viewerUserId) && !hiddenMessageIds.has(message.id),
     );
     const selected = visibleCached.slice(-limit);
     const hasMore =
@@ -1038,6 +1125,9 @@ async function cacheAndEmitMessage(
     ? meta.participantIds
     : await getChatParticipantIds(chatId);
 
+  await clearHiddenConversationState(chatId);
+  await invalidateConversationLists(participantIds, ['active', 'requests']);
+
   const recentMessage: ChatCachedMessage = {
     id: payload.messageId,
     chatId,
@@ -1162,6 +1252,31 @@ router.post('/conversations', requireModerationCapability('message'), async (req
     });
   } catch (err) {
     console.error('Error creating/getting conversation:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.delete('/conversations/:chatId', async (req: Request, res: Response) => {
+  const authed = req as unknown as AuthedRequest;
+  const userId = authed.auth!.userId;
+  const chatId = req.params.chatId as string;
+
+  if (!isValidUUID(chatId)) {
+    return res.status(400).json({ message: 'Invalid chat ID format' });
+  }
+
+  try {
+    if (!(await isChatParticipant(userId, chatId))) {
+      return res.status(403).json({ message: 'Not a participant' });
+    }
+
+    await hideConversationForUser(chatId, userId);
+    await invalidateConversationLists([userId], ['active', 'requests']);
+    noteConversationActivity(chatId);
+
+    return res.status(200).json({ message: 'Conversation hidden' });
+  } catch (err) {
+    console.error('Error hiding conversation:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });
@@ -1385,6 +1500,12 @@ router.patch('/conversations/:chatId/read', async (req: Request, res: Response) 
       WHERE chat_id = ${chatId}
         AND message_id = ${messageId}
         AND deleted_at IS NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM message_hidden_for_users mh
+          WHERE mh.message_id = m.message_id
+            AND mh.user_id = ${viewerUserId}
+        )
       LIMIT 1
     `;
 
@@ -1503,6 +1624,7 @@ router.delete(
       const chatId = String(req.params.chatId);
       const messageId = String(req.params.messageId);
       const userId = req.auth?.userId;
+      const scope = req.query.scope === 'me' ? 'me' : 'everyone';
 
       if (!userId) {
         return res.status(401).json({ error: 'Unauthorized' });
@@ -1526,9 +1648,19 @@ router.delete(
         return res.status(404).json({ error: 'Message not found' });
       }
       if (message.senderUserId !== userId) {
-        return res
-          .status(403)
-          .json({ error: 'You can only delete your own messages' });
+        return res.status(403).json({ error: 'You can only delete your own messages' });
+      }
+
+      if (scope === 'me') {
+        await prisma.$queryRaw`
+          INSERT INTO message_hidden_for_users (message_id, user_id)
+          VALUES (${messageId}, ${userId})
+          ON CONFLICT (message_id, user_id) DO NOTHING
+        `;
+
+        noteConversationActivity(chatId);
+        await invalidateConversationLists([userId], ['active', 'requests']);
+        return res.json({ success: true, messageId, scope });
       }
 
       const messageTime = new Date(message.createdAt).getTime();
@@ -1565,7 +1697,7 @@ router.delete(
           : await getChatParticipantIds(chatId);
       emitChatDelete(participantIds, chatId, messageId);
 
-      return res.json({ success: true, messageId });
+      return res.json({ success: true, messageId, scope });
     } catch (error) {
       console.error('Error deleting message:', error);
       return res.status(500).json({ error: 'Failed to delete message' });

@@ -147,7 +147,7 @@ interface AppDataStore {
   sendImageMessage: (chatId: string, input: SendImageInput) => Promise<void>;
   markConversationRead: (chatId: string, messageId: string) => Promise<void>;
   reactToMessage: (chatId: string, messageId: string, emoji: string) => Promise<void>;
-  deleteMessage: (chatId: string, messageId: string) => Promise<void>;
+  deleteMessage: (chatId: string, messageId: string, scope?: 'me' | 'everyone') => Promise<void>;
   upsertConversation: (conversation: ChatConversation) => void;
   removeConversation: (chatId: string) => void;
   applyRealtimeEvent: (event: { type?: string; payload?: any }, currentUserId: string) => void;
@@ -724,6 +724,7 @@ function createStore(): AppDataStore {
         };
       }
 
+    void cacheConversationList(conversations as unknown as ConversationApiResponse[]);
       const conversationOrder = sortConversationsByTimestamp(conversations).map((conversation) => conversation.id);
       const selectedConversationId =
         current.chat.selectedConversationId && conversationOrder.includes(current.chat.selectedConversationId)
@@ -1317,9 +1318,9 @@ function createStore(): AppDataStore {
         ),
       }));
     },
-    deleteMessage: async (chatId, messageId) => {
+    deleteMessage: async (chatId, messageId, scope = 'everyone') => {
       if (!authToken || !chatId || !messageId || messageId.startsWith('temp-')) return;
-      await apiDeleteMessage(chatId, messageId, authToken);
+      await apiDeleteMessage(chatId, messageId, authToken, scope);
       setMessagesState(chatId, (current) => ({
         ...current,
         messages: current.messages.filter((message) => message.id !== messageId),
@@ -1368,6 +1369,8 @@ function createStore(): AppDataStore {
           },
         };
       });
+
+      void cacheConversationList(nextConversations as unknown as ConversationApiResponse[]);
     },
     applyRealtimeEvent: (event, currentUserId) => {
       if (!event?.type || !event.payload) return;
@@ -1395,15 +1398,20 @@ function createStore(): AppDataStore {
         );
         setConversations(mergedConversations);
         if (!existingConversations.some((conversation) => conversation.id === payload.chatId)) {
-          void apiFetchConversations(authToken ?? '', 'requests')
-            .then((requests) => {
-              const withIncoming = sortConversationsByTimestamp([
+          void Promise.all([
+            apiFetchConversations(authToken ?? '', 'active'),
+            apiFetchConversations(authToken ?? '', 'requests'),
+          ])
+            .then(([activeConversations, requestConversations]) => {
+              const combined = [
                 ...mergedConversations,
-                ...(requests as ChatConversation[]).filter(
-                  (conversation) => !mergedConversations.some((current) => current.id === conversation.id),
-                ),
-              ]);
-              setConversations(withIncoming);
+                ...(activeConversations as ChatConversation[]),
+                ...(requestConversations as ChatConversation[]),
+              ];
+              const deduped = Array.from(
+                new Map(combined.map((conversation) => [conversation.id, conversation])).values(),
+              );
+              setConversations(sortConversationsByTimestamp(deduped));
             })
             .catch(() => {
               // Ignore optimistic refresh failures; a normal refresh will correct state.

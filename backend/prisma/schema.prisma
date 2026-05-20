@@ -722,6 +722,7 @@ model ChatParticipant {
   role              ChatParticipantRole
   joinedAt          DateTime            @map("joined_at") @db.Timestamp(6)
   leftAt            DateTime?           @map("left_at") @db.Timestamp(6)
+  hiddenAt          DateTime?           @map("hidden_at") @db.Timestamp(6)
   lastReadMessageId String?             @map("last_read_message_id") @db.Uuid
   createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamp(6)
   chat              Chat                @relation(fields: [chatId], references: [chatId], onDelete: Cascade, onUpdate: NoAction)
@@ -758,6 +759,20 @@ model Message {
   @@index([suppressedForUserId], map: "idx_messages_suppressed_for_user_id")
   @@index([replyToMessageId], map: "idx_messages_reply_to_message_id")
   @@map("messages")
+}
+
+model MessageHiddenForUser {
+  messageHiddenForUserId String   @id @default(dbgenerated("gen_random_uuid()")) @map("message_hidden_for_user_id") @db.Uuid
+  messageId              String   @map("message_id") @db.Uuid
+  userId                 String   @map("user_id") @db.Uuid
+  createdAt              DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  message                Message  @relation(fields: [messageId], references: [messageId], onDelete: Cascade, onUpdate: NoAction)
+  user                   User     @relation(fields: [userId], references: [userId], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([messageId, userId], map: "uq_message_hidden_for_users_message_id_user_id")
+  @@index([messageId], map: "idx_message_hidden_for_users_message_id")
+  @@index([userId], map: "idx_message_hidden_for_users_user_id")
+  @@map("message_hidden_for_users")
 }
 
 model BlockedUser {

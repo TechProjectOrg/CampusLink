@@ -136,6 +136,19 @@ export async function apiStartConversation(targetUserId: string, token: string):
   return response.json();
 }
 
+export async function apiDeleteConversation(chatId: string, token: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/chat/conversations/${chatId}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error.message || 'Failed to delete conversation');
+  }
+}
+
 export interface FetchMessagesResponse {
   messages: ChatMessageApi[];
   hasMore: boolean;
@@ -259,8 +272,13 @@ export async function apiRejectChatRequest(chatId: string, token: string): Promi
   }
 }
 
-export async function apiDeleteMessage(chatId: string, messageId: string, token: string): Promise<void> {
-  const response = await fetch(`${API_BASE_URL}/chat/conversations/${chatId}/messages/${messageId}`, {
+export async function apiDeleteMessage(
+  chatId: string,
+  messageId: string,
+  token: string,
+  scope: 'me' | 'everyone' = 'everyone',
+): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/chat/conversations/${chatId}/messages/${messageId}?scope=${scope}`, {
     method: 'DELETE',
     headers: {
       Authorization: `Bearer ${token}`
