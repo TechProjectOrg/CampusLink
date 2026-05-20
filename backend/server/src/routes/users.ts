@@ -5,7 +5,7 @@ import { getUserProfileById } from '../services/userProfile';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
 import requireModerationCapability from '../middleware/requireModerationCapability';
 import { hashPassword, signPasswordChangeToken, verifyPassword, verifyPasswordChangeToken } from '../lib/auth';
-import { generateOtp, storeOtp, verifyOtp } from '../lib/otp';
+import { generateOtp, getOtp, storeOtp, verifyOtp, clearOtpAfterSuccess } from '../lib/otp';
 import { sendEmailVerificationOTP } from '../lib/authEmail';
 import { setAdminMustChangePassword } from '../lib/admin';
 import { normalizeUsername, validateUsername } from '../lib/username';
@@ -3558,9 +3558,13 @@ router.post(
         return res.status(400).json({ message: 'This email is already in use' });
       }
 
-      // Generate and store OTP
-      const otp = generateOtp();
-      await storeOtp(userId, trimmedEmail, otp);
+      // Check if OTP already exists for this email (resend scenario)
+      let otp = await getOtp(userId, trimmedEmail);
+      if (!otp) {
+        // Generate new OTP only if one doesn't exist
+        otp = generateOtp();
+        await storeOtp(userId, trimmedEmail, otp);
+      }
 
       // Send OTP email
       try {
@@ -3633,6 +3637,9 @@ router.post(
         WHERE user_id = ${userId}
       `;
 
+      // Clear the OTP after successful verification
+      await clearOtpAfterSuccess(userId, trimmedEmail);
+
       // Invalidate user cache to refresh the updated data
       await invalidateUserCache(userId);
 
@@ -3644,6 +3651,192 @@ router.post(
       });
     } catch (err) {
       console.error('Error verifying alumni switch OTP:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
+
+// ============================================================================
+// Change Email Endpoints (For Any User - Student or Alumni)
+// ============================================================================
+
+interface RequestEmailChangeOtpBody {
+  newEmail: string;
+  changeToken: string;
+}
+
+interface VerifyEmailChangeOtpBody {
+  newEmail: string;
+  otp: string;
+}
+
+router.post(
+  '/:userId/email/request-otp',
+  requireOwnUser,
+  async (req: Request<GetUserParams, unknown, Partial<RequestEmailChangeOtpBody>>, res: Response) => {
+    const { userId } = req.params;
+    const { newEmail, changeToken } = req.body;
+
+    // Validate inputs
+    if (!newEmail || typeof newEmail !== 'string') {
+      return res.status(400).json({ message: 'New email is required' });
+    }
+
+    if (!changeToken || typeof changeToken !== 'string') {
+      return res.status(400).json({ message: 'Password change token is required' });
+    }
+
+    const trimmedEmail = newEmail.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailRegex.test(trimmedEmail)) {
+      return res.status(400).json({ message: 'Invalid email format' });
+    }
+
+    try {
+      // Verify the password change token is valid
+      let tokenPayload;
+      try {
+        tokenPayload = verifyPasswordChangeToken(changeToken);
+      } catch (err) {
+        return res.status(401).json({ message: 'Invalid or expired password change token' });
+      }
+
+      if (tokenPayload.userId !== userId) {
+        return res.status(403).json({ message: 'Invalid password change token' });
+      }
+
+      // Fetch user to verify they exist
+      const userRows = await prisma.$queryRaw<Array<{ user_id: string; email: string }>>`
+        SELECT user_id, email
+        FROM users
+        WHERE user_id = ${userId}
+      `;
+
+      const user = userRows[0];
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      // Check if new email is the same as current email
+      if (trimmedEmail === user.email.toLowerCase()) {
+        return res.status(400).json({ message: 'New email must be different from current email' });
+      }
+
+      // Check if new email is already in use
+      const existingEmailRows = await prisma.$queryRaw<{ exists: boolean }[]>`
+        SELECT EXISTS(SELECT 1 FROM users WHERE LOWER(email) = ${trimmedEmail}) AS "exists"
+      `;
+
+      if (existingEmailRows[0]?.exists) {
+        return res.status(400).json({ message: 'This email is already in use' });
+      }
+
+      // Check if OTP already exists for this email (resend scenario)
+      let otp = await getOtp(userId, trimmedEmail);
+      if (!otp) {
+        // Generate new OTP only if one doesn't exist
+        otp = generateOtp();
+        await storeOtp(userId, trimmedEmail, otp);
+      }
+
+      // Send OTP email
+      try {
+        await sendEmailVerificationOTP({
+          email: trimmedEmail,
+          otp,
+        });
+      } catch (err) {
+        console.error('Error sending OTP email:', err);
+        return res.status(500).json({ message: 'Failed to send verification email' });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: `Verification code sent to ${trimmedEmail}`,
+      });
+    } catch (err) {
+      console.error('Error requesting email change OTP:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
+
+router.post(
+  '/:userId/email/verify-otp',
+  requireOwnUser,
+  async (req: Request<GetUserParams, unknown, Partial<VerifyEmailChangeOtpBody>>, res: Response) => {
+    const { userId } = req.params;
+    const { newEmail, otp } = req.body;
+
+    // Validate inputs
+    if (!newEmail || typeof newEmail !== 'string') {
+      return res.status(400).json({ message: 'New email is required' });
+    }
+
+    if (!otp || typeof otp !== 'string') {
+      return res.status(400).json({ message: 'Verification code is required' });
+    }
+
+    const trimmedEmail = newEmail.trim().toLowerCase();
+
+    try {
+      // Verify OTP
+      const isOtpValid = await verifyOtp(userId, trimmedEmail, otp);
+
+      if (!isOtpValid) {
+        return res.status(401).json({ message: 'Invalid or expired verification code' });
+      }
+
+      // Fetch user to verify they exist and get their type
+      const userRows = await prisma.$queryRaw<Array<{ user_id: string; user_type: string }>>`
+        SELECT user_id, user_type
+        FROM users
+        WHERE user_id = ${userId}
+      `;
+
+      if (!userRows[0]) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      const user = userRows[0];
+      const allowedDomain = (process.env.AUTH_ALLOWED_EMAIL_DOMAIN?.trim() || 'gbpuat.ac.in').toLowerCase();
+      const isCollegeEmail = trimmedEmail.endsWith(`@${allowedDomain}`);
+      const isAlumniSwitchingToCollege = user.user_type === 'alumni' && isCollegeEmail;
+
+      // Update user email, and switch back to student if alumni is using college email
+      if (isAlumniSwitchingToCollege) {
+        await prisma.$queryRaw`
+          UPDATE users
+          SET email = ${trimmedEmail}, user_type = 'student', updated_at = NOW()
+          WHERE user_id = ${userId}
+        `;
+      } else {
+        await prisma.$queryRaw`
+          UPDATE users
+          SET email = ${trimmedEmail}, updated_at = NOW()
+          WHERE user_id = ${userId}
+        `;
+      }
+
+      // Clear the OTP after successful verification
+      await clearOtpAfterSuccess(userId, trimmedEmail);
+
+      // Invalidate user cache to refresh the updated data
+      await invalidateUserCache(userId);
+
+      const responseMessage = isAlumniSwitchingToCollege
+        ? 'Email updated successfully and account switched back to student'
+        : 'Email updated successfully';
+
+      return res.status(200).json({
+        success: true,
+        message: responseMessage,
+        email: trimmedEmail,
+        userType: isAlumniSwitchingToCollege ? 'student' : user.user_type,
+      });
+    } catch (err) {
+      console.error('Error verifying email change OTP:', err);
       return res.status(500).json({ message: 'Internal server error' });
     }
   }

@@ -736,3 +736,64 @@ export async function apiVerifyAlumniSwitchOtp(
 
   return response.json();
 }
+
+// ============================================================================
+// Change Email Functions (For Any User)
+// ============================================================================
+
+export interface EmailChangeOtpRequestResult {
+  success: boolean;
+  message: string;
+}
+
+export interface EmailChangeOtpVerifyResult {
+  success: boolean;
+  message: string;
+  email: string;
+}
+
+export async function apiRequestEmailChangeOtp(
+  userId: string,
+  newEmail: string,
+  changeToken: string,
+  token?: string,
+): Promise<EmailChangeOtpRequestResult> {
+  const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}/email/request-otp`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(token),
+    },
+    body: JSON.stringify({ newEmail, changeToken }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Failed to request OTP for email change');
+  }
+
+  return response.json();
+}
+
+export async function apiVerifyEmailChangeOtp(
+  userId: string,
+  newEmail: string,
+  otp: string,
+  token?: string,
+): Promise<EmailChangeOtpVerifyResult> {
+  const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}/email/verify-otp`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(token),
+    },
+    body: JSON.stringify({ newEmail, otp }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Failed to verify OTP for email change');
+  }
+
+  return response.json();
+}

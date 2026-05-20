@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Bell, Check, ChevronDown, ChevronRight, ChevronUp, Clock, Edit2, Globe, GraduationCap, KeyRound, Lock, MapPin, MonitorSmartphone, Save, Shield, Trash2, User, X } from 'lucide-react';
+import { ArrowLeft, Bell, Check, ChevronDown, ChevronRight, ChevronUp, Clock, Edit2, Globe, GraduationCap, KeyRound, Lock, Mail, MapPin, MonitorSmartphone, Save, Shield, Trash2, User, X } from 'lucide-react';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -14,6 +14,7 @@ import { apiChangePassword, apiCheckUsernameAvailability, apiFetchBlockedUsers, 
 import { apiFetchConversations, apiFetchGroupChatDetails, type GroupAdminTransferApi, type GroupChatDetailsApi } from '../lib/chatApi';
 import { ForgotPasswordDialog } from './ForgotPasswordDialog';
 import { SwitchToAlumniModal } from './SwitchToAlumniModal';
+import { ChangeEmailModal } from './ChangeEmailModal';
 import { LoadingIndicator } from './ui/LoadingIndicator';
 
 const PASSWORD_REQUIREMENTS = [
@@ -126,6 +127,7 @@ export function SettingsPage({ student, onEdit, onUpdateSettings, onUnblockUser 
   const [blockedUsers, setBlockedUsers] = useState<BlockedUserListItem[]>([]);
   const [blockedUsersLoading, setBlockedUsersLoading] = useState(false);
   const [switchToAlumniModalOpen, setSwitchToAlumniModalOpen] = useState(false);
+  const [changeEmailModalOpen, setChangeEmailModalOpen] = useState(false);
 
   const [notificationSettings, setNotificationSettings] = useState({
     emailNotifications: true,
@@ -1205,8 +1207,19 @@ export function SettingsPage({ student, onEdit, onUpdateSettings, onUnblockUser 
 
                   <div className="space-y-2">
                     <Label htmlFor="email">Email Address</Label>
-                    <Input id="email" type="email" value={accountStudent.email} disabled />
-                    <p className="text-xs text-gray-500">Email cannot be changed</p>
+                    <div className="flex gap-2 items-start">
+                      <Input id="email" type="email" value={accountStudent.email} disabled className="flex-1" />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setChangeEmailModalOpen(true)}
+                        className="mt-0"
+                      >
+                        <Mail className="w-4 h-4 mr-2" />
+                        Change
+                      </Button>
+                    </div>
                   </div>
 
                   <div className="space-y-2">
@@ -1610,6 +1623,14 @@ export function SettingsPage({ student, onEdit, onUpdateSettings, onUnblockUser 
         onOpenChange={setSwitchToAlumniModalOpen}
         onSuccess={() => {
           // Refresh the page or navigate after successful switch
+          window.location.reload();
+        }}
+      />
+      <ChangeEmailModal
+        open={changeEmailModalOpen}
+        onOpenChange={setChangeEmailModalOpen}
+        onSuccess={() => {
+          // Refresh the page to reflect updated email
           window.location.reload();
         }}
       />

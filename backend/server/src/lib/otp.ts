@@ -33,16 +33,23 @@ export async function storeOtp(userId: string, newEmail: string, code: string): 
 }
 
 /**
+ * Retrieve OTP from cache WITHOUT deleting it
+ * Returns the OTP code if exists, null otherwise
+ */
+export async function getOtp(userId: string, newEmail: string): Promise<string | null> {
+  const key = `otp:${userId}:${newEmail.toLowerCase()}`;
+  const payload = await cacheGetJson<OtpPayload>(key);
+  return payload?.code ?? null;
+}
+
+/**
  * Verify OTP from cache
  * Returns true if OTP is valid and matches, false otherwise
- * Automatically clears the OTP after verification attempt
+ * Does NOT delete the OTP - it will expire naturally after 10 minutes or can be cleared via clearOtpAfterSuccess()
  */
 export async function verifyOtp(userId: string, newEmail: string, providedCode: string): Promise<boolean> {
   const key = `otp:${userId}:${newEmail.toLowerCase()}`;
   const payload = await cacheGetJson<OtpPayload>(key);
-
-  // Clear the OTP after attempting verification (one-time use)
-  await cacheDelete(key);
 
   if (!payload) {
     return false; // OTP not found or expired
@@ -53,6 +60,14 @@ export async function verifyOtp(userId: string, newEmail: string, providedCode: 
   const codeMatches = payload.code === normalizedProvided;
 
   return codeMatches;
+}
+
+/**
+ * Clear OTP from cache after successful verification
+ */
+export async function clearOtpAfterSuccess(userId: string, newEmail: string): Promise<void> {
+  const key = `otp:${userId}:${newEmail.toLowerCase()}`;
+  await cacheDelete(key);
 }
 
 /**

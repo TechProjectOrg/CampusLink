@@ -1172,7 +1172,8 @@ export function ProfilePage({
   const profileBranch = student.branch?.trim() || '';
   const hasKnownBranch = Boolean(profileBranch && profileBranch.toLowerCase() !== 'unknown');
   const hasKnownYear = student.year > 0;
-  const yearLabel = hasKnownYear ? `Year ${student.year}` : 'Year not added';
+  const isAlumniProfile = isOwnProfile ? auth.profile?.type === 'alumni' : false;
+  const yearLabel = hasKnownYear ? (isAlumniProfile ? `Passing Year ${student.year}` : `Year ${student.year}`) : 'Year not added';
   const branchLabel = hasKnownBranch ? profileBranch : 'Branch not added';
   const clubCount = societies.length;
   const isSectionLimitedView = isRestrictedView || isPrivateLimitedView;
@@ -1671,7 +1672,7 @@ export function ProfilePage({
                           </p>
                         ) : null}
                         {(record.level === "Bachelor's" || record.level === "Master's") && record.isPursuing && hasKnownYear ? (
-                          <p className="mt-1 text-sm font-medium text-emerald-700">Current Year: {student.year}</p>
+                          <p className="mt-1 text-sm font-medium text-emerald-700">{isAlumniProfile ? 'Passing Year' : 'Current Year'}: {student.year}</p>
                         ) : null}
                       </div>
                       {isOwnProfile ? (
@@ -1689,10 +1690,10 @@ export function ProfilePage({
                 ))}
                 {(hasKnownBranch || hasKnownYear) ? (
                   <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 p-4">
-                    <p className="text-sm font-semibold text-emerald-900">Current Campus Profile</p>
+                    <p className="text-sm font-semibold text-emerald-900">{isAlumniProfile ? 'Alumni Profile' : 'Current Campus Profile'}</p>
                     <p className="mt-1 text-sm text-emerald-800">
                       {hasKnownBranch ? profileBranch : 'Branch not added'}
-                      {hasKnownYear ? ` • Year ${student.year}` : ''}
+                      {hasKnownYear ? ` • ${isAlumniProfile ? 'Passing Year' : 'Year'} ${student.year}` : ''}
                     </p>
                   </div>
                 ) : null}
@@ -2334,9 +2335,9 @@ export function ProfilePage({
       >
         <div className="space-y-5 max-w-[760px] w-full">
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Current Campus Profile</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{isAlumniProfile ? 'Alumni Profile' : 'Current Campus Profile'}</p>
             <p className="mt-1 text-sm font-medium text-slate-900">{hasKnownBranch ? profileBranch : 'Branch not added'}</p>
-            <p className="text-sm text-slate-700">{hasKnownYear ? `Year ${student.year}` : 'Year not added'}</p>
+            <p className="text-sm text-slate-700">{hasKnownYear ? `${isAlumniProfile ? 'Passing Year' : 'Year'} ${student.year}` : 'Year not added'}</p>
           </div>
           <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50/70 p-4">
             <div className="mb-3">

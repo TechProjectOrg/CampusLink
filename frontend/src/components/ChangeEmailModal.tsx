@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertCircle, CheckCircle, Loader2, X } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from './ui/dialog';
 import { Input } from './ui/input';
@@ -7,29 +7,28 @@ import { Label } from './ui/label';
 import { toast } from 'sonner@2.0.3';
 import { useAuth } from '../context/AuthContext';
 
-interface SwitchToAlumniModalProps {
+interface ChangeEmailModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess?: () => void;
 }
 
-type StepType = 'confirm' | 'password' | 'email' | 'otp';
+type StepType = 'password' | 'email' | 'otp';
 
-export function SwitchToAlumniModal({ open, onOpenChange, onSuccess }: SwitchToAlumniModalProps) {
+export function ChangeEmailModal({ open, onOpenChange, onSuccess }: ChangeEmailModalProps) {
   const auth = useAuth();
-  const [currentStep, setCurrentStep] = useState<StepType>('confirm');
+  const [currentStep, setCurrentStep] = useState<StepType>('password');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [changeToken, setChangeToken] = useState('');
-  const [understoodWarning, setUnderstoodWarning] = useState(false);
 
-  // Step 2: Password verification
+  // Step 1: Password verification
   const [currentPassword, setCurrentPassword] = useState('');
 
-  // Step 3: Email input
+  // Step 2: Email input
   const [newEmail, setNewEmail] = useState('');
 
-  // Step 4: OTP verification
+  // Step 3: OTP verification
   const [otp, setOtp] = useState('');
   const [otpSent, setOtpSent] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -37,11 +36,10 @@ export function SwitchToAlumniModal({ open, onOpenChange, onSuccess }: SwitchToA
   useEffect(() => {
     if (!open) {
       // Reset modal state when closed
-      setCurrentStep('confirm');
+      setCurrentStep('password');
       setIsLoading(false);
       setError('');
       setChangeToken('');
-      setUnderstoodWarning(false);
       setCurrentPassword('');
       setNewEmail('');
       setOtp('');
@@ -136,7 +134,7 @@ export function SwitchToAlumniModal({ open, onOpenChange, onSuccess }: SwitchToA
 
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/users/${auth.session.userId}/switch-to-alumni/request-otp`,
+        `${import.meta.env.VITE_API_URL}/users/${auth.session.userId}/email/request-otp`,
         {
           method: 'POST',
           headers: {
@@ -192,7 +190,7 @@ export function SwitchToAlumniModal({ open, onOpenChange, onSuccess }: SwitchToA
 
     try {
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/users/${auth.session.userId}/switch-to-alumni/verify-otp`,
+        `${import.meta.env.VITE_API_URL}/users/${auth.session.userId}/email/verify-otp`,
         {
           method: 'POST',
           headers: {
@@ -211,14 +209,14 @@ export function SwitchToAlumniModal({ open, onOpenChange, onSuccess }: SwitchToA
         throw new Error(data.message || 'Failed to verify code');
       }
 
-      // Success! Refresh the profile to get the updated user_type from the server
+      // Success! Refresh the profile to get the updated email from the server
       await auth.refreshProfile();
 
-      toast.success('Successfully switched to alumni account');
+      toast.success('Email changed successfully');
       onOpenChange(false);
       onSuccess?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to complete the switch');
+      setError(err instanceof Error ? err.message : 'Failed to change email');
     } finally {
       setIsLoading(false);
     }
@@ -236,7 +234,7 @@ export function SwitchToAlumniModal({ open, onOpenChange, onSuccess }: SwitchToA
       const trimmedEmail = newEmail.trim().toLowerCase();
 
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL}/users/${auth.session.userId}/switch-to-alumni/request-otp`,
+        `${import.meta.env.VITE_API_URL}/users/${auth.session.userId}/email/request-otp`,
         {
           method: 'POST',
           headers: {
@@ -267,9 +265,7 @@ export function SwitchToAlumniModal({ open, onOpenChange, onSuccess }: SwitchToA
 
   const handleBack = () => {
     setError('');
-    if (currentStep === 'password') {
-      setCurrentStep('confirm');
-    } else if (currentStep === 'email') {
+    if (currentStep === 'email') {
       setChangeToken('');
       setCurrentPassword('');
       setCurrentStep('password');
@@ -281,7 +277,6 @@ export function SwitchToAlumniModal({ open, onOpenChange, onSuccess }: SwitchToA
   };
 
   const stepTitles: Record<StepType, string> = {
-    confirm: 'Switch to Alumni Account',
     password: 'Verify Your Password',
     email: 'Enter New Email',
     otp: 'Verify Your Email',
@@ -295,65 +290,11 @@ export function SwitchToAlumniModal({ open, onOpenChange, onSuccess }: SwitchToA
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Step 1: Confirmation */}
-          {currentStep === 'confirm' && (
-            <div className="space-y-4">
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-                <div className="flex gap-3">
-                  <AlertCircle className="h-5 w-5 flex-shrink-0 text-amber-600 mt-0.5" />
-                  <div className="space-y-2 text-sm">
-                    <p className="font-semibold text-amber-900">Here's what will change:</p>
-                    <ul className="space-y-1 text-amber-800 text-xs list-disc list-inside">
-                      <li>Your email will change from your college email to a personal email</li>
-                      <li>Your account type will change from Student to Alumni</li>
-                      <li>All your posts, connections, chats, and club memberships remain unchanged</li>
-                      <li>Your profile and data will be preserved</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={understoodWarning}
-                  onChange={(e) => setUnderstoodWarning(e.target.checked)}
-                  className="mt-1"
-                />
-                <span className="text-sm text-slate-600">
-                  I understand the changes and want to proceed with switching to an alumni account
-                </span>
-              </label>
-
-              <div className="flex gap-3 pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => onOpenChange(false)}
-                  className="flex-1"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    setCurrentStep('password');
-                    setError('');
-                  }}
-                  disabled={!understoodWarning}
-                  className="flex-1"
-                >
-                  Continue
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Step 2: Password Verification */}
+          {/* Step 1: Password Verification */}
           {currentStep === 'password' && (
             <form onSubmit={handlePasswordVerification} className="space-y-4">
               <p className="text-sm text-slate-600">
-                For security, please verify your current password before making this change.
+                For security, please verify your current password before changing your email.
               </p>
 
               <div className="space-y-2">
@@ -380,11 +321,11 @@ export function SwitchToAlumniModal({ open, onOpenChange, onSuccess }: SwitchToA
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={handleBack}
+                  onClick={() => onOpenChange(false)}
                   disabled={isLoading}
                   className="flex-1"
                 >
-                  Back
+                  Cancel
                 </Button>
                 <Button type="submit" disabled={isLoading} className="flex-1">
                   {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -394,21 +335,21 @@ export function SwitchToAlumniModal({ open, onOpenChange, onSuccess }: SwitchToA
             </form>
           )}
 
-          {/* Step 3: Email Input */}
+          {/* Step 2: Email Input */}
           {currentStep === 'email' && (
             <form onSubmit={handleEmailSubmission} className="space-y-4">
               <p className="text-sm text-slate-600">
-                Enter the personal email address you want to use for your alumni account.
+                Enter your new email address.
               </p>
 
               <div className="space-y-2">
-                <Label htmlFor="new-email">New Personal Email</Label>
+                <Label htmlFor="new-email">New Email Address</Label>
                 <Input
                   id="new-email"
                   type="email"
                   value={newEmail}
                   onChange={(e) => setNewEmail(e.target.value)}
-                  placeholder="your.email@example.com"
+                  placeholder="your.new.email@example.com"
                   disabled={isLoading}
                   autoFocus
                 />
@@ -439,7 +380,7 @@ export function SwitchToAlumniModal({ open, onOpenChange, onSuccess }: SwitchToA
             </form>
           )}
 
-          {/* Step 4: OTP Verification */}
+          {/* Step 3: OTP Verification */}
           {currentStep === 'otp' && (
             <form onSubmit={handleOtpVerification} className="space-y-4">
               <div className="space-y-2">
