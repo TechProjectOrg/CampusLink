@@ -97,6 +97,15 @@ import { apiFetchModerationState, type ModerationStateResponse } from './lib/mod
 const POST_COMMENTS_PAGE_SIZE = 20;
 const COMMENT_REPLIES_PAGE_SIZE = 10;
 const FEED_PAGE_SIZE = 3;
+const MOBILE_TOP_HEADER_TABS = new Set([
+  'feed',
+  'search',
+  'hashtag',
+  'network',
+  'chat',
+  'clubs',
+  'notifications',
+]);
 
 function shouldShowResetPasswordPage(): boolean {
   if (typeof window === 'undefined') {
@@ -895,6 +904,40 @@ export default function App() {
   const currentUserId = currentUser?.id ?? '';
   const authToken = auth.session?.token;
   const apiBase = resolveApiBaseUrl(import.meta.env.VITE_API_URL as string | undefined);
+  const usesAppScrollShell = activeTab !== 'feed' && activeTab !== 'chat';
+  const shouldRenderMobileTopHeader = MOBILE_TOP_HEADER_TABS.has(activeTab);
+
+  const updateMobileTopNavVisibility = useCallback(
+    (scrollTop: number) => {
+      if (!shouldRenderMobileTopHeader) {
+        setIsMobileTopNavVisible(false);
+        lastFeedScrollTopRef.current = 0;
+        return;
+      }
+
+      const nextScrollTop = Math.max(scrollTop, 0);
+      const previousScrollTop = lastFeedScrollTopRef.current;
+      const scrollDelta = nextScrollTop - previousScrollTop;
+
+      if (nextScrollTop <= 16) {
+        setIsMobileTopNavVisible(true);
+      } else if (scrollDelta >= 8) {
+        setIsMobileTopNavVisible(false);
+      } else if (scrollDelta <= -8) {
+        setIsMobileTopNavVisible(true);
+      }
+
+      lastFeedScrollTopRef.current = nextScrollTop;
+    },
+    [shouldRenderMobileTopHeader],
+  );
+
+  const handleAppShellScroll = useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      updateMobileTopNavVisibility(event.currentTarget.scrollTop);
+    },
+    [updateMobileTopNavVisibility],
+  );
 
   useEffect(() => {
     openedPostCommentsRef.current = openedPostComments;
@@ -1119,25 +1162,13 @@ export default function App() {
   const handleFeedScroll = useCallback(
     (event: React.UIEvent<HTMLDivElement>) => {
       const element = event.currentTarget;
-      const nextScrollTop = Math.max(element.scrollTop, 0);
-      const previousScrollTop = lastFeedScrollTopRef.current;
-      const scrollDelta = nextScrollTop - previousScrollTop;
-
-      if (nextScrollTop <= 16) {
-        setIsMobileTopNavVisible(true);
-      } else if (scrollDelta >= 8) {
-        setIsMobileTopNavVisible(false);
-      } else if (scrollDelta <= -8) {
-        setIsMobileTopNavVisible(true);
-      }
-
-      lastFeedScrollTopRef.current = nextScrollTop;
+      updateMobileTopNavVisibility(element.scrollTop);
       const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
       if (distanceFromBottom <= 240) {
         void loadMoreFeedPosts();
       }
     },
-    [loadMoreFeedPosts],
+    [loadMoreFeedPosts, updateMobileTopNavVisibility],
   );
 
   useEffect(() => {
@@ -1175,9 +1206,9 @@ export default function App() {
   }, [activeTab, feedTimeline, loadMoreFeedPosts, opportunities.length]);
 
   useEffect(() => {
-    setIsMobileTopNavVisible(true);
+    setIsMobileTopNavVisible(shouldRenderMobileTopHeader);
     lastFeedScrollTopRef.current = 0;
-  }, [activeTab]);
+  }, [activeTab, shouldRenderMobileTopHeader]);
 
   useEffect(() => {
     if (auth.isAuthenticated && authToken) {
@@ -1410,8 +1441,6 @@ export default function App() {
       refreshSuggestedUsers();
     }
   }, [activeTab, refreshNotifications, refreshFollowGraph, refreshSuggestedUsers]);
-
-  const usesAppScrollShell = activeTab !== 'feed' && activeTab !== 'chat';
 
   const pendingIncomingRequestIds = useMemo(
     () => Object.values(requestIdMap).map((r) => r.requestId),
@@ -2831,6 +2860,7 @@ export default function App() {
         unreadCount={unreadCount}
         unreadNotifications={unreadNotifications}
         onSearch={setSearchQuery}
+        shouldRenderMobileTopHeader={shouldRenderMobileTopHeader}
         isMobileTopNavVisible={isMobileTopNavVisible}
       />
       {moderationState?.isSuspended ? (
@@ -2839,7 +2869,18 @@ export default function App() {
         </div>
       ) : null}
       <div className="flex flex-1 min-w-0">
-        <div className={`w-full min-w-0${usesAppScrollShell ? ' cl-app-scroll-shell' : ''}`}>
+        <div
+          className={`w-full min-w-0${
+            usesAppScrollShell
+              ? ` cl-app-scroll-shell ${
+                  shouldRenderMobileTopHeader
+                    ? 'cl-app-scroll-shell-mobile-header-enabled'
+                    : 'cl-app-scroll-shell-mobile-header-disabled'
+                }`
+              : ''
+          }`}
+          onScroll={usesAppScrollShell ? handleAppShellScroll : undefined}
+        >
           {activeTab === 'feed' ? (
           <div className="mx-auto flex w-full max-w-[1400px] justify-center">
             {/* Profile Section (Left) - Visible on XL screens and up */}
@@ -2962,6 +3003,7 @@ export default function App() {
             students={students}
             followGraph={followGraph}
             currentUserId={currentUserId}
+            onMobileHeaderScroll={updateMobileTopNavVisibility}
             onViewProfile={handleViewProfile}
             onChatClick={handleChatClick}
             onCreateChat={handleCreateChat}

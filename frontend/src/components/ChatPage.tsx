@@ -51,6 +51,7 @@ interface ChatPageProps {
   students: Student[];
   followGraph: FollowGraph;
   currentUserId: string;
+  onMobileHeaderScroll?: (scrollTop: number) => void;
   onViewProfile?: (studentId: string) => void;
   onChatClick?: (conversationId: string) => void;
   onCreateChat?: (conversation: ChatConversation) => void;
@@ -144,6 +145,7 @@ export function ChatPage({
   students,
   followGraph,
   currentUserId,
+  onMobileHeaderScroll,
   onViewProfile,
   onChatClick,
   onCreateChat,
@@ -901,7 +903,10 @@ export function ChatPage({
 
           {/* Scrollable Conversation List */}
           <div className="flex-1 relative">
-            <div className="absolute inset-0 overflow-y-auto">
+            <div
+              className="absolute inset-0 overflow-y-auto"
+              onScroll={(event) => onMobileHeaderScroll?.(event.currentTarget.scrollTop)}
+            >
               <div className="cl-chat-conversation-list-inner p-2 w-full">
               {filteredConversations.map(conversation => (
                 <button
@@ -1143,6 +1148,7 @@ export function ChatPage({
               <div
                 ref={messagesViewportRef}
                 style={{ overflowAnchor: 'auto' }}
+                onScroll={(event) => onMobileHeaderScroll?.(event.currentTarget.scrollTop)}
                 onPointerDown={(event) => {
                   if ((event.target as HTMLElement).closest('[data-chat-message-actions]')) return;
                   if ((event.target as HTMLElement).closest('[data-chat-scroll-message]')) return;

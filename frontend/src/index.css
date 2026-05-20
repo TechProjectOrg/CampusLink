@@ -5809,8 +5809,12 @@ div[style*="width: 25%"]::webkit-scrollbar {
     padding-bottom: calc(4.75rem + env(safe-area-inset-bottom));
   }
 
-  .cl-app-scroll-shell {
-    height: calc(100dvh - 4.75rem - env(safe-area-inset-bottom));
+  .cl-app-scroll-shell-mobile-header-enabled {
+    height: calc(100dvh - 4rem - env(safe-area-inset-bottom));
+  }
+
+  .cl-app-scroll-shell-mobile-header-disabled {
+    height: calc(100dvh - env(safe-area-inset-bottom));
   }
 
   .cl-clubs-content {
@@ -5830,6 +5834,12 @@ div[style*="width: 25%"]::webkit-scrollbar {
 
   .cl-navbar-root:has(.cl-navbar-mobile-search-panel-open) {
     height: 17.75rem;
+  }
+
+  .cl-navbar-mobile-header-disabled {
+    height: 0;
+    background: rgba(255, 255, 255, 0);
+    box-shadow: none;
   }
 
   .cl-navbar-mobile-hidden {

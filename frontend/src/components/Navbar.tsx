@@ -19,6 +19,7 @@ interface NavbarProps {
   unreadCount?: number;
   unreadNotifications?: number;
   onSearch?: (query: string) => void;
+  shouldRenderMobileTopHeader?: boolean;
   isMobileTopNavVisible?: boolean;
 }
 
@@ -29,14 +30,15 @@ export function Navbar({
   unreadCount = 0,
   unreadNotifications = 0,
   onSearch,
+  shouldRenderMobileTopHeader = false,
   isMobileTopNavVisible = true,
 }: NavbarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const { logout, profile } = useAuth();
   const navbarProfilePhoto = profile?.profilePictureUrl ?? null;
-  const showMobileTopActions = activeTab === 'feed' || activeTab === 'search';
-  const shouldShowMobileTopNav = isMobileSearchOpen || isMobileTopNavVisible;
+  const showMobileTopActions = shouldRenderMobileTopHeader;
+  const shouldShowMobileTopNav = shouldRenderMobileTopHeader && (isMobileSearchOpen || isMobileTopNavVisible);
 
   const navItems = [
     { id: 'feed', label: 'Feed', icon: Home },
@@ -108,7 +110,9 @@ export function Navbar({
   }, [activeTab]);
 
   return (
-    <nav className={`cl-navbar-root sticky top-0 z-50 w-full overflow-x-hidden backdrop-blur-xl bg-gradient-to-r from-primary via-secondary to-primary shadow-lg animate-slide-in-down ${shouldShowMobileTopNav ? 'cl-navbar-mobile-visible' : 'cl-navbar-mobile-hidden'}`}>
+    <nav className={`cl-navbar-root sticky top-0 z-50 w-full overflow-x-hidden backdrop-blur-xl bg-gradient-to-r from-primary via-secondary to-primary shadow-lg animate-slide-in-down ${
+      shouldRenderMobileTopHeader ? 'cl-navbar-mobile-header-enabled' : 'cl-navbar-mobile-header-disabled'
+    } ${shouldShowMobileTopNav ? 'cl-navbar-mobile-visible' : 'cl-navbar-mobile-hidden'}`}>
       <div className="cl-navbar-shell max-w-7xl mx-auto px-4">
         <div className="cl-navbar-row flex items-center gap-4 h-16">
           {/* Logo */}
