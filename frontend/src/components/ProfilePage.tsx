@@ -1339,7 +1339,11 @@ export function ProfilePage({
                           setShowBlockConfirm(true);
                         }
                       }}
-                      className="block w-full whitespace-nowrap rounded-2xl px-4 py-3 text-left text-base font-semibold text-red-600 transition hover:bg-red-50"
+                      className={`block w-full whitespace-nowrap rounded-2xl px-4 py-3 text-left text-base font-semibold transition ${
+                        isBlockedByViewer
+                          ? 'text-emerald-700 hover:bg-emerald-50'
+                          : 'text-red-600 hover:bg-red-50'
+                      }`}
                     >
                       {isBlockedByViewer ? 'Unblock User' : 'Block User'}
                     </button>
@@ -1393,7 +1397,7 @@ export function ProfilePage({
                     {isBlockedByViewer ? (
                       <Button
                         onClick={() => onUnblockUser?.(student.id)}
-                        className="rounded-full bg-red-600 px-4 sm:px-6 h-10 sm:h-11 font-semibold text-white shadow-md hover:bg-red-700 text-sm sm:text-base"
+                        className="rounded-full border border-emerald-200 bg-emerald-50 px-4 sm:px-6 h-10 sm:h-11 font-semibold text-emerald-700 shadow-sm hover:bg-emerald-100 text-sm sm:text-base"
                       >
                         Unblock
                       </Button>

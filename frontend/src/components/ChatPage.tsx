@@ -52,6 +52,7 @@ interface ChatPageProps {
   onChatClick?: (conversationId: string) => void;
   onCreateChat?: (conversation: ChatConversation) => void;
   onChatRead?: (conversationId: string) => void;
+  onBlockUser?: (userId: string) => Promise<void> | void;
   onUnblockUser?: (userId: string) => Promise<void> | void;
   onReportTarget?: (target: ReportTargetDescriptor) => void;
 }
@@ -135,7 +136,18 @@ function normalizeAvatarUrl(url: string | null | undefined): string | undefined 
   return trimmed;
 }
 
-export function ChatPage({ conversations, students, currentUserId, onViewProfile, onChatClick, onCreateChat, onChatRead, onUnblockUser, onReportTarget }: ChatPageProps) {
+export function ChatPage({
+  conversations,
+  students,
+  currentUserId,
+  onViewProfile,
+  onChatClick,
+  onCreateChat,
+  onChatRead,
+  onBlockUser,
+  onUnblockUser,
+  onReportTarget,
+}: ChatPageProps) {
   const appData = useAppDataStore();
   const auth = useAuth();
   const isCreatingGroupRef = useRef(false);
@@ -1020,6 +1032,8 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                           onClick={() => {
                             if (selectedConversation.viewerHasBlockedUser) {
                               void onUnblockUser?.(selectedConversation.participantId);
+                            } else {
+                              void onBlockUser?.(selectedConversation.participantId);
                             }
                           }}
                         >
@@ -1363,16 +1377,20 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
             {/* Fixed Input Footer */}
             <div className="cl-chat-input-footer px-4 md:px-6 py-3 md:py-4 border-t border-gray-200 flex-shrink-0">
               {isBlockedConversation && selectedConversation ? (
-                <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5">
-                  <p className="text-lg font-semibold text-slate-900">
+                <div className="mx-auto flex w-full max-w-3xl flex-col items-center rounded-3xl border border-slate-200 bg-slate-50 px-6 py-8 text-center sm:px-8">
+                  <p className="text-lg font-semibold text-slate-900 sm:text-xl">
                     You blocked @{selectedConversation.participantUsername ?? selectedConversation.participantName}
                   </p>
-                  <p className="mt-2 text-sm text-slate-600">
+                  <p className="mt-3 max-w-xl text-sm leading-6 text-slate-600">
                     You won&apos;t receive messages from this user unless you unblock them.
                   </p>
-                  <div className="mt-4 flex gap-3">
-                    <Button onClick={() => onUnblockUser?.(selectedConversation.participantId)}>Unblock</Button>
-                    <Button variant="outline" onClick={() => appData.selectConversation(null)}>Close Chat</Button>
+                  <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+                    <Button className="min-w-32 rounded-full px-6" onClick={() => onUnblockUser?.(selectedConversation.participantId)}>
+                      Unblock
+                    </Button>
+                    <Button className="min-w-32 rounded-full px-6" variant="outline" onClick={() => appData.selectConversation(null)}>
+                      Close Chat
+                    </Button>
                   </div>
                 </div>
               ) : null}

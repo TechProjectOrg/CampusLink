@@ -2468,11 +2468,46 @@ export default function App() {
     }
   };
 
-  const handleBlockUser = useCallback(async (targetUserId: string) => {
-    if (guardRestrictedAction()) return;
-    if (!authToken || !targetUserId) return;
-    await apiBlockUser(targetUserId, authToken);
-    await Promise.allSettled([
+  const applyOptimisticBlockState = useCallback((targetUserId: string, blocked: boolean) => {
+    const snapshot = appData.getSnapshot();
+    const previousUser = snapshot.usersById[targetUserId] ? { ...snapshot.usersById[targetUserId] } : null;
+    const previousConversations = snapshot.chat.conversationOrder
+      .map((id) => snapshot.chat.conversationsById[id])
+      .filter((conversation): conversation is ChatConversation => Boolean(conversation) && conversation.participantId === targetUserId)
+      .map((conversation) => ({ ...conversation }));
+
+    if (previousUser) {
+      appData.updateUser(targetUserId, (current) => ({
+        ...current,
+        viewerHasBlockedUser: blocked,
+        profileVisibility:
+          blocked
+            ? 'blocked-by-viewer'
+            : current.profileVisibility === 'blocked-by-viewer'
+              ? 'full'
+              : current.profileVisibility,
+      }));
+    }
+
+    for (const conversation of previousConversations) {
+      appData.upsertConversation({
+        ...conversation,
+        viewerHasBlockedUser: blocked,
+      });
+    }
+
+    return () => {
+      if (previousUser) {
+        appData.updateUser(targetUserId, () => previousUser);
+      }
+      for (const conversation of previousConversations) {
+        appData.upsertConversation(conversation);
+      }
+    };
+  }, [appData]);
+
+  const syncBlockStateInBackground = useCallback((targetUserId: string) => {
+    void Promise.allSettled([
       refreshFollowGraph(),
       refreshConversations(),
       refreshNotifications(),
@@ -2480,11 +2515,8 @@ export default function App() {
       appData.ensureUser(targetUserId, true),
       viewingProfileId ? appData.ensureUser(viewingProfileId, true) : Promise.resolve(null),
     ]);
-    toast.success('User blocked');
   }, [
     appData,
-    authToken,
-    guardRestrictedAction,
     refreshConversations,
     refreshFollowGraph,
     refreshNotifications,
@@ -2492,26 +2524,40 @@ export default function App() {
     viewingProfileId,
   ]);
 
+  const handleBlockUser = useCallback(async (targetUserId: string) => {
+    if (guardRestrictedAction()) return;
+    if (!authToken || !targetUserId) return;
+    const rollback = applyOptimisticBlockState(targetUserId, true);
+    try {
+      await apiBlockUser(targetUserId, authToken);
+      toast.success('User blocked');
+      syncBlockStateInBackground(targetUserId);
+    } catch (err: any) {
+      rollback();
+      toast.error(err?.message || 'Unable to block user');
+    }
+  }, [
+    applyOptimisticBlockState,
+    authToken,
+    guardRestrictedAction,
+    syncBlockStateInBackground,
+  ]);
+
   const handleUnblockUser = useCallback(async (targetUserId: string) => {
     if (!authToken || !targetUserId) return;
-    await apiUnblockUser(targetUserId, authToken);
-    await Promise.allSettled([
-      refreshFollowGraph(),
-      refreshConversations(),
-      refreshNotifications(),
-      refreshSuggestedUsers(),
-      appData.ensureUser(targetUserId, true),
-      viewingProfileId ? appData.ensureUser(viewingProfileId, true) : Promise.resolve(null),
-    ]);
-    toast.success('User unblocked');
+    const rollback = applyOptimisticBlockState(targetUserId, false);
+    try {
+      await apiUnblockUser(targetUserId, authToken);
+      toast.success('User unblocked');
+      syncBlockStateInBackground(targetUserId);
+    } catch (err: any) {
+      rollback();
+      toast.error(err?.message || 'Unable to unblock user');
+    }
   }, [
-    appData,
+    applyOptimisticBlockState,
     authToken,
-    refreshConversations,
-    refreshFollowGraph,
-    refreshNotifications,
-    refreshSuggestedUsers,
-    viewingProfileId,
+    syncBlockStateInBackground,
   ]);
 
   const handleOpenReport = useCallback((target: ReportTargetDescriptor) => {
@@ -2898,6 +2944,7 @@ export default function App() {
             onChatClick={handleChatClick}
             onCreateChat={handleCreateChat}
             onChatRead={handleChatRead}
+            onBlockUser={handleBlockUser}
             onUnblockUser={handleUnblockUser}
             onReportTarget={handleOpenReport}
           />
