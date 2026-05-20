@@ -42,6 +42,28 @@ const Button = React.forwardRef<
     }
 >(({ className, variant, size, asChild = false, ...props }, ref) => {
   const Comp = asChild ? Slot : "button";
+  const [busy, setBusy] = React.useState(false);
+
+  const originalOnClick = (props as any).onClick as
+    | React.MouseEventHandler<HTMLButtonElement>
+    | undefined;
+
+  const handleClick: React.MouseEventHandler<HTMLButtonElement> = (e) => {
+    if (!originalOnClick) return;
+
+    try {
+      const result = originalOnClick(e as any);
+      if (result && typeof (result as any).then === 'function') {
+        setBusy(true);
+        (result as Promise<unknown>).finally(() => setBusy(false));
+      }
+    } catch (err) {
+      // synchronous error — nothing special to do, rethrow so outer handlers can see it
+      throw err;
+    }
+  };
+
+  const passedDisabled = Boolean((props as any).disabled) || busy;
 
   return (
     <Comp
@@ -49,6 +71,8 @@ const Button = React.forwardRef<
       className={cn(buttonVariants({ variant, size, className }))}
       ref={ref}
       {...props}
+      onClick={handleClick}
+      disabled={passedDisabled}
     />
   );
 });
