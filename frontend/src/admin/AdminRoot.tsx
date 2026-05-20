@@ -12,7 +12,6 @@ import {
   LayoutDashboard,
   LogOut,
   Megaphone,
-  Search,
   Settings,
   Users,
   UserCog,
@@ -539,7 +538,6 @@ const CLUB_SORT_OPTIONS: Array<{ value: AdminClubSortKey; label: string }> = [
 
 function getClubActionOptions(club: Pick<AdminClubListItem, 'status' | 'verified'>): Array<{ action: ClubActionName; label: string }> {
   const actions: Array<{ action: ClubActionName; label: string }> = [];
-  if (!club.verified) actions.push({ action: 'verify', label: 'Verify' });
   if (club.status === 'deleted') {
     actions.push({ action: 'restore', label: 'Restore' });
   } else {
@@ -633,7 +631,6 @@ function getPostActionOptions(post: Pick<AdminPostListItem, 'status'>): Array<{ 
       { action: 'delete', label: 'Delete' },
       { action: 'warn', label: 'Warn author' },
       { action: 'suspend_author', label: 'Suspend author' },
-      { action: 'escalate', label: 'Escalate' },
     ];
   }
   return [
@@ -641,7 +638,6 @@ function getPostActionOptions(post: Pick<AdminPostListItem, 'status'>): Array<{ 
     { action: 'delete', label: 'Delete' },
     { action: 'warn', label: 'Warn author' },
     { action: 'suspend_author', label: 'Suspend author' },
-    { action: 'escalate', label: 'Escalate' },
   ];
 }
 
@@ -1917,7 +1913,7 @@ export default function AdminRoot() {
     goTo(targetPage, { source: 'dashboard', metric: metricKey, range: dashboardRange });
   };
 
-  const notificationCount = dashboard?.moderationQueue?.length ?? reports.filter((item) => ['pending', 'under_review'].includes(item.status)).length ?? 0;
+  const notificationCount = dashboard?.metrics?.find((metric) => metric.key === 'pendingReports')?.value ?? dashboard?.moderationQueue?.length ?? reports.filter((item) => ['pending', 'under_review'].includes(item.status)).length ?? 0;
 
   if (!token) return null;
 
@@ -2021,15 +2017,6 @@ export default function AdminRoot() {
                 </p>
               </div>
 
-              <div className="relative hidden w-[320px] xl:block">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400 pointer-events-none z-10" />
-                <Input
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search current page"
-                  className="h-10 rounded-md border-slate-300 bg-slate-50 pl-10"
-                />
-              </div>
 
               <div className="hidden items-center gap-2 lg:flex">
                 {page === 'dashboard' ? (
@@ -4363,7 +4350,7 @@ export default function AdminRoot() {
               <div className="space-y-3">
                 <Textarea
                   rows={4}
-                  placeholder="Add a moderation note for hide, warn, or escalate"
+                  placeholder="Add a moderation note for hide or warn"
                   value={postActionNote}
                   onChange={(event) => setPostActionNote(event.target.value)}
                 />
@@ -4375,7 +4362,7 @@ export default function AdminRoot() {
                       size="sm"
                       onClick={() => {
                         const trimmedNote = postActionNote.trim();
-                        if (['hide', 'warn', 'escalate'].includes(option.action) && !trimmedNote) {
+                        if (['hide', 'warn'].includes(option.action) && !trimmedNote) {
                           toast.error('Add a moderation note before this action.');
                           return;
                         }

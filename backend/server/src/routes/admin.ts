@@ -28,6 +28,7 @@ import {
 import { getTrendingHashtagsForApi } from '../lib/socialInsights';
 import { sendModerationBanEmail, sendVerificationDecisionEmail } from '../lib/authEmail';
 import { applyModerationAction } from '../lib/moderation';
+import { createNotification } from '../lib/notifications';
 
 const router = express.Router();
 
@@ -1759,6 +1760,17 @@ router.post('/clubs/:clubId/actions', async (req: Request<{ clubId: string }>, r
       return res.status(400).json({ message: 'Unsupported action' });
     }
 
+    if (action === 'freeze' || action === 'delete') {
+      await createNotification({
+        recipientUserId: clubRow.created_by_user_id,
+        type: 'club',
+        title: 'Club Moderation Action',
+        message: `Your club has been ${action === 'freeze' ? 'frozen' : 'deleted'} by the administration.`,
+        entityType: 'club',
+        entityId: clubId,
+      });
+    }
+
     await recordAdminAuditLog({
       actorUserId: adminReq.auth!.userId,
       actionType: `club.${action}`,
@@ -3085,13 +3097,16 @@ router.post('/reports/:reportId/actions', async (req: Request<{ reportId: string
         WHERE report_id = ${reportId}
       `;
       if (report.target_user_id) {
-        await applyModerationAction({
-          adminUserId: adminReq.auth!.userId,
-          targetUserId: report.target_user_id,
-          reportId,
-          actionType: 'dismiss',
-          reason: reason || 'Report dismissed with no policy violation found.',
-        });
+        const userExistsRows = await prisma.$queryRaw<Array<{ user_id: string }>>`SELECT user_id FROM users WHERE user_id = ${report.target_user_id}`;
+        if (userExistsRows.length > 0) {
+          await applyModerationAction({
+            adminUserId: adminReq.auth!.userId,
+            targetUserId: report.target_user_id,
+            reportId,
+            actionType: 'dismiss',
+            reason: reason || 'Report dismissed with no policy violation found.',
+          });
+        }
       }
       await recordAdminAuditLog({
         actorUserId: adminReq.auth!.userId,
@@ -3116,13 +3131,16 @@ router.post('/reports/:reportId/actions', async (req: Request<{ reportId: string
         WHERE report_id = ${reportId}
       `;
       if (report.target_user_id) {
-        await applyModerationAction({
-          adminUserId: adminReq.auth!.userId,
-          targetUserId: report.target_user_id,
-          reportId,
-          actionType: 'resolve',
-          reason: reason || 'Report resolved by moderation team.',
-        });
+        const userExistsRows = await prisma.$queryRaw<Array<{ user_id: string }>>`SELECT user_id FROM users WHERE user_id = ${report.target_user_id}`;
+        if (userExistsRows.length > 0) {
+          await applyModerationAction({
+            adminUserId: adminReq.auth!.userId,
+            targetUserId: report.target_user_id,
+            reportId,
+            actionType: 'resolve',
+            reason: reason || 'Report resolved by moderation team.',
+          });
+        }
       }
       await recordAdminAuditLog({
         actorUserId: adminReq.auth!.userId,
@@ -3139,6 +3157,11 @@ router.post('/reports/:reportId/actions', async (req: Request<{ reportId: string
     }
 
     if (action === 'warn_user' || action === 'suspend_user' || action === 'ban_user') {
+      const userExistsRows = await prisma.$queryRaw<Array<{ user_id: string }>>`SELECT user_id FROM users WHERE user_id = ${report.target_user_id!}`;
+      if (userExistsRows.length === 0) {
+        return res.status(404).json({ message: 'Target user no longer exists.' });
+      }
+
       const actionType = action === 'warn_user' ? 'warn' : action === 'suspend_user' ? 'suspend' : 'ban';
       await applyModerationAction({
         adminUserId: adminReq.auth!.userId,
@@ -3194,13 +3217,16 @@ router.post('/reports/:reportId/actions', async (req: Request<{ reportId: string
       }
 
       if (report.target_user_id) {
-        await applyModerationAction({
-          adminUserId: adminReq.auth!.userId,
-          targetUserId: report.target_user_id,
-          reportId,
-          actionType: report.target_type === 'post' ? 'delete_post' : report.target_type === 'comment' ? 'delete_comment' : 'delete_message',
-          reason: reason || 'Reported content removed by moderation.',
-        });
+        const userExistsRows = await prisma.$queryRaw<Array<{ user_id: string }>>`SELECT user_id FROM users WHERE user_id = ${report.target_user_id}`;
+        if (userExistsRows.length > 0) {
+          await applyModerationAction({
+            adminUserId: adminReq.auth!.userId,
+            targetUserId: report.target_user_id,
+            reportId,
+            actionType: report.target_type === 'post' ? 'delete_post' : report.target_type === 'comment' ? 'delete_comment' : 'delete_message',
+            reason: reason || 'Reported content removed by moderation.',
+          });
+        }
       }
 
       await prisma.$queryRaw`
