@@ -31,6 +31,7 @@ export interface UserProfile {
     year?: number;
     passingYear?: number;
   };
+  allowMessages: boolean;
   stats: {
     followerCount: number;
     followingCount: number;
@@ -123,6 +124,7 @@ export async function getUserProfileById(userId: string): Promise<UserProfile | 
     type: summary.type as UserType,
     verificationState: (summary.verificationState ?? null) as UserVerificationState | null,
     details: summary.details,
+    allowMessages: summary.allowMessages,
     stats: {
       followerCount: stats.followerCount,
       followingCount: stats.followingCount,

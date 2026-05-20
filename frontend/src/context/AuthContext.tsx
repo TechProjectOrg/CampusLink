@@ -71,6 +71,7 @@ function profileToStudent(profile: ApiUserProfile): Student {
     displayName,
     username: profile.username,
     email: profile.email,
+    allowMessages: profile.allowMessages ?? true,
     createdAt: profile.createdAt,
     branch: profile.details?.branch ?? 'Unknown',
     year: profile.details?.year ?? profile.details?.passingYear ?? 0,

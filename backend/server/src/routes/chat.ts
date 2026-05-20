@@ -1033,6 +1033,14 @@ async function resolveMessageSuppressionForChat(
     return { suppressedForUserId: null, recipientUserId: null };
   }
 
+  const recipient = await getUserSummaryById(row.other_user_id);
+  if (!recipient) {
+    throw new Error('RECIPIENT_NOT_FOUND');
+  }
+  if (!recipient.allowMessages) {
+    throw new Error('MESSAGING_DISABLED');
+  }
+
   const permission = await canMessage(senderUserId, row.other_user_id);
   if (!permission.allowed && !permission.suppressedForUserId) {
     throw new Error('BLOCKED_BY_SENDER');
@@ -1393,6 +1401,9 @@ router.post(
       if (err instanceof Error && err.message === 'BLOCKED_BY_SENDER') {
         return res.status(403).json({ message: 'You cannot message this user' });
       }
+      if (err instanceof Error && err.message === 'MESSAGING_DISABLED') {
+        return res.status(403).json({ message: 'This user does not accept messages' });
+      }
       console.error('Error sending message:', err);
       return res.status(500).json({ message: 'Internal server error' });
     }
@@ -1472,6 +1483,9 @@ router.post(
     } catch (err) {
       if (err instanceof Error && err.message === 'BLOCKED_BY_SENDER') {
         return res.status(403).json({ message: 'You cannot message this user' });
+      }
+      if (err instanceof Error && err.message === 'MESSAGING_DISABLED') {
+        return res.status(403).json({ message: 'This user does not accept messages' });
       }
       console.error('Error sending image:', err);
       return res.status(500).json({ message: 'Internal server error' });

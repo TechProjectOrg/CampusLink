@@ -419,6 +419,36 @@ async function getConversationViewerUserIds(userId: string): Promise<string[]> {
   return Array.from(unique);
 }
 
+async function canViewerSeeEmail(ownerUserId: string, viewerUserId: string): Promise<boolean> {
+  if (!ownerUserId || !viewerUserId || ownerUserId === viewerUserId) {
+    return true;
+  }
+
+  const rows = await prisma.$queryRaw<Array<{ show_email: boolean | null }>>`
+    SELECT show_email
+    FROM user_settings
+    WHERE user_id = ${ownerUserId}
+    LIMIT 1
+  `;
+
+  return rows[0]?.show_email ?? true;
+}
+
+async function canViewerSeeProjects(ownerUserId: string, viewerUserId: string): Promise<boolean> {
+  if (!ownerUserId || !viewerUserId || ownerUserId === viewerUserId) {
+    return true;
+  }
+
+  const rows = await prisma.$queryRaw<Array<{ show_projects: boolean | null }>>`
+    SELECT show_projects
+    FROM user_settings
+    WHERE user_id = ${ownerUserId}
+    LIMIT 1
+  `;
+
+  return rows[0]?.show_projects ?? true;
+}
+
 function applyProfileVisibility(profile: Awaited<ReturnType<typeof getUserProfileById>> extends infer T ? NonNullable<T> : never, visibility: ProfileVisibility) {
   if (visibility === 'full') {
     return profile;
@@ -475,9 +505,11 @@ router.get('/:userId', async (req: Request<GetUserParams>, res: Response) => {
     const blockState = await getBlockState(viewerUserId, userId);
     const profileVisibility = await getProfileVisibility(viewerUserId, userId);
     const visibleProfile = applyProfileVisibility(profile, profileVisibility);
+    const emailVisibleToViewer = await canViewerSeeEmail(userId, viewerUserId);
 
     return res.status(200).json({
       ...visibleProfile,
+      email: emailVisibleToViewer ? visibleProfile.email : '',
       viewerHasBlockedUser: blockState.viewerHasBlockedUser,
       profileVisibility,
     });
@@ -1811,7 +1843,11 @@ async function fetchProjectImageUrls(projectId: string): Promise<string[]> {
 router.get('/:userId/projects', async (req: Request<{ userId: string }>, res: Response) => {
   const { userId } = req.params;
   const authed = req as unknown as AuthedRequest;
-  if (!(await ensureCanViewProfileDetails(authed.auth!.userId, userId, res))) return;
+  const viewerUserId = authed.auth!.userId;
+  if (!(await ensureCanViewProfileDetails(viewerUserId, userId, res))) return;
+  if (!(await canViewerSeeProjects(userId, viewerUserId))) {
+    return res.status(200).json([]);
+  }
 
   try {
     const rows = await prisma.$queryRaw<

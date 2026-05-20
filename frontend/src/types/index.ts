@@ -39,6 +39,7 @@ export interface Student {
   displayName?: string;
   username: string;
   email: string;
+  allowMessages?: boolean;
   createdAt?: string;
   branch: string;
   year: number;
@@ -247,6 +248,7 @@ export interface ApiUserProfile {
   displayName: string;
   username: string;
   email: string;
+  allowMessages?: boolean;
   bio: string | null;
   headline?: string | null;
   profilePictureUrl: string | null;

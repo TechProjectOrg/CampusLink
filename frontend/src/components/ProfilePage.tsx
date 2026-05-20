@@ -1168,6 +1168,7 @@ export function ProfilePage({
   const isBlockedByViewer = !isOwnProfile && student.viewerHasBlockedUser === true;
   const isRestrictedView = !isOwnProfile && student.profileVisibility === 'restricted';
   const isPrivateLimitedView = !isOwnProfile && student.profileVisibility === 'private';
+  const canViewerMessageUser = isOwnProfile || student.allowMessages !== false;
   const profileEmail = student.email?.trim() || '';
   const profileBranch = student.branch?.trim() || '';
   const hasKnownBranch = Boolean(profileBranch && profileBranch.toLowerCase() !== 'unknown');
@@ -1414,7 +1415,7 @@ export function ProfilePage({
                           onUnfollow={() => onUnfollow(student.id)}
                           onCancelRequest={() => onCancelRequest(student.id)}
                         />
-                        {!isRestrictedView && !isPrivateLimitedView ? (
+                        {!isRestrictedView && !isPrivateLimitedView && canViewerMessageUser ? (
                           <Button 
                             onClick={() => onMessage?.(student.id)}
                             className="rounded-full gradient-primary px-4 sm:px-6 h-10 sm:h-11 font-semibold text-white shadow-md hover:shadow-lg transition-all border-none text-sm sm:text-base"
@@ -1461,10 +1462,12 @@ export function ProfilePage({
               {/* Location, Year, Email Row */}
               {!isRestrictedView ? (
               <div className="cl-metadata-row flex flex-wrap items-center gap-4 sm:gap-6 text-sm">
-                <div className="flex items-center gap-2 text-slate-600">
-                  <Mail className="w-4 h-4 flex-shrink-0 text-slate-400" />
-                  <span className="truncate">{profileEmail || 'Email not added'}</span>
-                </div>
+                {(isOwnProfile || profileEmail) ? (
+                  <div className="flex items-center gap-2 text-slate-600">
+                    <Mail className="w-4 h-4 flex-shrink-0 text-slate-400" />
+                    <span className="truncate">{profileEmail || 'Email not added'}</span>
+                  </div>
+                ) : null}
                 <div className="flex items-center gap-2 text-slate-600">
                   <Calendar className="w-4 h-4 flex-shrink-0 text-slate-400" />
                   <span>{yearLabel}</span>
