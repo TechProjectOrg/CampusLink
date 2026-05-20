@@ -339,8 +339,8 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                 ←
               </button>
               <Avatar className="w-10 h-10">
-                <AvatarImage src={selectedChat.participantAvatar} />
-                <AvatarFallback>{selectedChat.participantName[0]}</AvatarFallback>
+                <AvatarImage src={selectedChat.participantAvatar ?? undefined} />
+                <AvatarFallback className="bg-pink-500 text-white">{selectedChat.participantName[0]}</AvatarFallback>
               </Avatar>
               <div className="flex-1">
                 <p className="font-semibold text-gray-900 text-sm">{selectedChat.participantName}</p>
@@ -648,7 +648,7 @@ export function FloatingChat({ conversations, currentUserId, onOpenFullChat, onC
                     >
                       <div className="relative flex-shrink-0">
                         <Avatar className="w-12 h-12">
-                          <AvatarImage src={conv.participantAvatar} />
+                          <AvatarImage src={conv.participantAvatar ?? undefined} />
                           <AvatarFallback>{conv.participantName[0]}</AvatarFallback>
                         </Avatar>
                         {conv.unread > 0 && (

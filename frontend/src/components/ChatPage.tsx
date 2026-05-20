@@ -127,6 +127,14 @@ function TypingAnimatedText({
   );
 }
 
+function normalizeAvatarUrl(url: string | null | undefined): string | undefined {
+  const trimmed = url?.trim();
+  if (!trimmed || trimmed.toLowerCase() === 'null' || trimmed.toLowerCase() === 'undefined') {
+    return undefined;
+  }
+  return trimmed;
+}
+
 export function ChatPage({ conversations, students, currentUserId, onViewProfile, onChatClick, onCreateChat, onChatRead, onUnblockUser, onReportTarget }: ChatPageProps) {
   const appData = useAppDataStore();
   const auth = useAuth();
@@ -149,6 +157,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
   const readMessageByChatRef = useRef<Record<string, string>>({});
 
   const selectedConversation = conversations.find(c => c.id === selectedChat);
+  const selectedConversationAvatar = normalizeAvatarUrl(selectedConversation?.participantAvatar);
   const isBlockedConversation = Boolean(selectedConversation && !selectedConversation.isGroup && selectedConversation.viewerHasBlockedUser);
   const isPendingConversation = Boolean(selectedConversation?.isPending);
   const activeConversations = conversations.filter((conversation) => !conversation.isRequest);
@@ -856,7 +865,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                   <div className="flex gap-3 items-center w-full overflow-hidden">
                     <div className="relative flex-shrink-0">
                       <Avatar className="w-12 h-12 md:w-14 md:h-14 ring-2 ring-white shadow-sm">
-                        <AvatarImage src={conversation.participantAvatar} />
+                        <AvatarImage src={conversation.participantAvatar ?? undefined} />
                         <AvatarFallback>{conversation.participantName[0]}</AvatarFallback>
                       </Avatar>
                       {conversation.unread > 0 && (
@@ -928,10 +937,21 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                   }}
                   className="flex min-w-0 items-center gap-3 hover:opacity-80 transition-opacity"
                 >
-                    <Avatar className="w-10 h-10">
-                    <AvatarImage src={selectedConversation.participantAvatar} />
-                    <AvatarFallback className="bg-pink-500 text-white">{selectedConversation.participantName[0]}</AvatarFallback>
-                  </Avatar>
+                  <div className="relative h-10 w-10 overflow-hidden rounded-full border-2 border-[#6b7280] bg-[#c7cfdb]">
+                    <div className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-slate-700">
+                      {(selectedConversation.participantName?.trim()?.[0] ?? (selectedConversation.isGroup ? 'G' : 'U')).toUpperCase()}
+                    </div>
+                    {selectedConversationAvatar ? (
+                      <img
+                        src={selectedConversationAvatar}
+                        alt={selectedConversation.participantName}
+                        className="absolute inset-0 h-full w-full object-cover"
+                        onError={(event) => {
+                          event.currentTarget.style.display = 'none';
+                        }}
+                      />
+                    ) : null}
+                  </div>
                   <div className="min-w-0 text-left">
                     <p className="truncate text-base font-semibold leading-tight text-gray-950">{selectedConversation.participantName}</p>
                     {selectedConversation.participantUsername ? (
@@ -1317,7 +1337,7 @@ export function ChatPage({ conversations, students, currentUserId, onViewProfile
                 {typingStatusLabel && (
                   <div className="flex items-end gap-2 justify-start">
                     <Avatar className="w-6 h-6 md:w-7 md:h-7 flex-shrink-0 mb-1">
-                      <AvatarImage src={selectedConversation.participantAvatar} />
+                      <AvatarImage src={selectedConversation.participantAvatar ?? undefined} />
                       <AvatarFallback>{selectedConversation.participantName[0]}</AvatarFallback>
                     </Avatar>
                     <div className="rounded-3xl bg-gray-100 px-4 py-3 text-gray-500 shadow-sm">

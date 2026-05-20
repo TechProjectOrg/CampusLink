@@ -1495,8 +1495,8 @@ router.patch('/conversations/:chatId/read', async (req: Request, res: Response) 
     }
 
     const messageRows = await prisma.$queryRaw<Array<{ message_id: string }>>`
-      SELECT message_id
-      FROM messages
+      SELECT m.message_id
+      FROM messages m
       WHERE chat_id = ${chatId}
         AND message_id = ${messageId}
         AND deleted_at IS NULL
@@ -1504,7 +1504,7 @@ router.patch('/conversations/:chatId/read', async (req: Request, res: Response) 
           SELECT 1
           FROM message_hidden_for_users mh
           WHERE mh.message_id = m.message_id
-            AND mh.user_id = ${viewerUserId}
+            AND mh.user_id = ${userId}
         )
       LIMIT 1
     `;

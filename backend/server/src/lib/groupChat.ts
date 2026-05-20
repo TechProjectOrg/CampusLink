@@ -13,6 +13,7 @@ import { Prisma } from '@prisma/client';
 import prisma from '../prisma';
 import { checkChatPermission, ChatPermission } from './chatPermissions';
 import { emitUserJoined, emitUserLeft, emitUserRemoved, emitUserRoleChanged } from './chatSystemEvents';
+import { deleteManagedChatMediaByUrl } from './objectStorage';
 import { invalidateConversationLists } from './chatCache';
 import { emitChatMessage, getChatParticipantIds } from './chat';
 import { getUserSummariesByIds } from './userCache';
@@ -568,10 +569,21 @@ export async function updateGroupChat(
     SET
       name = ${updates.name ?? existing.name},
       description = ${updates.description ?? existing.description},
-      avatar_url = ${updates.avatarUrl ?? existing.avatar_url},
+      avatar_url = ${updates.avatarUrl === undefined ? existing.avatar_url : updates.avatarUrl},
       updated_at = NOW()
     WHERE chat_id = ${chatId}
   `;
+
+  // If caller explicitly requested clearing the avatar (avatarUrl === null), attempt to delete
+  // the previously managed chat media from object storage. Do not fail the operation if
+  // storage deletion fails — just log a warning.
+  if (updates.avatarUrl === null && existing.avatar_url) {
+    try {
+      await deleteManagedChatMediaByUrl(existing.avatar_url);
+    } catch (storageErr) {
+      console.warn('Unable to delete previous group avatar from object storage (on clear):', storageErr);
+    }
+  }
 
   // Invalidate all participants' conversation lists
   const participantIds = await getChatParticipantIds(chatId);
