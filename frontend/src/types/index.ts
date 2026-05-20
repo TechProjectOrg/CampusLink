@@ -146,6 +146,7 @@ export interface Club {
   tags: string[];
   memberCount: number;
   postCount: number;
+  isDeleted?: boolean;
   membership?: {
     status: 'active' | 'pending' | 'invited' | 'removed' | 'left' | null;
     role: 'owner' | 'admin' | 'member' | null;

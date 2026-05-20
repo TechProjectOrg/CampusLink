@@ -58,6 +58,7 @@ interface ClubListRow {
   tags: string[] | null;
   membership_status: 'active' | 'pending' | 'invited' | 'removed' | 'left' | null;
   membership_role: 'owner' | 'admin' | 'member' | null;
+  deleted_at: Date | null;
 }
 
 interface ClubMemberRow {
@@ -120,6 +121,7 @@ function mapClubRow(row: ClubListRow, permissionSnapshot?: Awaited<ReturnType<ty
       status: row.membership_status,
       role: row.membership_role,
     },
+    isDeleted: !!row.deleted_at,
     permissions: permissionSnapshot,
   };
 }
@@ -150,6 +152,7 @@ async function loadClubBySlugOrId(clubIdOrSlug: string, viewerUserId: string): P
       c.created_by_user_id,
       c.created_at,
       c.updated_at,
+      c.deleted_at,
       c.primary_category_id,
       cc.display_name AS category_display_name,
       (
@@ -246,6 +249,7 @@ router.get('/', async (req: Request, res: Response) => {
         c.created_by_user_id,
         c.created_at,
         c.updated_at,
+        c.deleted_at,
         c.primary_category_id,
         cc.display_name AS category_display_name,
         (
@@ -285,6 +289,7 @@ router.get('/', async (req: Request, res: Response) => {
             AND cm_visible.status = CAST('active' AS "ClubMembershipStatus")
         )
       )
+      AND c.deleted_at IS NULL
       AND (
         ${qPattern}::text IS NULL
         OR c.name ILIKE ${qPattern}
@@ -489,7 +494,7 @@ router.get('/:clubIdOrSlug', async (req: Request<{ clubIdOrSlug: string }>, res:
   }
 
   const club = await getCachedClubView(clubIdentity.club_id, viewerUserId);
-  if (!club) {
+  if (!club || club.isDeleted) {
     return res.status(404).json({ message: 'Club not found' });
   }
 

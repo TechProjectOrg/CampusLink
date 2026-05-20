@@ -24,7 +24,9 @@ import {
   invalidateClubMembershipCache,
   invalidateClubMetaCache,
   invalidateClubStatsCache,
+  purgeClubCaches,
 } from '../lib/clubCache';
+import { deleteManagedClubMediaByUrl } from '../lib/objectStorage';
 import { getTrendingHashtagsForApi } from '../lib/socialInsights';
 import { sendModerationBanEmail, sendVerificationDecisionEmail } from '../lib/authEmail';
 import { applyModerationAction } from '../lib/moderation';
@@ -1696,7 +1698,24 @@ router.post('/clubs/:clubId/actions', async (req: Request<{ clubId: string }>, r
     } else if (action === 'unfreeze') {
       await prisma.$queryRaw`UPDATE clubs SET frozen_at = NULL, updated_at = NOW() WHERE club_id = ${clubId}`;
     } else if (action === 'delete') {
-      await prisma.$queryRaw`UPDATE clubs SET deleted_at = NOW(), updated_at = NOW() WHERE club_id = ${clubId}`;
+      const dbRows = await prisma.$queryRaw<Array<{ avatar_url: string | null; cover_image_url: string | null; user_id: string | null }>>`
+        SELECT c.avatar_url, c.cover_image_url, cm.user_id
+        FROM clubs c
+        LEFT JOIN club_memberships cm ON cm.club_id = c.club_id
+        WHERE c.club_id = ${clubId}
+      `;
+      const row = dbRows[0];
+      if (row) {
+        await prisma.$queryRaw`DELETE FROM clubs WHERE club_id = ${clubId}`;
+        await Promise.allSettled([
+          deleteManagedClubMediaByUrl(row.avatar_url),
+          deleteManagedClubMediaByUrl(row.cover_image_url),
+        ]);
+        await purgeClubCaches(
+          clubId,
+          dbRows.map((item) => item.user_id).filter((userId): userId is string => Boolean(userId)),
+        );
+      }
     } else if (action === 'restore') {
       await prisma.$queryRaw`UPDATE clubs SET deleted_at = NULL, updated_at = NOW() WHERE club_id = ${clubId}`;
     } else if (action === 'transfer_ownership') {

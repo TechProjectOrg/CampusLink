@@ -49,6 +49,7 @@ export interface CachedClubMeta {
   } | null;
   tags: string[];
   memberCount: number;
+  isDeleted: boolean;
 }
 
 export interface CachedClubStats {
@@ -83,6 +84,7 @@ interface ClubMetaRow {
   updated_at: Date;
   primary_category_id: string | null;
   category_display_name: string | null;
+  deleted_at: Date | null;
   member_count: number;
   tags: string[] | null;
 }
@@ -285,6 +287,7 @@ async function loadClubMetaFromDb(clubId: string): Promise<CachedClubMeta | null
       c.created_by_user_id,
       c.created_at,
       c.updated_at,
+      c.deleted_at,
       c.primary_category_id,
       cc.display_name AS category_display_name,
       (
@@ -331,6 +334,7 @@ async function loadClubMetaFromDb(clubId: string): Promise<CachedClubMeta | null
       : null,
     tags: row.tags ?? [],
     memberCount: row.member_count,
+    isDeleted: !!row.deleted_at,
   };
 }
 
@@ -441,17 +445,18 @@ function buildPermissionSnapshot(
   const isActiveMember = membershipStatus === 'active';
   const isInvitedMember = membershipStatus === 'invited';
   const isCreator = meta.createdByUserId === viewerUserId;
-  const canViewClub = meta.privacy !== 'private' || isActiveMember || isInvitedMember || isManager || isCreator;
+  const isDeleted = meta.isDeleted;
+  const canViewClub = !isDeleted && (meta.privacy !== 'private' || isActiveMember || isInvitedMember || isManager || isCreator);
 
   return {
     canViewClub,
-    canJoinClub: !isActiveMember && (meta.privacy === 'open' || isInvitedMember),
-    canRequestJoin: meta.privacy === 'request' && membershipStatus !== 'pending' && !isActiveMember,
-    canManageClub: isManager || isCreator,
-    canModerateMembers: isManager || isCreator,
-    canCreatePosts: canViewClub && isActiveMember && !restrictions.has('posting_blocked'),
-    canComment: canViewClub && isActiveMember && !restrictions.has('comment_blocked'),
-    canInviteMembers: isManager || isCreator,
+    canJoinClub: !isDeleted && !isActiveMember && (meta.privacy === 'open' || isInvitedMember),
+    canRequestJoin: !isDeleted && meta.privacy === 'request' && membershipStatus !== 'pending' && !isActiveMember,
+    canManageClub: !isDeleted && (isManager || isCreator),
+    canModerateMembers: !isDeleted && (isManager || isCreator),
+    canCreatePosts: !isDeleted && canViewClub && isActiveMember && !restrictions.has('posting_blocked'),
+    canComment: !isDeleted && canViewClub && isActiveMember && !restrictions.has('comment_blocked'),
+    canInviteMembers: !isDeleted && (isManager || isCreator),
     membershipStatus,
     membershipRole,
   };
@@ -599,6 +604,7 @@ export async function getCachedClubView(clubId: string, viewerUserId: string): P
     status: ClubMembershipStatus | null;
     role: ClubMembershipRole | null;
   };
+  isDeleted: boolean;
   permissions: ClubPermissionSnapshot;
 } | null> {
   const [meta, stats, membership] = await Promise.all([
@@ -630,6 +636,7 @@ export async function getCachedClubView(clubId: string, viewerUserId: string): P
       status: membership?.status ?? null,
       role: membership?.role ?? null,
     },
+    isDeleted: meta.isDeleted,
     permissions,
   };
 }
