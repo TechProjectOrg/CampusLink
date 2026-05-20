@@ -2739,7 +2739,7 @@ export default function App() {
   };
 
   // Calculate unread messages and notifications
-  const unreadCount = conversations.reduce((sum, conv) => sum + conv.unread, 0);
+  const unreadCount = conversations.reduce((sum, conv) => sum + (conv.unread > 0 ? 1 : 0), 0);
   const unreadNotifications = notifications.filter(n => !n.read).length;
 
   const currentFollowerCount = (followGraph.followersByUserId[currentUserId] ?? []).length;

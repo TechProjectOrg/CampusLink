@@ -1126,7 +1126,7 @@ export default function AdminRoot() {
   }, [page, searchKey, userFilters]);
 
   useEffect(() => {
-    if (!token || page !== 'announcements') return;
+    if (!token || (page !== 'announcements' && page !== 'posts')) return;
     let cancelled = false;
     apiAdminGet<AdminAnnouncementOptionsResponse>('/admin/announcements/options', token)
       .then((result) => {
@@ -1538,22 +1538,20 @@ export default function AdminRoot() {
   ) => {
     if (!selectedReportDetail) return;
 
-    let reason = reportInternalNotes.trim();
-    if (!reason) {
-      const promptMessage =
-        action === 'warn_user'
-          ? 'Enter a warning reason'
-          : action === 'suspend_user'
-            ? 'Enter a suspension reason'
-            : action === 'ban_user'
-              ? 'Enter a ban reason'
-              : action === 'delete_content'
-                ? 'Enter a reason for deleting this content'
-                : action === 'dismiss'
-                  ? 'Enter a reason for dismissing this report'
-                  : 'Enter a resolution note';
-      reason = window.prompt(promptMessage, selectedReportDetail.reason) ?? '';
-    }
+    const promptMessage =
+      action === 'warn_user'
+        ? 'Enter a warning reason'
+        : action === 'suspend_user'
+          ? 'Enter a suspension reason'
+          : action === 'ban_user'
+            ? 'Enter a ban reason'
+            : action === 'delete_content'
+              ? 'Enter a reason for deleting this content'
+              : action === 'dismiss'
+                ? 'Enter a reason for dismissing this report'
+                : 'Enter a resolution note';
+    const reason = window.prompt(promptMessage, selectedReportDetail.reason) ?? '';
+
     if (!reason.trim()) {
       toast.error('A moderation reason is required.');
       return;
@@ -1569,7 +1567,7 @@ export default function AdminRoot() {
       {
         action,
         reason: reason.trim(),
-        durationDays: action === 'suspend_user' && Number.isFinite(durationDays) ? Math.max(1, durationDays) : undefined,
+        durationDays: action === 'suspend_user' && Number.isFinite(durationDays) ? Math.max(1, durationDays!) : undefined,
       },
       action === 'warn_user'
         ? 'Warning sent'
@@ -2464,12 +2462,16 @@ export default function AdminRoot() {
                     <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={postFilters.severity} onChange={(event) => setPostFilters((current) => ({ ...current, severity: event.target.value as AdminPostSeverity, page: 1 }))}>
                       {POST_SEVERITY_OPTIONS.map((option) => <option key={option.label} value={option.value}>{option.label}</option>)}
                     </select>
-                    <Input
-                      className="h-10"
-                      placeholder="Filter by club name"
+                    <select
+                      className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm"
                       value={postFilters.club}
                       onChange={(event) => setPostFilters((current) => ({ ...current, club: event.target.value, page: 1 }))}
-                    />
+                    >
+                      <option value="">Filter by club name</option>
+                      {announcementOptions.clubs.map((club) => (
+                        <option key={club.id} value={club.label}>{club.label}</option>
+                      ))}
+                    </select>
                     <select className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm" value={postFilters.sort} onChange={(event) => setPostFilters((current) => ({ ...current, sort: event.target.value as AdminPostSortKey, page: 1 }))}>
                       {POST_SORT_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                     </select>
@@ -3961,7 +3963,13 @@ export default function AdminRoot() {
                     key={`${action.type}-${action.label}`}
                     variant="outline"
                     size="sm"
-                    onClick={() => void runReportAction(selectedReportDetail.id, action.body, action.label)}
+                    onClick={() => {
+                      if (action.body.action === 'resolve' || action.body.action === 'dismiss') {
+                        void runModerationActionForSelectedReport(action.body.action);
+                      } else {
+                        void runReportAction(selectedReportDetail.id, action.body, action.label);
+                      }
+                    }}
                   >
                     {action.label}
                   </Button>
