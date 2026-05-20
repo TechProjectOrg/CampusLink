@@ -723,6 +723,7 @@ model ChatParticipant {
   joinedAt          DateTime            @map("joined_at") @db.Timestamp(6)
   leftAt            DateTime?           @map("left_at") @db.Timestamp(6)
   hiddenAt          DateTime?           @map("hidden_at") @db.Timestamp(6)
+  clearedAt         DateTime?           @map("cleared_at") @db.Timestamp(6)
   lastReadMessageId String?             @map("last_read_message_id") @db.Uuid
   createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamp(6)
   chat              Chat                @relation(fields: [chatId], references: [chatId], onDelete: Cascade, onUpdate: NoAction)

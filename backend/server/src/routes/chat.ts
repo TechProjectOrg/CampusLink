@@ -71,6 +71,7 @@ interface ConversationBaseRow {
   is_request: boolean;
   created_by_user_id: string | null;
   updated_at: Date;
+  cleared_at: Date | null;
   chat_type: string;
   chat_name: string | null;
   avatar_url: string | null;
@@ -139,41 +140,6 @@ function normalizeReactions(value: unknown): Record<string, string[]> {
   return reactions;
 }
 
-async function hideConversationForUser(chatId: string, userId: string): Promise<void> {
-  await prisma.$queryRaw`
-    UPDATE chat_participants
-    SET hidden_at = NOW()
-    WHERE chat_id = ${chatId}::uuid
-      AND user_id = ${userId}::uuid
-      AND left_at IS NULL
-  `;
-}
-
-async function clearHiddenConversationState(chatId: string): Promise<void> {
-  await prisma.$queryRaw`
-    UPDATE chat_participants
-    SET hidden_at = NULL
-    WHERE chat_id = ${chatId}::uuid
-      AND left_at IS NULL
-      AND hidden_at IS NOT NULL
-  `;
-}
-
-async function fetchHiddenMessageIdsForUser(chatId: string, userId: string): Promise<Set<string>> {
-  const rows = await prisma.$queryRaw<Array<{ message_id: string }>>`
-    SELECT message_id
-    FROM message_hidden_for_users
-    WHERE user_id = ${userId}
-      AND message_id IN (
-        SELECT message_id
-        FROM messages
-        WHERE chat_id = ${chatId}
-      )
-  `;
-
-  return new Set(rows.map((row) => row.message_id));
-}
-
 async function fetchConversationBaseRows(
   userId: string,
   isRequest: boolean,
@@ -186,6 +152,7 @@ async function fetchConversationBaseRows(
         c.is_request,
         c.created_by_user_id,
         c.updated_at,
+        cp_me.cleared_at,
         c.chat_type,
         c.name AS chat_name,
         c.avatar_url,
@@ -195,7 +162,6 @@ async function fetchConversationBaseRows(
         ON cp_me.chat_id = c.chat_id
        AND cp_me.user_id = ${userId}
        AND cp_me.left_at IS NULL
-       AND cp_me.hidden_at IS NULL
       LEFT JOIN LATERAL (
         SELECT cp.user_id
         FROM chat_participants cp
@@ -222,6 +188,7 @@ async function fetchConversationBaseRows(
       c.is_request,
       c.created_by_user_id,
       c.updated_at,
+      cp_me.cleared_at,
       c.chat_type,
       c.name AS chat_name,
       c.avatar_url,
@@ -231,7 +198,6 @@ async function fetchConversationBaseRows(
       ON cp_me.chat_id = c.chat_id
      AND cp_me.user_id = ${userId}
      AND cp_me.left_at IS NULL
-     AND cp_me.hidden_at IS NULL
     LEFT JOIN LATERAL (
       SELECT cp.user_id
       FROM chat_participants cp
@@ -277,6 +243,7 @@ async function fetchConversationUnreadRows(
        WHERE mh.message_id = m.message_id
          AND mh.user_id = ${userId}
      )
+     AND (cp.cleared_at IS NULL OR m.created_at > cp.cleared_at)
      AND m.sender_user_id != ${userId}
      AND (
        cp.last_read_message_id IS NULL
@@ -321,6 +288,10 @@ async function fetchLatestVisibleMessagesForConversations(
       m.content,
       m.created_at
     FROM messages m
+    JOIN chat_participants cp_me
+      ON cp_me.chat_id = m.chat_id
+     AND cp_me.user_id = ${viewerUserId}
+     AND cp_me.left_at IS NULL
     WHERE m.chat_id IN (${Prisma.join(conversationIds)})
       AND m.deleted_at IS NULL
       AND (m.suppressed_for_user_id IS NULL OR m.suppressed_for_user_id != ${viewerUserId})
@@ -330,6 +301,7 @@ async function fetchLatestVisibleMessagesForConversations(
         WHERE mh.message_id = m.message_id
           AND mh.user_id = ${viewerUserId}
       )
+      AND (cp_me.cleared_at IS NULL OR m.created_at > cp_me.cleared_at)
     ORDER BY m.chat_id, m.created_at DESC, m.message_id DESC
   `;
 
@@ -369,6 +341,9 @@ async function buildConversationListEntries(
   await Promise.all(
     rows.map(async (row) => {
       const latestMessage = latestMessages.get(row.chat_id);
+      if (!latestMessage && row.cleared_at) {
+        return;
+      }
       const meta: ChatConversationMetaCache = {
         conversationId: row.chat_id,
         lastMessageId: latestMessage?.id ?? null,
@@ -407,6 +382,9 @@ async function buildConversationListEntries(
   return rows
     .map<ChatConversationListEntry | null>((row) => {
       const latestMessage = latestMessages.get(row.chat_id);
+      if (!latestMessage && row.cleared_at) {
+        return null;
+      }
       if (row.chat_type === 'group') {
         const participantIds = participantIdsByConversationId.get(row.chat_id) ?? [];
         return {
@@ -530,10 +508,21 @@ async function fetchReplyPreview(
         LIMIT 1
       ) AS attachment_url
     FROM messages m
+    JOIN chat_participants cp_me
+      ON cp_me.chat_id = m.chat_id
+     AND cp_me.user_id = ${viewerUserId}
+     AND cp_me.left_at IS NULL
     WHERE m.chat_id = ${chatId}
       AND m.message_id = ${messageId}
       AND m.deleted_at IS NULL
       AND (m.suppressed_for_user_id IS NULL OR m.suppressed_for_user_id != ${viewerUserId})
+      AND NOT EXISTS (
+        SELECT 1
+        FROM message_hidden_for_users mh
+        WHERE mh.message_id = m.message_id
+          AND mh.user_id = ${viewerUserId}
+      )
+      AND (cp_me.cleared_at IS NULL OR m.created_at > cp_me.cleared_at)
     LIMIT 1
   `;
 
@@ -563,18 +552,23 @@ async function fetchMessageRows(
 
   if (before) {
     const cursorRows = await prisma.$queryRaw<Array<{ created_at: Date; message_id: string }>>`
-      SELECT created_at, message_id
-      FROM messages
-      WHERE message_id = ${before}
-        AND chat_id = ${chatId}
-        AND deleted_at IS NULL
-        AND (suppressed_for_user_id IS NULL OR suppressed_for_user_id != ${viewerUserId})
+      SELECT m.created_at, m.message_id
+      FROM messages m
+      JOIN chat_participants cp_me
+        ON cp_me.chat_id = m.chat_id
+       AND cp_me.user_id = ${viewerUserId}
+       AND cp_me.left_at IS NULL
+      WHERE m.message_id = ${before}
+        AND m.chat_id = ${chatId}
+        AND m.deleted_at IS NULL
+        AND (m.suppressed_for_user_id IS NULL OR m.suppressed_for_user_id != ${viewerUserId})
         AND NOT EXISTS (
           SELECT 1
           FROM message_hidden_for_users mh
-          WHERE mh.message_id = messages.message_id
+          WHERE mh.message_id = m.message_id
             AND mh.user_id = ${viewerUserId}
         )
+        AND (cp_me.cleared_at IS NULL OR m.created_at > cp_me.cleared_at)
       LIMIT 1
     `;
 
@@ -595,6 +589,10 @@ async function fetchMessageRows(
         m.created_at,
         m.reply_to_message_id
       FROM messages m
+      JOIN chat_participants cp_me
+        ON cp_me.chat_id = m.chat_id
+       AND cp_me.user_id = ${viewerUserId}
+       AND cp_me.left_at IS NULL
       WHERE m.chat_id = ${chatId}
         AND m.deleted_at IS NULL
         AND (m.suppressed_for_user_id IS NULL OR m.suppressed_for_user_id != ${viewerUserId})
@@ -604,6 +602,7 @@ async function fetchMessageRows(
           WHERE mh.message_id = m.message_id
             AND mh.user_id = ${viewerUserId}
         )
+        AND (cp_me.cleared_at IS NULL OR m.created_at > cp_me.cleared_at)
         AND (
           m.created_at < ${cursorCreatedAt}
           OR (m.created_at = ${cursorCreatedAt} AND m.message_id < ${cursorMessageId})
@@ -624,6 +623,10 @@ async function fetchMessageRows(
         m.created_at,
         m.reply_to_message_id
       FROM messages m
+      JOIN chat_participants cp_me
+        ON cp_me.chat_id = m.chat_id
+       AND cp_me.user_id = ${viewerUserId}
+       AND cp_me.left_at IS NULL
       WHERE m.chat_id = ${chatId}
         AND m.deleted_at IS NULL
         AND (m.suppressed_for_user_id IS NULL OR m.suppressed_for_user_id != ${viewerUserId})
@@ -633,6 +636,7 @@ async function fetchMessageRows(
           WHERE mh.message_id = m.message_id
             AND mh.user_id = ${viewerUserId}
         )
+        AND (cp_me.cleared_at IS NULL OR m.created_at > cp_me.cleared_at)
       ORDER BY m.created_at DESC, m.message_id DESC
       LIMIT ${warmLimit}
     `;
@@ -685,6 +689,10 @@ async function fetchMessageRows(
               LIMIT 1
             ) AS attachment_url
           FROM messages m
+          JOIN chat_participants cp_me
+            ON cp_me.chat_id = m.chat_id
+           AND cp_me.user_id = ${viewerUserId}
+           AND cp_me.left_at IS NULL
           WHERE m.chat_id = ${chatId}
             AND m.message_id IN (${Prisma.join(replyIds)})
             AND m.deleted_at IS NULL
@@ -695,6 +703,7 @@ async function fetchMessageRows(
               WHERE mh.message_id = m.message_id
                 AND mh.user_id = ${viewerUserId}
             )
+            AND (cp_me.cleared_at IS NULL OR m.created_at > cp_me.cleared_at)
         `
       : [];
 
@@ -738,18 +747,23 @@ async function hasOlderMessagesThan(
   oldestMessageId: string,
 ): Promise<boolean> {
   const cursorRows = await prisma.$queryRaw<Array<{ created_at: Date; message_id: string }>>`
-    SELECT created_at, message_id
-    FROM messages
-    WHERE message_id = ${oldestMessageId}
-      AND chat_id = ${chatId}
-      AND deleted_at IS NULL
-      AND (suppressed_for_user_id IS NULL OR suppressed_for_user_id != ${viewerUserId})
+    SELECT m.created_at, m.message_id
+    FROM messages m
+    JOIN chat_participants cp_me
+      ON cp_me.chat_id = m.chat_id
+     AND cp_me.user_id = ${viewerUserId}
+     AND cp_me.left_at IS NULL
+    WHERE m.message_id = ${oldestMessageId}
+      AND m.chat_id = ${chatId}
+      AND m.deleted_at IS NULL
+      AND (m.suppressed_for_user_id IS NULL OR m.suppressed_for_user_id != ${viewerUserId})
       AND NOT EXISTS (
         SELECT 1
         FROM message_hidden_for_users mh
-        WHERE mh.message_id = messages.message_id
+        WHERE mh.message_id = m.message_id
           AND mh.user_id = ${viewerUserId}
       )
+      AND (cp_me.cleared_at IS NULL OR m.created_at > cp_me.cleared_at)
     LIMIT 1
   `;
 
@@ -758,20 +772,25 @@ async function hasOlderMessagesThan(
   if (!cursorCreatedAt || !cursorMessageId) return false;
 
   const olderRows = await prisma.$queryRaw<Array<{ message_id: string }>>`
-    SELECT message_id
-    FROM messages
-    WHERE chat_id = ${chatId}
-      AND deleted_at IS NULL
-      AND (suppressed_for_user_id IS NULL OR suppressed_for_user_id != ${viewerUserId})
+    SELECT m.message_id
+    FROM messages m
+    JOIN chat_participants cp_me
+      ON cp_me.chat_id = m.chat_id
+     AND cp_me.user_id = ${viewerUserId}
+     AND cp_me.left_at IS NULL
+    WHERE m.chat_id = ${chatId}
+      AND m.deleted_at IS NULL
+      AND (m.suppressed_for_user_id IS NULL OR m.suppressed_for_user_id != ${viewerUserId})
       AND NOT EXISTS (
         SELECT 1
         FROM message_hidden_for_users mh
-        WHERE mh.message_id = messages.message_id
+        WHERE mh.message_id = m.message_id
           AND mh.user_id = ${viewerUserId}
       )
+      AND (cp_me.cleared_at IS NULL OR m.created_at > cp_me.cleared_at)
       AND (
-        created_at < ${cursorCreatedAt}
-        OR (created_at = ${cursorCreatedAt} AND message_id < ${cursorMessageId})
+        m.created_at < ${cursorCreatedAt}
+        OR (m.created_at = ${cursorCreatedAt} AND m.message_id < ${cursorMessageId})
       )
     LIMIT 1
   `;
@@ -871,30 +890,9 @@ async function fetchMessagesForRequest(
   limit: number,
   before?: string,
 ): Promise<MessagePageResult> {
-  const hiddenMessageIds = await fetchHiddenMessageIdsForUser(chatId, viewerUserId);
-
-  if (before) {
-    return fetchMessageRows(chatId, viewerUserId, limit, before);
-  }
-
-  const cached = await getCachedRecentMessages(chatId);
-  if (cached && cached.length > 0) {
-    const visibleCached = cached.filter(
-      (message) => (!message.suppressedForUserId || message.suppressedForUserId !== viewerUserId) && !hiddenMessageIds.has(message.id),
-    );
-    const selected = visibleCached.slice(-limit);
-    const hasMore =
-      visibleCached.length > limit ||
-      (selected.length > 0
-        ? await hasOlderMessagesThan(chatId, viewerUserId, selected[0].id)
-        : false);
-
-    return { messages: selected, hasMore };
-  }
-
-  const warmLimit = Math.max(limit, getChatRecentWindowSize());
-  const fresh = await fetchMessageRows(chatId, viewerUserId, warmLimit);
-  if (fresh.messages.length > 0) {
+  const warmLimit = before ? limit : Math.max(limit, getChatRecentWindowSize());
+  const fresh = await fetchMessageRows(chatId, viewerUserId, warmLimit, before);
+  if (!before && fresh.messages.length > 0) {
     await setCachedRecentMessages(chatId, fresh.messages);
   }
   noteConversationActivity(chatId);
@@ -1133,7 +1131,6 @@ async function cacheAndEmitMessage(
     ? meta.participantIds
     : await getChatParticipantIds(chatId);
 
-  await clearHiddenConversationState(chatId);
   await invalidateConversationLists(participantIds, ['active', 'requests']);
 
   const recentMessage: ChatCachedMessage = {
@@ -1278,28 +1275,32 @@ router.delete('/conversations/:chatId', requireModerationCapability('message'), 
       return res.status(403).json({ message: 'Not a participant' });
     }
 
-    res.status(200).json({ message: 'Conversation hidden' });
-
-    Promise.resolve().then(async () => {
-      try {
-        await hideConversationForUser(chatId, userId);
-        const now = new Date();
-        await prisma.$queryRaw`
-          INSERT INTO message_hidden_for_users (message_id, user_id)
-          SELECT message_id, ${userId}::uuid
-          FROM messages
-          WHERE chat_id = ${chatId}::uuid
-            AND created_at <= ${now}
-          ON CONFLICT (message_id, user_id) DO NOTHING
-        `;
-        await invalidateConversationLists([userId], ['active', 'requests']);
-        noteConversationActivity(chatId);
-      } catch (err) {
-        console.error('Failed to hide conversation completely in background:', err);
-      }
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`
+        UPDATE chat_participants
+        SET cleared_at = COALESCE(
+          (
+            SELECT MAX(m.created_at)
+            FROM messages m
+            WHERE m.chat_id = ${chatId}
+              AND m.deleted_at IS NULL
+              AND (m.suppressed_for_user_id IS NULL OR m.suppressed_for_user_id != ${userId})
+          ),
+          NOW()
+        )
+        WHERE chat_id = ${chatId}
+          AND user_id = ${userId}
+          AND left_at IS NULL
+      `;
     });
+
+    await invalidateConversationLists([userId], ['active', 'requests']);
+    await setUnreadCount(userId, chatId, 0);
+    noteConversationActivity(chatId);
+
+    return res.status(200).json({ message: 'Conversation cleared' });
   } catch (err) {
-    console.error('Error hiding conversation:', err);
+    console.error('Error clearing conversation:', err);
     if (!res.headersSent) {
       return res.status(500).json({ message: 'Internal server error' });
     }
@@ -1528,15 +1529,20 @@ router.patch('/conversations/:chatId/read', requireModerationCapability('message
     const messageRows = await prisma.$queryRaw<Array<{ message_id: string }>>`
       SELECT m.message_id
       FROM messages m
-      WHERE chat_id = ${chatId}
-        AND message_id = ${messageId}
-        AND deleted_at IS NULL
+      JOIN chat_participants cp_me
+        ON cp_me.chat_id = m.chat_id
+       AND cp_me.user_id = ${userId}
+       AND cp_me.left_at IS NULL
+      WHERE m.chat_id = ${chatId}
+        AND m.message_id = ${messageId}
+        AND m.deleted_at IS NULL
         AND NOT EXISTS (
           SELECT 1
           FROM message_hidden_for_users mh
           WHERE mh.message_id = m.message_id
             AND mh.user_id = ${userId}
         )
+        AND (cp_me.cleared_at IS NULL OR m.created_at > cp_me.cleared_at)
       LIMIT 1
     `;
 
@@ -1683,11 +1689,13 @@ router.delete(
       }
 
       if (scope === 'me') {
-        await prisma.$queryRaw`
-          INSERT INTO message_hidden_for_users (message_id, user_id)
-          VALUES (${messageId}::uuid, ${userId}::uuid)
-          ON CONFLICT (message_id, user_id) DO NOTHING
-        `;
+        await prisma.$queryRawUnsafe(
+          `INSERT INTO message_hidden_for_users (message_id, user_id)
+           VALUES ($1::uuid, $2::uuid)
+           ON CONFLICT (message_id, user_id) DO NOTHING`,
+          messageId,
+          userId,
+        );
 
         noteConversationActivity(chatId);
         await invalidateConversationLists([userId], ['active', 'requests']);

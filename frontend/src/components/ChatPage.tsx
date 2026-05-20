@@ -590,6 +590,7 @@ export function ChatPage({
 
     apiDeleteConversation(conversationId, token).catch((err) => {
       console.error('Failed to delete conversation:', err);
+      void appData.ensureConversations({ force: true });
     });
   };
 

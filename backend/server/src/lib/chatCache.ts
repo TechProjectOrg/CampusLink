@@ -478,6 +478,7 @@ export async function reconcileUnreadState(
        WHERE mh.message_id = m.message_id
          AND mh.user_id = ${userId}
      )
+     AND (cp.cleared_at IS NULL OR m.created_at > cp.cleared_at)
      AND m.sender_user_id != ${userId}
      AND (
        cp.last_read_message_id IS NULL

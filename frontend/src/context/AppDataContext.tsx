@@ -1117,7 +1117,9 @@ function createStore(): AppDataStore {
             if (current.requestVersion !== nextVersion) return current;
             return {
               ...current,
-              messages: response.messages.reduce(mergeChatMessageList, current.messages),
+              // Replace the recent page so server-side visibility changes
+              // like cleared_at cannot leave stale local messages behind.
+              messages: response.messages,
               hasMore: response.hasMore,
               nextCursor: response.nextCursor,
               lastFetchedAt: Date.now(),

@@ -17,12 +17,30 @@ CREATE INDEX IF NOT EXISTS idx_message_hidden_for_users_message_id
 CREATE INDEX IF NOT EXISTS idx_message_hidden_for_users_user_id
   ON message_hidden_for_users (user_id);
 
-ALTER TABLE message_hidden_for_users
-  ADD CONSTRAINT message_hidden_for_users_message_id_fkey
-  FOREIGN KEY (message_id) REFERENCES messages (message_id)
-  ON DELETE CASCADE ON UPDATE NO ACTION;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'message_hidden_for_users_message_id_fkey'
+  ) THEN
+    ALTER TABLE message_hidden_for_users
+      ADD CONSTRAINT message_hidden_for_users_message_id_fkey
+      FOREIGN KEY (message_id) REFERENCES messages (message_id)
+      ON DELETE CASCADE ON UPDATE NO ACTION;
+  END IF;
+END $$;
 
-ALTER TABLE message_hidden_for_users
-  ADD CONSTRAINT message_hidden_for_users_user_id_fkey
-  FOREIGN KEY (user_id) REFERENCES users (user_id)
-  ON DELETE CASCADE ON UPDATE NO ACTION;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'message_hidden_for_users_user_id_fkey'
+  ) THEN
+    ALTER TABLE message_hidden_for_users
+      ADD CONSTRAINT message_hidden_for_users_user_id_fkey
+      FOREIGN KEY (user_id) REFERENCES users (user_id)
+      ON DELETE CASCADE ON UPDATE NO ACTION;
+  END IF;
+END $$;
