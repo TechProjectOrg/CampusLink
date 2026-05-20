@@ -35,7 +35,6 @@ import {
   canAccessUserContent,
   getBlockState,
   getProfileVisibility,
-  getProfileVisibilityFromState,
   maskUserCardForViewer,
   type ProfileVisibility,
 } from '../lib/blocking';
@@ -423,6 +422,10 @@ function applyProfileVisibility(profile: Awaited<ReturnType<typeof getUserProfil
     return profile;
   }
 
+  if (visibility === 'private') {
+    return profile;
+  }
+
   if (visibility === 'restricted') {
     return {
       ...profile,
@@ -468,7 +471,7 @@ router.get('/:userId', async (req: Request<GetUserParams>, res: Response) => {
       return res.status(404).json({ message: 'User not found' });
     }
     const blockState = await getBlockState(viewerUserId, userId);
-    const profileVisibility = getProfileVisibilityFromState(viewerUserId, userId, blockState);
+    const profileVisibility = await getProfileVisibility(viewerUserId, userId);
     const visibleProfile = applyProfileVisibility(profile, profileVisibility);
 
     return res.status(200).json({

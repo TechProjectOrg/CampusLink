@@ -60,7 +60,7 @@ export interface Student {
     postCount: number;
   };
   viewerHasBlockedUser?: boolean;
-  profileVisibility?: 'full' | 'blocked-by-viewer' | 'restricted';
+  profileVisibility?: 'full' | 'blocked-by-viewer' | 'restricted' | 'private';
 }
 
 export interface Project {
@@ -283,7 +283,7 @@ export interface ApiUserProfile {
     lastWarningAt: string | null;
   } | null;
   viewerHasBlockedUser?: boolean;
-  profileVisibility?: 'full' | 'blocked-by-viewer' | 'restricted';
+  profileVisibility?: 'full' | 'blocked-by-viewer' | 'restricted' | 'private';
 }
 
 export interface BlockedUserListItem {

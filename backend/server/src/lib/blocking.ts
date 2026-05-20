@@ -1,7 +1,7 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../prisma';
 
-export type ProfileVisibility = 'full' | 'blocked-by-viewer' | 'restricted';
+export type ProfileVisibility = 'full' | 'blocked-by-viewer' | 'restricted' | 'private';
 
 export interface BlockState {
   viewerHasBlockedUser: boolean;
@@ -103,8 +103,40 @@ export function getProfileVisibilityFromState(
 }
 
 export async function getProfileVisibility(viewerId: string, ownerId: string): Promise<ProfileVisibility> {
+  if (!viewerId || viewerId === ownerId) {
+    return 'full';
+  }
+
   const blockState = await getBlockState(viewerId, ownerId);
-  return getProfileVisibilityFromState(viewerId, ownerId, blockState);
+  const blockVisibility = getProfileVisibilityFromState(viewerId, ownerId, blockState);
+  if (blockVisibility !== 'full') {
+    return blockVisibility;
+  }
+
+  const rows = await prisma.$queryRaw<Array<{ is_private: boolean; is_follower: boolean }>>`
+    SELECT
+      u.is_private,
+      EXISTS(
+        SELECT 1
+        FROM follows f
+        WHERE f.follower_user_id = ${viewerId}
+          AND f.followed_user_id = u.user_id
+      ) AS is_follower
+    FROM users u
+    WHERE u.user_id = ${ownerId}
+    LIMIT 1
+  `;
+
+  const row = rows[0];
+  if (!row) {
+    return 'restricted';
+  }
+
+  if (!row.is_private || row.is_follower) {
+    return 'full';
+  }
+
+  return 'private';
 }
 
 export async function canAccessUserContent(viewerId: string, ownerId: string): Promise<boolean> {

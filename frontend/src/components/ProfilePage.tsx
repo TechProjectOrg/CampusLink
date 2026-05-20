@@ -1167,6 +1167,7 @@ export function ProfilePage({
   const displaySkills = isOwnProfile ? skills : student.skills.map((name, index) => ({ id: String(index), name }));
   const isBlockedByViewer = !isOwnProfile && student.viewerHasBlockedUser === true;
   const isRestrictedView = !isOwnProfile && student.profileVisibility === 'restricted';
+  const isPrivateLimitedView = !isOwnProfile && student.profileVisibility === 'private';
   const profileEmail = student.email?.trim() || '';
   const profileBranch = student.branch?.trim() || '';
   const hasKnownBranch = Boolean(profileBranch && profileBranch.toLowerCase() !== 'unknown');
@@ -1174,13 +1175,14 @@ export function ProfilePage({
   const yearLabel = hasKnownYear ? `Year ${student.year}` : 'Year not added';
   const branchLabel = hasKnownBranch ? profileBranch : 'Branch not added';
   const clubCount = societies.length;
-  const showPostsSection = !isBlockedByViewer && !isRestrictedView && (isOwnProfile || postsLoading || profilePosts.length > 0);
-  const showProjectsSection = !isBlockedByViewer && !isRestrictedView && (isOwnProfile || projectsLoading || loadedProjects.length > 0);
-  const showExperienceSection = !isBlockedByViewer && !isRestrictedView && (isOwnProfile || experiences.length > 0);
-  const showEducationSection = !isBlockedByViewer && !isRestrictedView && (isOwnProfile || hasKnownBranch || hasKnownYear || educationRecords.length > 0);
-  const showSkillsSection = !isBlockedByViewer && !isRestrictedView && (isOwnProfile || skillsLoading || displaySkills.length > 0);
-  const showCertificationsSection = !isRestrictedView && (isOwnProfile || certificationsLoading || loadedCertifications.length > 0);
-  const showClubsSection = !isBlockedByViewer && !isRestrictedView && (isOwnProfile || societies.length > 0);
+  const isSectionLimitedView = isRestrictedView || isPrivateLimitedView;
+  const showPostsSection = !isBlockedByViewer && !isSectionLimitedView && (isOwnProfile || postsLoading || profilePosts.length > 0);
+  const showProjectsSection = !isBlockedByViewer && !isSectionLimitedView && (isOwnProfile || projectsLoading || loadedProjects.length > 0);
+  const showExperienceSection = !isBlockedByViewer && !isSectionLimitedView && (isOwnProfile || experiences.length > 0);
+  const showEducationSection = !isBlockedByViewer && !isSectionLimitedView && (isOwnProfile || hasKnownBranch || hasKnownYear || educationRecords.length > 0);
+  const showSkillsSection = !isBlockedByViewer && !isSectionLimitedView && (isOwnProfile || skillsLoading || displaySkills.length > 0);
+  const showCertificationsSection = !isSectionLimitedView && (isOwnProfile || certificationsLoading || loadedCertifications.length > 0);
+  const showClubsSection = !isBlockedByViewer && !isSectionLimitedView && (isOwnProfile || societies.length > 0);
   const profileSectionCardClass = 'box-border flex w-full min-w-0 flex-col gap-4 overflow-hidden break-words rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5 lg:p-6';
   const educationLevelOrder: Record<EducationLevel, number> = {
     '10th': 1,
@@ -1396,20 +1398,18 @@ export function ProfilePage({
                       </Button>
                     ) : (
                       <>
-                        {!isRestrictedView ? (
-                          <FollowButton
-                            targetName={student.name}
-                            accountType={student.accountType}
-                            isFollowing={isFollowing}
-                            isFollower={isFollower}
-                            requestStatus={requestStatus}
-                            className="w-auto rounded-full gradient-primary px-4 sm:px-6 h-10 sm:h-11 font-semibold text-white shadow-md hover:shadow-lg transition-all border-none text-sm sm:text-base"
-                            onFollow={() => onFollow(student.id, student.accountType)}
-                            onUnfollow={() => onUnfollow(student.id)}
-                            onCancelRequest={() => onCancelRequest(student.id)}
-                          />
-                        ) : null}
-                        {!isRestrictedView ? (
+                        <FollowButton
+                          targetName={student.name}
+                          accountType={student.accountType}
+                          isFollowing={isFollowing}
+                          isFollower={isFollower}
+                          requestStatus={requestStatus}
+                          className="w-auto rounded-full gradient-primary px-4 sm:px-6 h-10 sm:h-11 font-semibold text-white shadow-md hover:shadow-lg transition-all border-none text-sm sm:text-base"
+                          onFollow={() => onFollow(student.id, student.accountType)}
+                          onUnfollow={() => onUnfollow(student.id)}
+                          onCancelRequest={() => onCancelRequest(student.id)}
+                        />
+                        {!isRestrictedView && !isPrivateLimitedView ? (
                           <Button 
                             onClick={() => onMessage?.(student.id)}
                             className="rounded-full gradient-primary px-4 sm:px-6 h-10 sm:h-11 font-semibold text-white shadow-md hover:shadow-lg transition-all border-none text-sm sm:text-base"
@@ -1512,7 +1512,13 @@ export function ProfilePage({
           </section>
         ) : null}
 
-        {!isBlockedByViewer && !isRestrictedView && showPostsSection ? (
+        {isPrivateLimitedView ? (
+          <section className={profileSectionCardClass}>
+            <EmptyState message="This account is private. Follow to view activity, projects, education, and more." />
+          </section>
+        ) : null}
+
+        {!isBlockedByViewer && !isSectionLimitedView && showPostsSection ? (
         <section className={profileSectionCardClass}>
           <SectionHeader title="Activity" />
           {postsLoading ? (
@@ -1557,7 +1563,7 @@ export function ProfilePage({
         </section>
         ) : null}
 
-        {!isBlockedByViewer && !isRestrictedView && showProjectsSection ? (
+        {!isBlockedByViewer && !isSectionLimitedView && showProjectsSection ? (
         <section className={profileSectionCardClass}>
           <SectionHeader title="Projects" onAdd={() => setActiveModal('project')} />
           {projectsLoading ? (
@@ -1602,7 +1608,7 @@ export function ProfilePage({
         </section>
         ) : null}
 
-        {!isBlockedByViewer && !isRestrictedView && (showExperienceSection || showEducationSection) ? (
+        {!isBlockedByViewer && !isSectionLimitedView && (showExperienceSection || showEducationSection) ? (
         <section className="grid w-full [grid-template-columns:1fr] gap-4">
           {showExperienceSection ? (
           <div className={profileSectionCardClass}>
@@ -1706,7 +1712,7 @@ export function ProfilePage({
         </section>
         ) : null}
 
-        {!isBlockedByViewer && !isRestrictedView && showSkillsSection ? (
+        {!isBlockedByViewer && !isSectionLimitedView && showSkillsSection ? (
         <section className={profileSectionCardClass}>
           <SectionHeader title="Skills" onAdd={() => setActiveModal('skill')} />
           {skillsLoading ? (
@@ -1730,7 +1736,7 @@ export function ProfilePage({
         </section>
         ) : null}
 
-        {!isBlockedByViewer && !isRestrictedView && (showCertificationsSection || showClubsSection) ? (
+        {!isBlockedByViewer && !isSectionLimitedView && (showCertificationsSection || showClubsSection) ? (
         <section className="grid w-full [grid-template-columns:1fr] gap-4">
           {showCertificationsSection ? (
           <div className={profileSectionCardClass}>
