@@ -187,3 +187,38 @@ export async function sendVerificationDecisionEmail(params: {
     throw new Error(result.error.message || 'Resend could not deliver the verification decision email');
   }
 }
+
+export async function sendEmailVerificationOTP(params: {
+  email: string;
+  otp: string;
+}): Promise<void> {
+  const resend = getResendClient();
+
+  const result = await resend.emails.send({
+    from: getVerificationFromAddress(),
+    to: [params.email],
+    subject: 'Your CampusLynk email verification code',
+    html: `
+      <div style="font-family: Inter, Arial, sans-serif; background:#f8fafc; padding:32px;">
+        <div style="max-width:560px; margin:0 auto; background:#ffffff; border-radius:24px; padding:40px; border:1px solid #e2e8f0;">
+          <p style="margin:0 0 12px; color:#0f172a; font-size:28px; font-weight:700;">CampusLynk</p>
+          <p style="margin:0 0 12px; color:#0f172a; font-size:20px; font-weight:600;">Verify your email address</p>
+          <p style="margin:0 0 28px; color:#475569; font-size:15px; line-height:1.7;">
+            Use this code to verify your email address and complete your account changes.
+          </p>
+          <div style="background:#f1f5f9; border:1px solid #e2e8f0; border-radius:12px; padding:24px; margin:24px 0; text-align:center;">
+            <p style="margin:0 0 8px; color:#64748b; font-size:14px; font-weight:600;">Verification code</p>
+            <p style="margin:0; color:#0f172a; font-size:32px; font-weight:700; letter-spacing:4px; font-family:'Courier New', monospace;">${escapeHtml(params.otp)}</p>
+          </div>
+          <p style="margin:28px 0 0; color:#64748b; font-size:13px; line-height:1.7;">
+            This code expires in 10 minutes. Do not share this code with anyone.
+          </p>
+        </div>
+      </div>
+    `,
+  });
+
+  if (result.error) {
+    throw new Error(result.error.message || 'Resend could not deliver the email verification OTP');
+  }
+}

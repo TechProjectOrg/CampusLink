@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowLeft, Bell, Check, ChevronDown, ChevronRight, ChevronUp, Clock, Edit2, Globe, KeyRound, Lock, MapPin, MonitorSmartphone, Save, Shield, Trash2, User, X } from 'lucide-react';
+import { ArrowLeft, Bell, Check, ChevronDown, ChevronRight, ChevronUp, Clock, Edit2, Globe, GraduationCap, KeyRound, Lock, MapPin, MonitorSmartphone, Save, Shield, Trash2, User, X } from 'lucide-react';
 import { Card, CardContent, CardHeader } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -13,6 +13,7 @@ import { useAuth } from '../context/AuthContext';
 import { apiChangePassword, apiCheckUsernameAvailability, apiFetchBlockedUsers, apiFetchUserSessions, apiFetchUserSettings, apiRevokeUserSession, apiUpdateUserProfile, apiUpdateUserSettings, apiVerifyPasswordChange } from '../lib/authApi';
 import { apiFetchConversations, apiFetchGroupChatDetails, type GroupAdminTransferApi, type GroupChatDetailsApi } from '../lib/chatApi';
 import { ForgotPasswordDialog } from './ForgotPasswordDialog';
+import { SwitchToAlumniModal } from './SwitchToAlumniModal';
 import { LoadingIndicator } from './ui/LoadingIndicator';
 
 const PASSWORD_REQUIREMENTS = [
@@ -124,6 +125,7 @@ export function SettingsPage({ student, onEdit, onUpdateSettings, onUnblockUser 
   const [savingPrivacy, setSavingPrivacy] = useState(false);
   const [blockedUsers, setBlockedUsers] = useState<BlockedUserListItem[]>([]);
   const [blockedUsersLoading, setBlockedUsersLoading] = useState(false);
+  const [switchToAlumniModalOpen, setSwitchToAlumniModalOpen] = useState(false);
 
   const [notificationSettings, setNotificationSettings] = useState({
     emailNotifications: true,
@@ -940,6 +942,25 @@ export function SettingsPage({ student, onEdit, onUpdateSettings, onUnblockUser 
               </span>
               <ChevronRight className="h-5 w-5 text-gray-400" />
             </button>
+
+            {auth.user?.userType === 'student' && (
+              <button
+                type="button"
+                onClick={() => setSwitchToAlumniModalOpen(true)}
+                className="flex w-full items-center justify-between rounded-2xl border bg-white px-4 py-4 text-left transition hover:border-primary/40 hover:bg-primary/5"
+              >
+                <span className="flex items-center gap-3">
+                  <span className="rounded-full bg-primary/10 p-2 text-primary">
+                    <GraduationCap className="h-5 w-5" />
+                  </span>
+                  <span>
+                    <span className="block text-gray-900">Switch to Alumni Account</span>
+                    <span className="block text-sm text-gray-600">Change to personal email as alumni</span>
+                  </span>
+                </span>
+                <ChevronRight className="h-5 w-5 text-gray-400" />
+              </button>
+            )}
           </CardContent>
         </Card>
       )}
@@ -1295,6 +1316,25 @@ export function SettingsPage({ student, onEdit, onUpdateSettings, onUnblockUser 
                       </span>
                       <ChevronRight className="h-5 w-5 text-gray-400" />
                     </button>
+
+                    {auth.user?.userType === 'student' && (
+                      <button
+                        type="button"
+                        onClick={() => setSwitchToAlumniModalOpen(true)}
+                        className="flex w-full items-center justify-between rounded-2xl border bg-white px-4 py-4 text-left transition hover:border-primary/40 hover:bg-primary/5"
+                      >
+                        <span className="flex items-center gap-3">
+                          <span className="rounded-full bg-primary/10 p-2 text-primary">
+                            <GraduationCap className="h-5 w-5" />
+                          </span>
+                          <span>
+                            <span className="block text-gray-900">Switch to Alumni Account</span>
+                            <span className="block text-sm text-gray-600">Change to personal email as alumni</span>
+                          </span>
+                        </span>
+                        <ChevronRight className="h-5 w-5 text-gray-400" />
+                      </button>
+                    )}
                   </CardContent>
                 </Card>
               )}
@@ -1564,6 +1604,14 @@ export function SettingsPage({ student, onEdit, onUpdateSettings, onUnblockUser 
         open={forgotPasswordOpen}
         onOpenChange={setForgotPasswordOpen}
         defaultIdentifier={auth.profile?.email ?? accountStudent.email}
+      />
+      <SwitchToAlumniModal
+        open={switchToAlumniModalOpen}
+        onOpenChange={setSwitchToAlumniModalOpen}
+        onSuccess={() => {
+          // Refresh the page or navigate after successful switch
+          window.location.reload();
+        }}
       />
     </div>
   );

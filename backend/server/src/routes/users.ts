@@ -5,6 +5,8 @@ import { getUserProfileById } from '../services/userProfile';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
 import requireModerationCapability from '../middleware/requireModerationCapability';
 import { hashPassword, signPasswordChangeToken, verifyPassword, verifyPasswordChangeToken } from '../lib/auth';
+import { generateOtp, storeOtp, verifyOtp } from '../lib/otp';
+import { sendEmailVerificationOTP } from '../lib/authEmail';
 import { setAdminMustChangePassword } from '../lib/admin';
 import { normalizeUsername, validateUsername } from '../lib/username';
 import {
@@ -3471,6 +3473,177 @@ router.post(
       }
 
       console.error('Error creating post:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
+
+// ============================================================================
+// Switch to Alumni Account Endpoints
+// ============================================================================
+
+interface RequestAlumniSwitchOtpBody {
+  newEmail: string;
+  changeToken: string;
+}
+
+interface VerifyAlumniSwitchOtpBody {
+  newEmail: string;
+  otp: string;
+}
+
+router.post(
+  '/:userId/switch-to-alumni/request-otp',
+  requireOwnUser,
+  async (req: Request<GetUserParams, unknown, Partial<RequestAlumniSwitchOtpBody>>, res: Response) => {
+    const { userId } = req.params;
+    const { newEmail, changeToken } = req.body;
+
+    // Validate inputs
+    if (!newEmail || typeof newEmail !== 'string') {
+      return res.status(400).json({ message: 'New email is required' });
+    }
+
+    if (!changeToken || typeof changeToken !== 'string') {
+      return res.status(400).json({ message: 'Password change token is required' });
+    }
+
+    const trimmedEmail = newEmail.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailRegex.test(trimmedEmail)) {
+      return res.status(400).json({ message: 'Invalid email format' });
+    }
+
+    try {
+      // Verify the password change token is valid
+      let tokenPayload;
+      try {
+        tokenPayload = verifyPasswordChangeToken(changeToken);
+      } catch (err) {
+        return res.status(401).json({ message: 'Invalid or expired password change token' });
+      }
+
+      if (tokenPayload.userId !== userId) {
+        return res.status(403).json({ message: 'Invalid password change token' });
+      }
+
+      // Fetch user to verify they are a student
+      const userRows = await prisma.$queryRaw<Array<{ user_id: string; user_type: string; email: string }>>`
+        SELECT user_id, user_type, email
+        FROM users
+        WHERE user_id = ${userId}
+      `;
+
+      const user = userRows[0];
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      if (user.user_type !== 'student') {
+        return res.status(400).json({ message: 'Only student accounts can switch to alumni' });
+      }
+
+      // Check if new email is the same as current email
+      if (trimmedEmail === user.email.toLowerCase()) {
+        return res.status(400).json({ message: 'New email must be different from current email' });
+      }
+
+      // Check if new email is already in use
+      const existingEmailRows = await prisma.$queryRaw<{ exists: boolean }[]>`
+        SELECT EXISTS(SELECT 1 FROM users WHERE LOWER(email) = ${trimmedEmail}) AS "exists"
+      `;
+
+      if (existingEmailRows[0]?.exists) {
+        return res.status(400).json({ message: 'This email is already in use' });
+      }
+
+      // Generate and store OTP
+      const otp = generateOtp();
+      await storeOtp(userId, trimmedEmail, otp);
+
+      // Send OTP email
+      try {
+        await sendEmailVerificationOTP({
+          email: trimmedEmail,
+          otp,
+        });
+      } catch (err) {
+        console.error('Error sending OTP email:', err);
+        return res.status(500).json({ message: 'Failed to send verification email' });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: `Verification code sent to ${trimmedEmail}`,
+      });
+    } catch (err) {
+      console.error('Error requesting alumni switch OTP:', err);
+      return res.status(500).json({ message: 'Internal server error' });
+    }
+  }
+);
+
+router.post(
+  '/:userId/switch-to-alumni/verify-otp',
+  requireOwnUser,
+  async (req: Request<GetUserParams, unknown, Partial<VerifyAlumniSwitchOtpBody>>, res: Response) => {
+    const { userId } = req.params;
+    const { newEmail, otp } = req.body;
+
+    // Validate inputs
+    if (!newEmail || typeof newEmail !== 'string') {
+      return res.status(400).json({ message: 'New email is required' });
+    }
+
+    if (!otp || typeof otp !== 'string') {
+      return res.status(400).json({ message: 'Verification code is required' });
+    }
+
+    const trimmedEmail = newEmail.trim().toLowerCase();
+
+    try {
+      // Verify OTP
+      const isOtpValid = await verifyOtp(userId, trimmedEmail, otp);
+
+      if (!isOtpValid) {
+        return res.status(401).json({ message: 'Invalid or expired verification code' });
+      }
+
+      // Fetch user to verify they are a student
+      const userRows = await prisma.$queryRaw<Array<{ user_id: string; user_type: string }>>`
+        SELECT user_id, user_type
+        FROM users
+        WHERE user_id = ${userId}
+      `;
+
+      const user = userRows[0];
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      if (user.user_type !== 'student') {
+        return res.status(400).json({ message: 'Only student accounts can switch to alumni' });
+      }
+
+      // Update user email and role to alumni
+      await prisma.$queryRaw`
+        UPDATE users
+        SET email = ${trimmedEmail}, user_type = 'alumni', updated_at = NOW()
+        WHERE user_id = ${userId}
+      `;
+
+      // Invalidate user cache to refresh the updated data
+      await invalidateUserCache(userId);
+
+      return res.status(200).json({
+        success: true,
+        message: 'Successfully switched to alumni account',
+        email: trimmedEmail,
+        userType: 'alumni',
+      });
+    } catch (err) {
+      console.error('Error verifying alumni switch OTP:', err);
       return res.status(500).json({ message: 'Internal server error' });
     }
   }

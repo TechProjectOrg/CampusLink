@@ -674,3 +674,65 @@ export async function apiDeleteAccount(
     throw new Error(err?.message || 'Unable to delete account');
   }
 }
+
+// ============================================================================
+// Switch to Alumni Account Functions
+// ============================================================================
+
+export interface AlumniSwitchOtpRequestResult {
+  success: boolean;
+  message: string;
+}
+
+export interface AlumniSwitchOtpVerifyResult {
+  success: boolean;
+  message: string;
+  email: string;
+  userType: string;
+}
+
+export async function apiRequestAlumniSwitchOtp(
+  userId: string,
+  newEmail: string,
+  changeToken: string,
+  token?: string,
+): Promise<AlumniSwitchOtpRequestResult> {
+  const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}/switch-to-alumni/request-otp`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(token),
+    },
+    body: JSON.stringify({ newEmail, changeToken }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Failed to request OTP for alumni switch');
+  }
+
+  return response.json();
+}
+
+export async function apiVerifyAlumniSwitchOtp(
+  userId: string,
+  newEmail: string,
+  otp: string,
+  token?: string,
+): Promise<AlumniSwitchOtpVerifyResult> {
+  const response = await safeFetch(`${API_BASE}/users/${encodeURIComponent(userId)}/switch-to-alumni/verify-otp`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(token),
+    },
+    body: JSON.stringify({ newEmail, otp }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Failed to verify OTP for alumni switch');
+  }
+
+  return response.json();
+}
