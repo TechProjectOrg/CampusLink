@@ -154,6 +154,7 @@ export function ChatPage({
   const selectedConversationId = useAppDataSelector((state) => state.chat.selectedConversationId);
   const selectedChat = selectedConversationId;
   const [message, setMessage] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const [isNewChatOpen, setIsNewChatOpen] = useState(false);
   const [showMessageRequests, setShowMessageRequests] = useState(false);
   const [viewingGroupInfo, setViewingGroupInfo] = useState<string | null>(null);
@@ -175,6 +176,22 @@ export function ChatPage({
   const activeConversations = conversations.filter((conversation) => !conversation.isRequest);
   const requestConversations = conversations.filter((conversation) => conversation.isRequest);
   const visibleConversations = showMessageRequests ? requestConversations : activeConversations;
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const filteredConversations = visibleConversations.filter((conversation) => {
+    if (!normalizedSearchQuery) {
+      return true;
+    }
+
+    const searchableValues = [
+      conversation.participantName,
+      conversation.participantUsername,
+      conversation.lastMessage,
+    ];
+
+    return searchableValues.some(
+      (value) => typeof value === 'string' && value.toLowerCase().includes(normalizedSearchQuery),
+    );
+  });
   const selectedChatState = useAppDataSelector((state) =>
     selectedChat ? state.chat.messagesByConversationId[selectedChat] ?? null : null,
   );
@@ -829,6 +846,8 @@ export function ChatPage({
               <Input
                 type="text"
                 placeholder="Search messages..."
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
                 className="pl-10 bg-gray-50 border-gray-200 rounded-xl focus:bg-white transition-all duration-300"
               />
             </div>
@@ -859,7 +878,7 @@ export function ChatPage({
           <div className="flex-1 relative">
             <div className="absolute inset-0 overflow-y-auto">
               <div className="cl-chat-conversation-list-inner p-2 w-full">
-              {visibleConversations.map(conversation => (
+              {filteredConversations.map(conversation => (
                 <button
                   key={conversation.id}
                   onClick={() => {
@@ -914,9 +933,13 @@ export function ChatPage({
                   </div>
                 </button>
               ))}
-              {visibleConversations.length === 0 && (
+              {filteredConversations.length === 0 && (
                 <div className="px-4 py-8 text-center text-sm text-gray-500">
-                  {showMessageRequests ? 'No message requests right now.' : 'No chats yet.'}
+                  {normalizedSearchQuery
+                    ? 'No conversations match your search.'
+                    : showMessageRequests
+                      ? 'No message requests right now.'
+                      : 'No chats yet.'}
                 </div>
               )}
               </div>
