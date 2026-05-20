@@ -280,14 +280,21 @@ async function canViewerAccessAuthorPosts(viewerUserId: string, authorUserId: st
 }
 
 async function canViewerAccessPost(viewerUserId: string, postId: string): Promise<boolean> {
-  const rows = await prisma.$queryRaw<Array<{ author_user_id: string }>>`
-    SELECT author_user_id
+  const rows = await prisma.$queryRaw<Array<{ author_user_id: string; club_id: string | null }>>`
+    SELECT author_user_id, club_id
     FROM posts
     WHERE post_id = ${postId}
     LIMIT 1
   `;
-  const authorUserId = rows[0]?.author_user_id;
-  if (!authorUserId) return false;
+  const post = rows[0];
+  const authorUserId = post?.author_user_id;
+  if (!authorUserId || !post) return false;
+  if (await isBlockedEitherWay(viewerUserId, authorUserId)) {
+    return false;
+  }
+  if (post.club_id) {
+    return canViewerAccessClubPost(viewerUserId, postId);
+  }
   if (!(await canViewerAccessAuthorPosts(viewerUserId, authorUserId))) {
     return false;
   }

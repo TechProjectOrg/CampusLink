@@ -1,9 +1,21 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, CheckCircle, Crown, Lock, MoreVertical, Plus, Search, ShieldCheck, TrendingUp, UserPlus, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { userPostToOpportunity } from '../context/AppDataContext';
-import { apiCreateUserPost } from '../lib/postsApi';
+import {
+  apiAddComment,
+  apiAddReply,
+  apiCreateUserPost,
+  apiDeleteComment,
+  apiFetchPostById,
+  apiLikeComment,
+  apiLikePost,
+  apiSavePost,
+  apiUnlikeComment,
+  apiUnlikePost,
+  apiUnsavePost,
+} from '../lib/postsApi';
 import {
   apiJoinClub,
   apiApproveClubMember,
@@ -18,7 +30,7 @@ import {
   type ClubMember,
 } from '../lib/clubsApi';
 import { apiGetFollowGraph, apiSearchUsers, type SearchUserResult } from '../lib/networkApi';
-import type { Club, Student } from '../types';
+import type { Club, Comment, Opportunity, Student } from '../types';
 import { Button } from './ui/button';
 import { Card, CardContent } from './ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
@@ -95,6 +107,73 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
     privacy: 'open' as Club['privacy'],
     primaryCategory: '',
   });
+
+  const updatePostInState = useCallback((postId: string, updater: (post: Opportunity) => Opportunity) => {
+    setPosts((current) => current.map((post) => (post.id === postId ? updater(post) : post)));
+  }, []);
+
+  const replacePostInState = useCallback((post: Opportunity) => {
+    setPosts((current) => current.map((item) => (item.id === post.id ? post : item)));
+  }, []);
+
+  const refreshClubPost = useCallback(async (postId: string) => {
+    const fresh = await apiFetchPostById(postId, auth.session?.token);
+    replacePostInState(userPostToOpportunity(fresh, {}, auth.currentUser ?? null));
+  }, [auth.currentUser, auth.session?.token, replacePostInState]);
+
+  const updateCommentInTree = useCallback(function updateCommentInTree(
+    comments: Comment[],
+    commentId: string,
+    updater: (comment: Comment) => Comment,
+  ): Comment[] {
+    return comments.map((comment) => {
+      if (comment.id === commentId) {
+        return updater(comment);
+      }
+
+      if (!comment.replies || comment.replies.length === 0) {
+        return comment;
+      }
+
+      return {
+        ...comment,
+        replies: updateCommentInTree(comment.replies, commentId, updater),
+      };
+    });
+  }, []);
+
+  const removeCommentFromTree = useCallback(function removeCommentFromTree(
+    comments: Comment[],
+    commentId: string,
+  ): { comments: Comment[]; removed: Comment | null } {
+    let removed: Comment | null = null;
+    const nextComments = comments
+      .filter((comment) => {
+        if (comment.id === commentId) {
+          removed = comment;
+          return false;
+        }
+        return true;
+      })
+      .map((comment) => {
+        if (removed || !comment.replies || comment.replies.length === 0) {
+          return comment;
+        }
+
+        const nested = removeCommentFromTree(comment.replies, commentId);
+        if (!nested.removed) {
+          return comment;
+        }
+
+        removed = nested.removed;
+        return {
+          ...comment,
+          replies: nested.comments,
+        };
+      });
+
+    return { comments: nextComments, removed };
+  }, []);
 
   const loadClubData = async () => {
     const detailKey = `page:club:detail:${clubSlug}`;
@@ -350,6 +429,249 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
       setIsPosting(false);
     }
   };
+
+  const handleLikePost = useCallback((postId: string) => {
+    const target = posts.find((post) => post.id === postId);
+    if (!target) return;
+
+    const previousLiked = Boolean(target.isLikedByMe ?? target.likes.includes(currentUserId));
+    const previousLikeCount = Math.max(target.likeCount ?? target.likes.length, 0);
+    const nextLiked = !previousLiked;
+
+    updatePostInState(postId, (post) => ({
+      ...post,
+      isLikedByMe: nextLiked,
+      likeCount: Math.max((post.likeCount ?? 0) + (nextLiked ? 1 : -1), 0),
+    }));
+
+    void (async () => {
+      try {
+        if (nextLiked) {
+          await apiLikePost(postId, auth.session?.token);
+        } else {
+          await apiUnlikePost(postId, auth.session?.token);
+        }
+        await refreshClubPost(postId);
+      } catch (err) {
+        updatePostInState(postId, (post) => ({
+          ...post,
+          isLikedByMe: previousLiked,
+          likeCount: previousLikeCount,
+        }));
+        toast.error(err instanceof Error ? err.message : 'Unable to update like');
+      }
+    })();
+  }, [auth.session?.token, currentUserId, posts, refreshClubPost, updatePostInState]);
+
+  const handleSavePost = useCallback((postId: string) => {
+    const target = posts.find((post) => post.id === postId);
+    if (!target) return;
+
+    const previousSaved = Boolean(target.isSavedByMe ?? target.saved.includes(currentUserId));
+    const previousSaveCount = Math.max(target.saveCount ?? target.saved.length, 0);
+    const nextSaved = !previousSaved;
+
+    updatePostInState(postId, (post) => ({
+      ...post,
+      isSavedByMe: nextSaved,
+      saveCount: Math.max((post.saveCount ?? 0) + (nextSaved ? 1 : -1), 0),
+    }));
+
+    void (async () => {
+      try {
+        if (nextSaved) {
+          await apiSavePost(postId, auth.session?.token);
+        } else {
+          await apiUnsavePost(postId, auth.session?.token);
+        }
+        await refreshClubPost(postId);
+      } catch (err) {
+        updatePostInState(postId, (post) => ({
+          ...post,
+          isSavedByMe: previousSaved,
+          saveCount: previousSaveCount,
+        }));
+        toast.error(err instanceof Error ? err.message : 'Unable to update save');
+      }
+    })();
+  }, [auth.session?.token, currentUserId, posts, refreshClubPost, updatePostInState]);
+
+  const handleAddComment = useCallback((postId: string, content: string) => {
+    const trimmed = content.trim();
+    if (!trimmed) return;
+
+    const createdAt = new Date().toISOString();
+    const optimisticComment: Comment = {
+      id: `temp-comment-${createdAt}`,
+      postId,
+      authorId: currentUserId,
+      authorName: auth.currentUser?.name ?? auth.profile?.displayName ?? auth.profile?.username ?? 'You',
+      authorAvatar: auth.currentUser?.avatar ?? auth.profile?.profilePictureUrl ?? '',
+      content: trimmed,
+      timestamp: createdAt,
+      parentCommentId: null,
+      replies: [],
+      likeCount: 0,
+      replyCount: 0,
+      isLikedByMe: false,
+      canDelete: true,
+    };
+
+    updatePostInState(postId, (post) => ({
+      ...post,
+      comments: [...post.comments, optimisticComment],
+      commentCount: Math.max((post.commentCount ?? post.comments.length) + 1, 0),
+    }));
+
+    void (async () => {
+      try {
+        await apiAddComment(postId, trimmed, auth.session?.token);
+        await refreshClubPost(postId);
+      } catch (err) {
+        updatePostInState(postId, (post) => ({
+          ...post,
+          comments: post.comments.filter((comment) => comment.id !== optimisticComment.id),
+          commentCount: Math.max((post.commentCount ?? post.comments.length) - 1, 0),
+        }));
+        toast.error(err instanceof Error ? err.message : 'Unable to add comment');
+      }
+    })();
+  }, [auth.currentUser?.avatar, auth.currentUser?.name, auth.profile?.displayName, auth.profile?.profilePictureUrl, auth.profile?.username, auth.session?.token, currentUserId, refreshClubPost, updatePostInState]);
+
+  const handleReplyToComment = useCallback((commentId: string, content: string) => {
+    const trimmed = content.trim();
+    if (!trimmed) return;
+
+    const parentPost = posts.find((post) => {
+      const walk = (comments: Comment[]): boolean =>
+        comments.some((comment) => comment.id === commentId || walk(comment.replies ?? []));
+      return walk(post.comments);
+    });
+    if (!parentPost) return;
+
+    const createdAt = new Date().toISOString();
+    const optimisticReply: Comment = {
+      id: `temp-reply-${createdAt}`,
+      postId: parentPost.id,
+      authorId: currentUserId,
+      authorName: auth.currentUser?.name ?? auth.profile?.displayName ?? auth.profile?.username ?? 'You',
+      authorAvatar: auth.currentUser?.avatar ?? auth.profile?.profilePictureUrl ?? '',
+      content: trimmed,
+      timestamp: createdAt,
+      parentCommentId: commentId,
+      replies: [],
+      likeCount: 0,
+      replyCount: 0,
+      isLikedByMe: false,
+      canDelete: true,
+    };
+
+    updatePostInState(parentPost.id, (post) => ({
+      ...post,
+      comments: updateCommentInTree(post.comments, commentId, (comment) => ({
+        ...comment,
+        replies: [...(comment.replies ?? []), optimisticReply],
+        replyCount: (comment.replyCount ?? comment.replies?.length ?? 0) + 1,
+      })),
+      commentCount: Math.max((post.commentCount ?? post.comments.length) + 1, 0),
+    }));
+
+    void (async () => {
+      try {
+        await apiAddReply(commentId, trimmed, auth.session?.token);
+        await refreshClubPost(parentPost.id);
+      } catch (err) {
+        updatePostInState(parentPost.id, (post) => ({
+          ...post,
+          comments: updateCommentInTree(post.comments, commentId, (comment) => ({
+            ...comment,
+            replies: (comment.replies ?? []).filter((reply) => reply.id !== optimisticReply.id),
+            replyCount: Math.max((comment.replyCount ?? 0) - 1, 0),
+          })),
+          commentCount: Math.max((post.commentCount ?? post.comments.length) - 1, 0),
+        }));
+        toast.error(err instanceof Error ? err.message : 'Unable to add reply');
+      }
+    })();
+  }, [auth.currentUser?.avatar, auth.currentUser?.name, auth.profile?.displayName, auth.profile?.profilePictureUrl, auth.profile?.username, auth.session?.token, currentUserId, posts, refreshClubPost, updateCommentInTree, updatePostInState]);
+
+  const handleLikePostComment = useCallback((commentId: string, alreadyLiked: boolean) => {
+    const parentPost = posts.find((post) => {
+      const walk = (comments: Comment[]): boolean =>
+        comments.some((comment) => comment.id === commentId || walk(comment.replies ?? []));
+      return walk(post.comments);
+    });
+    if (!parentPost) return;
+
+    let previousLikeCount = 0;
+    const nextLiked = !alreadyLiked;
+
+    updatePostInState(parentPost.id, (post) => ({
+      ...post,
+      comments: updateCommentInTree(post.comments, commentId, (comment) => {
+        previousLikeCount = Math.max(comment.likeCount ?? 0, 0);
+        return {
+          ...comment,
+          isLikedByMe: nextLiked,
+          likeCount: Math.max((comment.likeCount ?? 0) + (nextLiked ? 1 : -1), 0),
+        };
+      }),
+    }));
+
+    void (async () => {
+      try {
+        if (alreadyLiked) {
+          await apiUnlikeComment(commentId, auth.session?.token);
+        } else {
+          await apiLikeComment(commentId, auth.session?.token);
+        }
+        await refreshClubPost(parentPost.id);
+      } catch (err) {
+        updatePostInState(parentPost.id, (post) => ({
+          ...post,
+          comments: updateCommentInTree(post.comments, commentId, (comment) => ({
+            ...comment,
+            isLikedByMe: alreadyLiked,
+            likeCount: previousLikeCount,
+          })),
+        }));
+        toast.error(err instanceof Error ? err.message : 'Unable to update comment like');
+      }
+    })();
+  }, [auth.session?.token, posts, refreshClubPost, updateCommentInTree, updatePostInState]);
+
+  const handleDeletePostComment = useCallback((commentId: string) => {
+    const parentPost = posts.find((post) => {
+      const walk = (comments: Comment[]): boolean =>
+        comments.some((comment) => comment.id === commentId || walk(comment.replies ?? []));
+      return walk(post.comments);
+    });
+    if (!parentPost) return;
+
+    const removal = removeCommentFromTree(parentPost.comments, commentId);
+    if (!removal.removed) return;
+
+    updatePostInState(parentPost.id, (post) => ({
+      ...post,
+      comments: removal.removed.parentCommentId
+        ? updateCommentInTree(removal.comments, removal.removed.parentCommentId, (comment) => ({
+            ...comment,
+            replyCount: Math.max((comment.replyCount ?? 0) - 1, 0),
+          }))
+        : removal.comments,
+      commentCount: Math.max((post.commentCount ?? post.comments.length) - 1, 0),
+    }));
+
+    void (async () => {
+      try {
+        await apiDeleteComment(commentId, auth.session?.token);
+        await refreshClubPost(parentPost.id);
+      } catch (err) {
+        replacePostInState(parentPost);
+        toast.error(err instanceof Error ? err.message : 'Unable to delete comment');
+      }
+    })();
+  }, [auth.session?.token, posts, refreshClubPost, removeCommentFromTree, replacePostInState, updateCommentInTree, updatePostInState]);
 
   const handleApproveRequest = async (userId: string) => {
     if (!club) return;
@@ -622,9 +944,12 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
                   key={post.id}
                   opportunity={post}
                   currentUserId={currentUserId}
-                  onLike={() => {}}
-                  onSave={() => {}}
-                  onComment={() => {}}
+                  onLike={handleLikePost}
+                  onSave={handleSavePost}
+                  onComment={handleAddComment}
+                  onReply={handleReplyToComment}
+                  onLikeComment={handleLikePostComment}
+                  onDeleteComment={handleDeletePostComment}
                   onViewProfile={onViewProfile}
                 />
               ))}
