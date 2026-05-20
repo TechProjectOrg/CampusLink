@@ -1264,7 +1264,7 @@ router.post('/conversations', requireModerationCapability('message'), async (req
   }
 });
 
-router.delete('/conversations/:chatId', async (req: Request, res: Response) => {
+router.delete('/conversations/:chatId', requireModerationCapability('message'), async (req: Request, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const userId = authed.auth!.userId;
   const chatId = req.params.chatId as string;
@@ -1493,7 +1493,7 @@ router.post(
   },
 );
 
-router.patch('/conversations/:chatId/read', async (req: Request, res: Response) => {
+router.patch('/conversations/:chatId/read', requireModerationCapability('message'), async (req: Request, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const userId = authed.auth!.userId;
   const chatId = req.params.chatId as string;

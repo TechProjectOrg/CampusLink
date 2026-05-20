@@ -188,6 +188,48 @@ export async function sendVerificationDecisionEmail(params: {
   }
 }
 
+export async function sendModerationBanEmail(params: {
+  email: string;
+  displayName?: string | null;
+  reason?: string | null;
+}): Promise<void> {
+  const resend = getResendClient();
+  const safeName = escapeHtml(params.displayName?.trim() || 'there');
+  const safeReason = params.reason?.trim() ? escapeHtml(params.reason.trim()) : '';
+
+  const reasonBlock = safeReason
+    ? `
+        <div style="margin:24px 0 0; padding:16px 18px; border-radius:16px; background:#fef2f2; border:1px solid #fecaca;">
+          <p style="margin:0 0 8px; color:#7f1d1d; font-size:14px; font-weight:600;">Moderation note</p>
+          <p style="margin:0; color:#7f1d1d; font-size:14px; line-height:1.7;">${safeReason}</p>
+        </div>
+      `
+    : '';
+
+  const result = await resend.emails.send({
+    from: getVerificationFromAddress(),
+    to: [params.email],
+    subject: 'Your CampusLynk account has been banned',
+    html: `
+      <div style="font-family: Inter, Arial, sans-serif; background:#f8fafc; padding:32px;">
+        <div style="max-width:560px; margin:0 auto; background:#ffffff; border-radius:24px; padding:40px; border:1px solid #e2e8f0;">
+          <p style="margin:0 0 12px; color:#0f172a; font-size:28px; font-weight:700;">CampusLynk</p>
+          <p style="margin:0 0 8px; color:#991b1b; font-size:20px; font-weight:600;">Account banned</p>
+          <p style="margin:0 0 12px; color:#0f172a; font-size:15px;">Hi ${safeName},</p>
+          <p style="margin:0; color:#475569; font-size:15px; line-height:1.7;">
+            Your account has been permanently banned from using CampusLynk. You can no longer access the website with this account.
+          </p>
+          ${reasonBlock}
+        </div>
+      </div>
+    `,
+  });
+
+  if (result.error) {
+    throw new Error(result.error.message || 'Resend could not deliver the moderation ban email');
+  }
+}
+
 export async function sendEmailVerificationOTP(params: {
   email: string;
   otp: string;

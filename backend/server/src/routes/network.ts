@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import prisma from '../prisma';
 import authenticateToken, { type AuthedRequest } from '../middleware/authenticateToken';
+import requireModerationCapability from '../middleware/requireModerationCapability';
 import { createNotification } from '../lib/notifications';
 import { invalidateUserFeedCache } from '../lib/feedCache';
 import { getUserSummariesByIds, getUserSummaryById, incrementUserStat, toCachedUserCard } from '../lib/userCache';
@@ -205,7 +206,7 @@ router.get('/suggestions', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/suggestions/:targetUserId/dismiss', async (req: Request, res: Response) => {
+router.post('/suggestions/:targetUserId/dismiss', requireModerationCapability('network'), async (req: Request, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const userId = authed.auth!.userId;
   const targetUserId = String(req.params.targetUserId);
@@ -231,7 +232,7 @@ router.post('/suggestions/:targetUserId/dismiss', async (req: Request, res: Resp
 // POST /network/follow — Follow a user (or send request to private)
 // ============================================================
 
-router.post('/follow', async (req: Request, res: Response) => {
+router.post('/follow', requireModerationCapability('network'), async (req: Request, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const currentUserId = authed.auth!.userId;
   const { targetUserId } = req.body as { targetUserId?: string };
@@ -351,7 +352,7 @@ router.post('/follow', async (req: Request, res: Response) => {
 // DELETE /network/follow/:targetUserId — Unfollow a user
 // ============================================================
 
-router.delete('/follow/:targetUserId', async (req: Request, res: Response) => {
+router.delete('/follow/:targetUserId', requireModerationCapability('network'), async (req: Request, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const currentUserId = authed.auth!.userId;
   const targetUserId = String(req.params.targetUserId);
@@ -395,7 +396,7 @@ router.delete('/follow/:targetUserId', async (req: Request, res: Response) => {
 // DELETE /network/followers/:followerUserId — Remove a follower
 // ============================================================
 
-router.delete('/followers/:followerUserId', async (req: Request, res: Response) => {
+router.delete('/followers/:followerUserId', requireModerationCapability('network'), async (req: Request, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const currentUserId = authed.auth!.userId;
   const followerUserId = String(req.params.followerUserId);
@@ -506,7 +507,7 @@ router.get('/requests/outgoing', async (req: Request, res: Response) => {
 // POST /network/requests/:requestId/accept
 // ============================================================
 
-router.post('/requests/:requestId/accept', async (req: Request, res: Response) => {
+router.post('/requests/:requestId/accept', requireModerationCapability('network'), async (req: Request, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const currentUserId = authed.auth!.userId;
   const requestIdentifier = req.params.requestId as string;
@@ -587,7 +588,7 @@ router.post('/requests/:requestId/accept', async (req: Request, res: Response) =
 // POST /network/requests/:requestId/reject
 // ============================================================
 
-router.post('/requests/:requestId/reject', async (req: Request, res: Response) => {
+router.post('/requests/:requestId/reject', requireModerationCapability('network'), async (req: Request, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const currentUserId = authed.auth!.userId;
   const requestIdentifier = req.params.requestId as string;
@@ -628,7 +629,7 @@ router.post('/requests/:requestId/reject', async (req: Request, res: Response) =
 // DELETE /network/requests/:targetUserId — Cancel outgoing request
 // ============================================================
 
-router.delete('/requests/:targetUserId', async (req: Request, res: Response) => {
+router.delete('/requests/:targetUserId', requireModerationCapability('network'), async (req: Request, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const currentUserId = authed.auth!.userId;
   const { targetUserId } = req.params;

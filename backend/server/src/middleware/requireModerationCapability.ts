@@ -4,12 +4,13 @@ import {
   assertCanComment,
   assertCanManageCommunities,
   assertCanMessage,
+  assertCanNetwork,
   assertCanPost,
   assertCanUpload,
   type ModerationState,
 } from '../lib/moderation';
 
-type Capability = 'post' | 'comment' | 'message' | 'upload' | 'community';
+type Capability = 'post' | 'comment' | 'message' | 'network' | 'upload' | 'community';
 
 function applyCapability(capability: Capability, state: ModerationState): void {
   if (capability === 'post') {
@@ -22,6 +23,10 @@ function applyCapability(capability: Capability, state: ModerationState): void {
   }
   if (capability === 'message') {
     assertCanMessage(state);
+    return;
+  }
+  if (capability === 'network') {
+    assertCanNetwork(state);
     return;
   }
   if (capability === 'upload') {

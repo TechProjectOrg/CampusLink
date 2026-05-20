@@ -26,7 +26,7 @@ import {
   invalidateClubStatsCache,
 } from '../lib/clubCache';
 import { getTrendingHashtagsForApi } from '../lib/socialInsights';
-import { sendVerificationDecisionEmail } from '../lib/authEmail';
+import { sendModerationBanEmail, sendVerificationDecisionEmail } from '../lib/authEmail';
 import { applyModerationAction } from '../lib/moderation';
 
 const router = express.Router();
@@ -1304,10 +1304,18 @@ router.post('/users/:userId/actions', async (req: Request<{ userId: string }>, r
   const { userId } = req.params;
   const { action, note, durationDays } = req.body as { action?: string; note?: string; durationDays?: number };
   const normalizedNote = note?.trim();
-  const suspendDays = Math.min(365, Math.max(1, Number.isFinite(Number(durationDays)) ? Number(durationDays) : 7));
 
   if (!action) {
     return res.status(400).json({ message: 'Missing action' });
+  }
+
+  let suspendDays: number | null = null;
+  if (action === 'suspend') {
+    const parsedDuration = Number(durationDays);
+    if (!Number.isInteger(parsedDuration) || parsedDuration < 1 || parsedDuration > 365) {
+      return res.status(400).json({ message: 'durationDays must be an integer between 1 and 365' });
+    }
+    suspendDays = parsedDuration;
   }
 
   try {
@@ -1336,15 +1344,55 @@ router.post('/users/:userId/actions', async (req: Request<{ userId: string }>, r
         targetUserId: userId,
         actionType: 'suspend',
         reason: normalizedNote || 'Account suspended for policy violations.',
-        durationDays: suspendDays,
+        durationDays: suspendDays!,
       });
     } else if (action === 'ban') {
+      const targetRows = await prisma.$queryRaw<Array<{ email: string; display_name: string | null }>>`
+        SELECT email, display_name
+        FROM users
+        WHERE user_id = ${userId}
+        LIMIT 1
+      `;
+      const targetUser = targetRows[0];
+      if (!targetUser) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
       await applyModerationAction({
         adminUserId: adminReq.auth!.userId,
         targetUserId: userId,
         actionType: 'ban',
         reason: normalizedNote || 'Account permanently banned for policy violations.',
       });
+
+      let banEmail: { attempted: true; sent: boolean; error?: string } = { attempted: true, sent: true };
+      try {
+        await sendModerationBanEmail({
+          email: targetUser.email,
+          displayName: targetUser.display_name,
+          reason: normalizedNote || 'Account permanently banned for policy violations.',
+        });
+      } catch (emailErr) {
+        const errorMessage = emailErr instanceof Error ? emailErr.message : 'Unknown email delivery failure';
+        banEmail = { attempted: true, sent: false, error: errorMessage };
+        console.error('Error sending moderation ban email:', emailErr);
+      }
+
+      await recordAdminAuditLog({
+        actorUserId: adminReq.auth!.userId,
+        actionType: 'user.ban',
+        targetType: 'user',
+        targetId: userId,
+        severity: 'warning',
+        summary: 'Admin performed ban on user',
+        metadata: {
+          ...(normalizedNote ? { note: normalizedNote } : {}),
+          banEmailSent: banEmail.sent,
+          ...(banEmail.error ? { banEmailError: banEmail.error } : {}),
+        },
+      });
+
+      return res.status(200).json({ success: true, email: banEmail });
     } else if (action === 'unsuspend') {
       await applyModerationAction({
         adminUserId: adminReq.auth!.userId,
@@ -1378,7 +1426,7 @@ router.post('/users/:userId/actions', async (req: Request<{ userId: string }>, r
       summary: `Admin performed ${action} on user`,
       metadata: {
         ...(normalizedNote ? { note: normalizedNote } : {}),
-        ...(action === 'suspend' ? { durationDays: suspendDays } : {}),
+        ...(action === 'suspend' && suspendDays !== null ? { durationDays: suspendDays } : {}),
       },
     });
 

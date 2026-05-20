@@ -555,7 +555,7 @@ router.get('/:userId/blocks', requireOwnUser, async (req: Request<GetUserParams>
   }
 });
 
-router.post('/:userId/block', async (req: Request<GetUserParams>, res: Response) => {
+router.post('/:userId/block', requireModerationCapability('network'), async (req: Request<GetUserParams>, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const blockerId = authed.auth!.userId;
   const blockedId = req.params.userId;
@@ -622,7 +622,7 @@ router.post('/:userId/block', async (req: Request<GetUserParams>, res: Response)
   }
 });
 
-router.delete('/:userId/block', async (req: Request<GetUserParams>, res: Response) => {
+router.delete('/:userId/block', requireModerationCapability('network'), async (req: Request<GetUserParams>, res: Response) => {
   const authed = req as unknown as AuthedRequest;
   const blockerId = authed.auth!.userId;
   const blockedId = req.params.userId;
@@ -686,6 +686,7 @@ router.get('/:userId/settings', async (req: Request<GetUserParams>, res: Respons
 router.patch(
   '/:userId/settings',
   requireOwnUser,
+  requireModerationCapability('post'),
   async (req: Request<GetUserParams, unknown, UpdateUserSettingsBody>, res: Response) => {
     const { userId } = req.params;
     const { notifications, privacy } = req.body;

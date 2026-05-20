@@ -168,6 +168,10 @@ export function assertCanMessage(state: ModerationState): void {
   assertCapabilityAllowed(state, 'message');
 }
 
+export function assertCanNetwork(state: ModerationState): void {
+  assertCapabilityAllowed(state, 'network');
+}
+
 export function assertCanUpload(state: ModerationState): void {
   assertCapabilityAllowed(state, 'upload');
 }

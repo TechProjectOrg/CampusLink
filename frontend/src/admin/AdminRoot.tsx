@@ -182,6 +182,15 @@ type UserFilterState = {
 
 type UserActionName = 'warn' | 'suspend' | 'unsuspend' | 'ban' | 'unban' | 'verify';
 
+type AdminUserActionResponse = {
+  success: true;
+  email?: {
+    attempted: boolean;
+    sent: boolean;
+    error?: string;
+  };
+};
+
 type AdminClubStatus = 'active' | 'featured' | 'frozen' | 'deleted';
 type AdminClubSortKey = 'members' | 'posts' | 'reports' | 'createdAt' | 'lastActivity';
 
@@ -887,6 +896,16 @@ function getUserActionOptions(user: Pick<AdminUserListItem, 'status' | 'verified
   return actions;
 }
 
+function parseSuspensionDaysInput(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 365) {
+    return null;
+  }
+  return parsed;
+}
+
 function ShellCard({ title, children, action }: { title: string; children: React.ReactNode; action?: React.ReactNode }) {
   return (
     <section className="overflow-hidden rounded-lg border border-slate-200 bg-white">
@@ -1034,7 +1053,7 @@ export default function AdminRoot() {
   const [transferTarget, setTransferTarget] = useState<string>('');
   const [transferConfirm, setTransferConfirm] = useState(false);
   const [selectedUserIds, setSelectedUserIds] = useState<string[]>([]);
-  const [userActionForm, setUserActionForm] = useState({ note: '', durationDays: 7 });
+  const [userActionForm, setUserActionForm] = useState({ note: '', durationDays: '7' });
 
   const [announcementDraft, setAnnouncementDraft] = useState<AnnouncementDraftState>(DEFAULT_ANNOUNCEMENT_DRAFT);
   const [announcementFilters, setAnnouncementFilters] = useState<AnnouncementFilterState>(DEFAULT_ANNOUNCEMENT_FILTERS);
@@ -1340,10 +1359,23 @@ export default function AdminRoot() {
 
   const runUserAction = async (userId: string, action: UserActionName, options?: { note?: string; durationDays?: number }) => {
     if (!token) return;
+    if (action === 'suspend') {
+      if (!Number.isInteger(options?.durationDays) || (options?.durationDays ?? 0) < 1 || (options?.durationDays ?? 0) > 365) {
+        toast.error('Enter a suspension length between 1 and 365 days.');
+        return;
+      }
+    }
     try {
-      await apiAdminPost(`/admin/users/${userId}/actions`, token, { action, note: options?.note, durationDays: options?.durationDays });
+      const response = await apiAdminPost<AdminUserActionResponse>(`/admin/users/${userId}/actions`, token, {
+        action,
+        note: options?.note,
+        durationDays: options?.durationDays,
+      });
       toast.success(`User ${action} completed`);
       setUserActionForm((current) => ({ ...current, note: '' }));
+      if (action === 'ban' && response.email?.attempted && !response.email.sent) {
+        toast.warning(`User banned, but the ban email could not be delivered${response.email.error ? `: ${response.email.error}` : '.'}`);
+      }
       await refreshCurrentPage();
       if (selectedUser?.id === userId) {
         await queryClient.invalidateQueries({ queryKey: getAdminUserDetailQueryKey(token, userId), exact: true });
@@ -1365,6 +1397,17 @@ export default function AdminRoot() {
     } catch (error) {
       toast.error(error instanceof Error ? error.message : `Unable to ${action} club`);
     }
+  };
+
+  const requestSuspensionDays = (defaultValue = '7'): number | null => {
+    const rawValue = window.prompt('Suspend for how many days? (1-365)', defaultValue);
+    if (rawValue === null) return null;
+    const parsed = parseSuspensionDaysInput(rawValue);
+    if (parsed === null) {
+      toast.error('Enter a whole number of days between 1 and 365.');
+      return null;
+    }
+    return parsed;
   };
 
   const runPostAction = async (postId: string, action: PostActionName, options?: { note?: string }) => {
@@ -1418,7 +1461,7 @@ export default function AdminRoot() {
 
   const openUserDrawer = (user: AdminUserListItem) => {
     setSelectedUser(user);
-    setUserActionForm({ note: '', durationDays: 7 });
+    setUserActionForm({ note: '', durationDays: '7' });
   };
 
   const openClubDrawer = async (club: AdminClubListItem) => {
@@ -1728,7 +1771,7 @@ export default function AdminRoot() {
         verified: Boolean(target.verified),
         avatarUrl: target.avatarUrl ?? null,
       });
-      setUserActionForm({ note: '', durationDays: 7 });
+      setUserActionForm({ note: '', durationDays: '7' });
       return;
     }
 
@@ -2213,7 +2256,18 @@ export default function AdminRoot() {
                   action={
                     <div className="flex flex-wrap gap-2">
                       <Button variant="outline" size="sm" disabled={selectedUserIds.length === 0} onClick={() => selectedUserIds.forEach((id) => void runUserAction(id, 'verify'))}>Bulk verify</Button>
-                      <Button variant="outline" size="sm" disabled={selectedUserIds.length === 0} onClick={() => selectedUserIds.forEach((id) => void runUserAction(id, 'suspend', { durationDays: 7 }))}>Bulk suspend</Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={selectedUserIds.length === 0}
+                        onClick={() => {
+                          const durationDays = requestSuspensionDays();
+                          if (durationDays === null) return;
+                          selectedUserIds.forEach((id) => void runUserAction(id, 'suspend', { durationDays }));
+                        }}
+                      >
+                        Bulk suspend
+                      </Button>
                     </div>
                   }
                 >
@@ -2284,7 +2338,15 @@ export default function AdminRoot() {
                                         key={option.action}
                                         variant="outline"
                                         size="sm"
-                                        onClick={() => void runUserAction(user.id, option.action, option.action === 'suspend' ? { durationDays: 7 } : undefined)}
+                                        onClick={() => {
+                                          if (option.action === 'suspend') {
+                                            const durationDays = requestSuspensionDays();
+                                            if (durationDays === null) return;
+                                            void runUserAction(user.id, option.action, { durationDays });
+                                            return;
+                                          }
+                                          void runUserAction(user.id, option.action);
+                                        }}
                                       >
                                         {option.label}
                                       </Button>
@@ -3427,7 +3489,7 @@ export default function AdminRoot() {
         subtitle={selectedUserDetail?.email ?? selectedUser?.email}
         onClose={() => {
           setSelectedUser(null);
-          setUserActionForm({ note: '', durationDays: 7 });
+          setUserActionForm({ note: '', durationDays: '7' });
         }}
       >
         {selectedUserDetailQuery.isError ? (
@@ -3522,7 +3584,7 @@ export default function AdminRoot() {
                     min={1}
                     max={365}
                     value={userActionForm.durationDays}
-                    onChange={(event) => setUserActionForm((current) => ({ ...current, durationDays: Number(event.target.value) || 7 }))}
+                    onChange={(event) => setUserActionForm((current) => ({ ...current, durationDays: event.target.value }))}
                     placeholder="Suspension days"
                   />
                   <div className="flex flex-wrap gap-2">
@@ -3534,7 +3596,10 @@ export default function AdminRoot() {
                         onClick={() =>
                           void runUserAction(selectedUserDetail.id, option.action, {
                             note: userActionForm.note.trim() || undefined,
-                            durationDays: option.action === 'suspend' ? userActionForm.durationDays : undefined,
+                            durationDays:
+                              option.action === 'suspend'
+                                ? parseSuspensionDaysInput(userActionForm.durationDays) ?? undefined
+                                : undefined,
                           })
                         }
                       >
