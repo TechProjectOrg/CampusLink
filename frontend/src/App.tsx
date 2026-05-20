@@ -612,6 +612,8 @@ export default function App() {
   const [suggestedUserIds, setSuggestedUserIds] = useState<string[]>([]);
   const [viewingProfileId, setViewingProfileId] = useState<string | null>(null);
   const [profileSubpage, setProfileSubpage] = useState<'posts' | 'projects' | 'saved' | null>(null);
+  const [networkProfileId, setNetworkProfileId] = useState<string | null>(null);
+  const [networkSubpage, setNetworkSubpage] = useState<'followers' | 'following' | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedHashtag, setSelectedHashtag] = useState<string | null>(null);
   const [postsRefreshToken, setPostsRefreshToken] = useState(0);
@@ -662,6 +664,8 @@ export default function App() {
     setSuggestedUserIds([]);
     setViewingProfileId(null);
     setProfileSubpage(null);
+    setNetworkProfileId(null);
+    setNetworkSubpage(null);
     setOpenedPost(null);
     setOpenedPostId(null);
     setOpenedPostComments(createInitialDiscussionPageState<Comment>());
@@ -728,6 +732,23 @@ export default function App() {
         if (mainPath === 'profile' && pathParts[1]) {
             setViewingProfileId(pathParts[1]);
             setProfileSubpage(pathParts[2] === 'posts' || pathParts[2] === 'projects' || pathParts[2] === 'saved' ? pathParts[2] : null);
+            setNetworkProfileId(null);
+            setNetworkSubpage(null);
+            setOpenedPostId(null);
+            setOpenedPost(null);
+            setOpenedPostComments(createInitialDiscussionPageState<Comment>());
+            setOpenedPostRepliesByCommentId({});
+            setFocusedCommentId(null);
+            setHashtagPageTag(null);
+            setClubPageSlug(null);
+        } else if (mainPath === 'network') {
+            const ownNetworkTab = pathParts[1] === 'followers' || pathParts[1] === 'following' ? pathParts[1] : null;
+            const parsedNetworkProfileId = ownNetworkTab ? null : pathParts[1] ?? null;
+            const parsedNetworkSubpage = ownNetworkTab ?? (pathParts[2] === 'followers' || pathParts[2] === 'following' ? pathParts[2] : null);
+            setViewingProfileId(null);
+            setProfileSubpage(null);
+            setNetworkProfileId(parsedNetworkProfileId);
+            setNetworkSubpage(parsedNetworkSubpage);
             setOpenedPostId(null);
             setOpenedPost(null);
             setOpenedPostComments(createInitialDiscussionPageState<Comment>());
@@ -737,6 +758,8 @@ export default function App() {
             setClubPageSlug(null);
         } else if (mainPath === 'post' && pathParts[1]) {
             setProfileSubpage(null);
+            setNetworkProfileId(null);
+            setNetworkSubpage(null);
             setOpenedPostId(pathParts[1]);
             const matched = opportunities.find((item) => item.id === pathParts[1]) ?? null;
             setOpenedPost(matched);
@@ -748,6 +771,8 @@ export default function App() {
             setClubPageSlug(null);
         } else if (mainPath === 'hashtag' && pathParts[1]) {
             setProfileSubpage(null);
+            setNetworkProfileId(null);
+            setNetworkSubpage(null);
             const decodedTag = decodeURIComponent(pathParts[1]).trim().replace(/^#+/, '');
             setHashtagPageTag(decodedTag || null);
             setViewingProfileId(null);
@@ -759,6 +784,8 @@ export default function App() {
             setClubPageSlug(null);
         } else if (mainPath === 'clubs' && pathParts[1]) {
             setProfileSubpage(null);
+            setNetworkProfileId(null);
+            setNetworkSubpage(null);
             const decodedClubSlug = decodeURIComponent(pathParts[1]).trim();
             setClubPageSlug(decodedClubSlug || null);
             setViewingProfileId(null);
@@ -771,6 +798,8 @@ export default function App() {
         } else {
             setViewingProfileId(null);
             setProfileSubpage(null);
+            setNetworkProfileId(null);
+            setNetworkSubpage(null);
             setOpenedPostId(null);
             setOpenedPost(null);
             setOpenedPostComments(createInitialDiscussionPageState<Comment>());
@@ -798,10 +827,27 @@ export default function App() {
     tab: string,
     profileId?: string,
     postId?: string,
-    options?: { commentId?: string; hashtag?: string; clubSlug?: string; profileSubpage?: 'posts' | 'projects' | 'saved' }
+    options?: {
+      commentId?: string;
+      hashtag?: string;
+      clubSlug?: string;
+      profileSubpage?: 'posts' | 'projects' | 'saved';
+      networkProfileId?: string;
+      networkSubpage?: 'followers' | 'following';
+    }
   ) => {
     let path = `/${tab}`;
-    const state: { tab: string; profileId?: string; postId?: string; commentId?: string; hashtag?: string; clubSlug?: string; profileSubpage?: 'posts' | 'projects' | 'saved' } = { tab };
+    const state: {
+      tab: string;
+      profileId?: string;
+      postId?: string;
+      commentId?: string;
+      hashtag?: string;
+      clubSlug?: string;
+      profileSubpage?: 'posts' | 'projects' | 'saved';
+      networkProfileId?: string;
+      networkSubpage?: 'followers' | 'following';
+    } = { tab };
     if (tab === 'profile' && profileId) {
         path += `/${profileId}`;
         if (options?.profileSubpage) {
@@ -817,8 +863,36 @@ export default function App() {
         setOpenedPostRepliesByCommentId({});
         setFocusedCommentId(null);
         setHashtagPageTag(null);
+        setNetworkProfileId(null);
+        setNetworkSubpage(null);
+    } else if (tab === 'network') {
+        const normalizedNetworkProfileId =
+          options?.networkProfileId && options.networkProfileId !== currentUserId
+            ? options.networkProfileId
+            : undefined;
+        setViewingProfileId(null);
+        setProfileSubpage(null);
+        setOpenedPost(null);
+        setOpenedPostId(null);
+        setOpenedPostComments(createInitialDiscussionPageState<Comment>());
+        setOpenedPostRepliesByCommentId({});
+        setFocusedCommentId(null);
+        setHashtagPageTag(null);
+        setClubPageSlug(null);
+        if (normalizedNetworkProfileId) {
+          path += `/${normalizedNetworkProfileId}`;
+          state.networkProfileId = normalizedNetworkProfileId;
+        }
+        if (options?.networkSubpage) {
+          path += `/${options.networkSubpage}`;
+          state.networkSubpage = options.networkSubpage;
+        }
+        setNetworkProfileId(normalizedNetworkProfileId ?? null);
+        setNetworkSubpage(options?.networkSubpage ?? null);
     } else if (tab === 'post' && postId) {
         setProfileSubpage(null);
+        setNetworkProfileId(null);
+        setNetworkSubpage(null);
         path += `/${postId}`;
         if (options?.commentId) {
           path += `?commentId=${encodeURIComponent(options.commentId)}`;
@@ -833,6 +907,8 @@ export default function App() {
         setHashtagPageTag(null);
     } else if (tab === 'hashtag' && options?.hashtag) {
         setProfileSubpage(null);
+        setNetworkProfileId(null);
+        setNetworkSubpage(null);
         const normalized = options.hashtag.trim().replace(/^#+/, '');
         path += `/${encodeURIComponent(normalized)}`;
         state.hashtag = normalized;
@@ -846,6 +922,8 @@ export default function App() {
         setClubPageSlug(null);
     } else if (tab === 'clubs' && options?.clubSlug) {
         setProfileSubpage(null);
+        setNetworkProfileId(null);
+        setNetworkSubpage(null);
         const normalizedClubSlug = options.clubSlug.trim();
         path += `/${encodeURIComponent(normalizedClubSlug)}`;
         state.clubSlug = normalizedClubSlug;
@@ -860,6 +938,10 @@ export default function App() {
     } else if (tab !== 'profile') {
         setViewingProfileId(null);
         setProfileSubpage(null);
+        setNetworkProfileId(null);
+        if (tab !== 'network') {
+          setNetworkSubpage(null);
+        }
         if (tab !== 'post') {
           setOpenedPost(null);
           setOpenedPostId(null);
@@ -2836,6 +2918,8 @@ export default function App() {
   const handleTabChange = (tab: string) => {
     setViewingProfileId(null);
     setProfileSubpage(null);
+    setNetworkProfileId(null);
+    setNetworkSubpage(null);
     setOpenedPost(null);
     setFocusedCommentId(null);
     setHashtagPageTag(null);
@@ -2988,13 +3072,13 @@ export default function App() {
           <NetworkPage
             students={students}
             currentUserId={currentUserId}
+            viewedUserId={networkProfileId ?? currentUserId}
             followGraph={followGraph}
+            initialTab={networkSubpage ?? 'followers'}
             onFollow={handleFollow}
             onUnfollow={handleUnfollow}
             onCancelRequest={handleCancelRequest}
             onRemoveFollower={handleRemoveFollower}
-            onAcceptRequest={handleAcceptFollowRequest}
-            onRejectRequest={handleRejectFollowRequest}
             onViewProfile={handleViewProfile}
           />
           ) : activeTab === 'chat' ? (
@@ -3090,6 +3174,8 @@ export default function App() {
                 onBlockUser={handleBlockUser}
                 onUnblockUser={handleUnblockUser}
                 postsRefreshToken={postsRefreshToken}
+                onViewFollowers={() => navigate('network', undefined, undefined, { networkProfileId: displayedStudent.id, networkSubpage: 'followers' })}
+                onViewFollowing={() => navigate('network', undefined, undefined, { networkProfileId: displayedStudent.id, networkSubpage: 'following' })}
                 onReportTarget={handleOpenReport}
               />
             )

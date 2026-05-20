@@ -42,6 +42,13 @@ export interface FollowGraphResponse {
   outgoingRequests: NetworkUserWithRequest[];
 }
 
+export interface UserFollowGraphResponse extends FollowGraphResponse {
+  userId: string;
+  canManage: boolean;
+  profileVisibility: 'full' | 'blocked-by-viewer' | 'restricted' | 'private';
+  owner: NetworkUser;
+}
+
 export interface SearchUserResult {
   userId: string;
   displayName: string;
@@ -155,6 +162,19 @@ export async function apiGetFollowGraph(token?: string): Promise<FollowGraphResp
   }
 
   return (await response.json()) as FollowGraphResponse;
+}
+
+export async function apiGetUserFollowGraph(targetUserId: string, token?: string): Promise<UserFollowGraphResponse> {
+  const response = await safeFetch(`${API_BASE}/network/graph/${encodeURIComponent(targetUserId)}`, {
+    headers: { ...authHeaders(token) },
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.message || 'Failed to fetch user network');
+  }
+
+  return (await response.json()) as UserFollowGraphResponse;
 }
 
 export async function apiGetConnectedUsers(

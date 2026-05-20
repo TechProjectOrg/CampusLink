@@ -100,6 +100,8 @@ interface ProfilePageProps {
   onShowAllPosts?: (userId: string) => void;
   onShowAllProjects?: (userId: string) => void;
   onMessage?: (userId: string) => void;
+  onViewFollowers?: () => void;
+  onViewFollowing?: () => void;
   onBlockUser?: (userId: string) => Promise<void> | void;
   onUnblockUser?: (userId: string) => Promise<void> | void;
   postsRefreshToken?: number;
@@ -186,6 +188,8 @@ export function ProfilePage({
   onShowAllPosts,
   onShowAllProjects,
   onMessage,
+  onViewFollowers,
+  onViewFollowing,
   onBlockUser,
   onUnblockUser,
   postsRefreshToken = 0,
@@ -1481,14 +1485,24 @@ export function ProfilePage({
 
               {/* Stats Row */}
               <div className="cl-stats-row flex flex-wrap items-center gap-6 sm:gap-8 pt-2 sm:pt-3 border-t border-slate-100">
-                <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={onViewFollowers}
+                  disabled={!onViewFollowers}
+                  className={`flex items-center gap-2 ${onViewFollowers ? 'cursor-pointer rounded-lg transition-colors hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-200' : 'cursor-default'}`}
+                >
                   <span className="text-lg sm:text-xl font-bold text-slate-900">{followersCount}</span>
                   <span className="text-sm sm:text-base text-slate-500 font-medium">Followers</span>
-                </div>
-                <div className="flex items-center gap-2">
+                </button>
+                <button
+                  type="button"
+                  onClick={onViewFollowing}
+                  disabled={!onViewFollowing}
+                  className={`flex items-center gap-2 ${onViewFollowing ? 'cursor-pointer rounded-lg transition-colors hover:text-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-200' : 'cursor-default'}`}
+                >
                   <span className="text-lg sm:text-xl font-bold text-slate-900">{followingCount}</span>
                   <span className="text-sm sm:text-base text-slate-500 font-medium">Following</span>
-                </div>
+                </button>
                 <div className="flex items-center gap-2">
                   <span className="text-lg sm:text-xl font-bold text-slate-900">{loadedProjects.length}</span>
                   <span className="text-sm sm:text-base text-slate-500 font-medium">Projects</span>

@@ -6,7 +6,7 @@ import { createNotification } from '../lib/notifications';
 import { invalidateUserFeedCache } from '../lib/feedCache';
 import { getUserSummariesByIds, getUserSummaryById, incrementUserStat, toCachedUserCard } from '../lib/userCache';
 import { dismissSuggestedUser, getSuggestedUsersForApi, queueSuggestedUsersRecompute } from '../lib/socialInsights';
-import { getBlockState, getBlockStates, maskUserCardForViewer } from '../lib/blocking';
+import { getBlockState, getBlockStates, getProfileVisibility, maskUserCardForViewer } from '../lib/blocking';
 
 const router = express.Router();
 
@@ -137,6 +137,79 @@ router.get('/graph', async (req: Request, res: Response) => {
     });
   } catch (err) {
     console.error('Error fetching follow graph:', err);
+    return res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+router.get('/graph/:targetUserId', async (req: Request, res: Response) => {
+  const authed = req as unknown as AuthedRequest;
+  const viewerUserId = authed.auth!.userId;
+  const targetUserId = String(req.params.targetUserId ?? '').trim();
+
+  if (!targetUserId) {
+    return res.status(400).json({ message: 'targetUserId is required' });
+  }
+
+  if (targetUserId === viewerUserId) {
+    return res.redirect(307, '/network/graph');
+  }
+
+  try {
+    const owner = await getUserSummaryById(targetUserId);
+    if (!owner) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const profileVisibility = await getProfileVisibility(viewerUserId, targetUserId);
+    if (profileVisibility === 'blocked-by-viewer') {
+      return res.status(403).json({ message: 'You blocked this user.' });
+    }
+    if (profileVisibility === 'restricted') {
+      return res.status(403).json({ message: 'This profile is unavailable.' });
+    }
+    if (profileVisibility === 'private') {
+      return res.status(403).json({ message: 'This account is private. Follow this user to view followers and following.' });
+    }
+
+    const [ownerBlockState, followerRows, followingRows] = await Promise.all([
+      getBlockState(viewerUserId, targetUserId),
+      prisma.$queryRaw<Array<{ user_id: string }>>`
+        SELECT
+          f.follower_user_id AS user_id
+        FROM follows f
+        JOIN users u ON u.user_id = f.follower_user_id
+        WHERE f.followed_user_id = ${targetUserId}
+          AND u.is_deleted = FALSE
+        ORDER BY f.created_at DESC
+      `,
+      prisma.$queryRaw<Array<{ user_id: string }>>`
+        SELECT
+          f.followed_user_id AS user_id
+        FROM follows f
+        JOIN users u ON u.user_id = f.followed_user_id
+        WHERE f.follower_user_id = ${targetUserId}
+          AND u.is_deleted = FALSE
+        ORDER BY f.created_at DESC
+      `,
+    ]);
+
+    const [followers, following] = await Promise.all([
+      hydrateOrderedUsers(viewerUserId, followerRows.map((row) => row.user_id)),
+      hydrateOrderedUsers(viewerUserId, followingRows.map((row) => row.user_id)),
+    ]);
+
+    return res.status(200).json({
+      userId: targetUserId,
+      canManage: false,
+      profileVisibility,
+      owner: mapMinimalUserFromSummary(viewerUserId, owner, ownerBlockState),
+      followers,
+      following,
+      incomingRequests: [],
+      outgoingRequests: [],
+    });
+  } catch (err) {
+    console.error('Error fetching target follow graph:', err);
     return res.status(500).json({ message: 'Internal server error' });
   }
 });
