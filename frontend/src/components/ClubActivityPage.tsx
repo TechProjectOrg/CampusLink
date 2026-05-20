@@ -981,12 +981,12 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
                   <Card key={member.clubMembershipId} className="border border-primary/10 shadow-sm hover:shadow-lg transition-all duration-300">
                     <CardContent className="p-4 md:p-6">
                       <div className="flex items-center gap-4">
-                        <Avatar className="w-14 h-14 ring-2 ring-primary/20">
+                        <Avatar className="w-14 h-14 ring-2 ring-primary/20 shrink-0">
                           <AvatarImage src={profile?.avatar ?? member.profilePictureUrl ?? undefined} />
                           <AvatarFallback>{(member.displayName ?? member.username)[0]}</AvatarFallback>
                         </Avatar>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <p className="font-semibold text-gray-900">{member.displayName ?? profile?.name ?? member.username}</p>
                             <p className="text-xs text-gray-500">@{member.username}</p>
                             <Badge className="bg-primary/10 text-primary text-xs capitalize">{member.role}</Badge>
@@ -994,23 +994,23 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
                           </div>
                           <p className="text-sm text-gray-600">{profile?.branch ?? 'Unknown branch'}</p>
                         </div>
-                        <div className="flex gap-2">
-                          {canModerateMembers && membershipRole === 'owner' && member.role !== 'owner' ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="hover:bg-primary/5"
-                              onClick={() => void handleToggleAdminRole(member)}
-                              disabled={busyMemberId === member.userId}
-                            >
-                              <ShieldCheck className="w-4 h-4 mr-1" />
-                              {member.role === 'admin' ? 'Demote' : 'Make Admin'}
-                            </Button>
-                          ) : null}
-                          <Button variant="outline" size="sm" className="hover:bg-primary/5" onClick={() => onViewProfile?.(member.userId)}>
-                            View Profile
+                      </div>
+                      <div className="flex flex-wrap gap-2 mt-3 justify-end">
+                        {canModerateMembers && membershipRole === 'owner' && member.role !== 'owner' ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="hover:bg-primary/5"
+                            onClick={() => void handleToggleAdminRole(member)}
+                            disabled={busyMemberId === member.userId}
+                          >
+                            <ShieldCheck className="w-4 h-4 mr-1" />
+                            {member.role === 'admin' ? 'Demote' : 'Make Admin'}
                           </Button>
-                        </div>
+                        ) : null}
+                        <Button variant="outline" size="sm" className="hover:bg-primary/5" onClick={() => onViewProfile?.(member.userId)}>
+                          View Profile
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>

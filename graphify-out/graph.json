@@ -21753,8 +21753,8 @@
       "source_file": "backend\\server\\src\\middleware\\requireModerationCapability.ts",
       "source_location": "L29",
       "weight": 1.0,
-      "_src": "requiremoderationcapability_applycapability",
-      "_tgt": "moderation_assertcannetwork",
+      "_src": "moderation_assertcannetwork",
+      "_tgt": "requiremoderationcapability_applycapability",
       "source": "moderation_assertcannetwork",
       "target": "requiremoderationcapability_applycapability"
     },
