@@ -159,7 +159,7 @@ export function Navbar({
                 onClick={() => handleTabNavigate('profile')}
                 className="cl-mobile-top-action cl-mobile-profile-action md:hidden relative overflow-hidden rounded-full border border-white/30 shadow-lg"
               >
-                <Avatar className="h-11 w-11">
+                <Avatar className="h-9 w-9">
                   <AvatarImage src={navbarProfilePhoto ?? undefined} alt="My profile" className="object-cover" />
                   <AvatarFallback className="bg-white/20 text-white text-sm font-medium">
                     {profile?.displayName?.[0] ?? profile?.username?.[0] ?? 'U'}
@@ -168,7 +168,7 @@ export function Navbar({
               </button>
             )
           ) : (
-            <div className="md:hidden flex h-11 w-11 flex-shrink-0" aria-hidden="true" />
+            <div className="md:hidden flex h-9 w-9 flex-shrink-0" aria-hidden="true" />
           )}
 
           {/* Search Bar - Desktop */}

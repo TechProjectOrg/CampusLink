@@ -358,18 +358,18 @@ export function SearchPage({
           {Boolean(searchQuery.trim()) && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {filteredStudents.map((student, index) => (
-                <Card
-                  key={student.id}
-                  className="cl-search-result-user-card hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border-primary/10 rounded-2xl animate-slide-in-up"
-                  style={{ animationDelay: `${index * 50}ms` }}
-                  onClick={() => handleSearchResultCardClick(student.id)}
-                >
-                  <CardContent className="cl-search-result-user-card-content p-6 space-y-4">
-                    <div className="flex items-start gap-3">
-                      <Avatar className="cl-search-result-user-avatar w-16 h-16 ring-2 ring-primary/20 transition-all duration-300 hover:ring-primary/40">
-                        <AvatarImage src={student.avatar} />
-                        <AvatarFallback>{student.name[0]}</AvatarFallback>
-                      </Avatar>
+              <Card
+                key={student.id}
+                className="cl-search-result-user-card hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border-primary/10 rounded-2xl animate-slide-in-up"
+                style={{ animationDelay: `${index * 50}ms` }}
+                onClick={() => handleSearchResultCardClick(student.id)}
+              >
+                <CardContent className="cl-search-result-user-card-content p-3 md:p-6 md:space-y-4">
+                  <div className="flex items-start gap-3">
+                    <Avatar className="cl-search-result-user-avatar h-12 w-12 md:h-16 md:w-16 ring-2 ring-primary/20 transition-all duration-300 hover:ring-primary/40">
+                      <AvatarImage src={student.avatar} />
+                      <AvatarFallback>{student.name[0]}</AvatarFallback>
+                    </Avatar>
                       <div className="flex-1 min-w-0">
                         <h3 className="text-gray-900 truncate">{student.name}</h3>
                         <p className="text-sm text-gray-600">{student.branch}</p>
