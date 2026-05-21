@@ -2991,6 +2991,8 @@ export default function App() {
           className={`w-full min-w-0${
             usesAppScrollShell
               ? ` cl-app-scroll-shell ${
+                  activeTab === 'profile' ? ' cl-app-scroll-shell-profile' : ''
+                } ${
                   shouldRenderMobileTopHeader
                     ? 'cl-app-scroll-shell-mobile-header-enabled'
                     : 'cl-app-scroll-shell-mobile-header-disabled'

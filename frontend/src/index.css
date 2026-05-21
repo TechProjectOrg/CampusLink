@@ -5063,6 +5063,143 @@ div[style*="width: 25%"]::webkit-scrollbar {
 }
 
 @media (max-width: 639px) {
+  .cl-profile-subpage-header {
+    padding: 1rem 1rem 1.125rem;
+    border-radius: 1.5rem;
+  }
+
+  .cl-profile-subpage-back {
+    margin-bottom: .75rem;
+    padding-left: .625rem;
+    padding-right: .625rem;
+    min-height: 2rem;
+    font-size: .95rem;
+  }
+
+  .cl-profile-subpage-back-icon {
+    width: 1rem;
+    height: 1rem;
+    margin-right: .375rem;
+  }
+
+  .cl-profile-subpage-hero {
+    gap: .875rem;
+    margin-top: 0;
+    padding-left: 0;
+  }
+
+  .cl-profile-subpage-avatar {
+    width: 4.25rem !important;
+    height: 4.25rem !important;
+  }
+
+  .cl-profile-subpage-copy {
+    min-width: 0;
+  }
+
+  .cl-profile-subpage-kicker {
+    font-size: .75rem;
+    line-height: 1rem;
+    letter-spacing: .12em;
+  }
+
+  .cl-profile-subpage-title {
+    font-size: 1.1rem;
+    line-height: 1.4rem;
+  }
+
+  .cl-profile-subpage-blurb {
+    margin-top: .25rem;
+    font-size: .875rem;
+    line-height: 1.25rem;
+  }
+
+  .cl-app-scroll-shell-profile {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .cl-app-scroll-shell-profile::-webkit-scrollbar {
+    display: none;
+  }
+
+  html:has(.cl-profile-page-shell),
+  body:has(.cl-profile-page-shell) {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  html:has(.cl-profile-page-shell)::-webkit-scrollbar,
+  body:has(.cl-profile-page-shell)::-webkit-scrollbar {
+    display: none;
+  }
+
+  .cl-profile-page-shell {
+    background: #f8fafc;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .cl-profile-page-content {
+    max-width: none;
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: 0;
+    padding-bottom: calc(5.75rem + env(safe-area-inset-bottom));
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .cl-profile-page-shell::-webkit-scrollbar,
+  .cl-profile-page-content::-webkit-scrollbar {
+    display: none;
+  }
+
+  .cl-profile-page-stack {
+    gap: .875rem;
+    max-width: none !important;
+  }
+
+  .cl-profile-mobile-header,
+  .cl-profile-mobile-section {
+    width: 100%;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .cl-profile-mobile-header {
+    border-top-width: 0;
+    border-left-width: 0;
+    border-right-width: 0;
+  }
+
+  .cl-profile-mobile-section {
+    border-left-width: 0;
+    border-right-width: 0;
+  }
+
+  .cl-profile-mobile-section-group {
+    gap: .875rem;
+  }
+
+  .cl-profile-mobile-post-strip .cl-opportunity-card,
+  .cl-profile-mobile-project-strip .cl-opportunity-card {
+    border: 1px solid color-mix(in oklab, var(--primary) 10%, transparent);
+    border-radius: 1rem;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, .08), 0 10px 24px rgba(15, 23, 42, .06);
+    border-bottom-width: 1px;
+  }
+
+  .cl-profile-mobile-post-strip .cl-opportunity-card-body,
+  .cl-profile-mobile-project-strip .cl-opportunity-card-body {
+    padding: .5rem 1rem .75rem;
+  }
+
+  .cl-profile-mobile-post-strip .cl-opportunity-card-actions,
+  .cl-profile-mobile-project-strip .cl-opportunity-card-actions {
+    padding: .875rem 1rem;
+  }
+
   .cl-profile-mobile-cover {
     height: 9.5rem;
   }

@@ -90,20 +90,20 @@ export function ProfilePostsPage({
   return (
     <PageLayout maxWidth="7xl" className="bg-slate-50 pb-24 md:pb-8" contentClassName="py-4 sm:py-5 lg:py-6">
       <div className="mx-auto w-full space-y-6" style={{ maxWidth: '1000px' }}>
-        <header className="overflow-visible rounded-3xl border border-slate-200/80 bg-white px-6 pb-6 pt-4 shadow-sm sm:px-7 sm:pb-7 sm:pt-5">
-          <Button variant="ghost" size="sm" onClick={onBack} className="mb-5 rounded-full">
-            <ArrowLeft className="mr-2 h-4 w-4" />
+        <header className="cl-profile-subpage-header overflow-visible rounded-3xl border border-slate-200/80 bg-white px-6 pb-6 pt-4 shadow-sm sm:px-7 sm:pb-7 sm:pt-5">
+          <Button variant="ghost" size="sm" onClick={onBack} className="cl-profile-subpage-back mb-5 rounded-full">
+            <ArrowLeft className="cl-profile-subpage-back-icon mr-2 h-4 w-4" />
             Back
           </Button>
-          <div className="mt-2 flex items-center gap-4 pl-1 sm:gap-5">
-            <Avatar className="aspect-square shrink-0 overflow-hidden rounded-full border border-slate-200 ring-4 ring-white shadow-sm" style={{ width: 80, height: 80 }}>
+          <div className="cl-profile-subpage-hero mt-2 flex items-center gap-4 pl-1 sm:gap-5">
+            <Avatar className="cl-profile-subpage-avatar aspect-square shrink-0 overflow-hidden rounded-full border border-slate-200 ring-4 ring-white shadow-sm" style={{ width: 80, height: 80 }}>
               <AvatarImage src={student.avatar} alt={student.name} className="h-full w-full object-cover" />
               <AvatarFallback>{student.name[0]}</AvatarFallback>
             </Avatar>
-            <div className="space-y-1">
-              <p className="text-sm font-medium uppercase tracking-[0.18em] text-slate-400">Posts</p>
-              <h1 className="text-2xl font-semibold tracking-tight text-slate-950">{student.name}</h1>
-              <p className="mt-1 text-sm text-slate-500">{student.bio || student.branch}</p>
+            <div className="cl-profile-subpage-copy space-y-1">
+              <p className="cl-profile-subpage-kicker text-sm font-medium uppercase tracking-[0.18em] text-slate-400">Posts</p>
+              <h1 className="cl-profile-subpage-title text-2xl font-semibold tracking-tight text-slate-950">{student.name}</h1>
+              <p className="cl-profile-subpage-blurb mt-1 text-sm text-slate-500">{student.bio || student.branch}</p>
             </div>
           </div>
         </header>

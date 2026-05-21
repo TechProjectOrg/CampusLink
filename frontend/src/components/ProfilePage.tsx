@@ -1189,7 +1189,7 @@ export function ProfilePage({
   const showSkillsSection = !isBlockedByViewer && !isSectionLimitedView && (isOwnProfile || skillsLoading || displaySkills.length > 0);
   const showCertificationsSection = !isSectionLimitedView && (isOwnProfile || certificationsLoading || loadedCertifications.length > 0);
   const showClubsSection = !isBlockedByViewer && !isSectionLimitedView && (isOwnProfile || societies.length > 0);
-  const profileSectionCardClass = 'box-border flex w-full min-w-0 flex-col gap-4 overflow-hidden break-words rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5 lg:p-6';
+  const profileSectionCardClass = 'cl-profile-mobile-section box-border flex w-full min-w-0 flex-col gap-4 overflow-hidden break-words rounded-3xl border border-slate-200/80 bg-white p-4 shadow-sm sm:p-5 lg:p-6';
   const educationLevelOrder: Record<EducationLevel, number> = {
     '10th': 1,
     '12th': 2,
@@ -1305,8 +1305,8 @@ export function ProfilePage({
   };
 
   return (
-    <PageLayout maxWidth="4xl" className="bg-slate-50 pb-24 md:pb-8" contentClassName="py-4 sm:py-5 lg:py-6 max-w-[720px]">
-      <div className="mx-auto grid w-full [grid-template-columns:1fr] gap-4" style={{ maxWidth: '1000px' }}>
+    <PageLayout maxWidth="4xl" className="cl-profile-page-shell bg-slate-50 pb-24 md:pb-8" contentClassName="cl-profile-page-content py-4 sm:py-5 lg:py-6 max-w-[720px]">
+      <div className="cl-profile-page-stack mx-auto grid w-full [grid-template-columns:1fr] gap-4" style={{ maxWidth: '1000px' }}>
         {/* Modern Profile Header: Cover + Overlapping Avatar + Stacked Content */}
         <section className="cl-profile-header cl-profile-mobile-header relative bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
           <div className="mx-auto w-full max-w-[1000px]">
@@ -1547,7 +1547,7 @@ export function ProfilePage({
             <LoadingIndicator label="Loading posts..." className="justify-start" size={20} />
           ) : profilePosts.length > 0 ? (
             <>
-              <div className="overflow-hidden">
+              <div className="cl-profile-mobile-post-strip overflow-hidden">
                 <div
                   className="hide-scrollbar w-full overflow-x-auto overscroll-x-contain pb-2"
                   onWheel={handleHorizontalWheel}
@@ -1592,7 +1592,7 @@ export function ProfilePage({
             <LoadingIndicator label="Loading projects..." className="justify-start" size={20} />
           ) : loadedProjects.length > 0 ? (
             <>
-              <div className="overflow-hidden">
+              <div className="cl-profile-mobile-project-strip overflow-hidden">
                 <div
                   className="hide-scrollbar w-full overflow-x-auto overscroll-x-contain pb-2"
                   onWheel={handleHorizontalWheel}
@@ -1631,7 +1631,7 @@ export function ProfilePage({
         ) : null}
 
         {!isBlockedByViewer && !isSectionLimitedView && (showExperienceSection || showEducationSection) ? (
-        <section className="grid w-full [grid-template-columns:1fr] gap-4">
+        <section className="cl-profile-mobile-section-group grid w-full [grid-template-columns:1fr] gap-4">
           {showExperienceSection ? (
           <div className={profileSectionCardClass}>
             <SectionHeader title="Experience" onAdd={() => setActiveModal('experience')} />
@@ -1759,7 +1759,7 @@ export function ProfilePage({
         ) : null}
 
         {!isBlockedByViewer && !isSectionLimitedView && (showCertificationsSection || showClubsSection) ? (
-        <section className="grid w-full [grid-template-columns:1fr] gap-4">
+        <section className="cl-profile-mobile-section-group grid w-full [grid-template-columns:1fr] gap-4">
           {showCertificationsSection ? (
           <div className={profileSectionCardClass}>
             <SectionHeader title="Certifications" onAdd={() => setActiveModal('certification')} />
