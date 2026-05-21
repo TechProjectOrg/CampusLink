@@ -181,6 +181,16 @@ export function SearchPage({
   }, [searchQuery, auth.session?.token]);
 
   const filteredStudents = searchResults;
+  const handleSuggestedCardClick = (studentId: string) => {
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches) {
+      onViewProfile(studentId);
+    }
+  };
+  const handleSearchResultCardClick = (studentId: string) => {
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches) {
+      onViewProfile(studentId);
+    }
+  };
 
   return (
     <div className="cl-search-page min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
@@ -242,12 +252,12 @@ export function SearchPage({
         <div className="cl-search-results-section">
           {!searchQuery.trim() && !isLoading && suggestedUsers.length > 0 && (
             <Card className="cl-search-suggested-card border-primary/10 shadow-lg rounded-2xl animate-slide-in-up mb-6">
-              <CardContent className="p-6 space-y-4">
-                <div className="flex items-center gap-2">
+              <CardContent className="cl-search-suggested-card-content p-6">
+                <div className="cl-search-suggested-header flex items-center gap-2">
                   <Users className="w-5 h-5 text-primary" />
                   <span className="text-gray-900">Suggested Users</span>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="cl-search-suggested-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {suggestedUsers.map((suggestion, index) => {
                     const { student, sharedSkills, sharedInterests } = suggestion;
                     const isFollowing = (followGraph.followingByUserId[currentUserId] ?? []).includes(student.id);
@@ -262,12 +272,13 @@ export function SearchPage({
                     return (
                       <Card
                         key={student.id}
-                        className="hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 border-primary/10 rounded-2xl animate-slide-in-up"
+                        className="cl-search-suggested-user-card hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 border-primary/10 rounded-2xl animate-slide-in-up"
                         style={{ animationDelay: `${index * 50}ms` }}
+                        onClick={() => handleSuggestedCardClick(student.id)}
                       >
-                        <CardContent className="p-4 sm:p-5">
+                        <CardContent className="cl-search-suggested-user-card-content p-3 sm:p-5">
                           <div className="flex items-start gap-3">
-                            <Avatar className="w-14 h-14 shrink-0 ring-2 ring-primary/20 transition-all duration-300 hover:ring-primary/40">
+                            <Avatar className="h-12 w-12 shrink-0 ring-2 ring-primary/20 transition-all duration-300 hover:ring-primary/40 sm:h-14 sm:w-14">
                               <AvatarImage src={student.avatar} />
                               <AvatarFallback>{student.name[0]}</AvatarFallback>
                             </Avatar>
@@ -285,19 +296,22 @@ export function SearchPage({
 
                           {/* followers/projects counts hidden in search results */}
 
-                          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+                          <div className="mt-4 hidden md:flex flex-col gap-2 md:flex-row md:items-center">
                             <button
                               type="button"
-                              onClick={() => onViewProfile(student.id)}
-                              className="w-full sm:flex-1 border border-primary/20 hover:border-primary hover:bg-primary/10 text-primary transition-all duration-300 rounded-xl px-4 py-2.5 text-sm font-medium"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                onViewProfile(student.id);
+                              }}
+                              className="w-full md:flex-1 border border-primary/20 hover:border-primary hover:bg-primary/10 text-primary transition-all duration-300 rounded-xl px-4 py-2.5 text-sm font-medium"
                             >
                               View Profile
                             </button>
                             {!isFollowing && !isRequested && (
-                              <div className="w-full sm:w-auto sm:flex-shrink-0">
+                              <div className="w-full md:w-auto md:flex-shrink-0">
                                 <FollowButton
                                   compact
-                                  className="h-10 w-full rounded-xl px-4 text-sm sm:min-w-[124px] sm:w-auto"
+                                  className="h-10 w-full rounded-xl px-4 text-sm md:min-w-[124px] md:w-auto"
                                   targetName={student.name}
                                   accountType={student.accountType}
                                   isFollowing={isFollowing}
@@ -329,12 +343,13 @@ export function SearchPage({
             {filteredStudents.map((student, index) => (
               <Card
                 key={student.id}
-                className="hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border-primary/10 rounded-2xl animate-slide-in-up"
+                className="cl-search-result-user-card hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border-primary/10 rounded-2xl animate-slide-in-up"
                 style={{ animationDelay: `${index * 50}ms` }}
+                onClick={() => handleSearchResultCardClick(student.id)}
               >
-                <CardContent className="p-6 space-y-4">
+                <CardContent className="cl-search-result-user-card-content p-6 space-y-4">
                   <div className="flex items-start gap-3">
-                    <Avatar className="w-16 h-16 ring-2 ring-primary/20 transition-all duration-300 hover:ring-primary/40">
+                    <Avatar className="cl-search-result-user-avatar w-16 h-16 ring-2 ring-primary/20 transition-all duration-300 hover:ring-primary/40">
                       <AvatarImage src={student.avatar} />
                       <AvatarFallback>{student.name[0]}</AvatarFallback>
                     </Avatar>
@@ -347,10 +362,13 @@ export function SearchPage({
 
                   {/* followers/projects counts hidden in search results */}
 
-                  <div className="flex gap-2 items-center">
+                  <div className="hidden md:flex gap-2 items-center">
                     <button
                       type="button"
-                      onClick={() => onViewProfile(student.id)}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onViewProfile(student.id);
+                      }}
                       className="flex-1 border border-primary/20 hover:border-primary hover:bg-primary/10 text-primary transition-all duration-300 hover:scale-105 rounded-xl px-3 py-2 text-sm font-medium"
                     >
                       View Profile
@@ -374,17 +392,6 @@ export function SearchPage({
               </Card>
             ))}
           </div>
-
-          {!hasSearched && searchQuery.trim().length > 0 && (
-            <Card className="border-primary/10 rounded-2xl shadow-lg animate-fade-in">
-              <CardContent className="p-12 text-center">
-                <div className="w-16 h-16 gradient-primary rounded-2xl mx-auto mb-4 flex items-center justify-center">
-                  <Search className="w-8 h-8 text-white" />
-                </div>
-                <p className="text-gray-500">Start typing to search users and hashtags</p>
-              </CardContent>
-            </Card>
-          )}
 
           {hasSearched && !isLoading && filteredStudents.length === 0 && hashtagResults.length === 0 && clubResults.length === 0 && (
             <Card className="border-primary/10 rounded-2xl shadow-lg animate-fade-in">
