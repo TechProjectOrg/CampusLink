@@ -5331,6 +5331,11 @@ div[style*="width: 25%"]::webkit-scrollbar {
 }
 
 @media (max-width: 640px) {
+  body.cl-chat-mobile-open {
+    overflow: hidden;
+    padding-bottom: 0;
+  }
+
   .cl-chat-page {
     max-width: none;
     height: calc(100dvh - 4.75rem - env(safe-area-inset-bottom)) !important;

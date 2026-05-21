@@ -411,6 +411,20 @@ export function ChatPage({
       });
   }, [appData, selectedChat, chatMessages, onChatRead, isPendingConversation]);
 
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+
+    if (selectedConversation) {
+      document.body.classList.add('cl-chat-mobile-open');
+      return () => {
+        document.body.classList.remove('cl-chat-mobile-open');
+      };
+    }
+
+    document.body.classList.remove('cl-chat-mobile-open');
+    return undefined;
+  }, [selectedConversation]);
+
   const appendEmoji = (emoji: string) => {
     const input = inputRef.current;
     if (!input) {

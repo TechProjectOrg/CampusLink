@@ -982,12 +982,14 @@ export default function App() {
       .map((id) => state.chat.conversationsById[id])
       .filter((conversation): conversation is ChatConversation => Boolean(conversation)),
   );
+  const selectedConversationId = useAppDataSelector((state) => state.chat.selectedConversationId);
 
   const currentUserId = currentUser?.id ?? '';
   const authToken = auth.session?.token;
   const apiBase = resolveApiBaseUrl(import.meta.env.VITE_API_URL as string | undefined);
   const usesAppScrollShell = activeTab !== 'feed' && activeTab !== 'chat';
-  const shouldRenderMobileTopHeader = MOBILE_TOP_HEADER_TABS.has(activeTab);
+  const shouldRenderMobileTopHeader =
+    MOBILE_TOP_HEADER_TABS.has(activeTab) && !(activeTab === 'chat' && Boolean(selectedConversationId));
 
   const updateMobileTopNavVisibility = useCallback(
     (scrollTop: number) => {
