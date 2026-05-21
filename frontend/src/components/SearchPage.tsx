@@ -146,10 +146,13 @@ export function SearchPage({
       setHashtagResults([]);
       setClubResults([]);
       setHasSearched(false);
+      setIsLoading(false);
       return;
     }
 
+    let isActive = true;
     const timerId = setTimeout(async () => {
+      if (!isActive) return;
       setIsLoading(true);
       setHasSearched(true);
       try {
@@ -159,25 +162,32 @@ export function SearchPage({
           policy: cachePolicies.search,
           fetcher: () => apiSearchAll(trimmedQuery, auth.session?.token, 50, 25),
           onCached: (cachedResult) => {
+            if (!isActive) return;
             setSearchResults(cachedResult.users.map(searchResultToStudent));
             setHashtagResults(cachedResult.hashtags);
             setClubResults(cachedResult.clubs ?? []);
           },
         });
+        if (!isActive) return;
         setSearchResults(result.users.map(searchResultToStudent));
         setHashtagResults(result.hashtags);
         setClubResults(result.clubs ?? []);
       } catch (err) {
+        if (!isActive) return;
         console.error('Search failed:', err);
         setSearchResults([]);
         setHashtagResults([]);
         setClubResults([]);
       } finally {
+        if (!isActive) return;
         setIsLoading(false);
       }
     }, 350);
 
-    return () => clearTimeout(timerId);
+    return () => {
+      isActive = false;
+      clearTimeout(timerId);
+    };
   }, [searchQuery, auth.session?.token]);
 
   const filteredStudents = searchResults;
@@ -333,67 +343,69 @@ export function SearchPage({
             </Card>
           )}
 
-          {hasSearched && !isLoading && (
+          {Boolean(searchQuery.trim()) && hasSearched && !isLoading && (
             <p className="text-gray-600 mb-4 animate-fade-in">
               {filteredStudents.length} {filteredStudents.length === 1 ? 'user' : 'users'} found
             </p>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredStudents.map((student, index) => (
-              <Card
-                key={student.id}
-                className="cl-search-result-user-card hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border-primary/10 rounded-2xl animate-slide-in-up"
-                style={{ animationDelay: `${index * 50}ms` }}
-                onClick={() => handleSearchResultCardClick(student.id)}
-              >
-                <CardContent className="cl-search-result-user-card-content p-6 space-y-4">
-                  <div className="flex items-start gap-3">
-                    <Avatar className="cl-search-result-user-avatar w-16 h-16 ring-2 ring-primary/20 transition-all duration-300 hover:ring-primary/40">
-                      <AvatarImage src={student.avatar} />
-                      <AvatarFallback>{student.name[0]}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-gray-900 truncate">{student.name}</h3>
-                      <p className="text-sm text-gray-600">{student.branch}</p>
-                      {student.year > 0 && <p className="text-sm text-secondary">Year {student.year}</p>}
-                    </div>
-                  </div>
-
-                  {/* followers/projects counts hidden in search results */}
-
-                  <div className="hidden md:flex gap-2 items-center">
-                    <button
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onViewProfile(student.id);
-                      }}
-                      className="flex-1 border border-primary/20 hover:border-primary hover:bg-primary/10 text-primary transition-all duration-300 hover:scale-105 rounded-xl px-3 py-2 text-sm font-medium"
-                    >
-                      View Profile
-                    </button>
-                    {!((followGraph.followingByUserId[currentUserId] ?? []).includes(student.id)) && !((followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id)) && (
-                      <div className="flex-shrink-0">
-                        <FollowButton
-                          targetName={student.name}
-                          accountType={student.accountType}
-                          isFollowing={(followGraph.followingByUserId[currentUserId] ?? []).includes(student.id)}
-                          isFollower={(followGraph.followersByUserId[currentUserId] ?? []).includes(student.id)}
-                          requestStatus={(followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id) ? 'requested' : 'none'}
-                          onFollow={() => onFollow(student.id, student.accountType)}
-                          onUnfollow={() => onUnfollow(student.id)}
-                          onCancelRequest={() => onCancelRequest(student.id)}
-                        />
+          {Boolean(searchQuery.trim()) && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filteredStudents.map((student, index) => (
+                <Card
+                  key={student.id}
+                  className="cl-search-result-user-card hover:shadow-2xl transition-all duration-300 hover:-translate-y-2 border-primary/10 rounded-2xl animate-slide-in-up"
+                  style={{ animationDelay: `${index * 50}ms` }}
+                  onClick={() => handleSearchResultCardClick(student.id)}
+                >
+                  <CardContent className="cl-search-result-user-card-content p-6 space-y-4">
+                    <div className="flex items-start gap-3">
+                      <Avatar className="cl-search-result-user-avatar w-16 h-16 ring-2 ring-primary/20 transition-all duration-300 hover:ring-primary/40">
+                        <AvatarImage src={student.avatar} />
+                        <AvatarFallback>{student.name[0]}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <h3 className="text-gray-900 truncate">{student.name}</h3>
+                        <p className="text-sm text-gray-600">{student.branch}</p>
+                        {student.year > 0 && <p className="text-sm text-secondary">Year {student.year}</p>}
                       </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                    </div>
 
-          {hasSearched && !isLoading && filteredStudents.length === 0 && hashtagResults.length === 0 && clubResults.length === 0 && (
+                    {/* followers/projects counts hidden in search results */}
+
+                    <div className="hidden md:flex gap-2 items-center">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          onViewProfile(student.id);
+                        }}
+                        className="flex-1 border border-primary/20 hover:border-primary hover:bg-primary/10 text-primary transition-all duration-300 hover:scale-105 rounded-xl px-3 py-2 text-sm font-medium"
+                      >
+                        View Profile
+                      </button>
+                      {!((followGraph.followingByUserId[currentUserId] ?? []).includes(student.id)) && !((followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id)) && (
+                        <div className="flex-shrink-0">
+                          <FollowButton
+                            targetName={student.name}
+                            accountType={student.accountType}
+                            isFollowing={(followGraph.followingByUserId[currentUserId] ?? []).includes(student.id)}
+                            isFollower={(followGraph.followersByUserId[currentUserId] ?? []).includes(student.id)}
+                            requestStatus={(followGraph.outgoingRequestsByUserId[currentUserId] ?? []).includes(student.id) ? 'requested' : 'none'}
+                            onFollow={() => onFollow(student.id, student.accountType)}
+                            onUnfollow={() => onUnfollow(student.id)}
+                            onCancelRequest={() => onCancelRequest(student.id)}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+
+          {Boolean(searchQuery.trim()) && hasSearched && !isLoading && filteredStudents.length === 0 && hashtagResults.length === 0 && clubResults.length === 0 && (
             <Card className="border-primary/10 rounded-2xl shadow-lg animate-fade-in">
               <CardContent className="p-12 text-center">
                 <div className="w-16 h-16 gradient-primary rounded-2xl mx-auto mb-4 flex items-center justify-center">

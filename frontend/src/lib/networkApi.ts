@@ -1,5 +1,6 @@
 import type { ApiUserProfile } from '../types';
 import { resolveApiBaseUrl } from './apiBase';
+import { notifyAuthExpired } from './authStorage';
 
 const API_BASE = resolveApiBaseUrl(import.meta.env.VITE_API_URL as string | undefined);
 
@@ -9,7 +10,11 @@ function authHeaders(token?: string): HeadersInit {
 
 async function safeFetch(input: string, init?: RequestInit): Promise<Response> {
   try {
-    return await fetch(input, init);
+    const response = await fetch(input, init);
+    if (response.status === 401) {
+      notifyAuthExpired();
+    }
+    return response;
   } catch (error) {
     const reason = error instanceof Error ? error.message : 'Network request failed';
     throw new Error(`Cannot reach backend at ${API_BASE}. ${reason}`);

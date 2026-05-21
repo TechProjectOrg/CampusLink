@@ -22,8 +22,10 @@ import {
   type SignupExchangeResult,
 } from '../lib/authApi';
 import {
+  AUTH_EXPIRED_EVENT,
   clearStoredSession,
   readStoredSession,
+  notifyAuthExpired,
   writeStoredSession,
   type StoredAuthSession,
 } from '../lib/authStorage';
@@ -233,7 +235,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         setProfile(nextProfile);
       } catch {
-        clearStoredSession();
+        notifyAuthExpired();
         setSession(null);
         setProfile(null);
       } finally {
@@ -242,6 +244,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
 
     void init();
+  }, []);
+
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      clearStoredSession();
+      clearAdminSession();
+      setSession(null);
+      setProfile(null);
+      setIsLoading(false);
+    };
+
+    window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
   }, []);
 
   const value: AuthContextValue = {

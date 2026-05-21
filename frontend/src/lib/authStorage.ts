@@ -4,6 +4,7 @@ export interface StoredAuthSession {
 }
 
 const STORAGE_KEY = 'campuslink.auth.session';
+export const AUTH_EXPIRED_EVENT = 'campuslynk:auth-expired';
 
 export function readStoredSession(): StoredAuthSession | null {
   try {
@@ -44,4 +45,11 @@ export function clearStoredSession(): void {
 
 export function getAuthToken(): string | null {
   return readStoredSession()?.token || null;
+}
+
+export function notifyAuthExpired(): void {
+  clearStoredSession();
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
+  }
 }
