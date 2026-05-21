@@ -52,6 +52,7 @@ import {
   setUnreadCount,
 } from '../lib/chatCache';
 import { decryptMessage, encryptMessage } from '../lib/encryption';
+import { createNotification } from '../lib/notifications';
 import { uploadChatMediaToStorage } from '../lib/objectStorage';
 import { getUserSummariesByIds, getUserSummaryById } from '../lib/userCache';
 import { canMessage, getBlockState, getBlockStates } from '../lib/blocking';
@@ -1175,6 +1176,18 @@ async function cacheAndEmitMessage(
     },
   );
 
+  void createMessageNotifications({
+    chatId,
+    participantIds,
+    senderUserId: payload.senderUserId,
+    senderUsername: authed.auth?.username ?? 'Someone',
+    messageType: payload.messageType,
+    content: payload.content,
+    suppressedForUserId: payload.suppressedForUserId,
+  }).catch((err) => {
+    console.warn('Failed to create message notifications:', err);
+  });
+
   void (async () => {
     try {
       await appendRecentMessage(chatId, recentMessage);
@@ -1199,6 +1212,49 @@ async function cacheAndEmitMessage(
       console.warn('Failed to update chat cache after message send:', err);
     }
   })();
+}
+
+async function createMessageNotifications(params: {
+  chatId: string;
+  participantIds: string[];
+  senderUserId: string;
+  senderUsername: string;
+  messageType: 'text' | 'image';
+  content: string | null;
+  suppressedForUserId: string | null;
+}): Promise<void> {
+  const recipientIds = params.participantIds.filter(
+    (participantId) =>
+      participantId !== params.senderUserId && participantId !== params.suppressedForUserId,
+  );
+
+  if (recipientIds.length === 0) return;
+
+  const chatRows = await prisma.$queryRaw<Array<{ chat_type: string; chat_name: string | null }>>`
+    SELECT chat_type, name AS chat_name
+    FROM chats
+    WHERE chat_id = ${params.chatId}
+    LIMIT 1
+  `;
+
+  const chatType = chatRows[0]?.chat_type ?? 'direct';
+  const chatName = chatRows[0]?.chat_name?.trim() || null;
+  const preview = formatMessagePreview(params.messageType, params.content);
+  const body = chatType === 'direct' ? preview : `${chatName ?? 'Group chat'}: ${preview}`;
+
+  await Promise.allSettled(
+    recipientIds.map((recipientUserId) =>
+      createNotification({
+        recipientUserId,
+        actorUserId: params.senderUserId,
+        type: 'message',
+        title: params.senderUsername,
+        message: body,
+        entityType: 'chat',
+        entityId: params.chatId,
+      }),
+    ),
+  );
 }
 
 router.get('/conversations', async (req: Request, res: Response) => {

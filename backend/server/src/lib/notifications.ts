@@ -102,6 +102,10 @@ async function isNotificationEnabled(recipientUserId: string, type: Notification
     return prefs.clubUpdates;
   }
 
+  if (type === 'message') {
+    return prefs.newMessages;
+  }
+
   return true;
 }
 

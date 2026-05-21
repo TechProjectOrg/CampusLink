@@ -12,6 +12,7 @@ self.addEventListener('push', (event) => {
 
   const title = payload.title || 'CampusLynk';
   const message = payload.message || 'You have a new notification';
+  const entityType = payload.entityType || null;
   const entityId = payload.entityId || null;
 
   event.waitUntil(
@@ -19,6 +20,7 @@ self.addEventListener('push', (event) => {
       body: message,
       icon: '/logo.png',
       data: {
+        entityType,
         entityId,
       },
     }),
@@ -27,7 +29,12 @@ self.addEventListener('push', (event) => {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const targetUrl = '/notifications';
+  const entityType = event.notification.data?.entityType || null;
+  const entityId = event.notification.data?.entityId || null;
+  const targetUrl =
+    entityType === 'chat' && entityId
+      ? `/chat?chatId=${encodeURIComponent(entityId)}`
+      : '/notifications';
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
       for (const client of clients) {

@@ -733,7 +733,9 @@ export default function App() {
         setActiveTab(mainPath);
 
         if (mainPath === 'chat') {
-          appData.selectConversation(typeof historyState?.chatId === 'string' ? historyState.chatId : null);
+          const chatIdFromState = typeof historyState?.chatId === 'string' ? historyState.chatId : null;
+          const chatIdFromQuery = searchParams.get('chatId')?.trim() || null;
+          appData.selectConversation(chatIdFromState || chatIdFromQuery);
         } else {
           appData.selectConversation(null);
         }
