@@ -215,6 +215,7 @@ model User {
   chatsCreated           Chat[]              @relation("ChatCreator")
   chatParticipants       ChatParticipant[]
   messagesSent           Message[]           @relation("MessageSender")
+  hiddenMessages         MessageHiddenForUser[]
   notifications          Notification[]      @relation("NotificationUser")
   notificationsActed     Notification[]      @relation("NotificationActor")
   pushSubscriptions      UserPushSubscription[]
@@ -753,6 +754,7 @@ model Message {
   replyToMessage          Message?           @relation("MessageReplies", fields: [replyToMessageId], references: [messageId], onDelete: SetNull, onUpdate: NoAction)
   replies                 Message[]          @relation("MessageReplies")
   attachments             MessageAttachment[]
+  hiddenForUsers          MessageHiddenForUser[]
   lastReadByParticipants  ChatParticipant[]  @relation("ChatParticipantLastReadMessage")
 
   @@index([chatId], map: "idx_messages_chat_id")

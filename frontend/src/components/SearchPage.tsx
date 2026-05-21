@@ -343,10 +343,16 @@ export function SearchPage({
             </Card>
           )}
 
-          {Boolean(searchQuery.trim()) && hasSearched && !isLoading && (
-            <p className="text-gray-600 mb-4 animate-fade-in">
-              {filteredStudents.length} {filteredStudents.length === 1 ? 'user' : 'users'} found
-            </p>
+          {Boolean(searchQuery.trim()) && (
+            <div className="mb-4 min-h-6">
+              {isLoading ? (
+                <p className="text-gray-500 animate-pulse">Searching...</p>
+              ) : hasSearched ? (
+                <p className="text-gray-600 animate-fade-in">
+                  {filteredStudents.length} {filteredStudents.length === 1 ? 'user' : 'users'} found
+                </p>
+              ) : null}
+            </div>
           )}
 
           {Boolean(searchQuery.trim()) && (
