@@ -5577,6 +5577,55 @@ div[style*="width: 25%"]::webkit-scrollbar {
 }
 
 @media (max-width: 640px) {
+  .cl-clubs-mobile-header {
+    display: none;
+  }
+
+  .cl-club-activity-feed-tab {
+    margin-left: -1rem;
+    margin-right: -1rem;
+  }
+
+  .cl-club-activity-feed-tab[data-state="active"] {
+    margin-top: 1.5rem;
+  }
+
+  .cl-club-activity-composer-card {
+    border: 0;
+    border-radius: 0;
+    border-bottom: 1px solid #e5e7eb;
+    box-shadow: none;
+  }
+
+  .cl-club-activity-composer-card [data-slot="card-content"] {
+    padding: 1rem 1.25rem;
+  }
+
+  .cl-club-activity-post-list {
+    gap: 0;
+  }
+
+  .cl-club-member-card-layout {
+    align-items: flex-start;
+  }
+
+  .cl-club-member-card-identity {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: .375rem;
+  }
+
+  .cl-club-member-card-name,
+  .cl-club-member-card-username {
+    width: 100%;
+    line-height: 1.35;
+  }
+
+  .cl-club-member-card-role-row {
+    flex-wrap: wrap;
+  }
+
   .cl-notifications-page {
     min-height: calc(100dvh - 3.9rem - env(safe-area-inset-bottom));
     padding-bottom: 0;

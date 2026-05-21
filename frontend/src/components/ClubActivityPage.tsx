@@ -809,8 +809,8 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
-      <div className="max-w-6xl mx-auto px-4 md:px-6 py-6 md:py-8 space-y-6">
+    <div className="cl-club-activity-page min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
+      <div className="cl-club-activity-shell max-w-6xl mx-auto px-4 md:px-6 py-6 md:py-8 space-y-6">
         <div className="animate-slide-in-down">
           <Card className="overflow-hidden border-0 shadow-xl">
             <div className="relative h-48 md:h-64 bg-gradient-to-r from-blue-500 to-purple-600">
@@ -908,7 +908,7 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
         ) : null}
 
         {!isPrivateInvitePreview ? (
-        <Tabs defaultValue="feed" className="space-y-6">
+        <Tabs defaultValue="feed" className="cl-club-activity-tabs space-y-6">
           <TabsList className={`grid w-full ${canShowRequestsTab ? 'grid-cols-3' : 'grid-cols-2'} bg-white shadow-sm border border-gray-200`}>
             <TabsTrigger value="feed" className="data-[state=active]:bg-gradient-to-r data-[state=active]:from-primary data-[state=active]:to-secondary data-[state=active]:text-white">
               Feed
@@ -923,9 +923,9 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
             ) : null}
           </TabsList>
 
-          <TabsContent value="feed" className="space-y-6">
+          <TabsContent value="feed" className="cl-club-activity-feed-tab space-y-6">
             {club.permissions?.canCreatePosts ? (
-              <Card className="border border-primary/10 shadow-sm">
+              <Card className="cl-club-activity-composer-card border border-primary/10 shadow-sm">
                 <CardContent className="p-4 md:p-6">
                   <div className="flex items-center justify-between gap-3">
                     <h3 className="text-gray-900">Share with the community</h3>
@@ -938,7 +938,7 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
               </Card>
             ) : null}
 
-            <div className="space-y-4">
+            <div className="cl-club-activity-post-list space-y-4">
               {posts.map((post) => (
                 <OpportunityCard
                   key={post.id}
@@ -980,17 +980,19 @@ export function ClubActivityPage({ clubSlug, students, currentUserId, onBack, on
                 return (
                   <Card key={member.clubMembershipId} className="border border-primary/10 shadow-sm hover:shadow-lg transition-all duration-300">
                     <CardContent className="p-4 md:p-6">
-                      <div className="flex items-center gap-4">
+                      <div className="cl-club-member-card-layout flex items-center gap-4">
                         <Avatar className="w-14 h-14 ring-2 ring-primary/20 shrink-0">
                           <AvatarImage src={profile?.avatar ?? member.profilePictureUrl ?? undefined} />
                           <AvatarFallback>{(member.displayName ?? member.username)[0]}</AvatarFallback>
                         </Avatar>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-semibold text-gray-900">{member.displayName ?? profile?.name ?? member.username}</p>
-                            <p className="text-xs text-gray-500">@{member.username}</p>
-                            <Badge className="bg-primary/10 text-primary text-xs capitalize">{member.role}</Badge>
-                            {member.role === 'owner' ? <Crown className="w-4 h-4 text-amber-500" /> : null}
+                        <div className="cl-club-member-card-details flex-1 min-w-0">
+                          <div className="cl-club-member-card-identity flex items-center gap-2 flex-wrap">
+                            <p className="cl-club-member-card-name font-semibold text-gray-900">{member.displayName ?? profile?.name ?? member.username}</p>
+                            <p className="cl-club-member-card-username text-xs text-gray-500">@{member.username}</p>
+                            <div className="cl-club-member-card-role-row flex items-center gap-2">
+                              <Badge className="bg-primary/10 text-primary text-xs capitalize">{member.role}</Badge>
+                              {member.role === 'owner' ? <Crown className="w-4 h-4 text-amber-500" /> : null}
+                            </div>
                           </div>
                           <p className="text-sm text-gray-600">{profile?.branch ?? 'Unknown branch'}</p>
                         </div>

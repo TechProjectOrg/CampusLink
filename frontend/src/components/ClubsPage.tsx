@@ -224,7 +224,7 @@ export function ClubsPage({ students, currentUserId, initialClubSlug = null, onC
       contentClassName="cl-clubs-content px-4 py-6 md:px-6 md:py-8 space-y-6 md:space-y-8"
     >
         <div className="animate-slide-in-down flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-3">
-          <div>
+          <div className="cl-clubs-mobile-header">
             <h1 className="text-3xl md:text-4xl text-gray-900 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">Campus Clubs</h1>
             <p className="text-gray-600 mt-2 text-sm md:text-base">Join clubs and groups to connect with like-minded peers.</p>
           </div>
