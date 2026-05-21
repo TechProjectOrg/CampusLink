@@ -1364,8 +1364,8 @@ export function AuthPage() {
             <div className="cl-auth-mobile-landing-inner mx-auto flex w-full max-w-md flex-1 flex-col px-6 pb-6 pt-8 text-center">
               <div className="mt-4 flex flex-col items-center">
                 <div className="cl-auth-mobile-logo-ring flex h-32 w-32 items-center justify-center rounded-full">
-                  <div className="overflow-hidden rounded-full border border-white/25 shadow-2xl">
-                    <img src="/logo.png" alt="CampusLynk logo" className="h-24 w-24 object-cover" />
+                  <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border border-white/25 p-1.5 shadow-2xl">
+                    <img src="/logo.png" alt="CampusLynk logo" className="h-full w-full rounded-full object-cover" />
                   </div>
                 </div>
                 <div className="mt-6 space-y-3">
@@ -1386,7 +1386,7 @@ export function AuthPage() {
                   return (
                     <div
                       key={feature.title}
-                      className="cl-auth-mobile-feature-card rounded-[1.4rem] px-4 py-4 text-left animate-slide-in-up"
+                      className="cl-auth-mobile-feature-card rounded-[1.6rem] px-4 py-4 text-left animate-slide-in-up"
                       style={{ animationDelay: `${index * 90 + 100}ms` }}
                     >
                       <div className="flex items-center gap-3">
@@ -1397,7 +1397,6 @@ export function AuthPage() {
                           <p className="text-[1.05rem] font-semibold leading-tight text-white">{feature.title}</p>
                           <p className="mt-1 text-sm leading-6 text-white/80">{feature.description}</p>
                         </div>
-                        <ArrowRight className="h-5 w-5 shrink-0 text-white/60" />
                       </div>
                     </div>
                   );
@@ -1422,19 +1421,19 @@ export function AuthPage() {
             </div>
           </div>
         ) : (
-          <div className="cl-auth-mobile-auth-screen flex min-h-screen w-full flex-col">
-            <div className="cl-auth-mobile-auth-top px-5 pt-5">
+          <div className="cl-auth-mobile-auth-screen flex min-h-screen w-full flex-col px-3 pb-3">
+            <div className="cl-auth-mobile-auth-top px-1 pt-4">
               <button
                 type="button"
                 onClick={handleMobileBack}
-                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white shadow-lg backdrop-blur-sm transition hover:bg-white/20"
+                className="cl-auth-mobile-back-button inline-flex items-center justify-center border border-white/30 bg-white/10 text-white shadow-lg backdrop-blur-sm transition hover:bg-white/20"
                 aria-label="Go back"
               >
                 <ArrowLeft className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="cl-auth-mobile-auth-panel mt-5 flex-1 rounded-t-[2rem] bg-white/96 px-5 pb-6 pt-6 shadow-2xl backdrop-blur-xl">
+            <div className="cl-auth-mobile-auth-panel mt-4 w-full px-6 pb-5 pt-6 shadow-2xl backdrop-blur-xl">
               <div className="mx-auto w-full max-w-sm">
                 <div className="mb-6 text-center">
                   <Zap className="mx-auto mb-3 h-7 w-7 text-primary" />

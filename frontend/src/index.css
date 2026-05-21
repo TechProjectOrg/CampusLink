@@ -6109,7 +6109,7 @@ div[style*="width: 25%"]::webkit-scrollbar {
   .cl-auth-page {
     align-items: flex-start;
     justify-content: flex-start;
-    min-height: 100dvh;
+    min-height: calc(100dvh + 4.75rem + env(safe-area-inset-bottom));
     padding: 0;
     overflow-x: hidden;
     overflow-y: auto;
@@ -6134,6 +6134,7 @@ div[style*="width: 25%"]::webkit-scrollbar {
   }
 
   .cl-auth-mobile-feature-card {
+    border-radius: 1.6rem;
     border: 1px solid rgba(255, 255, 255, .2);
     background: linear-gradient(135deg, rgba(255, 255, 255, .18), rgba(255, 255, 255, .1));
     -webkit-backdrop-filter: blur(14px);
@@ -6142,6 +6143,7 @@ div[style*="width: 25%"]::webkit-scrollbar {
   }
 
   .cl-auth-mobile-feature-icon {
+    aspect-ratio: 1 / 1;
     background: rgba(255, 255, 255, .12);
     border: 1px solid rgba(255, 255, 255, .18);
   }
@@ -6149,21 +6151,54 @@ div[style*="width: 25%"]::webkit-scrollbar {
   .cl-auth-mobile-cta-wrap {
     position: sticky;
     bottom: 0;
+    border-radius: 1.6rem 1.6rem 0 0;
+    overflow: hidden;
     padding-bottom: max(.25rem, env(safe-area-inset-bottom));
     background: linear-gradient(to top, rgba(72, 108, 255, .2) 0%, rgba(72, 108, 255, 0) 100%);
+  }
+
+  .cl-auth-mobile-cta-wrap .button,
+  .cl-auth-mobile-cta-wrap button {
+    border-radius: 1.35rem;
+  }
+
+  .cl-auth-mobile-cta-wrap p {
+    border-radius: 1rem;
+    margin-left: .5rem;
+    margin-right: .5rem;
+    padding-bottom: .25rem;
   }
 
   .cl-auth-mobile-auth-top {
     padding-top: max(.5rem, env(safe-area-inset-top));
   }
 
+  .cl-auth-mobile-back-button {
+    width: 2.75rem;
+    height: 2.75rem;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    aspect-ratio: 1 / 1;
+    border-radius: 9999px;
+    flex-shrink: 0;
+  }
+
   .cl-auth-mobile-auth-panel {
-    min-height: calc(100dvh - max(5.5rem, calc(env(safe-area-inset-top) + 4rem)));
-    padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
+    border-radius: 2rem;
+    border: 1px solid rgba(255, 255, 255, .18);
+    background: linear-gradient(135deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, .08));
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+    box-shadow: 0 18px 40px rgba(15, 23, 42, .14);
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
 
   .cl-auth-layout-desktop {
     display: none;
+  }
+
+  body:has(.cl-auth-page) {
+    padding-bottom: 0;
   }
 
   body {
