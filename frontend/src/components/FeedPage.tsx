@@ -74,7 +74,7 @@ export function FeedPage({
     <>
         <div className="cl-feed-page mx-auto w-full space-y-4 sm:space-y-6 pb-24 md:pb-6" style={{ maxWidth: '1000px' }}>
           {/* Main Feed */}
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {/* Header */}
             <div className="animate-slide-in-down">
               <div className="cl-feed-composer rounded-3xl border border-slate-200/80 bg-white shadow-lg hover-lift overflow-hidden transition-all duration-300 hover:shadow-xl">

@@ -333,8 +333,8 @@ export function NetworkPage({
   };
 
   return (
-    <PageLayout maxWidth="4xl" className="cl-network-page" contentClassName="cl-network-content py-6 space-y-6">
-      <div className="animate-slide-in-down">
+    <PageLayout maxWidth="4xl" className="cl-network-page" contentClassName="cl-network-content px-2 py-6 md:px-4 space-y-6">
+      <div className="hidden animate-slide-in-down md:block">
         <h1 className="text-gray-900 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
           {headerTitle}
         </h1>

@@ -2984,7 +2984,7 @@ export default function App() {
             {/* Feed Section (Center) */}
             <div
               ref={feedViewportRef}
-              className="cl-feed-mobile-viewport flex-1 min-w-0 px-2 pt-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)]"
+              className="cl-feed-mobile-viewport flex-1 min-w-0 px-0 pt-2 md:px-2 md:pt-3 overflow-y-auto h-[calc(100vh-4rem)]"
               style={{ maxWidth: '1000px', scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               onScroll={handleFeedScroll}
             >
