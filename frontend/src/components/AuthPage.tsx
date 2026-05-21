@@ -1306,33 +1306,33 @@ export function AuthPage() {
           </p>
 
           <div className="grid grid-cols-2 gap-4 pt-4">
-            <div className="glass-morphism-solid rounded-2xl p-4 shadow-xl hover-lift animate-slide-in-up" style={{ animationDelay: '100ms' }}>
-              <div className="flex items-center gap-2 mb-2">
+            <div className="glass-morphism-solid rounded-2xl p-4 shadow-xl hover-lift animate-slide-in-up min-h-[148px] flex flex-col" style={{ animationDelay: '100ms' }}>
+              <div className="flex items-center gap-2 mb-3">
                 <Users className="w-5 h-5 text-white" />
-                <p className="text-2xl text-white">500+</p>
               </div>
-              <p className="text-sm text-white/80">Active Students</p>
+              <p className="text-lg md:text-xl font-semibold text-white leading-snug">Verified Campus Network</p>
+              <p className="text-sm text-white/80 leading-relaxed mt-2">Secure onboarding for students and alumni.</p>
             </div>
-            <div className="glass-morphism-solid rounded-2xl p-4 shadow-xl hover-lift animate-slide-in-up" style={{ animationDelay: '200ms' }}>
-              <div className="flex items-center gap-2 mb-2">
+            <div className="glass-morphism-solid rounded-2xl p-4 shadow-xl hover-lift animate-slide-in-up min-h-[148px] flex flex-col" style={{ animationDelay: '200ms' }}>
+              <div className="flex items-center gap-2 mb-3">
                 <TrendingUp className="w-5 h-5 text-white" />
-                <p className="text-2xl text-white">100+</p>
               </div>
-              <p className="text-sm text-white/80">Opportunities</p>
+              <p className="text-lg md:text-xl font-semibold text-white leading-snug">Opportunities Hub</p>
+              <p className="text-sm text-white/80 leading-relaxed mt-2">Share internships, jobs, and announcements.</p>
             </div>
-            <div className="glass-morphism-solid rounded-2xl p-4 shadow-xl hover-lift animate-slide-in-up" style={{ animationDelay: '300ms' }}>
-              <div className="flex items-center gap-2 mb-2">
+            <div className="glass-morphism-solid rounded-2xl p-4 shadow-xl hover-lift animate-slide-in-up min-h-[148px] flex flex-col" style={{ animationDelay: '300ms' }}>
+              <div className="flex items-center gap-2 mb-3">
                 <Sparkles className="w-5 h-5 text-white" />
-                <p className="text-2xl text-white">50+</p>
               </div>
-              <p className="text-sm text-white/80">Active Clubs</p>
+              <p className="text-lg md:text-xl font-semibold text-white leading-snug">Clubs &amp; Communities</p>
+              <p className="text-sm text-white/80 leading-relaxed mt-2">Manage societies, events, and campus engagement.</p>
             </div>
-            <div className="glass-morphism-solid rounded-2xl p-4 shadow-xl hover-lift animate-slide-in-up" style={{ animationDelay: '400ms' }}>
-              <div className="flex items-center gap-2 mb-2">
+            <div className="glass-morphism-solid rounded-2xl p-4 shadow-xl hover-lift animate-slide-in-up min-h-[148px] flex flex-col" style={{ animationDelay: '400ms' }}>
+              <div className="flex items-center gap-2 mb-3">
                 <Award className="w-5 h-5 text-white" />
-                <p className="text-2xl text-white">20+</p>
               </div>
-              <p className="text-sm text-white/80">Events/Month</p>
+              <p className="text-lg md:text-xl font-semibold text-white leading-snug">Real-Time Collaboration</p>
+              <p className="text-sm text-white/80 leading-relaxed mt-2">Posts, chats, comments, and interactions across campus.</p>
             </div>
           </div>
         </div>
