@@ -100,8 +100,8 @@ export function NotificationsCard({
   const unreadCount = notifications.filter(n => !n.read).length;
 
   return (
-    <Card className="border-primary/10 rounded-2xl shadow-lg overflow-hidden animate-slide-in-up">
-      <CardHeader className="p-6 pb-4">
+    <Card className="cl-notifications-card border-primary/10 rounded-2xl shadow-lg overflow-hidden animate-slide-in-up">
+      <CardHeader className="cl-notifications-card-header p-6 pb-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-lg">
@@ -154,8 +154,8 @@ export function NotificationsCard({
 
       <Separator />
 
-      <ScrollArea className="h-[400px]">
-        <CardContent className="p-0">
+      <ScrollArea className="cl-notifications-scroll h-[400px]">
+        <CardContent className="cl-notifications-card-content p-0">
           {filteredNotifications.length === 0 ? (
             <div className="p-8 text-center">
               <div className="w-16 h-16 rounded-2xl bg-gray-100 mx-auto mb-4 flex items-center justify-center">
