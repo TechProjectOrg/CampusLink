@@ -240,7 +240,7 @@ export function ClubsPage({ students, currentUserId, initialClubSlug = null, onC
           <p className="text-sm text-gray-600">No clubs found.</p>
         ) : (
           <div className="space-y-8">
-            <section className="space-y-4 animate-slide-in-up">
+            <section className="cl-clubs-mobile-joined-section space-y-4 animate-slide-in-up">
               <div className="space-y-1">
                 <h2 className="text-xl md:text-2xl text-gray-900">Joined Clubs</h2>
                 <p className="text-sm text-gray-600">Your active club memberships appear here first.</p>

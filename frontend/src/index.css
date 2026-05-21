@@ -5027,6 +5027,10 @@ div[style*="width: 25%"]::webkit-scrollbar {
   min-height: 0;
 }
 
+.cl-clubs-mobile-joined-section {
+  padding-bottom: 1rem;
+}
+
 .cl-post-detail-card .cl-post-detail-actions {
   border-top-color: #eef2f7;
 }
@@ -5577,6 +5581,38 @@ div[style*="width: 25%"]::webkit-scrollbar {
 }
 
 @media (max-width: 640px) {
+  .cl-post-detail-page {
+    padding-bottom: 0;
+  }
+
+  .cl-post-detail-shell {
+    max-width: none;
+    padding-left: 0;
+    padding-right: 0;
+    padding-top: 1rem;
+    padding-bottom: 0;
+    gap: 1rem;
+  }
+
+  .cl-post-detail-back-button {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .cl-post-detail-card {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .cl-post-detail-card > .p-4.sm\:p-6 {
+    padding: 1rem 1.25rem;
+  }
+
+  .cl-post-detail-card .cl-post-detail-comments {
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+  }
+
   .cl-clubs-mobile-header {
     display: none;
   }

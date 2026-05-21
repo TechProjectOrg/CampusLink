@@ -505,13 +505,13 @@ export function PostPage({
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
+    <div className="cl-post-detail-page min-h-screen bg-gradient-to-br from-gray-50 via-blue-50/30 to-purple-50/30 animate-fade-in pb-20 md:pb-0">
       <ShareToChatDialog isOpen={isShareOpen} onClose={() => setIsShareOpen(false)} post={post} />
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+      <div className="cl-post-detail-shell max-w-4xl mx-auto px-4 py-6 space-y-6">
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex items-center gap-2 text-gray-700 hover:text-gray-900"
+          className="cl-post-detail-back-button inline-flex items-center gap-2 text-gray-700 hover:text-gray-900"
         >
           <ArrowLeft className="w-4 h-4" />
           Back
