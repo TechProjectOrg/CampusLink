@@ -17697,8 +17697,8 @@
       "source_file": "backend\\server\\src\\routes\\chat.ts",
       "source_location": "L1242",
       "weight": 1.0,
-      "_src": "chat_createmessagenotifications",
-      "_tgt": "chatcache_formatmessagepreview",
+      "_src": "chatcache_formatmessagepreview",
+      "_tgt": "chat_createmessagenotifications",
       "source": "chatcache_formatmessagepreview",
       "target": "chat_createmessagenotifications"
     },
