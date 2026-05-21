@@ -865,7 +865,7 @@ export function ChatPage({
   }
 
   return (
-    <div className="cl-chat-page flex flex-col w-full max-w-7xl mx-auto bg-white overflow-hidden pb-16 md:pb-0" style={{ height: 'calc(100vh - 4rem)' }}>
+    <div className="cl-chat-page flex flex-col w-full max-w-7xl mx-auto bg-white overflow-hidden" style={{ height: 'calc(100vh - 4rem)' }}>
       <div className="cl-chat-frame flex flex-1 min-h-0 border-x border-gray-200">
         {/* LEFT: Conversations List */}
         <div className={`cl-chat-conversation-list ${selectedChat ? 'hidden md:flex' : 'flex'} w-full md:w-96 flex-shrink-0 border-r border-gray-200 flex-col min-h-0 bg-white`}>

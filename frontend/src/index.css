@@ -5338,7 +5338,7 @@ div[style*="width: 25%"]::webkit-scrollbar {
 
   .cl-chat-page {
     max-width: none;
-    height: calc(100dvh - 4.75rem - env(safe-area-inset-bottom)) !important;
+    height: calc(100dvh - 3.9rem - env(safe-area-inset-bottom)) !important;
     padding-bottom: 0;
   }
 
@@ -6007,8 +6007,8 @@ div[style*="width: 25%"]::webkit-scrollbar {
   }
 
   .cl-mobile-bottom-nav {
-    min-height: 4.5rem;
-    gap: clamp(.75rem, 7vw, 2.5rem);
+    min-height: 3.9rem;
+    gap: clamp(.5rem, 5vw, 1.5rem);
     background: #fff;
     border-top: 1px solid #e5e7eb;
     box-shadow: 0 -8px 24px rgba(15, 23, 42, .08);
@@ -6017,11 +6017,11 @@ div[style*="width: 25%"]::webkit-scrollbar {
   }
 
   .cl-mobile-bottom-nav button {
-    flex: 0 1 5rem;
-    max-width: 5rem;
-    height: 3.5rem;
+    flex: 0 1 4.5rem;
+    max-width: 4.5rem;
+    height: 3rem;
     flex-direction: column;
-    gap: .125rem;
+    gap: .05rem;
     color: #0f172a;
     border: 0;
     background: transparent;
@@ -6038,8 +6038,8 @@ div[style*="width: 25%"]::webkit-scrollbar {
   }
 
   .cl-mobile-bottom-nav button svg {
-    width: 1.55rem;
-    height: 1.55rem;
+    width: 1.35rem;
+    height: 1.35rem;
   }
 
   .cl-mobile-bottom-nav button .cl-mobile-nav-label {
@@ -6052,8 +6052,8 @@ div[style*="width: 25%"]::webkit-scrollbar {
     clip: auto;
     white-space: nowrap;
     border: 0;
-    font-size: .8125rem;
-    line-height: 1rem;
+    font-size: .75rem;
+    line-height: .9rem;
     font-weight: 400;
   }
 }
