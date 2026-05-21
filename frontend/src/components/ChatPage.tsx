@@ -996,10 +996,10 @@ export function ChatPage({
           <div className={`cl-chat-panel ${selectedChat ? 'flex' : 'hidden md:flex'} flex-1 flex-col min-w-0 min-h-0 bg-white`}>
             {/* Fixed Chat Header */}
             <div className="cl-chat-panel-header px-4 md:px-6 py-3 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
-              <div className="flex min-w-0 items-center gap-3">
+              <div className="cl-chat-panel-header-main flex min-w-0 items-center gap-3">
                 <button 
                   onClick={() => appData.selectConversation(null)}
-                  className="md:hidden text-gray-600 hover:text-gray-900 mr-2"
+                  className="cl-chat-panel-back-button md:hidden text-gray-600 hover:text-gray-900 mr-2"
                   aria-label="Back to conversations"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1014,9 +1014,9 @@ export function ChatPage({
                       onViewProfile?.(selectedConversation.participantId);
                     }
                   }}
-                  className="flex min-w-0 items-center gap-3 hover:opacity-80 transition-opacity"
+                  className="cl-chat-panel-title-button flex min-w-0 items-center gap-3 hover:opacity-80 transition-opacity"
                 >
-                  <div className="relative h-10 w-10 overflow-hidden rounded-full border-2 border-[#6b7280] bg-[#c7cfdb]">
+                  <div className="cl-chat-panel-title-avatar relative h-10 w-10 overflow-hidden rounded-full border-2 border-[#6b7280] bg-[#c7cfdb]">
                     <div className="absolute inset-0 flex items-center justify-center text-sm font-semibold text-slate-700">
                       {(selectedConversation.participantName?.trim()?.[0] ?? (selectedConversation.isGroup ? 'G' : 'U')).toUpperCase()}
                     </div>
@@ -1031,12 +1031,12 @@ export function ChatPage({
                       />
                     ) : null}
                   </div>
-                  <div className="min-w-0 text-left">
-                    <p className="truncate text-base font-semibold leading-tight text-gray-950">{selectedConversation.participantName}</p>
+                  <div className="cl-chat-panel-title-copy min-w-0 text-left">
+                    <p className="cl-chat-panel-title-text truncate text-base font-semibold leading-tight text-gray-950">{selectedConversation.participantName}</p>
                     {selectedConversation.participantUsername ? (
-                      <p className="truncate text-xs text-gray-500">@{selectedConversation.participantUsername}</p>
+                      <p className="cl-chat-panel-title-username truncate text-xs text-gray-500">@{selectedConversation.participantUsername}</p>
                     ) : null}
-                    <div className="flex items-center gap-1">
+                    <div className="cl-chat-panel-title-status flex items-center gap-1">
                       {typingStatusLabel ? (
                         <>
                           <div className="flex items-center gap-1 text-xs text-primary">
