@@ -26,6 +26,29 @@ import { Card, CardContent, CardHeader } from './ui/card';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 
+const FEATURE_CARDS = [
+  {
+    title: 'Verified Campus Network',
+    description: 'Secure onboarding for students and alumni.',
+    icon: Users,
+  },
+  {
+    title: 'Opportunities Hub',
+    description: 'Share internships, jobs, and announcements.',
+    icon: TrendingUp,
+  },
+  {
+    title: 'Clubs & Communities',
+    description: 'Manage societies, events, and campus engagement.',
+    icon: Sparkles,
+  },
+  {
+    title: 'Real-Time Collaboration',
+    description: 'Posts, chats, comments, and interactions across campus.',
+    icon: Award,
+  },
+] as const;
+
 const BRANCH_OPTIONS = [
   'Computer Engineering',
   'Information Technology',
@@ -213,6 +236,7 @@ export function AuthPage() {
   const auth = useAuth();
 
   const [mode, setMode] = useState<ScreenMode>('login');
+  const [mobileScreen, setMobileScreen] = useState<'landing' | 'auth'>('landing');
   const [signupStep, setSignupStep] = useState<SignupStep>('role');
   const [isLoading, setIsLoading] = useState(false);
   const [selectedRole, setSelectedRole] = useState<AccountType | null>(null);
@@ -313,12 +337,14 @@ export function AuthPage() {
 
   const openSignup = () => {
     setMode('signup');
+    setMobileScreen('auth');
     setForgotPasswordOpen(false);
     resetSignupFlow();
   };
 
   const openLogin = () => {
     setMode('login');
+    setMobileScreen('auth');
     setForgotPasswordOpen(false);
     setSignupError('');
     setSignupMessage('');
@@ -326,6 +352,7 @@ export function AuthPage() {
 
   const moveToOnboarding = (session: AuthOnboardingResponse) => {
     setMode('signup');
+    setMobileScreen('auth');
     setAlumniResubmissionToken(null);
     setAlumniResubmissionNote(null);
     setSelectedRole(session.accountType);
@@ -363,6 +390,7 @@ export function AuthPage() {
     decisionNote: string | null;
   }) => {
     setMode('signup');
+    setMobileScreen('auth');
     setSelectedRole('alumni');
     setOnboardingSession(null);
     setAlumniResubmissionToken(params.token);
@@ -476,6 +504,7 @@ export function AuthPage() {
     window.history.replaceState({}, '', nextUrl);
 
     setMode('signup');
+    setMobileScreen('auth');
 
     if (authStatus === 'expired') {
       setSignupStep('verify-email');
@@ -1260,6 +1289,31 @@ export function AuthPage() {
     </div>
   );
 
+  const handleSignupBack = () => {
+    if (signupStep === 'method') {
+      setSignupStep('role');
+      resetMessages();
+      return;
+    }
+
+    if (signupStep === 'verify-email' || signupStep === 'await-verification') {
+      setSignupStep('method');
+      resetMessages();
+      return;
+    }
+
+    if (signupStep === 'student-form' || signupStep === 'alumni-form') {
+      if (alumniResubmissionToken) {
+        openLogin();
+        resetSignupFlow();
+        return;
+      }
+
+      setSignupStep(onboardingSession?.provider === 'google' ? 'method' : 'verify-email');
+      resetMessages();
+    }
+  };
+
   const renderSignupBody = () => {
     switch (signupStep) {
       case 'role':
@@ -1281,6 +1335,22 @@ export function AuthPage() {
     }
   };
 
+  const handleMobileBack = () => {
+    setForgotPasswordOpen(false);
+    if (mode === 'login') {
+      resetMessages();
+      setMobileScreen('landing');
+      return;
+    }
+
+    if (signupStep === 'role') {
+      openLogin();
+      return;
+    }
+
+    handleSignupBack();
+  };
+
   return (
     <div className="cl-auth-page min-h-screen bg-gradient-to-br from-primary via-secondary to-purple-600 flex items-center justify-center p-4 relative overflow-hidden">
       <div className="absolute inset-0 overflow-hidden">
@@ -1288,7 +1358,216 @@ export function AuthPage() {
         <div className="absolute bottom-20 right-10 w-96 h-96 bg-white/10 rounded-full blur-3xl animate-pulse" style={{ animationDelay: '1s' }} />
       </div>
 
-      <div className="cl-auth-layout w-full max-w-6xl grid grid-cols-1 md:grid-cols-2 gap-8 items-center relative z-10">
+      <div className="cl-auth-mobile-shell flex md:hidden relative z-10 min-h-screen w-full flex-col">
+        {mobileScreen === 'landing' && mode === 'login' ? (
+          <div className="cl-auth-mobile-landing flex min-h-screen w-full flex-col">
+            <div className="cl-auth-mobile-landing-inner mx-auto flex w-full max-w-md flex-1 flex-col px-6 pb-6 pt-8 text-center">
+              <div className="mt-4 flex flex-col items-center">
+                <div className="cl-auth-mobile-logo-ring flex h-32 w-32 items-center justify-center rounded-full">
+                  <div className="overflow-hidden rounded-full border border-white/25 shadow-2xl">
+                    <img src="/logo.png" alt="CampusLynk logo" className="h-24 w-24 object-cover" />
+                  </div>
+                </div>
+                <div className="mt-6 space-y-3">
+                  <div className="text-3xl font-medium text-white">CampusLynk</div>
+                  <h1 className="text-[2.25rem] font-medium leading-tight text-white">
+                    Connect. Collaborate. Succeed.
+                  </h1>
+                  <p className="mx-auto max-w-xs text-base leading-7 text-white/85">
+                    Your campus. Your network. Your future. Join a verified community built for students and alumni.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-8 flex flex-col gap-3">
+                {FEATURE_CARDS.map((feature, index) => {
+                  const Icon = feature.icon;
+
+                  return (
+                    <div
+                      key={feature.title}
+                      className="cl-auth-mobile-feature-card rounded-[1.4rem] px-4 py-4 text-left animate-slide-in-up"
+                      style={{ animationDelay: `${index * 90 + 100}ms` }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="cl-auth-mobile-feature-icon flex h-11 w-11 shrink-0 items-center justify-center rounded-full">
+                          <Icon className="h-5 w-5 text-white" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-[1.05rem] font-semibold leading-tight text-white">{feature.title}</p>
+                          <p className="mt-1 text-sm leading-6 text-white/80">{feature.description}</p>
+                        </div>
+                        <ArrowRight className="h-5 w-5 shrink-0 text-white/60" />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="cl-auth-mobile-cta-wrap mt-auto pt-6">
+                <Button
+                  type="button"
+                  onClick={() => setMobileScreen('auth')}
+                  className="h-14 w-full rounded-[1.35rem] bg-white text-primary shadow-2xl hover:bg-white/95"
+                >
+                  <span className="inline-flex items-center gap-2 text-base font-semibold">
+                    <Zap className="h-5 w-5" />
+                    Get Started
+                  </span>
+                </Button>
+                <p className="mt-4 px-4 text-center text-xs leading-6 text-white/70">
+                  By continuing, you agree to our Terms of Service and Privacy Policy.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="cl-auth-mobile-auth-screen flex min-h-screen w-full flex-col">
+            <div className="cl-auth-mobile-auth-top px-5 pt-5">
+              <button
+                type="button"
+                onClick={handleMobileBack}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/30 bg-white/10 text-white shadow-lg backdrop-blur-sm transition hover:bg-white/20"
+                aria-label="Go back"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="cl-auth-mobile-auth-panel mt-5 flex-1 rounded-t-[2rem] bg-white/96 px-5 pb-6 pt-6 shadow-2xl backdrop-blur-xl">
+              <div className="mx-auto w-full max-w-sm">
+                <div className="mb-6 text-center">
+                  <Zap className="mx-auto mb-3 h-7 w-7 text-primary" />
+                  <h2 className="text-2xl font-semibold text-slate-900">
+                    {mode === 'login' ? 'Welcome to CampusLynk' : 'Create Your Account'}
+                  </h2>
+                  <p className="mt-3 text-base leading-7 text-slate-500">
+                    {mode === 'login'
+                      ? 'Sign in to connect with your campus network.'
+                      : signupStep === 'alumni-form' && alumniResubmissionToken
+                        ? 'Upload additional proof requested by the reviewer.'
+                        : SIGNUP_STEP_SUBTITLES[signupStep]}
+                  </p>
+                </div>
+
+                {mode === 'login' ? (
+                  <div className="space-y-4 animate-fade-slide-in">
+                    <form onSubmit={handleLogin} className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="mobile-login-email">Email</Label>
+                        <div className="relative">
+                          <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                          <Input
+                            id="mobile-login-email"
+                            type="email"
+                            value={loginEmail}
+                            onChange={(event) => setLoginEmail(event.target.value)}
+                            className="h-12 rounded-xl pl-10"
+                            placeholder="youremail@college.edu"
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="mobile-login-password">Password</Label>
+                        <div className="relative">
+                          <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                          <Input
+                            id="mobile-login-password"
+                            type={showLoginPassword ? 'text' : 'password'}
+                            value={loginPassword}
+                            onChange={(event) => setLoginPassword(event.target.value)}
+                            className="h-12 rounded-xl pl-10 pr-11"
+                            placeholder="Enter your password"
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowLoginPassword((current) => !current)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-700"
+                            aria-label={showLoginPassword ? 'Hide password' : 'Show password'}
+                          >
+                            {showLoginPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-start">
+                        <button
+                          type="button"
+                          onClick={() => setForgotPasswordOpen(true)}
+                          className="text-sm font-normal text-blue-600 transition hover:underline"
+                        >
+                          Forgot password?
+                        </button>
+                      </div>
+
+                      {loginMessage ? <FormMessage tone="info">{loginMessage}</FormMessage> : null}
+                      {loginError ? <FormMessage tone="error">{loginError}</FormMessage> : null}
+
+                      <Button type="submit" className="h-12 w-full rounded-2xl gradient-primary" disabled={isLoading}>
+                        {isLoading
+                          ? <Lottie animationData={loadingAnimation} style={{ height: 40, width: 40 }} />
+                          : 'Login'}
+                      </Button>
+                    </form>
+
+                    <Divider />
+
+                    <div className="flex justify-center">
+                      <GoogleAuthButton disabled={isLoading} onCredential={handleLoginGoogle} />
+                    </div>
+
+                    <div className="flex justify-center text-sm font-normal text-slate-500">
+                      <p>
+                        New here?{' '}
+                        <button
+                          type="button"
+                          onClick={openSignup}
+                          className="font-normal text-blue-600 transition hover:underline"
+                        >
+                          Sign up
+                        </button>
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {signupStep !== 'role' ? (
+                      <button
+                        type="button"
+                        onClick={handleSignupBack}
+                        className="inline-flex items-center gap-1.5 text-sm font-normal text-slate-500 transition hover:text-slate-900"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                        Back
+                      </button>
+                    ) : null}
+
+                    {renderSignupBody()}
+
+                    <div className="flex justify-center text-sm font-normal text-slate-500">
+                      <p>
+                        Already have an account?{' '}
+                        <button
+                          type="button"
+                          onClick={openLogin}
+                          className="font-normal text-blue-600 transition hover:underline"
+                        >
+                          Log in
+                        </button>
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="cl-auth-layout cl-auth-layout-desktop w-full max-w-6xl grid-cols-1 md:grid-cols-2 gap-8 items-center relative z-10">
         <div className="cl-auth-branding space-y-6 text-center md:text-left animate-slide-in-up">
           <div className="inline-flex items-center gap-3 glass-morphism-solid rounded-2xl p-4 shadow-2xl hover-lift">
             <div className="overflow-hidden rounded-full border border-white/20 shadow-lg">
@@ -1358,30 +1637,7 @@ export function AuthPage() {
               {mode === 'signup' && signupStep !== 'role' ? (
                 <button
                   type="button"
-                  onClick={() => {
-                    if (signupStep === 'method') {
-                      setSignupStep('role');
-                      resetMessages();
-                      return;
-                    }
-
-                    if (signupStep === 'verify-email' || signupStep === 'await-verification') {
-                      setSignupStep('method');
-                      resetMessages();
-                      return;
-                    }
-
-                    if (signupStep === 'student-form' || signupStep === 'alumni-form') {
-                      if (alumniResubmissionToken) {
-                        openLogin();
-                        resetSignupFlow();
-                        return;
-                      }
-
-                      setSignupStep(onboardingSession?.provider === 'google' ? 'method' : 'verify-email');
-                      resetMessages();
-                    }
-                  }}
+                  onClick={handleSignupBack}
                   className="inline-flex items-center gap-1.5 text-xs font-normal text-slate-500 transition hover:text-slate-900"
                 >
                   <ArrowLeft className="h-3.5 w-3.5" />
