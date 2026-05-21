@@ -1308,11 +1308,11 @@ export function ProfilePage({
     <PageLayout maxWidth="4xl" className="bg-slate-50 pb-24 md:pb-8" contentClassName="py-4 sm:py-5 lg:py-6 max-w-[720px]">
       <div className="mx-auto grid w-full [grid-template-columns:1fr] gap-4" style={{ maxWidth: '1000px' }}>
         {/* Modern Profile Header: Cover + Overlapping Avatar + Stacked Content */}
-        <section className="cl-profile-header relative bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
+        <section className="cl-profile-header cl-profile-mobile-header relative bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden">
           <div className="mx-auto w-full max-w-[1000px]">
           
           {/* Banner/Cover Section */}
-          <div className="cl-cover-section relative h-48 sm:h-64 md:h-72 w-full flex-shrink-0 overflow-hidden bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 bg-cover bg-center">
+          <div className="cl-cover-section cl-profile-mobile-cover relative h-48 sm:h-64 md:h-72 w-full flex-shrink-0 overflow-hidden bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 bg-cover bg-center">
             {bannerImage ? (
               <img
                 src={bannerImage}
@@ -1327,7 +1327,7 @@ export function ProfilePage({
                 <button
                   type="button"
                   onClick={() => setShowProfileActions((current) => !current)}
-                  className="flex h-12 w-12 items-center justify-center rounded-full border-2 border-white/90 bg-white/20 text-white shadow-lg backdrop-blur-md transition hover:scale-105 hover:bg-white/30"
+                  className="cl-profile-mobile-cover-action flex h-12 w-12 items-center justify-center rounded-full border-2 border-white/90 bg-white/20 text-white shadow-lg backdrop-blur-md transition hover:scale-105 hover:bg-white/30"
                   aria-label="Profile actions"
                 >
                   <MoreHorizontal className="h-5 w-5" />
@@ -1379,11 +1379,11 @@ export function ProfilePage({
           </div>
 
           {/* Avatar Container - Centered on Banner/Content Separation Line */}
-          <div className="cl-avatar-container relative px-6 sm:px-10 pb-6">
-            <div className="flex items-end gap-4 sm:gap-6 -mt-16 sm:-mt-20 md:-mt-24 mb-4 sm:mb-6">
+          <div className="cl-avatar-container cl-profile-mobile-avatar-container relative px-6 sm:px-10 pb-6">
+            <div className="cl-profile-mobile-hero flex items-end gap-4 sm:gap-6 -mt-16 sm:-mt-20 md:-mt-24 mb-4 sm:mb-6">
               {/* Circular Avatar - Centered on Separation Line */}
               <div className="cl-avatar-wrapper flex-shrink-0">
-                <div className="w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 rounded-full border-4 sm:border-[5px] border-white bg-white shadow-lg overflow-hidden flex items-center justify-center flex-shrink-0">
+                <div className="cl-profile-mobile-avatar-frame w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 rounded-full border-4 sm:border-[5px] border-white bg-white shadow-lg overflow-hidden flex items-center justify-center flex-shrink-0">
                   <ProfilePhotoUpload
                     currentPhoto={displayedProfilePhoto}
                     hasCustomPhoto={hasCustomProfilePhoto}
@@ -1396,13 +1396,13 @@ export function ProfilePage({
               </div>
 
               {/* Action Buttons Aligned to Bottom of Avatar */}
-              <div className="cl-actions-beside-avatar flex flex-col gap-2 flex-shrink-0">
+              <div className="cl-actions-beside-avatar cl-profile-mobile-actions flex flex-col gap-2 flex-shrink-0">
                 {!isOwnProfile ? (
-                  <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="cl-profile-mobile-action-row flex items-center gap-2 sm:gap-3">
                     {isBlockedByViewer ? (
                       <Button
                         onClick={() => onUnblockUser?.(student.id)}
-                        className="rounded-full border border-emerald-200 bg-emerald-50 px-4 sm:px-6 h-10 sm:h-11 font-semibold text-emerald-700 shadow-sm hover:bg-emerald-100 text-sm sm:text-base"
+                        className="cl-profile-mobile-action-button rounded-full border border-emerald-200 bg-emerald-50 px-4 sm:px-6 h-10 sm:h-11 font-semibold text-emerald-700 shadow-sm hover:bg-emerald-100 text-sm sm:text-base"
                       >
                         Unblock
                       </Button>
@@ -1414,7 +1414,7 @@ export function ProfilePage({
                           isFollowing={isFollowing}
                           isFollower={isFollower}
                           requestStatus={requestStatus}
-                          className="w-auto rounded-full gradient-primary px-4 sm:px-6 h-10 sm:h-11 font-semibold text-white shadow-md hover:shadow-lg transition-all border-none text-sm sm:text-base"
+                          className="cl-profile-mobile-action-button w-auto rounded-full gradient-primary px-4 sm:px-6 h-10 sm:h-11 font-semibold text-white shadow-md hover:shadow-lg transition-all border-none text-sm sm:text-base"
                           onFollow={() => onFollow(student.id, student.accountType)}
                           onUnfollow={() => onUnfollow(student.id)}
                           onCancelRequest={() => onCancelRequest(student.id)}
@@ -1422,9 +1422,9 @@ export function ProfilePage({
                         {!isRestrictedView && !isPrivateLimitedView && canViewerMessageUser ? (
                           <Button 
                             onClick={() => onMessage?.(student.id)}
-                            className="rounded-full gradient-primary px-4 sm:px-6 h-10 sm:h-11 font-semibold text-white shadow-md hover:shadow-lg transition-all border-none text-sm sm:text-base"
+                            className="cl-profile-mobile-action-button rounded-full gradient-primary px-4 sm:px-6 h-10 sm:h-11 font-semibold text-white shadow-md hover:shadow-lg transition-all border-none text-sm sm:text-base"
                           >
-                            <MessageCircle className="mr-2 h-4 w-4" />
+                            <MessageCircle className="cl-profile-mobile-action-icon mr-2 h-4 w-4" />
                             Message
                           </Button>
                         ) : null}
@@ -1434,9 +1434,9 @@ export function ProfilePage({
                 ) : (
                   <Button 
                     onClick={() => setActiveModal('editProfile')}
-                    className="rounded-full gradient-primary px-4 sm:px-6 h-10 sm:h-11 font-semibold text-white shadow-md hover:shadow-lg transition-all border-none text-sm sm:text-base"
+                    className="cl-profile-mobile-action-button rounded-full gradient-primary px-4 sm:px-6 h-10 sm:h-11 font-semibold text-white shadow-md hover:shadow-lg transition-all border-none text-sm sm:text-base"
                   >
-                    <Edit2 className="mr-2 h-4 w-4" />
+                    <Edit2 className="cl-profile-mobile-action-icon mr-2 h-4 w-4" />
                     Edit
                   </Button>
                 )}
