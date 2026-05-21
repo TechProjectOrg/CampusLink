@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Home, Search, Users, MessageCircle, BookOpen, User, Bell, Settings, LogOut, Menu, Bookmark } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Home, Search, Users, MessageCircle, BookOpen, User, Bell, Settings, LogOut, Menu, Bookmark, X } from 'lucide-react';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
 import {
@@ -35,6 +35,7 @@ export function Navbar({
 }: NavbarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+  const mobileSearchInputRef = useRef<HTMLInputElement | null>(null);
   const { logout, profile } = useAuth();
   const navbarProfilePhoto = profile?.profilePictureUrl ?? null;
   const showMobileTopActions = shouldRenderMobileTopHeader;
@@ -109,6 +110,11 @@ export function Navbar({
     }
   }, [activeTab]);
 
+  useEffect(() => {
+    if (!isMobileSearchOpen) return;
+    mobileSearchInputRef.current?.focus();
+  }, [isMobileSearchOpen]);
+
   return (
     <nav className={`cl-navbar-root sticky top-0 z-50 w-full overflow-x-hidden backdrop-blur-xl bg-gradient-to-r from-primary via-secondary to-primary shadow-lg animate-slide-in-down ${
       shouldRenderMobileTopHeader ? 'cl-navbar-mobile-header-enabled' : 'cl-navbar-mobile-header-disabled'
@@ -116,26 +122,51 @@ export function Navbar({
       <div className="cl-navbar-shell max-w-7xl mx-auto px-4">
         <div className="cl-navbar-row flex items-center gap-4 h-16">
           {/* Logo */}
-          <div className="hidden sm:flex items-center gap-2 flex-shrink-0 cursor-pointer" onClick={() => handleTabNavigate('feed')}>
+          <div className="hidden md:flex items-center gap-2 flex-none min-w-fit cursor-pointer" onClick={() => handleTabNavigate('feed')}>
             <div className="overflow-hidden rounded-xl border border-white/30 bg-white/20 shadow-lg backdrop-blur-lg hover-lift">
               <img src="/logo.png" alt="CampusLynk logo" className="h-10 w-10 object-cover" />
             </div>
-            <span className="cl-navbar-logo-text text-white text-xl tracking-tight hidden sm:inline">CampusLynk</span>
+            <span className="cl-navbar-logo-text text-white text-xl tracking-tight">CampusLynk</span>
           </div>
 
           {showMobileTopActions ? (
-            <button
-              aria-label="Open profile"
-              onClick={() => handleTabNavigate('profile')}
-              className="cl-mobile-top-action cl-mobile-profile-action md:hidden relative overflow-hidden rounded-full border border-white/30 shadow-lg"
-            >
-              <Avatar className="h-11 w-11">
-                <AvatarImage src={navbarProfilePhoto ?? undefined} alt="My profile" className="object-cover" />
-                <AvatarFallback className="bg-white/20 text-white text-sm font-medium">
-                  {profile?.displayName?.[0] ?? profile?.username?.[0] ?? 'U'}
-                </AvatarFallback>
-              </Avatar>
-            </button>
+            isMobileSearchOpen ? (
+              <div className="cl-mobile-inline-search md:hidden">
+                <div className="cl-mobile-inline-search-field">
+                  <Search className="cl-mobile-inline-search-icon" />
+                  <Input
+                    ref={mobileSearchInputRef}
+                    type="text"
+                    placeholder="Search users or tags"
+                    value={searchQuery}
+                    onChange={handleMobileSearchChange}
+                    onFocus={handleSearchFocus}
+                    className="cl-mobile-inline-search-input"
+                  />
+                  <button
+                    type="button"
+                    aria-label="Close search"
+                    onClick={handleMobileSearchToggle}
+                    className="cl-mobile-inline-search-close"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                aria-label="Open profile"
+                onClick={() => handleTabNavigate('profile')}
+                className="cl-mobile-top-action cl-mobile-profile-action md:hidden relative overflow-hidden rounded-full border border-white/30 shadow-lg"
+              >
+                <Avatar className="h-11 w-11">
+                  <AvatarImage src={navbarProfilePhoto ?? undefined} alt="My profile" className="object-cover" />
+                  <AvatarFallback className="bg-white/20 text-white text-sm font-medium">
+                    {profile?.displayName?.[0] ?? profile?.username?.[0] ?? 'U'}
+                  </AvatarFallback>
+                </Avatar>
+              </button>
+            )
           ) : (
             <div className="md:hidden flex h-11 w-11 flex-shrink-0" aria-hidden="true" />
           )}
@@ -257,7 +288,7 @@ export function Navbar({
 
 
 
-          {showMobileTopActions && (
+          {showMobileTopActions && !isMobileSearchOpen && (
             <div className="cl-mobile-top-actions-group md:hidden">
               {/* Search Icon - Mobile */}
               <button 
