@@ -5114,6 +5114,27 @@ div[style*="width: 25%"]::webkit-scrollbar {
     line-height: 1.25rem;
   }
 
+  .cl-saved-posts-page-stack {
+    gap: 1rem;
+  }
+
+  .cl-saved-posts-header {
+    padding-bottom: 1rem;
+  }
+
+  .cl-saved-posts-empty {
+    padding: 1.5rem 1rem;
+  }
+
+  .cl-saved-posts-empty-icon {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+
+  .cl-saved-posts-empty-copy {
+    margin-top: .75rem;
+  }
+
   .cl-app-scroll-shell-profile {
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -5232,6 +5253,23 @@ div[style*="width: 25%"]::webkit-scrollbar {
     padding-left: 1rem;
     padding-right: 1rem;
     padding-bottom: 1rem;
+  }
+
+  .cl-profile-details {
+    gap: .625rem;
+  }
+
+  .cl-name-section p {
+    margin-top: .125rem;
+  }
+
+  .cl-about-preview-section p {
+    font-size: .95rem;
+    line-height: 1.45rem;
+  }
+
+  .cl-metadata-row {
+    gap: .5rem 1rem;
   }
 
   .cl-profile-mobile-hero {
