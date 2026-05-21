@@ -636,6 +636,8 @@ export default function App() {
   const openedPostCommentsRef = useRef<DiscussionPageState<Comment>>(createInitialDiscussionPageState<Comment>());
   const openedPostRepliesRef = useRef<Record<string, ReplyThreadState>>({});
   const lastFeedScrollTopRef = useRef(0);
+  const suppressMobileChatHistorySyncRef = useRef(false);
+  const selectedConversationId = useAppDataSelector((state) => state.chat.selectedConversationId);
   const guardRestrictedAction = useCallback(() => {
     if (forcedBannedMessage || moderationState?.isBanned) {
       toast.error(forcedBannedMessage || 'Your account has been permanently banned due to repeated violations.');
@@ -725,9 +727,16 @@ export default function App() {
     const setTabFromPath = () => {
         const pathParts = window.location.pathname.split('/').filter(p => p);
         const searchParams = new URLSearchParams(window.location.search);
+      const historyState = window.history.state as { chatId?: string } | null;
       const rawMainPath = pathParts[0] || 'feed';
       const mainPath = rawMainPath === 'posts' ? 'post' : rawMainPath;
         setActiveTab(mainPath);
+
+        if (mainPath === 'chat') {
+          appData.selectConversation(typeof historyState?.chatId === 'string' ? historyState.chatId : null);
+        } else {
+          appData.selectConversation(null);
+        }
 
         if (mainPath === 'profile' && pathParts[1]) {
             setViewingProfileId(pathParts[1]);
@@ -813,6 +822,7 @@ export default function App() {
     setTabFromPath(); // Initial load
 
     const handlePopState = () => {
+        suppressMobileChatHistorySyncRef.current = true;
         setTabFromPath();
     };
 
@@ -821,7 +831,31 @@ export default function App() {
     return () => {
         window.removeEventListener('popstate', handlePopState);
     };
-  }, []);
+  }, [appData]);
+
+  useEffect(() => {
+    if (activeTab !== 'chat') return;
+    if (typeof window === 'undefined') return;
+    if (!window.matchMedia('(max-width: 640px)').matches) return;
+
+    if (suppressMobileChatHistorySyncRef.current) {
+      suppressMobileChatHistorySyncRef.current = false;
+      return;
+    }
+
+    const currentState = (window.history.state ?? {}) as { tab?: string; chatId?: string };
+    const currentChatId = typeof currentState.chatId === 'string' ? currentState.chatId : null;
+
+    if (selectedConversationId && currentChatId !== selectedConversationId) {
+      window.history.pushState({ ...currentState, tab: 'chat', chatId: selectedConversationId }, '', '/chat');
+      return;
+    }
+
+    if (!selectedConversationId && currentChatId) {
+      const { chatId: _removedChatId, ...restState } = currentState;
+      window.history.replaceState({ ...restState, tab: 'chat' }, '', '/chat');
+    }
+  }, [activeTab, selectedConversationId]);
 
   const navigate = (
     tab: string,
@@ -982,8 +1016,6 @@ export default function App() {
       .map((id) => state.chat.conversationsById[id])
       .filter((conversation): conversation is ChatConversation => Boolean(conversation)),
   );
-  const selectedConversationId = useAppDataSelector((state) => state.chat.selectedConversationId);
-
   const currentUserId = currentUser?.id ?? '';
   const authToken = auth.session?.token;
   const apiBase = resolveApiBaseUrl(import.meta.env.VITE_API_URL as string | undefined);
