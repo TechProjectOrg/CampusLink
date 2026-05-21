@@ -6017,6 +6017,35 @@ div[style*="width: 25%"]::webkit-scrollbar {
   .cl-settings-mobile-section-panel .flex.items-center.justify-between {
     gap: 1rem;
   }
+
+  .cl-settings-mobile-email-row {
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+  }
+
+  .cl-settings-mobile-email-input {
+    width: 100%;
+  }
+
+  .cl-settings-mobile-email-change {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .cl-settings-mobile-blocked-user-card {
+    display: flex;
+    flex-direction: column;
+    gap: .75rem;
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem;
+    background: #fff;
+    padding: 1rem;
+  }
+
+  .cl-settings-mobile-blocked-user-action {
+    width: 100%;
+  }
 }
 
 @media (min-width: 641px) and (max-width: 1023px) {

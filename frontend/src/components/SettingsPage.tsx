@@ -834,8 +834,19 @@ export function SettingsPage({ student, onEdit, onUpdateSettings, onUnblockUser 
 
           <div className="space-y-2">
             <Label htmlFor="mobile-email">Email Address</Label>
-            <Input id="mobile-email" type="email" value={accountStudent.email} disabled />
-            <p className="text-xs text-gray-500">Email cannot be changed</p>
+            <div className="cl-settings-mobile-email-row">
+              <Input id="mobile-email" type="email" value={accountStudent.email} disabled className="cl-settings-mobile-email-input" />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setChangeEmailModalOpen(true)}
+                className="cl-settings-mobile-email-change"
+              >
+                <Mail className="w-4 h-4 mr-2" />
+                Change
+              </Button>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -1061,6 +1072,44 @@ export function SettingsPage({ student, onEdit, onUpdateSettings, onUnblockUser 
             />
           </div>
         ))}
+
+        <Separator className="my-6" />
+
+        <div className="space-y-4">
+          <div>
+            <p className="text-gray-900">Blocked Users</p>
+            <p className="text-sm text-gray-600">Manage people you&apos;ve blocked.</p>
+          </div>
+          {blockedUsersLoading ? (
+            <LoadingIndicator label="Loading blocked users..." className="justify-start" size={20} />
+          ) : blockedUsers.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-sm text-slate-600">
+              You haven&apos;t blocked anyone yet.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {blockedUsers.map((blockedUser) => (
+                <div key={blockedUser.userId} className="cl-settings-mobile-blocked-user-card">
+                  <div>
+                    <p className="font-medium text-slate-900">{blockedUser.displayName}</p>
+                    <p className="text-sm text-slate-500">@{blockedUser.username}</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="cl-settings-mobile-blocked-user-action"
+                    onClick={async () => {
+                      if (!window.confirm(`Unblock @${blockedUser.username}?`)) return;
+                      await onUnblockUser(blockedUser.userId);
+                      setBlockedUsers((current) => current.filter((item) => item.userId !== blockedUser.userId));
+                    }}
+                  >
+                    Unblock
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         <Separator className="my-6" />
 
