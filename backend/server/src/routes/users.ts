@@ -10,8 +10,10 @@ import { sendEmailVerificationOTP } from '../lib/authEmail';
 import { setAdminMustChangePassword } from '../lib/admin';
 import { normalizeUsername, validateUsername } from '../lib/username';
 import {
+  deleteManagedCertificationMediaByUrl,
   deleteManagedPhotoByUrl,
   deleteManagedPostMediaByUrl,
+  uploadCertificationMediaToStorage,
   uploadPostMediaToStorage,
   uploadProfilePhotoToStorage,
 } from '../lib/objectStorage';
@@ -108,6 +110,27 @@ const postMediaUpload = multer({
     files: 10,
   },
 });
+
+const certificationImageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+    files: 1,
+  },
+});
+
+function normalizeOptionalFormValue(value: unknown): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (Array.isArray(value)) {
+    return normalizeOptionalFormValue(value[0]);
+  }
+  if (typeof value !== 'string') {
+    return String(value);
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
 
 router.get('/username-availability', async (req: Request, res: Response) => {
   const rawUsername = typeof req.query.username === 'string' ? req.query.username : '';
@@ -1576,6 +1599,7 @@ router.get('/:userId/certifications', async (req: Request<{ userId: string }>, r
 router.post(
   '/:userId/certifications',
   requireOwnUser,
+  certificationImageUpload.single('image'),
   async (
     req: Request<
       { userId: string },
@@ -1592,23 +1616,39 @@ router.post(
     res: Response
   ) => {
     const { userId } = req.params;
-    const { name, issuer, credentialUrl, issuedAt, description, imageUrl } = req.body;
+    const name = typeof req.body.name === 'string' ? req.body.name : '';
+    const issuerValue = normalizeOptionalFormValue(req.body.issuer) ?? null;
+    const descriptionValue = normalizeOptionalFormValue(req.body.description) ?? null;
+    const credentialUrlValue = normalizeOptionalFormValue(req.body.credentialUrl) ?? null;
+    let imageUrlValue = normalizeOptionalFormValue(req.body.imageUrl) ?? null;
+    const issuedAt = typeof req.body.issuedAt === 'string' ? req.body.issuedAt : undefined;
+    const uploadedFile = req.file;
 
     if (!name || name.trim().length === 0) {
       return res.status(400).json({ message: 'Certification name is required' });
     }
 
-    const issuerValue = issuer?.trim() || null;
-    const descriptionValue = description?.trim() || null;
-    const credentialUrlValue = credentialUrl?.trim() || null;
-    const imageUrlValue = imageUrl?.trim() || null;
+    if (uploadedFile && !uploadedFile.mimetype.startsWith('image/')) {
+      return res.status(400).json({ message: 'Only image uploads are allowed for certifications' });
+    }
 
     const issuedAtDate = issuedAt ? new Date(issuedAt) : null;
     if (issuedAt && Number.isNaN(issuedAtDate?.getTime())) {
       return res.status(400).json({ message: 'issuedAt must be a valid date (YYYY-MM-DD)' });
     }
 
+    let uploadedImageUrl: string | null = null;
+
     try {
+      if (uploadedFile) {
+        uploadedImageUrl = await uploadCertificationMediaToStorage({
+          userId,
+          fileBuffer: uploadedFile.buffer,
+          mimeType: uploadedFile.mimetype,
+        });
+        imageUrlValue = uploadedImageUrl;
+      }
+
       const rows = await prisma.$queryRaw<
         {
           certification_id: string;
@@ -1656,6 +1696,13 @@ router.post(
         createdAt: created.created_at.toISOString(),
       });
     } catch (err) {
+      if (uploadedImageUrl) {
+        try {
+          await deleteManagedCertificationMediaByUrl(uploadedImageUrl);
+        } catch (storageErr) {
+          console.warn('Unable to delete uploaded certification image after create failure:', storageErr);
+        }
+      }
       console.error('Error creating certification:', err);
       return res.status(500).json({ message: 'Internal server error' });
     }
@@ -1665,6 +1712,7 @@ router.post(
 router.patch(
   '/:userId/certifications/:certificationId',
   requireOwnUser,
+  certificationImageUpload.single('image'),
   async (
     req: Request<
       { userId: string; certificationId: string },
@@ -1681,14 +1729,20 @@ router.patch(
     res: Response,
   ) => {
     const { userId, certificationId } = req.params;
-    const { name, issuer, credentialUrl, issuedAt, description, imageUrl } = req.body;
+    const name = typeof req.body.name === 'string' ? req.body.name : undefined;
+    const issuer = normalizeOptionalFormValue(req.body.issuer);
+    const credentialUrl = normalizeOptionalFormValue(req.body.credentialUrl);
+    const issuedAt = typeof req.body.issuedAt === 'string' ? req.body.issuedAt : undefined;
+    const description = normalizeOptionalFormValue(req.body.description);
+    let imageUrl = normalizeOptionalFormValue(req.body.imageUrl);
+    const uploadedFile = req.file;
 
     const hasName = Object.prototype.hasOwnProperty.call(req.body, 'name');
     const hasIssuer = Object.prototype.hasOwnProperty.call(req.body, 'issuer');
     const hasCredentialUrl = Object.prototype.hasOwnProperty.call(req.body, 'credentialUrl');
     const hasIssuedAt = Object.prototype.hasOwnProperty.call(req.body, 'issuedAt');
     const hasDescription = Object.prototype.hasOwnProperty.call(req.body, 'description');
-    const hasImageUrl = Object.prototype.hasOwnProperty.call(req.body, 'imageUrl');
+    const hasImageUrl = Object.prototype.hasOwnProperty.call(req.body, 'imageUrl') || !!uploadedFile;
 
     if (!hasName && !hasIssuer && !hasCredentialUrl && !hasIssuedAt && !hasDescription && !hasImageUrl) {
       return res.status(400).json({ message: 'No certification fields provided for update' });
@@ -1698,12 +1752,43 @@ router.patch(
       return res.status(400).json({ message: 'Certification name cannot be empty' });
     }
 
+    if (uploadedFile && !uploadedFile.mimetype.startsWith('image/')) {
+      return res.status(400).json({ message: 'Only image uploads are allowed for certifications' });
+    }
+
     const issuedAtDate = hasIssuedAt ? (issuedAt ? new Date(issuedAt) : null) : undefined;
     if (hasIssuedAt && issuedAt && Number.isNaN(issuedAtDate?.getTime())) {
       return res.status(400).json({ message: 'issuedAt must be a valid date (YYYY-MM-DD)' });
     }
 
+    let uploadedImageUrl: string | null = null;
+
     try {
+      const existingRows = await prisma.$queryRaw<
+        {
+          image_url: string | null;
+        }[]
+      >`
+        SELECT image_url
+        FROM user_certifications
+        WHERE user_id = ${userId} AND certification_id = ${certificationId}
+        LIMIT 1
+      `;
+
+      const existing = existingRows[0];
+      if (!existing) {
+        return res.status(404).json({ message: 'Certification not found' });
+      }
+
+      if (uploadedFile) {
+        uploadedImageUrl = await uploadCertificationMediaToStorage({
+          userId,
+          fileBuffer: uploadedFile.buffer,
+          mimeType: uploadedFile.mimetype,
+        });
+        imageUrl = uploadedImageUrl;
+      }
+
       const rows = await prisma.$queryRaw<
         {
           certification_id: string;
@@ -1719,10 +1804,10 @@ router.patch(
         UPDATE user_certifications
         SET
           name = CASE WHEN ${hasName} THEN ${name?.trim()} ELSE name END,
-          issuer = CASE WHEN ${hasIssuer} THEN ${issuer?.trim() || null} ELSE issuer END,
-          description = CASE WHEN ${hasDescription} THEN ${description?.trim() || null} ELSE description END,
-          credential_url = CASE WHEN ${hasCredentialUrl} THEN ${credentialUrl?.trim() || null} ELSE credential_url END,
-          image_url = CASE WHEN ${hasImageUrl} THEN ${imageUrl?.trim() || null} ELSE image_url END,
+          issuer = CASE WHEN ${hasIssuer} THEN ${issuer ?? null} ELSE issuer END,
+          description = CASE WHEN ${hasDescription} THEN ${description ?? null} ELSE description END,
+          credential_url = CASE WHEN ${hasCredentialUrl} THEN ${credentialUrl ?? null} ELSE credential_url END,
+          image_url = CASE WHEN ${hasImageUrl} THEN ${imageUrl ?? null} ELSE image_url END,
           issued_at = CASE WHEN ${hasIssuedAt} THEN ${issuedAtDate ?? null} ELSE issued_at END,
           updated_at = NOW()
         WHERE user_id = ${userId} AND certification_id = ${certificationId}
@@ -1732,6 +1817,14 @@ router.patch(
       const updated = rows[0];
       if (!updated) {
         return res.status(404).json({ message: 'Certification not found' });
+      }
+
+      if (hasImageUrl && existing.image_url && existing.image_url !== updated.image_url) {
+        try {
+          await deleteManagedCertificationMediaByUrl(existing.image_url);
+        } catch (storageErr) {
+          console.warn('Unable to delete previous certification image from object storage:', storageErr);
+        }
       }
 
       return res.status(200).json({
@@ -1745,6 +1838,13 @@ router.patch(
         createdAt: updated.created_at.toISOString(),
       });
     } catch (err) {
+      if (uploadedImageUrl) {
+        try {
+          await deleteManagedCertificationMediaByUrl(uploadedImageUrl);
+        } catch (storageErr) {
+          console.warn('Unable to delete uploaded certification image after update failure:', storageErr);
+        }
+      }
       console.error('Error updating certification:', err);
       return res.status(500).json({ message: 'Internal server error' });
     }
@@ -1758,18 +1858,27 @@ router.delete(
     const { userId, certificationId } = req.params;
 
     try {
-      const result = await prisma.$queryRaw<{ count: number }[]>`
+      const result = await prisma.$queryRaw<{ count: number; image_url: string | null }[]>`
         WITH deleted AS (
           DELETE FROM user_certifications
           WHERE user_id = ${userId} AND certification_id = ${certificationId}
-          RETURNING 1
+          RETURNING image_url
         )
-        SELECT COUNT(*)::int AS count FROM deleted
+        SELECT COUNT(*)::int AS count, MAX(image_url) AS image_url FROM deleted
       `;
 
-      const count = result[0]?.count ?? 0;
-      if (count === 0) {
+      const deleted = result[0];
+      const count = deleted?.count ?? 0;
+      if (count === 0 || !deleted) {
         return res.status(404).json({ message: 'Certification not found' });
+      }
+
+      if (deleted.image_url) {
+        try {
+          await deleteManagedCertificationMediaByUrl(deleted.image_url);
+        } catch (storageErr) {
+          console.warn('Unable to delete certification image from object storage after delete:', storageErr);
+        }
       }
 
       return res.status(204).send();

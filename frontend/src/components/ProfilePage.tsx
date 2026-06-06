@@ -987,6 +987,7 @@ export function ProfilePage({
             issuer: newCertification.issuer?.trim(),
             description: newCertification.description?.trim(),
             imageUrl: certificationImageUrl,
+            imageFile: certImageFile ?? undefined,
             credentialUrl: newCertification.certificateUrl,
             issuedAt: newCertification.issueDate ? format(newCertification.issueDate, 'yyyy-MM-dd') : undefined,
           }, authToken);
@@ -1028,6 +1029,7 @@ export function ProfilePage({
               issuer: newCertification.issuer?.trim(),
               description: newCertification.description?.trim(),
               imageUrl: certificationImageUrl,
+              imageFile: certImageFile ?? undefined,
               credentialUrl: newCertification.certificateUrl,
               issuedAt: newCertification.issueDate ? format(newCertification.issueDate, 'yyyy-MM-dd') : undefined,
             },

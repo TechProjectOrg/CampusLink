@@ -7,6 +7,7 @@ interface StorageEnv {
   endpoint?: string;
   publicBaseUrl: string;
   profilePhotosPrefix: string;
+  certificationMediaPrefix: string;
   postMediaPrefix: string;
   chatMediaPrefix: string;
   clubMediaPrefix: string;
@@ -68,6 +69,9 @@ function buildStorageEnv(): StorageEnv {
     profilePhotosPrefix:
       optionalEnv(['STORAGE_S3_PROFILE_PHOTOS_PREFIX', 'S3_PROFILE_PHOTOS_PREFIX']) ??
       'users/profile-photos',
+    certificationMediaPrefix:
+      optionalEnv(['STORAGE_S3_CERTIFICATION_MEDIA_PREFIX', 'S3_CERTIFICATION_MEDIA_PREFIX']) ??
+      'users/certifications',
     postMediaPrefix:
       optionalEnv(['STORAGE_S3_POST_MEDIA_PREFIX', 'S3_POST_MEDIA_PREFIX']) ??
       'posts/media',
@@ -172,6 +176,29 @@ export async function uploadPostMediaToStorage(params: {
   return `${storageEnv.publicBaseUrl}/${key}`;
 }
 
+export async function uploadCertificationMediaToStorage(params: {
+  userId: string;
+  fileBuffer: Buffer;
+  mimeType: string;
+}): Promise<string> {
+  const storageEnv = getStorageEnv();
+  const extension = extensionFromMime(params.mimeType);
+  const fileName = `${Date.now()}-${randomUUID()}.${extension}`;
+  const key = `${storageEnv.certificationMediaPrefix}/${params.userId}/${fileName}`;
+
+  await getS3Client().send(
+    new PutObjectCommand({
+      Bucket: storageEnv.bucketName,
+      Key: key,
+      Body: params.fileBuffer,
+      ContentType: params.mimeType,
+      CacheControl: 'public,max-age=31536000,immutable',
+    })
+  );
+
+  return `${storageEnv.publicBaseUrl}/${key}`;
+}
+
 export async function deleteManagedPhotoByUrl(photoUrl: string | null): Promise<void> {
   if (!photoUrl) return;
 
@@ -200,6 +227,24 @@ export async function deleteManagedPostMediaByUrl(mediaUrl: string | null): Prom
 
   const storageEnv = getStorageEnv();
   const prefix = `${storageEnv.postMediaPrefix}/`;
+  const prefixIdx = mediaUrl.indexOf(prefix);
+
+  if (prefixIdx === -1) return;
+
+  const key = mediaUrl.slice(prefixIdx);
+  await getS3Client().send(
+    new DeleteObjectCommand({
+      Bucket: storageEnv.bucketName,
+      Key: key,
+    })
+  );
+}
+
+export async function deleteManagedCertificationMediaByUrl(mediaUrl: string | null): Promise<void> {
+  if (!mediaUrl) return;
+
+  const storageEnv = getStorageEnv();
+  const prefix = `${storageEnv.certificationMediaPrefix}/`;
   const prefixIdx = mediaUrl.indexOf(prefix);
 
   if (prefixIdx === -1) return;

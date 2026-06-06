@@ -85,30 +85,34 @@ export async function apiFetchUserCertifications(
 
 export async function apiCreateUserCertification(
   userId: string,
-  payload: { name: string; issuer?: string; description?: string; imageUrl?: string; credentialUrl?: string; issuedAt?: string },
+  payload: {
+    name: string;
+    issuer?: string;
+    description?: string;
+    imageUrl?: string;
+    credentialUrl?: string;
+    issuedAt?: string;
+    imageFile?: File;
+  },
   token?: string
 ): Promise<void> {
-  const name = payload.name.trim();
-  const issuer = payload.issuer?.trim() || null;
-  const description = payload.description?.trim() || null;
-  const imageUrl = payload.imageUrl?.trim() || null;
-  const credentialUrl = payload.credentialUrl?.trim() || null;
-  const issuedAt = payload.issuedAt?.trim() || null;
+  const formData = new FormData();
+  formData.append('name', payload.name.trim());
+  formData.append('issuer', payload.issuer?.trim() || '');
+  formData.append('description', payload.description?.trim() || '');
+  formData.append('imageUrl', payload.imageUrl?.trim() || '');
+  formData.append('credentialUrl', payload.credentialUrl?.trim() || '');
+  formData.append('issuedAt', payload.issuedAt?.trim() || '');
+  if (payload.imageFile) {
+    formData.append('image', payload.imageFile);
+  }
 
   const response = await fetch(`${API_BASE}/users/${encodeURIComponent(userId)}/certifications`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
       ...authHeaders(token),
     },
-    body: JSON.stringify({
-      name,
-      issuer,
-      description,
-      imageUrl,
-      credentialUrl,
-      issuedAt,
-    }),
+    body: formData,
   });
 
   if (!response.ok) {
@@ -126,18 +130,30 @@ export async function apiUpdateUserCertification(
     imageUrl?: string;
     credentialUrl?: string;
     issuedAt?: string;
+    imageFile?: File;
   },
   token?: string,
 ): Promise<void> {
+  const formData = new FormData();
+
+  if (payload.name !== undefined) formData.append('name', payload.name);
+  if (payload.issuer !== undefined) formData.append('issuer', payload.issuer);
+  if (payload.description !== undefined) formData.append('description', payload.description);
+  if (payload.imageUrl !== undefined) formData.append('imageUrl', payload.imageUrl);
+  if (payload.credentialUrl !== undefined) formData.append('credentialUrl', payload.credentialUrl);
+  if (payload.issuedAt !== undefined) formData.append('issuedAt', payload.issuedAt);
+  if (payload.imageFile) {
+    formData.append('image', payload.imageFile);
+  }
+
   const response = await fetch(
     `${API_BASE}/users/${encodeURIComponent(userId)}/certifications/${encodeURIComponent(certificationId)}`,
     {
       method: 'PATCH',
       headers: {
-        'Content-Type': 'application/json',
         ...authHeaders(token),
       },
-      body: JSON.stringify(payload),
+      body: formData,
     },
   );
 
