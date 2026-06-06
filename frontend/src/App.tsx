@@ -530,9 +530,11 @@ function findRepliesForComment(comments: Comment[], commentId: string): Comment[
 function networkUsersToStudents(users: NetworkUser[]): Student[] {
   return users.map((u) => {
     const seed = encodeURIComponent(u.username);
+    const displayName = u.displayName?.trim() || u.username;
     return {
       id: u.userId,
-      name: u.username,
+      name: displayName,
+      displayName,
       username: u.username,
       email: '',
       branch: u.branch ?? 'Unknown',
