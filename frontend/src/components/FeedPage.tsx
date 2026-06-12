@@ -1,10 +1,7 @@
 import { useState } from 'react';
-import { Filter, FileText, CalendarPlus, BriefcaseBusiness } from 'lucide-react';
+import { Filter, FileText, CalendarPlus, BriefcaseBusiness, Users } from 'lucide-react';
 import { Opportunity, Student } from '../types';
 import { OpportunityCard } from './OpportunityCard';
-import { ProfileCard } from './ProfileCard';
-import { SuggestionsCard } from './SuggestionsCard';
-import { EmptyState } from './EmptyState';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
@@ -48,7 +45,6 @@ export function FeedPage({
   selectedHashtag,
   onClearHashtagFilter,
   currentUser,
-  students = [],
   onLike, 
   onSave, 
   onComment,
@@ -188,9 +184,31 @@ export function FeedPage({
               {!isLoading && filteredOpportunities.length === 0 && (
                 <div className="glass-morphism rounded-2xl border border-white/50 p-12 text-center shadow-lg animate-fade-in">
                   <div className="w-16 h-16 gradient-primary rounded-2xl mx-auto mb-4 flex items-center justify-center">
-                    <Filter className="w-8 h-8 text-white" />
+                    {selectedHashtag ? (
+                      <Filter className="w-8 h-8 text-white" />
+                    ) : (
+                      <Users className="w-8 h-8 text-white" />
+                    )}
                   </div>
-                  <p className="text-gray-500">No opportunities found for this filter.</p>
+                  <h3 className="text-lg font-semibold text-slate-900">
+                    {selectedHashtag ? 'No posts found for this hashtag.' : 'No posts yet'}
+                  </h3>
+                  <p className="mx-auto mt-2 max-w-md text-gray-500">
+                    {selectedHashtag
+                      ? 'Try clearing the hashtag filter to see more campus updates.'
+                      : 'Create the first post or follow classmates to see their posts in your feed.'}
+                  </p>
+                  {!selectedHashtag ? (
+                    <Button
+                      className="mt-6 gradient-primary"
+                      onClick={() => {
+                        setCreateTab('post');
+                        setIsCreateUnifiedModalOpen(true);
+                      }}
+                    >
+                      Start a post
+                    </Button>
+                  ) : null}
                 </div>
               )}
             </div>
